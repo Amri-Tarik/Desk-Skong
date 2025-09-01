@@ -42,6 +42,52 @@
 
 ---
 
+## Scopes (prefixes for PRs, commits, and branches)
+
+Use these short, consistent scopes. Examples:
+- **Branch**: `<scope>_<short-topic>` → `anim_walk_cycle_player`
+- **PR title**: `feat(<scope>): <message>` → `feat(path): add A* with turn cost`
+
+### Core game scopes
+
+- **ext** — Extractor (tk2d → PNG+JSON tools, exporters, data prep)
+  - *Examples*: `ext_index_picker`, `ext_json_include_fields`, `ext_list_collections`
+
+- **anim** — Sprite Animator (frame sequencing, timing curves, blending, state machines)
+  - *Examples*: `anim_stategraph_idle_run`, `anim_event_callbacks`, `anim_lerp_pivots`
+
+- **coll** — Collision Engine (walkable detection, contacts, ledges, edges, slope/stairs)
+  - *Examples*: `coll_aabb_resolve`, `coll_ui_edge_probes`, `coll_ceil_floor_snap`
+
+- **path** — Pathfinding (nav extraction, graph building, A*/D*, steering, avoidance)
+  - *Examples*: `path_a_star`, `path_waypoint_smoothing`, `path_ledge_chooser`
+
+### Supporting scopes (use when relevant)
+
+- **vis** — Vision / Screen Capture / CNN (grab frames, classify walkables, OCR if any)
+  - *Examples*: `vis_win_capture`, `vis_unet_walkable`, `vis_textbox_detector`
+
+- **rend** — Rendering & Overlay (always-on-top window, wgpu, batching, atlases)
+  - *Examples*: `rend_win_overlay`, `rend_atlas_blit`, `rend_vsync_timing`
+
+- **core** — Shared utilities (math, time, config, logging, serialization)
+  - *Examples*: `core_toml_config`, `core_vec2_math`, `core_logger`
+
+- **docs** — Documentation, READMEs, design notes
+  - *Examples*: `docs_data_format`, `docs_anim_spec`
+
+- **build** — Tooling, CI, packaging, scripts
+  - *Examples*: `build_ci_cache`, `build_release_bundle`
+
+### Rules
+
+- **Lowercase** scope, **kebab-case** topic: `scope_my-feature`
+- One primary scope per PR. If truly cross-cutting, pick the dominant one.
+- Prefer small focused branches/PRs; keep titles imperative and specific.
+
+
+---
+
 ## Data format (what the overlay consumes)
 
 Each skin is represented by:
