@@ -1,6 +1,6 @@
 # Desk-Skong
 
-**Desk-Skong** is a Windows overlay “pet” that walks, jumps, and reacts to what’s on your screen — powered by community-made Hollow Knight skins, any skin that includes the `Knight.png` file will be supported.  
+**Desk-Skong** is a Windows overlay “pet” that walks, jumps, and reacts to what’s on your screen — powered by computer vision and community-made Hollow Knight skins, any skin that includes the `Knight.png` file will be supported.  
 
 > ⚠️ Legal: This repository **does not** include Hollow Knight assets. Users must provide their own files. Only `classdata.tpk` (a Unity class database) is kept in version control.
 
