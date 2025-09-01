@@ -1,1 +1,40 @@
+# Build results
+HK_TK2D_Exporter/bin/
+HK_TK2D_Exporter/obj/
+HK_TK2D_Exporter/Debug/
+HK_TK2D_Exporter/Release/
+
+# User-specific files
+HK_TK2D_Exporter/*.user
+HK_TK2D_Exporter/*.suo
+HK_TK2D_Exporter/*.userosscache
+HK_TK2D_Exporter/*.sln.docstates
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Rider and VSCode
+.vscode/
+
+# NuGet packages
+HK_TK2D_Exporter/packages/
+*.nupkg
+*.snupkg
+*.nuspec
+
+# Logs
+HK_TK2D_Exporter/*.log
+
+# Test results
+HK_TK2D_Exporter/TestResults/
+HK_TK2D_Exporter/*.TestResults/
+
+# Others
+HK_TK2D_Exporter/Managed/**
+HK_TK2D_Exporter/assets/**
+
+Knight.png
+
+# Rust
 /target
