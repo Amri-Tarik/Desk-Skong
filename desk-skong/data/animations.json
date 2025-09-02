@@ -25,10 +25,61 @@
       "loop": false
     },
     {
-      "name": "idle_to_run",
+      "name": "fall",
+      "fps": 16.0,
+      "loop": true,
+      "order": [
+        "fall_04",
+        "fall_05",
+        "fall_06"
+      ],
+      "transition_frames": {
+        "idle": "land",
+        "run": "land",
+        "jump": "land"
+      }
+    },
+    {
+      "name": "land",
       "fps": 12.0,
-      "prefix": "idle_to_run000",
+      "prefix": "land000",
       "loop": false
+    },
+    {
+      "name": "jump",
+      "fps": 16.0,
+      "prefix": "jump_0",
+      "loop": false,
+      "transition_frames": {
+        "fall": "jump_to_fall"
+      }
+    },
+    {
+      "name": "jump_to_fall",
+      "fps": 12.0,
+      "loop": false,
+      "order": [
+        "fall_01",
+        "fall_02",
+        "fall_03"
+      ]
+    },
+    {
+      "name": "wall_slide",
+      "fps": 12.0,
+      "prefix": "wall_slide000",
+      "loop": true,
+      "transition_frames": {
+        "jump": "wall_slide_to_jump",
+        "fall": "wall_slide_to_jump"
+      }
+    },
+    {
+      "name": "wall_slide_to_jump",
+      "fps": 24.0,
+      "prefix": "wall_jump000",
+      "loop": false,
+      "flipped": true
     }
   ]
 }

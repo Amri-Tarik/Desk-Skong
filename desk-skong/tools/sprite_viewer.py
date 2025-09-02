@@ -4,9 +4,19 @@ from __future__ import annotations
 import os
 import pathlib
 import sys
+
+# top of file
 import time
 
+import pymunk
 from anim.sprite_anim import AnimationConfig, Skin, SpritePlayer
+
+# your repo-local physics
+from phys import CFG, CharacterBody, PhysicsWorld
+from phys.contacts import setup_handlers
+from phys.kinematics import apply_movement
+from phys.layers import CT_TERRAIN, CT_WALL
+from phys.types import MoveInput
 from PIL import ImageQt
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtGui import QAction
@@ -47,6 +57,53 @@ class Viewer(QtWidgets.QWidget):
             geometry = screen.availableGeometry()
             self.setGeometry(geometry)
 
+        # --- physics world (60 Hz) ---
+        self.W = self.width()
+        self.H = self.height()
+
+        self.world = PhysicsWorld()
+        self.space = self.world.space
+        self.space.time = 0.0
+
+        # flat floor along the bottom edge (y=0 in world coords)
+        self.world.add_static_segment(
+            (0.0, 0.0), (float(self.W), 0.0), collision_type=CT_TERRAIN, radius=20.0
+        )
+
+        world_edge_buffer = 80.0
+        radius = 50.0
+
+        # optional guard rails at the extreme sides
+        self.world.add_static_segment(
+            (-world_edge_buffer, 0.0),
+            (-world_edge_buffer, float(self.H + 100)),
+            collision_type=CT_WALL,
+            radius=radius,
+        )
+        self.world.add_static_segment(
+            (self.W + world_edge_buffer - radius, 0.0),
+            (self.W + world_edge_buffer - radius, float(self.H + 100)),
+            collision_type=CT_WALL,
+            radius=radius,
+        )
+
+        # player spawn roughly mid screen
+        self.player_phys = CharacterBody(
+            self.space, x=self.W * 0.5, y=self.H * 0.5, w=60, h=110
+        )
+        setup_handlers(self.space, self.player_phys)
+
+        # input state for physics
+        self.in_left = False
+        self.in_right = False
+        self.in_jump_press = False
+
+        # one timer drives both physics and redraw
+        self._last_tick = time.perf_counter()
+        self._tick = QtCore.QTimer(self)
+        self._tick.timeout.connect(self._on_tick)
+        self._tick.start(16)  # ~60Hz visual—physics inside is fixed 30Hz
+
         # Overlay-friendly window flags
         self.setWindowFlags(
             QtCore.Qt.WindowType.FramelessWindowHint
@@ -85,7 +142,7 @@ class Viewer(QtWidgets.QWidget):
         self.timer.start(16)  # ~60 fps
 
         # view params
-        self.scale = float(os.environ.get("SKONG_SCALE", "0.5"))
+        self.scale = float(os.environ.get("SKONG_SCALE", "0.7"))
         self.scale = max(0.05, min(20.0, self.scale))
         self.bg = make_checker_pixmap(self.width(), self.height())
 
@@ -111,36 +168,34 @@ class Viewer(QtWidgets.QWidget):
         k = e.key()
         if k == QtCore.Qt.Key_Escape:
             QtWidgets.QApplication.quit()
-        elif k == QtCore.Qt.Key_1:
-            self.player.goto("idle")
-        elif k == QtCore.Qt.Key_2:
-            self.player.goto("run")
-        elif k in (QtCore.Qt.Key_Plus, QtCore.Qt.Key_Equal):
-            self.scale = min(20.0, self.scale * 1.1)
-            self.update()
-        elif k in (QtCore.Qt.Key_Minus, QtCore.Qt.Key_Underscore):
-            self.scale = max(0.05, self.scale / 1.1)
-            self.update()
+        # elif k in (QtCore.Qt.Key_Plus, QtCore.Qt.Key_Equal):
+        #     self.scale = min(20.0, self.scale * 1.1)
+        #     self.update()
+        # elif k in (QtCore.Qt.Key_Minus, QtCore.Qt.Key_Underscore):
+        #     self.scale = max(0.05, self.scale / 1.1)
+        #     self.update()
+        # elif k == QtCore.Qt.Key_Space:
+        #     self.pause = not self.pause
+        elif k in (QtCore.Qt.Key_A, QtCore.Qt.Key_Left):
+            self.in_left = True
+        elif k in (QtCore.Qt.Key_D, QtCore.Qt.Key_Right):
+            self.in_right = True
         elif k == QtCore.Qt.Key_Space:
-            self.pause = not self.pause
-        elif k == QtCore.Qt.Key_Right:
-            self.pause = True
-            # manual step
-            self.player.update(999.0)  # force advance one or more frames; clamp inside
-        elif k == QtCore.Qt.Key_Left:
-            # simple “step back”: restart group and advance to prev index
-            self.pause = True
-            # crude back step: reset then advance to len-1 from current
-            name = self.player.current_group
-            self.player.goto(name)  # resets to 0
-            # spin length-1 frames
-            for _ in range(len(self._seq()) - 1):
-                self.player.update(999.0)
+            self.in_jump_press = True
         elif k == QtCore.Qt.Key_T:
             self.set_transparent_mode(not self.transparent_mode)
         elif k == QtCore.Qt.Key_C:
             self.set_click_through(not self.click_through)
 
+        else:
+            super().keyPressEvent(e)
+
+    def keyReleaseEvent(self, e: QtGui.QKeyEvent) -> None:
+        k = e.key()
+        if k in (QtCore.Qt.Key_A, QtCore.Qt.Key_Left):
+            self.in_left = False
+        elif k in (QtCore.Qt.Key_D, QtCore.Qt.Key_Right):
+            self.in_right = False
         else:
             super().keyPressEvent(e)
 
@@ -173,9 +228,21 @@ class Viewer(QtWidgets.QWidget):
         cw, ch = pkt.scaled_canvas_size
         ox, oy, fw, fh = pkt.scaled_frame_rect_tl
 
-        # bottom-align canvas in window with padding (initial)
-        dst_x = self.pad_x
-        dst_y = self.height() - self.pad_y - int(round(ch))
+        # Compute anchor (bottom-center of canvas) in *screen* coords.
+        # Physics is in pixels, y-up; Qt is y-down:
+        px, py = self.player_phys.pos  # pymunk Vec2d
+        anchor_x_screen = int(round(px))
+        # feet point in physics is y = player center - half height, but we want the canvas bottom on the floor:
+        feet_y = py - (self.player_phys.h * 0.5)
+        anchor_y_screen = self.height() - int(round(feet_y))  # map y-up->y-down
+
+        # Canvas top-left from anchor (bottom-center)
+        dst_x = anchor_x_screen - int(round(cw * 0.5))
+        dst_y = anchor_y_screen - int(round(ch))
+
+        # Optional clamp to keep sprite entirely on screen (prevents accidental clipping)
+        dst_x = max(-cw, min(self.width(), dst_x))
+        dst_y = max(-ch, min(self.height(), dst_y))
 
         # --- Clamp so the *frame* is fully visible vertically ---
         # frame top-left in window:
@@ -274,6 +341,58 @@ class Viewer(QtWidgets.QWidget):
             QtCore.Qt.WindowType.WindowTransparentForInput, self.click_through
         )
         self.show()  # re-apply flags
+
+    def _on_tick(self):
+        # build input
+        xaxis = (-1.0 if self.in_left else 0.0) + (1.0 if self.in_right else 0.0)
+        self.player.set_facing_from_input(xaxis)
+        inp = MoveInput(x=xaxis, jump=self.in_jump_press)
+        self.in_jump_press = False  # consume
+
+        # dt & sim time
+        now = time.perf_counter()
+        dt = max(0.0, min(1.0 / 15.0, now - self._last_tick))  # clamp long frames
+        self._last_tick = now
+        self.space.time += dt
+
+        # apply kinematics + step (fixed 30 Hz inside)
+        apply_movement(self.player_phys, inp, dt, now=self.space.time)
+        self.world.step(dt)
+
+        # pick animation by physics state
+        self._sync_anim_to_physics()
+
+        # trigger repaint
+        self.update()
+
+    def _sync_anim_to_physics(self):
+        """Map physics state to anim group names. Fallbacks if groups missing."""
+        vx, vy = self.player_phys.vel
+        grounded = self.player_phys.contacts.grounded
+        wall_l = self.player_phys.contacts.wall_left
+        wall_r = self.player_phys.contacts.wall_right
+
+        # deadzone for run/idle switch
+        run_threshold = 30.0
+
+        if not grounded:
+            if (wall_l or wall_r) and self.player_phys.contacts:
+                target = (
+                    "wall_slide" if self.player.config.get("wall_slide") else "idle"
+                )
+            elif vy > 40.0:
+                target = "jump" if self.player.config.get("jump") else "idle"
+            elif vy < -10:
+                target = "fall" if self.player.config.get("fall") else "idle"
+        else:
+            target = "run" if abs(vx) > run_threshold else "idle"
+
+        # Your SpritePlayer has goto() with transition support and no-op on same group
+        try:
+            self.player.goto(target)
+        except Exception:
+            # if target missing, ignore
+            pass
 
 
 def main():

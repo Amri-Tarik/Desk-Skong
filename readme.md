@@ -56,7 +56,7 @@ Use these short, consistent scopes. Examples:
 - **anim** — Sprite Animator (frame sequencing, timing curves, blending, state machines)
   - *Examples*: `anim_stategraph_idle_run`, `anim_event_callbacks`, `anim_lerp_pivots`
 
-- **coll** — Collision Engine (walkable detection, contacts, ledges, edges, slope/stairs)
+- **phys** — Physics and collision Engine (walkable detection, contacts, ledges, edges, slope/stairs)
   - *Examples*: `coll_aabb_resolve`, `coll_ui_edge_probes`, `coll_ceil_floor_snap`
 
 - **path** — Pathfinding (nav extraction, graph building, A*/D*, steering, avoidance)

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 from PIL import Image
+from PIL.Image import Resampling
 
 
 @dataclass
@@ -62,6 +63,14 @@ class DrawPacket:
     scaled_canvas_size: Tuple[int, int]
     scaled_frame_rect_tl: Tuple[int, int, int, int]
     scale: float
+
+
+def _resampler_for(scale: float):
+    # Keep NEAREST for pixel-perfect whole-number scales,
+    # use LANCZOS for downscales, BICUBIC for fractional upscales.
+    if abs(scale - round(scale)) < 0.02:
+        return Resampling.NEAREST
+    return Resampling.LANCZOS if scale < 1.0 else Resampling.BICUBIC
 
 
 # ========= Skin loader (atlas + metadata) =========
@@ -162,10 +171,13 @@ class Skin:
         # unknown -> no-op
         return img
 
-    def frame_image(self, sd: SpriteDef) -> Image.Image:
+    def frame_image(self, sd: SpriteDef, hflip: bool = False) -> Image.Image:
         """Return a PIL image for the (upright) frame, with tk2d rotation applied."""
         sub = self._crop_pil_from_atlas(sd.pixel_rect)
-        return self._apply_flip(sub, sd.flip)
+        sub = self._apply_flip(sub, sd.flip)
+        if hflip:
+            sub = sub.transpose(Image.FLIP_LEFT_RIGHT)
+        return sub
 
     def canvas_size(
         self, sd: SpriteDef, frame_img: Optional[Image.Image] = None
@@ -182,23 +194,36 @@ class Skin:
         return frame_img.width, frame_img.height
 
     def top_left_offset_in_canvas(
-        self, sd: SpriteDef, frame_img: Image.Image
+        self, sd: SpriteDef, frame_img: Image.Image, hflip: bool = False
     ) -> Tuple[int, int]:
         """
         Where to draw the (rotated) frame inside its untrimmed canvas in **top-left** coords.
         tk2d stores sprite_source_offset in bottom-left coords relative to the canvas.
         For top-left, y_top = canvas_h - (off_y + frame_h).
+        If hflip=True, mirror the X offset inside the same canvas.
         """
-        _, ch = self.canvas_size(sd, frame_img)
+        cw, ch = self.canvas_size(sd, frame_img)
+
         if sd.sprite_source_offset:
             off_x = max(0, sd.sprite_source_offset.x)
             off_y = max(0, sd.sprite_source_offset.y)
         else:
             off_x = 0
             off_y = 0
-        # bottom-left → top-left
+
+        # bottom-left → top-left for Y
         y_top = max(0, ch - (off_y + frame_img.height))
-        x_left = max(0, off_x)
+
+        # X: mirror inside the canvas if hflip; otherwise direct
+        if hflip:
+            x_left = cw - (off_x + frame_img.width)
+        else:
+            x_left = off_x
+
+        # Clamp to canvas bounds just in case
+        x_left = max(0, min(int(x_left), max(0, cw - frame_img.width)))
+        y_top = max(0, min(int(y_top), max(0, ch - frame_img.height)))
+
         return x_left, y_top
 
 
@@ -208,11 +233,18 @@ class Skin:
 @dataclass
 class AnimGroup:
     name: str
-    fps: float
-    loop: bool
-    order: Optional[List[str]] = None
-    prefix: Optional[str] = None
-    transition_frames: Optional[Dict[str, str]] = None  # e.g., {"run": "idle_to_run"}
+    fps: float  # frame switching speed
+    loop: bool  # if the animation should be looped infinitely
+    order: Optional[List[str]] = (
+        None  # if order is present, play frames following the order
+    )
+    prefix: Optional[str] = (
+        None  # fetch all animations by this prefix and play them all in numerical order
+    )
+    transition_frames: Optional[Dict[str, str]] = (
+        None  # e.g., for animation idle : {"run": "idle_to_run"}
+    )
+    flipped: bool = False  # if we should flip this animation group by default
 
 
 class AnimationConfig:
@@ -232,6 +264,7 @@ class AnimationConfig:
                 order=g.get("order"),
                 prefix=g.get("prefix"),
                 transition_frames=g.get("transition_frames", {}),
+                flipped=bool(g.get("flipped", False)),
             )
         return cls(groups)
 
@@ -276,6 +309,11 @@ class SpritePlayer:
         self.accum = 0.0
         self.index = 0
 
+        self.force_complete_transitions: bool = True
+        self._queued_target: Optional[str] = None
+
+        self.facing_sign: int = -1  # -1 = left (default), +1 = right
+
     # ---- group resolution & switching ----
 
     def _resolve_group(self, name: str) -> List[int]:
@@ -314,6 +352,13 @@ class SpritePlayer:
         """Switch to target, optionally passing through a one-shot transition."""
         if self.current_group == target:
             return
+
+        # If we are in a transition (pending is set), honor completion first.
+        if self.force_complete_transitions and self.pending_after_transition:
+            # Remember only the latest intent
+            self._queued_target = target
+            return
+
         cur_g = self.config.get(self.current_group)
         used_transition = False
         if cur_g and cur_g.transition_frames and target in cur_g.transition_frames:
@@ -323,9 +368,11 @@ class SpritePlayer:
                 self._apply_group(trans_name, loop=False)  # one-shot
                 self.pending_after_transition = target
                 used_transition = True
+
         if not used_transition:
             self._apply_group(target)
             self.pending_after_transition = None
+            self._queued_target = None
 
     # ---- ticking ----
 
@@ -341,11 +388,21 @@ class SpritePlayer:
             else:
                 if self.index >= len(self._seq):
                     self.index = len(self._seq) - 1
-                    # if we finished a transition, jump to pending target
-                    if self.pending_after_transition:
-                        target = self.pending_after_transition
+                    # If a transition just finished, go to queued target (if any), else the original
+                    if self.pending_after_transition is not None:
+                        next_target = (
+                            self._queued_target or self.pending_after_transition
+                        )
                         self.pending_after_transition = None
-                        self._apply_group(target)
+                        self._queued_target = None
+                        self._apply_group(next_target)
+
+    def set_facing_from_input(self, xaxis: float, deadzone: float = 0.1):
+        """Call this each tick with last non-zero horizontal input."""
+        if xaxis > deadzone:
+            self.facing_sign = +1
+        elif xaxis < -deadzone:
+            self.facing_sign = -1
 
     # ---- single source of truth for drawing/collisions ----
 
@@ -356,8 +413,16 @@ class SpritePlayer:
         """
         sd = self.skin.data.sprites[self._seq[self.index]]
 
+        g = self.config.get(self.current_group)
+
+        want_right = self.facing_sign > 0
+        base_right = bool(getattr(g, "flipped", False))
+        hflip = want_right != base_right
+
         # 1) rotate/crop frame to be upright
-        img = self.skin.frame_image(sd)  # already applies Flip (TPackerCW, Tk2d, None)
+        img = self.skin.frame_image(
+            sd, hflip
+        )  # already applies Flip (TPackerCW, Tk2d, None)
 
         # 2) rotation-aware canvas size
         cw, ch = self.skin.canvas_size(
@@ -365,17 +430,17 @@ class SpritePlayer:
         )  # uses SourceSize if present, else frame.size
 
         # 3) top-left offset of the (trimmed) frame inside the (untrimmed) canvas
-        ox, oy = self.skin.top_left_offset_in_canvas(sd, img)
+        ox, oy = self.skin.top_left_offset_in_canvas(sd, img, hflip)
 
         # 4) apply scale consistently to everything
         if scale != 1.0:
             sw = max(1, int(round(img.width * scale)))
             sh = max(1, int(round(img.height * scale)))
-            img = img.resize((sw, sh), Image.NEAREST)
-            cw = int(round(cw * scale))
-            ch = int(round(ch * scale))
+            img = img.resize((sw, sh), _resampler_for(scale))
             ox = int(round(ox * scale))
             oy = int(round(oy * scale))
+            cw = int(round(cw * scale))
+            ch = int(round(ch * scale))
 
         return DrawPacket(
             name=sd.name,
