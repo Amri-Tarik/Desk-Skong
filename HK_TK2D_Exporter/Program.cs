@@ -7,24 +7,22 @@ public sealed class ExportRoot
 {
     public int AtlasWidth { get; set; }
     public int AtlasHeight { get; set; }
-    public string CollectionName { get; set; } = "";
-    public float[] TexelSize { get; set; } = new float[2];
     public List<ExportSprite> Sprites { get; set; } = new();
 }
+
 public sealed class ExportSprite
 {
     public string Name { get; set; } = "";
-    public UVRect UVRect { get; set; } = new();
-    public PixelRect PixelRect { get; set; } = new();
-    public BoundsData Bounds { get; set; } = new();
-    public BoundsData UntrimmedBounds { get; set; } = new();
-    public float[] Pivot { get; set; } = new float[2];
-    public int[]? Indices { get; set; }
+    public PixelRect PixelRect { get; set; } = new();    // atlas pixels (bottom-left origin)
+    public float[] Pivot { get; set; } = new float[2];   // bounds.center in world units
+    public string Flip { get; set; } = "None";           // None | Tk2d | TPackerCW
+    public Size2D SourceSize { get; set; } = new();      // original (untrimmed) size in pixels
+    public Offset2D SpriteSourceOffset { get; set; } = new(); // bottom-left offset of trimmed rect within untrimmed
 }
-public sealed class UVRect { public float UMin, VMin, UMax, VMax; }
-public sealed class PixelRect { public int X, Y, W, H; }
-public sealed class BoundsData { public float[] Center = new float[3]; public float[] Extents = new float[3]; }
 
+public sealed class PixelRect { public int X, Y, W, H; }
+public sealed class Size2D { public int W, H; }
+public sealed class Offset2D { public int X, Y; }
 internal class Program
 {
     private static string? TryGetMonoBehaviourClassName(AssetsManager am, AssetsFileInstance afi, AssetFileInfo mbInfo)
@@ -259,7 +257,7 @@ internal class Program
         }
 
         // Hardcode the desired collection index from your listing:
-        int collectionIndex = 0; // <-- the Knight collection you identified
+        int collectionIndex = 0; // <-- Knight collection
 
         if (collectionIndex < 0 || collectionIndex >= collections.Count)
         {
@@ -270,11 +268,8 @@ internal class Program
         var pickedAfi = collections[collectionIndex].afi;
         var pickedInfo = collections[collectionIndex].info;
         var pickedField = am.GetBaseField(pickedAfi, pickedInfo);
-        var collectionNm = pickedField["m_Name"].AsString ?? "tk2dCollection";
-        Console.WriteLine($"Exporting collection index {collectionIndex} → '{collectionNm}'");
+        Console.WriteLine($"Exporting collection index {collectionIndex}");
 
-
-        // Atlas dims from first Texture2D in 'textures'
         // Atlas dims from first Texture2D in 'textures'
         int atlasW = 0, atlasH = 0;
         try
@@ -282,95 +277,138 @@ internal class Program
             var textures = pickedField["textures.Array"];
             if (textures.AsArray.size > 0)
             {
-                var texPtrField = textures[0];
-                var texExt = am.GetExtAsset(pickedAfi, texPtrField); // <-- use pickedAfi
+                var texExt = am.GetExtAsset(pickedAfi, textures[0]);
                 var tbf = texExt.baseField;
                 atlasW = tbf["m_Width"].AsInt;
                 atlasH = tbf["m_Height"].AsInt;
             }
         }
-        catch { /* will still export UVs */ }
+        catch { /* ok */ }
 
+        var root = new ExportRoot { AtlasWidth = atlasW, AtlasHeight = atlasH };
 
-        float texelX = 1f, texelY = 1f;
-        try { texelX = pickedField["texelSize"]["x"].AsFloat; texelY = pickedField["texelSize"]["y"].AsFloat; } catch { }
-
-        var root = new ExportRoot
-        {
-            AtlasWidth = atlasW,
-            AtlasHeight = atlasH,
-            CollectionName = collectionNm,
-            TexelSize = new[] { texelX, texelY }
-        };
-
-        var defs = pickedField["spriteDefinitions.Array"];
-        var defCount = defs.AsArray.size;
+        var defsField = pickedField["spriteDefinitions.Array"];
+        int defCount = defsField.AsArray.size;
 
         for (int i = 0; i < defCount; i++)
         {
-            var def = defs[i];
+            var def = defsField[i];
             var name = def["name"].AsString ?? $"sprite_{i}";
 
-            float uMin = 1e9f, vMin = 1e9f, uMax = -1e9f, vMax = -1e9f;
+            // 1) Rotation / flip (tk2d FlipMode)
+            int flipInt = 0;
+            try { flipInt = def["flipped"].AsInt; } catch { }
+            string flipStr = flipInt switch { 1 => "Tk2d", 2 => "TPackerCW", _ => "None" };
+
+            // 2) PixelRect (prefer precise region; else UVs)
+            int px = 0, py = 0, pw = 0, ph = 0;
+            bool usedRegion = false;
             try
             {
-                var uvs = def["uvs.Array"];
-                var n = uvs.AsArray.size;
-                for (int j = 0; j < n; j++)
+                if (def["extractRegion"].AsBool)
                 {
-                    var u = uvs[j]["x"].AsFloat;
-                    var v = uvs[j]["y"].AsFloat;
-                    if (u < uMin) uMin = u; if (v < vMin) vMin = v;
-                    if (u > uMax) uMax = u; if (v > vMax) vMax = v;
+                    px = def["regionX"].AsInt;
+                    py = def["regionY"].AsInt;
+                    pw = def["regionW"].AsInt;
+                    ph = def["regionH"].AsInt;
+                    usedRegion = true;
                 }
             }
-            catch { uMin = vMin = uMax = vMax = 0; }
+            catch { /* fall through */ }
 
-            int px = 0, py = 0, pw = 0, ph = 0;
-            if (atlasW > 0 && atlasH > 0)
+            if (!usedRegion && atlasW > 0 && atlasH > 0)
             {
+                float uMin = 1e9f, vMin = 1e9f, uMax = -1e9f, vMax = -1e9f;
+                try
+                {
+                    var uvs = def["uvs.Array"];
+                    int uvCount = uvs.AsArray.size;
+                    for (int j = 0; j < uvCount; j++)
+                    {
+                        var u = uvs[j]["x"].AsFloat;
+                        var v = uvs[j]["y"].AsFloat;
+                        if (u < uMin) uMin = u; if (v < vMin) vMin = v;
+                        if (u > uMax) uMax = u; if (v > vMax) vMax = v;
+                    }
+                }
+                catch { uMin = vMin = uMax = vMax = 0; }
+
                 px = (int)MathF.Round(uMin * atlasW);
                 pw = (int)MathF.Round((uMax - uMin) * atlasW);
                 py = (int)MathF.Round(vMin * atlasH);
                 ph = (int)MathF.Round((vMax - vMin) * atlasH);
             }
 
-            var b = new BoundsData();
-            var ub = new BoundsData();
+            // 3) Pivot (keep bounds.center in world units; don’t serialize bounds)
+            float pivotX = 0f, pivotY = 0f;
+            float bx = 0, by = 0, ex = 0, ey = 0, ubx = 0, uby = 0, uex = 0, uey = 0;
+            bool haveBounds = false, haveUntrimmed = false;
             try
             {
                 var bd = def["boundsData.Array"];
-                b.Center[0] = bd[0]["x"].AsFloat; b.Center[1] = bd[0]["y"].AsFloat; b.Center[2] = bd[0]["z"].AsFloat;
-                b.Extents[0] = bd[1]["x"].AsFloat; b.Extents[1] = bd[1]["y"].AsFloat; b.Extents[2] = bd[1]["z"].AsFloat;
-
-                var ubd = def["untrimmedBoundsData.Array"];
-                ub.Center[0] = ubd[0]["x"].AsFloat; ub.Center[1] = ubd[0]["y"].AsFloat; ub.Center[2] = ubd[0]["z"].AsFloat;
-                ub.Extents[0] = ubd[1]["x"].AsFloat; ub.Extents[1] = ubd[1]["y"].AsFloat; ub.Extents[2] = ubd[1]["z"].AsFloat;
+                bx = bd[0]["x"].AsFloat; by = bd[0]["y"].AsFloat;
+                ex = bd[1]["x"].AsFloat; ey = bd[1]["y"].AsFloat;
+                pivotX = bx; pivotY = by;
+                haveBounds = true;
             }
-            catch { /* older defs may lack untrimmed */ }
+            catch { /* ok */ }
 
-            int[]? indices = null;
             try
             {
-                var inds = def["indices.Array"];
-                var n = inds.AsArray.size;
-                indices = new int[n];
-                for (int j = 0; j < n; j++) indices[j] = inds[j].AsInt;
+                var ubd = def["untrimmedBoundsData.Array"];
+                ubx = ubd[0]["x"].AsFloat; uby = ubd[0]["y"].AsFloat;
+                uex = ubd[1]["x"].AsFloat; uey = ubd[1]["y"].AsFloat;
+                haveUntrimmed = true;
             }
-            catch { }
+            catch { /* ok */ }
 
-            var pivotX = b.Center[0];
-            var pivotY = b.Center[1];
+            // 4) Compute TexturePacker-style trim offsets in pixels
+            //    We use texelSize (world units per pixel) internally but DO NOT serialize it.
+            float texelX = 1f, texelY = 1f;
+            try
+            {
+                texelX = pickedField["texelSize"]["x"].AsFloat;
+                texelY = pickedField["texelSize"]["y"].AsFloat;
+            }
+            catch { /* default 1 */ }
 
+            // Source (untrimmed) size in pixels
+            int srcW = 0, srcH = 0, offX = 0, offY = 0;
+            if (haveUntrimmed)
+            {
+                // width/height in world units: 2*extents; convert to pixels by dividing by texel
+                srcW = (int)MathF.Round((uex * 2f) / texelX);
+                srcH = (int)MathF.Round((uey * 2f) / texelY);
+
+                if (haveBounds)
+                {
+                    // bottom-left in world units
+                    var untrimBLx = ubx - uex;
+                    var untrimBLy = uby - uey;
+                    var trimBLx = bx - ex;
+                    var trimBLy = by - ey;
+
+                    // offset in pixels from untrimmed bottom-left to trimmed bottom-left
+                    offX = (int)MathF.Round((trimBLx - untrimBLx) / texelX);
+                    offY = (int)MathF.Round((trimBLy - untrimBLy) / texelY);
+
+                    // clamp to sane range
+                    if (offX < 0) offX = 0;
+                    if (offY < 0) offY = 0;
+                    if (pw > 0 && srcW > 0 && offX + pw > srcW) offX = Math.Max(0, srcW - pw);
+                    if (ph > 0 && srcH > 0 && offY + ph > srcH) offY = Math.Max(0, srcH - ph);
+                }
+            }
+
+            // 5) Emit
             root.Sprites.Add(new ExportSprite
             {
                 Name = name,
-                UVRect = new UVRect { UMin = uMin, VMin = vMin, UMax = uMax, VMax = vMax },
                 PixelRect = new PixelRect { X = px, Y = py, W = pw, H = ph },
-                Bounds = b,
-                UntrimmedBounds = ub,
                 Pivot = new[] { pivotX, pivotY },
-                Indices = indices
+                Flip = flipStr,
+                SourceSize = new Size2D { W = srcW, H = srcH },
+                SpriteSourceOffset = new Offset2D { X = offX, Y = offY }
             });
         }
 
@@ -381,8 +419,7 @@ internal class Program
             IncludeFields = true
         });
         File.WriteAllText(outJsonPath, json);
-        Console.WriteLine($"Exported {root.Sprites.Count} sprites from '{root.CollectionName}'");
-        Console.WriteLine($"→ {outJsonPath}");
+        Console.WriteLine($"Exported {root.Sprites.Count} sprites → {outJsonPath}");
         return 0;
     }
 }
