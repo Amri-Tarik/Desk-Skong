@@ -4,13 +4,13 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class Config:
     # Simulation
-    HZ: float = 60.0
+    HZ: float = 120.0
     SUBSTEPS: int = 2
     GRAVITY_Y: float = -2400.0  # y-up in physics (negative = “down”)
 
     # Solver tuning
     SOLVER_ITERATIONS: int = 50  # ← default is ~10; 20–40 is typical for platformers
-    COLLISION_SLOP: float = 0.02  # ← penetration allowance (in your world units/pixels)
+    COLLISION_SLOP: float = 0.0  # ← penetration allowance (in your world units/pixels)
 
     # Shapes
     FLOOR_RADIUS: float = 3.0  # ← thickness for static segments (ground/walls)
@@ -22,7 +22,7 @@ class Config:
     JUMP_IMPULSE: float = 1000.0
     COYOTE_TIME: float = 0.08  # seconds after leaving ground still allowed to jump
     JUMP_BUFFER: float = 0.10  # seconds buffering the jump press
-    MAX_FALL_SPEED: float = -1200.0
+    MAX_FALL_SPEED: float = -800.0
     WALL_SLIDE_SPEED: float = -150.0
     WALL_JUMP_X: float = 400.0
     WALL_JUMP_Y: float = 1000.0
