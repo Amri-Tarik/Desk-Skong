@@ -45,6 +45,24 @@ class SkinData:
     name_to_index: Dict[str, int]
 
 
+@dataclass(frozen=True)
+class DrawPacket:
+    """
+    Ready-to-render data for the *current frame*:
+      - `image`: PIL image already rotated/flipped and scaled
+      - `scaled_canvas_size`: (W,H) of the untrimmed canvas after scaling
+      - `scaled_frame_rect_tl`: (x,y,w,h) top-left rect of the frame inside the canvas (after scaling)
+      - `name`: frame name (useful for logs)
+      - `scale`: the scale applied
+    """
+
+    name: str
+    image: Image.Image
+    scaled_canvas_size: Tuple[int, int]
+    scaled_frame_rect_tl: Tuple[int, int, int, int]
+    scale: float
+
+
 # ========= Skin loader (atlas + metadata) =========
 
 
@@ -328,59 +346,40 @@ class SpritePlayer:
                         self.pending_after_transition = None
                         self._apply_group(target)
 
-    # ---- query current frame + placement ----
+    # ---- single source of truth for drawing/collisions ----
 
-    def frame_name(self) -> str:
-        sd = self.skin.data.sprites[self._seq[self.index]]
-        return sd.name
-
-    def current_frame(self) -> Image.Image:
-        """Returns a PIL Image with rotation/flip applied (upright)."""
-        sd = self.skin.data.sprites[self._seq[self.index]]
-        return self.skin.frame_image(sd)
-
-    def current_canvas_size(self) -> Tuple[int, int]:
-        sd = self.skin.data.sprites[self._seq[self.index]]
-        img = self.skin.frame_image(sd)  # rotated/upright
-        return self.skin.canvas_size(sd, img)
-
-    def current_top_left_offset(self) -> Tuple[int, int]:
-        """Where to draw the current frame inside its untrimmed canvas (top-left origin)."""
-        sd = self.skin.data.sprites[self._seq[self.index]]
-        img = self.skin.frame_image(sd)
-        return self.skin.top_left_offset_in_canvas(sd, img)
-
-    # Convenience: all draw info at once
-    def draw_packet(self, scale: float = 1.0) -> Dict[str, object]:
+    def draw_packet(self, scale: float = 1.0) -> DrawPacket:
         """
-        Returns everything a renderer needs to draw the frame bottom-aligned:
-          {
-            "name": str,
-            "image": PIL.Image,               # already rotated/flipped
-            "canvas_size": (cw, ch),          # untrimmed canvas (pixels)
-            "offset_tl": (ox, oy),            # where to blit inside canvas (top-left coords)
-            "scaled_size": (w, h),            # image size after scaling
-            "scaled_offset_tl": (ox, oy),     # offset after scaling
-          }
+        Returns everything a renderer needs to draw the frame bottom-aligned and to
+        compute a sane default collision rect (the frame rect inside the canvas).
         """
-        img = self.current_frame()
-        cw, ch = self.current_canvas_size()
-        ox, oy = self.current_top_left_offset()
+        sd = self.skin.data.sprites[self._seq[self.index]]
 
+        # 1) rotate/crop frame to be upright
+        img = self.skin.frame_image(sd)  # already applies Flip (TPackerCW, Tk2d, None)
+
+        # 2) rotation-aware canvas size
+        cw, ch = self.skin.canvas_size(
+            sd, img
+        )  # uses SourceSize if present, else frame.size
+
+        # 3) top-left offset of the (trimmed) frame inside the (untrimmed) canvas
+        ox, oy = self.skin.top_left_offset_in_canvas(sd, img)
+
+        # 4) apply scale consistently to everything
         if scale != 1.0:
-            w = max(1, int(round(img.width * scale)))
-            h = max(1, int(round(img.height * scale)))
-            img = img.resize((w, h), Image.NEAREST)
-            ox = int(round(ox * scale))
-            oy = int(round(oy * scale))
+            sw = max(1, int(round(img.width * scale)))
+            sh = max(1, int(round(img.height * scale)))
+            img = img.resize((sw, sh), Image.NEAREST)
             cw = int(round(cw * scale))
             ch = int(round(ch * scale))
+            ox = int(round(ox * scale))
+            oy = int(round(oy * scale))
 
-        return {
-            "name": self.frame_name(),
-            "image": img,
-            "canvas_size": (cw, ch),
-            "offset_tl": (ox, oy),
-            "scaled_size": (img.width, img.height),
-            "scaled_offset_tl": (ox, oy),
-        }
+        return DrawPacket(
+            name=sd.name,
+            image=img,
+            scaled_canvas_size=(cw, ch),
+            scaled_frame_rect_tl=(ox, oy, img.width, img.height),
+            scale=float(scale),
+        )

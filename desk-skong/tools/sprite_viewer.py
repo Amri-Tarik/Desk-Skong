@@ -132,34 +132,33 @@ class Viewer(QtWidgets.QWidget):
         p.drawPixmap(0, 0, self.bg)
 
         pkt = self.player.draw_packet(scale=self.scale)
-        img: QtGui.QImage = ImageQt.ImageQt(pkt["image"])
-        pix = QtGui.QPixmap.fromImage(img)
+        img_qt: QtGui.QImage = ImageQt.ImageQt(pkt.image)
+        pix = QtGui.QPixmap.fromImage(img_qt)
 
-        cw, ch = pkt["canvas_size"]
-        ox, oy = pkt["scaled_offset_tl"]
+        cw, ch = pkt.scaled_canvas_size
+        ox, oy, fw, fh = pkt.scaled_frame_rect_tl
 
         # bottom-align canvas in window with padding
         dst_x = self.pad_x
-        dst_y = self.height() - self.pad_y - int(round(ch))
+        dst_y = self.height() - self.pad_y - int(round(ch)) - 20
 
-        # draw canvas outline (debug)
-        pen = QtGui.QPen(QtGui.QColor(0, 0, 0, 120))
+        # draw inner frame rect (debug hitbox)
+        pen = QtGui.QPen(QtGui.QColor(255, 80, 80, 160))
         pen.setWidth(1)
         p.setPen(pen)
-        p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-        p.drawRect(dst_x, dst_y, int(round(cw)), int(round(ch)))
+        p.drawRect(dst_x + ox, dst_y + oy, fw, fh)
 
         # draw sprite at its top-left offset inside canvas
         p.drawPixmap(dst_x + ox, dst_y + oy, pix)
 
         # labels
         p.setPen(QtGui.QColor(20, 20, 20))
-        info = f"group={self.player.current_group}  frame={pkt['name']}  scale={self.scale:.2f}"
+        info = f"group={self.player.current_group}  frame={pkt.name}  scale={self.scale:.2f}"
         p.drawText(12, 20, info)
 
         # frame-change log
-        if pkt["name"] != self.last_frame_name:
-            self.last_frame_name = pkt["name"]
+        if pkt.name != self.last_frame_name:
+            self.last_frame_name = pkt.name
 
         p.end()
 
