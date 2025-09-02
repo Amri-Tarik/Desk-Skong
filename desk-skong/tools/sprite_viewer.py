@@ -1,12 +1,15 @@
 # tools/sprite_viewer.py
 from __future__ import annotations
-import os, sys, time, pathlib
 
+import os
+import pathlib
+import sys
+import time
+
+from anim.sprite_anim import AnimationConfig, Skin, SpritePlayer
 from PIL import ImageQt
 from PySide6 import QtCore, QtGui, QtWidgets
-
-from anim.sprite_anim import Skin, AnimationConfig, SpritePlayer
-
+from PySide6.QtGui import QAction
 
 # --- add repo root to sys.path
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -38,8 +41,29 @@ class Viewer(QtWidgets.QWidget):
     def __init__(self) -> None:
         super().__init__(parent=None)
         self.setWindowTitle("Sprite Viewer")
-        self.resize(1280, 720)
-        self.setMinimumSize(640, 360)
+        # Make the window resize to the size of the current monitor
+        screen = QtWidgets.QApplication.primaryScreen()
+        if screen is not None:
+            geometry = screen.availableGeometry()
+            self.setGeometry(geometry)
+
+        # Overlay-friendly window flags
+        self.setWindowFlags(
+            QtCore.Qt.WindowType.FramelessWindowHint
+            | QtCore.Qt.WindowType.WindowStaysOnTopHint
+            | QtCore.Qt.WindowType.Tool  # no taskbar button
+        )
+
+        self._tray_actions = {}
+        self._setup_tray()
+
+        # Per-pixel alpha
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_NoSystemBackground, True)
+
+        # mode toggles
+        self.transparent_mode = True  # start transparent; press 'T' to see checkerboard
+        self.click_through = False  # press 'C' to toggle
 
         # load data
         self.skin = Skin.load(str(SKIN_JSON), str(ATLAS_PNG))
@@ -112,6 +136,11 @@ class Viewer(QtWidgets.QWidget):
             # spin length-1 frames
             for _ in range(len(self._seq()) - 1):
                 self.player.update(999.0)
+        elif k == QtCore.Qt.Key_T:
+            self.set_transparent_mode(not self.transparent_mode)
+        elif k == QtCore.Qt.Key_C:
+            self.set_click_through(not self.click_through)
+
         else:
             super().keyPressEvent(e)
 
@@ -128,8 +157,14 @@ class Viewer(QtWidgets.QWidget):
         p = QtGui.QPainter(self)
         p.setRenderHints(QtGui.QPainter.RenderHint.SmoothPixmapTransform, False)
 
-        # checker background
-        p.drawPixmap(0, 0, self.bg)
+        if self.transparent_mode:
+            # Clear to fully transparent (for overlay)
+            p.setCompositionMode(QtGui.QPainter.CompositionMode_Source)
+            p.fillRect(self.rect(), QtCore.Qt.transparent)
+            p.setCompositionMode(QtGui.QPainter.CompositionMode_SourceOver)
+        else:
+            # Debug checkerboard
+            p.drawPixmap(0, 0, self.bg)
 
         pkt = self.player.draw_packet(scale=self.scale)
         img_qt: QtGui.QImage = ImageQt.ImageQt(pkt.image)
@@ -138,29 +173,107 @@ class Viewer(QtWidgets.QWidget):
         cw, ch = pkt.scaled_canvas_size
         ox, oy, fw, fh = pkt.scaled_frame_rect_tl
 
-        # bottom-align canvas in window with padding
+        # bottom-align canvas in window with padding (initial)
         dst_x = self.pad_x
-        dst_y = self.height() - self.pad_y - int(round(ch)) - 20
+        dst_y = self.height() - self.pad_y - int(round(ch))
 
-        # draw inner frame rect (debug hitbox)
-        pen = QtGui.QPen(QtGui.QColor(255, 80, 80, 160))
-        pen.setWidth(1)
-        p.setPen(pen)
-        p.drawRect(dst_x + ox, dst_y + oy, fw, fh)
+        # --- Clamp so the *frame* is fully visible vertically ---
+        # frame top-left in window:
+        frame_top = dst_y + oy
+        frame_bottom = frame_top + fh
 
-        # draw sprite at its top-left offset inside canvas
+        if frame_top < 0:
+            # push canvas down so frame top is at y=0
+            dst_y += -frame_top
+        elif frame_bottom > self.height():
+            # pull canvas up so frame bottom fits
+            dst_y -= frame_bottom - self.height()
+
+        # Optional outlines in debug mode
+        if not self.transparent_mode:
+            pen = QtGui.QPen(QtGui.QColor(0, 0, 0, 120))
+            pen.setWidth(1)
+            p.setPen(pen)
+            p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+            p.drawRect(dst_x, dst_y, int(round(cw)), int(round(ch)))
+
+            pen2 = QtGui.QPen(QtGui.QColor(255, 80, 80, 160))
+            pen2.setWidth(1)
+            p.setPen(pen2)
+            p.drawRect(dst_x + ox, dst_y + oy, fw, fh)
+
+        # Draw sprite
         p.drawPixmap(dst_x + ox, dst_y + oy, pix)
 
-        # labels
-        p.setPen(QtGui.QColor(20, 20, 20))
-        info = f"group={self.player.current_group}  frame={pkt.name}  scale={self.scale:.2f}"
-        p.drawText(12, 20, info)
-
-        # frame-change log
-        if pkt.name != self.last_frame_name:
-            self.last_frame_name = pkt.name
+        # Labels (only in debug)
+        if not self.transparent_mode:
+            p.setPen(QtGui.QColor(20, 20, 20))
+            info = f"group={self.player.current_group}  scale={self.scale:.2f}"
+            p.drawText(12, 20, info)
 
         p.end()
+
+    def _setup_tray(self):
+        """Create a system tray icon with a context menu to recover from click-through."""
+        if not QtWidgets.QSystemTrayIcon.isSystemTrayAvailable():
+            print(
+                "System tray not available; click-through might be hard to disable without a hotkey."
+            )
+            return
+
+        icon = self.style().standardIcon(
+            QtWidgets.QStyle.StandardPixmap.SP_ComputerIcon
+        )
+        tray = QtWidgets.QSystemTrayIcon(icon, self)
+        menu = QtWidgets.QMenu()
+
+        act_show = QAction("Show Window", self)
+        act_hide = QAction("Hide Window", self)
+        act_trans = QAction("Transparent Background", self, checkable=True)
+        act_click = QAction("Click-through (mouse passthrough)", self, checkable=True)
+        act_quit = QAction("Quit", self)
+
+        act_show.triggered.connect(self.showNormal)
+        act_hide.triggered.connect(self.hide)
+        act_trans.toggled.connect(self.set_transparent_mode)
+        act_click.toggled.connect(self.set_click_through)
+        act_quit.triggered.connect(QtWidgets.QApplication.quit)
+
+        menu.addAction(act_show)
+        menu.addAction(act_hide)
+        menu.addSeparator()
+        menu.addAction(act_trans)
+        menu.addAction(act_click)
+        menu.addSeparator()
+        menu.addAction(act_quit)
+
+        tray.setContextMenu(menu)
+        tray.setToolTip("Desk-Skong Overlay")
+        tray.show()
+
+        # Keep references so GC doesn't kill the tray/menu/actions
+        self.tray = tray
+        self._tray_actions = {
+            "transparent": act_trans,
+            "clickthrough": act_click,
+        }
+
+    def set_transparent_mode(self, on: bool):
+        self.transparent_mode = bool(on)
+        # keep tray and keyboard toggles in sync
+        if self._tray_actions:
+            self._tray_actions["transparent"].setChecked(self.transparent_mode)
+        self.update()
+
+    def set_click_through(self, on: bool):
+        self.click_through = bool(on)
+        if self._tray_actions:
+            self._tray_actions["clickthrough"].setChecked(self.click_through)
+        # Toggle mouse passthrough
+        self.setWindowFlag(
+            QtCore.Qt.WindowType.WindowTransparentForInput, self.click_through
+        )
+        self.show()  # re-apply flags
 
 
 def main():
