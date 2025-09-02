@@ -6,5 +6,6 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "pillow>=11.3.0",
+    "pymunk>=7.1.0",
     "pyside6>=6.9.2",
 ]
