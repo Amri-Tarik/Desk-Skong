@@ -36,5 +36,21 @@ HK_TK2D_Exporter/assets/**
 
 Knight.png
 
-# Rust
-/target
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# uv virtual environment
+.uv/
+
+# pip/uv wheel cache
+*.whl
+
+# Python egg info
+*.egg-info/
+dist/
+build/
+
+

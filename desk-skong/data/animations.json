@@ -1,0 +1,34 @@
+{
+  "groups": [
+    {
+      "name": "idle",
+      "fps": 12.0,
+      "prefix": "idle_still_02000",
+      "loop": true,
+      "transition_frames": {
+        "run": "idle_to_run"
+      }
+    },
+    {
+      "name": "run",
+      "fps": 12.0,
+      "prefix": "run000",
+      "loop": true,
+      "transition_frames": {
+        "idle": "run_to_idle"
+      }
+    },
+    {
+      "name": "run_to_idle",
+      "fps": 12.0,
+      "prefix": "run_to_idle00",
+      "loop": false
+    },
+    {
+      "name": "idle_to_run",
+      "fps": 12.0,
+      "prefix": "idle_to_run000",
+      "loop": false
+    }
+  ]
+}
