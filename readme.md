@@ -85,6 +85,17 @@ Use these short, consistent scopes. Examples:
 - One primary scope per PR. If truly cross-cutting, pick the dominant one.
 - Prefer small focused branches/PRs; keep titles imperative and specific.
 
+---
+
+# Setup Python env
+
+install uv (https://docs.astral.sh/uv/)
+
+run 
+```bash
+cd desk-skong
+uv run
+```
 
 ---
 
@@ -98,16 +109,16 @@ Each skin is represented by:
 
 ```json
 {
-  "atlasWidth": 4096,
-  "atlasHeight": 4096,
-  "sprites": [
+  "AtlasWidth": 4096,
+  "AtlasHeight": 4096,
+  "Sprites": [
     {
-      "name": "idle_still_020007",
-      "pixelRect": { "x": 1119, "y": 1897, "w": 130, "h": 61 },  // atlas pixels, bottom-left origin
-      "pivot": [0.054687425, -0.39062503],                        // world-units anchor (from tk2d bounds.center)
-      "flip": "TPackerCW",                                        // None | Tk2d | TPackerCW (90° CW)
-      "sourceSize": { "w": 350, "h": 186 },                        // original (untrimmed) size in pixels
-      "spriteSourceOffset": { "x": 24, "y": 18 }                   // bottom-left offset of trimmed rect within the untrimmed
+      "Name": "idle_still_020007",
+      "PixelRect": { "X": 1119, "Y": 1897, "W": 130, "H": 61 },  // atlas pixels, bottom-left origin
+      "Pivot": [0.054687425, -0.39062503],                        // world-units anchor (from tk2d bounds.center)
+      "Flip": "TPackerCW",                                        // None | Tk2d | TPackerCW (90° CW)
+      "SourceSize": { "W": 350, "H": 186 },                        // original (untrimmed) size in pixels
+      "SpriteSourceOffset": { "X": 24, "Y": 18 }                   // bottom-left offset of trimmed rect within the untrimmed
     }
   ]
 }
