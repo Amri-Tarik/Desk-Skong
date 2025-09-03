@@ -5,7 +5,7 @@ from dataclasses import dataclass
 class Config:
     # Simulation
     HZ: float = 120.0
-    SUBSTEPS: int = 2
+    SUBSTEPS: int = 1
     GRAVITY_Y: float = -2400.0  # y-up in physics (negative = “down”)
 
     # Solver tuning

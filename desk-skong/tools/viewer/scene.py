@@ -11,7 +11,13 @@ from phys import CharacterBody, PhysicsWorld
 from phys.contacts import setup_handlers
 from phys.kinematics import apply_movement
 from phys.layers import CT_PLAYER, CT_TERRAIN
-from phys.segments import OneWayPlatform, VerticalWall, tick_phase
+from phys.segments import (
+    OneWayPlatform,
+    VerticalWall,
+    install_handlers,
+    request_phase_down,
+    tick_phase,
+)
 from phys.types import MoveInput
 
 
@@ -70,14 +76,14 @@ class Scene:
             self.space,
             (float(W) * 0.3, float(H) * 0.35),
             (float(W) * 0.7, float(H) * 0.35),
-            radius=0.4,
+            radius=8.0,
         )
 
         VerticalWall.add(
             self.space,
             (float(W) * 0.55, 0.0),
             (float(W) * 0.55, float(H) * 0.65),
-            radius=4.0,
+            radius=8.0,
         )
 
         # Player hitbox (requested size & spawn)
@@ -95,6 +101,8 @@ class Scene:
 
         # timing
         self._last_t = time.perf_counter()
+
+        install_handlers(self.space)
 
     # ---------------- API the widget calls ----------------
 
@@ -129,7 +137,11 @@ class Scene:
         move = MoveInput(x=xaxis, jump=self.in_jump_press)
         self.in_jump_press = False  # consume
 
-        tick_phase(self.player_phys, dt)
+        request_phase_down(
+            self.space, now=self.space.time, hold=self.in_down, duration=0.15
+        )
+
+        tick_phase(self.space, now=self.space.time)
         apply_movement(self.player_phys, move, dt, now=self.space.time)
         self.world.step(dt)
 
