@@ -188,6 +188,7 @@ def install_handlers(
         vy = float(dyn_s.body.velocity.y)
 
         # Player feet from shape's AABB bottom (robust, uses actual hitbox)
+        dyn_s.cache_bb()
         feet_y = float(dyn_s.bb.bottom)
 
         # Platform nominal Y (cached) + small grace to account for radius
@@ -195,28 +196,19 @@ def install_handlers(
         grace = float(static_s.radius)
 
         on_top = feet_y >= (plat_y + grace * 0.25)
-        falling = vy < -1e-3
         rising = vy > 1e-3
 
         if st.active and on_top:
-            _log(
-                f"pre TERRAIN[oneway]: PHASE -> ignore (feet={feet_y:.1f} plat={plat_y:.1f})"
-            )
             arb.process_collision = False
-            return
+            return False
 
         # Autopass from below: if rising and feet are below (or close to) platform height
         if rising and feet_y <= (plat_y + grace * 0.6):
-            _log(
-                f"pre TERRAIN[oneway]: rising from below -> ignore (vy={vy:.1f} feet={feet_y:.1f} plat={plat_y:.1f})"
-            )
             arb.process_collision = False
-            return
+            return False
 
         # Otherwise, let it collide (solid top)
-        _log(
-            f"pre TERRAIN[oneway]: collide (on_top={on_top} vy={vy:.1f} feet={feet_y:.1f} plat={plat_y:.1f})"
-        )
+        return True
 
     space.on_collision(
         CT_PLAYER,

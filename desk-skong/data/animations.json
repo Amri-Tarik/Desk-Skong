@@ -70,13 +70,12 @@
       "prefix": "wall_slide000",
       "loop": true,
       "transition_frames": {
-        "jump": "wall_slide_to_jump",
-        "fall": "wall_slide_to_jump"
+        "jump": "wall_slide_to_jump"
       }
     },
     {
       "name": "wall_slide_to_jump",
-      "fps": 24.0,
+      "fps": 12.0,
       "prefix": "wall_jump000",
       "loop": false,
       "flipped": true
