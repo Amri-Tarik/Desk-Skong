@@ -63,6 +63,7 @@ class DrawPacket:
     scaled_canvas_size: Tuple[int, int]
     scaled_frame_rect_tl: Tuple[int, int, int, int]
     scale: float
+    foot_y_canvas: int
 
 
 def _resampler_for(scale: float):
@@ -448,4 +449,5 @@ class SpritePlayer:
             scaled_canvas_size=(cw, ch),
             scaled_frame_rect_tl=(ox, oy, img.width, img.height),
             scale=float(scale),
+            foot_y_canvas=ch,
         )
