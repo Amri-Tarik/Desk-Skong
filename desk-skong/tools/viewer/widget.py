@@ -5,11 +5,13 @@ import os
 import time
 from typing import Tuple
 
-from phys.segments import gather_debug_segments  # helper that scans space
+from phys.segments import gather_debug_segments
 from PIL import ImageQt
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtGui import QAction
-from tools.viewer.debugdraw import draw_segments_capsules  # if you created this file
+from tools.edge_phys import EdgePhysConfig, EdgePhysicsBridge
+from tools.viewer.debugdraw import draw_segments_capsules
+from vision.edge_detect import EdgeConfig, EdgeDetector
 
 from .scene import Scene
 
@@ -73,6 +75,24 @@ class OverlayWidget(QtWidgets.QWidget):
         self._timer = QtCore.QTimer(self)
         self._timer.timeout.connect(self._on_tick)
         self._timer.start(16)  # ~60 Hz
+
+        # Edge → Physics wiring (toggle visualization via env SKONG_EDGE_VIS=1)
+        det_cfg = EdgeConfig(
+            # keep your tuned values here
+        )
+        self.edge_detector = EdgeDetector(det_cfg)
+
+        edge_cfg = EdgePhysConfig(
+            interval_sec=1.0,
+            horiz_radius=4.0,
+            vert_radius=6.0,
+            world_height_px=self.height(),  # physics/world pixels match window
+            visualize=bool(int(os.environ.get("SKONG_EDGE_VIS", "0"))),
+        )
+
+        self.edge_bridge = EdgePhysicsBridge(
+            self.scene.space, self.edge_detector, edge_cfg, parent=self
+        )
 
     # ---------------- UI plumbing ----------------
 
@@ -187,17 +207,36 @@ class OverlayWidget(QtWidgets.QWidget):
         else:
             p.drawPixmap(0, 0, self.bg)
 
-        # --- physics debug: draw segments (always)
-        plats, walls = gather_debug_segments(self.scene.space)
-        draw_segments_capsules(
-            p,
-            self.width(),
-            self.height(),
-            platforms=plats,
-            walls=walls,
-            default_radius=2.0,
-            width_scale=1.0,
-        )
+        if (
+            getattr(self.edge_bridge.cfg, "visualize", False)
+            and self.edge_bridge.last_edges
+        ):
+
+            # --- physics debug: draw segments (always)
+            plats, walls = gather_debug_segments(self.scene.space)
+            draw_segments_capsules(
+                p,
+                self.width(),
+                self.height(),
+                platforms=plats,
+                walls=walls,
+                default_radius=2.0,
+                width_scale=1.0,
+            )
+            # thin pens
+            # wall_pen = QtGui.QPen(QtGui.QColor(255, 60, 60, 220))
+            # wall_pen.setWidth(1)
+            # plat_pen = QtGui.QPen(QtGui.QColor(80, 220, 120, 220))
+            # plat_pen.setWidth(1)
+            # # capture size (to scale if needed, here we assume 1:1 with window)
+            # Wc, Hc = self.edge_bridge.last_capture_size
+            # # draw in screen coords (y-down), our widget is also y-down, so no transform
+            # p.setPen(plat_pen)
+            # for s in self.edge_bridge.last_edges.horiz:
+            #     p.drawLine(s.x1, s.y1, s.x2, s.y2)
+            # p.setPen(wall_pen)
+            # for s in self.edge_bridge.last_edges.vert:
+            #     p.drawLine(s.x1, s.y1, s.x2, s.y2)
 
         # --- sprite draw
         pkt = self.scene.draw_packet(scale=self.scale)

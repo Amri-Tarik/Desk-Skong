@@ -1,6 +1,7 @@
 # tools/viewer/scene.py
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
 from typing import Tuple
@@ -19,6 +20,8 @@ from phys.segments import (
     tick_phase,
 )
 from phys.types import MoveInput
+from tools.edge_phys import EdgePhysConfig, EdgePhysicsBridge
+from vision.edge_detect import EdgeConfig, EdgeDetector
 
 
 def player_feet_y(player_phys: CharacterBody) -> float:
@@ -72,19 +75,19 @@ class Scene:
         )
 
         # example objects to play with
-        OneWayPlatform.add(
-            self.space,
-            (float(W) * 0.3, float(H) * 0.35),
-            (float(W) * 0.7, float(H) * 0.35),
-            radius=8.0,
-        )
+        # OneWayPlatform.add(
+        #     self.space,
+        #     (float(W) * 0.3, float(H) * 0.35),
+        #     (float(W) * 0.7, float(H) * 0.35),
+        #     radius=2.0,
+        # )
 
-        VerticalWall.add(
-            self.space,
-            (float(W) * 0.55, 0.0),
-            (float(W) * 0.55, float(H) * 0.65),
-            radius=8.0,
-        )
+        # VerticalWall.add(
+        #     self.space,
+        #     (float(W) * 0.55, 0.0),
+        #     (float(W) * 0.55, float(H) * 0.65),
+        #     radius=2.0,
+        # )
 
         # Player hitbox (requested size & spawn)
         self.player_phys = CharacterBody(self.space, x=W * 0.5, y=H * 0.8, w=40, h=80)
