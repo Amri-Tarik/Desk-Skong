@@ -252,7 +252,6 @@ class OverlayWidget(QtWidgets.QWidget):
         anchor_x_screen = int(round(px))
         anchor_y_screen = self.height() - int(round(feet_y))  # y-up to y-down
 
-        # ✅ Your requested placement
         dst_x = int(round(anchor_x_screen - (ox + (fw * 0.5))))
         dst_y = int(round(anchor_y_screen - (oy + fh)))
 

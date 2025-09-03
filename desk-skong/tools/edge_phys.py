@@ -30,7 +30,7 @@ def grab_screen_rgba_and_qimage(
 @dataclass
 class EdgePhysConfig:
     interval_sec: float = 1.0  # how often to rescan
-    horiz_radius: float = 6.0  # pymunk Segment radius for platforms
+    horiz_radius: float = 2.0  # pymunk Segment radius for platforms
     vert_radius: float = 6.0  # pymunk Segment radius for walls
     # If your window height differs from capture height, set a transform
     # otherwise we’ll use QScreen geometry.
@@ -76,7 +76,7 @@ class EdgePhysicsBridge(QtCore.QObject):
                 min_persist=3,  # require 3 hits to “stabilize”
                 y_tol=4,
                 x_tol=4,
-                gap_merge_tol=12,
+                gap_merge_tol=4,
                 min_overlap_px=8,
                 smooth_alpha=0.6,
             )

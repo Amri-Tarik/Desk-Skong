@@ -34,7 +34,7 @@ HK_TK2D_Exporter/*.TestResults/
 HK_TK2D_Exporter/Managed/**
 HK_TK2D_Exporter/assets/**
 
-Knight.png
+Knight.*
 
 # Python
 __pycache__/

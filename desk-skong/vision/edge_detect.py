@@ -39,16 +39,16 @@ class EdgeConfig:
     hough_rho: float = 1.0
     hough_theta: float = np.pi / 180.0
     hough_threshold: int = 15  # LOWER -> accept weaker lines
-    hough_min_line_len_frac: float = 0.03  # 8% of min(screen_w, screen_h)
+    hough_min_line_len_frac: float = 0.02  # 8% of min(screen_w, screen_h)
     hough_max_line_gap: int = 1
 
     # Orientation gate
-    axis_eps_deg: float = 8.0  # allow a bit more slant
+    axis_eps_deg: float = 12.0  # allow a bit more slant
 
     # Merge tolerances (pixels)
-    y_merge_tol: int = 4
-    x_merge_tol: int = 4
-    gap_merge_tol: int = 12
+    y_merge_tol: int = 2
+    x_merge_tol: int = 2
+    gap_merge_tol: int = 2
 
 
 def _angle_deg(x1: int, y1: int, x2: int, y2: int) -> float:

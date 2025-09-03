@@ -43,7 +43,7 @@ def player_feet_y(player_phys: CharacterBody) -> float:
 class SceneConfig:
     width: int
     height: int
-    scale: float = 0.7  # default visual scale
+    scale: float = 1.5  # default visual scale
 
 
 class Scene:
@@ -56,16 +56,16 @@ class Scene:
         self.world = PhysicsWorld()
         self.space: pymunk.Space = self.world.space
         self.space.time = 0.0
-        self.space.iterations = 30  # crisp contacts
+        self.space.iterations = 30
 
         W, H = cfg.width, cfg.height
 
-        # Solid floor (identical to what you liked before)
+        # world floor (bottom of screen)
         self.world.add_static_segment(
             (0.0, 0.0), (float(W), 0.0), collision_type=CT_TERRAIN, radius=4.0
         )
 
-        # Side rails (solid walls). Adjust radius to taste.
+        # Side rails (solid walls).
         VerticalWall.add(self.space, (0.0, 0.0), (0.0, float(H)), radius=4.0)
         VerticalWall.add(
             self.space,
