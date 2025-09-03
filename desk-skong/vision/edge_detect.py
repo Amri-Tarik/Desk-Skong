@@ -32,15 +32,15 @@ class EdgeConfig:
 
     # --- Optional color-aware edges (Lab chroma channels) ---
     color_aware: bool = True
-    canny1_color: int = 8  # chroma thresholds even looser
-    canny2_color: int = 28
+    canny1_color: int = 6  # chroma thresholds even looser
+    canny2_color: int = 22
 
     # --- Hough ---
     hough_rho: float = 1.0
     hough_theta: float = np.pi / 180.0
     hough_threshold: int = 15  # LOWER -> accept weaker lines
     hough_min_line_len_frac: float = 0.03  # 8% of min(screen_w, screen_h)
-    hough_max_line_gap: int = 2
+    hough_max_line_gap: int = 1
 
     # Orientation gate
     axis_eps_deg: float = 8.0  # allow a bit more slant

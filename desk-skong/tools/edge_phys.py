@@ -11,6 +11,7 @@ from phys.layers import CT_TERRAIN, CT_WALL
 from phys.segments import OneWayPlatform, VerticalWall
 from PySide6 import QtCore, QtGui, QtWidgets
 from vision.edge_detect import DetectedEdges, EdgeConfig, EdgeDetector, Segment
+from vision.edge_track import EdgeTracker, TrackConfig
 
 
 def grab_screen_rgba_and_qimage(
@@ -29,8 +30,8 @@ def grab_screen_rgba_and_qimage(
 @dataclass
 class EdgePhysConfig:
     interval_sec: float = 1.0  # how often to rescan
-    horiz_radius: float = 8.0  # pymunk Segment radius for platforms
-    vert_radius: float = 8.0  # pymunk Segment radius for walls
+    horiz_radius: float = 6.0  # pymunk Segment radius for platforms
+    vert_radius: float = 6.0  # pymunk Segment radius for walls
     # If your window height differs from capture height, set a transform
     # otherwise we’ll use QScreen geometry.
     world_height_px: Optional[int] = None
@@ -69,6 +70,18 @@ class EdgePhysicsBridge(QtCore.QObject):
         self.last_edges: Optional[DetectedEdges] = None
         self.last_capture_size: Tuple[int, int] = (0, 0)
 
+        self.tracker = EdgeTracker(
+            TrackConfig(
+                window=3,  # tune: 4–6 is a good range
+                min_persist=3,  # require 3 hits to “stabilize”
+                y_tol=4,
+                x_tol=4,
+                gap_merge_tol=12,
+                min_overlap_px=8,
+                smooth_alpha=0.6,
+            )
+        )
+
     # -- public control -------------------------------------------------
 
     def stop(self) -> None:
@@ -89,17 +102,19 @@ class EdgePhysicsBridge(QtCore.QObject):
         screen = QtWidgets.QApplication.primaryScreen()
         if not screen:
             return
-
         rgba, _img = grab_screen_rgba_and_qimage(screen)
-        Hc, Wc = rgba.shape[:2]  # capture (y-down)
+        Hc, Wc = rgba.shape[:2]
         self.last_capture_size = (Wc, Hc)
 
-        # detect edges (in screen coords, y-down)
-        edges = self.detector.detect(rgba)
-        self.last_edges = edges
+        # 1) raw detections (your tuned detector)
+        raw_edges = self.detector.detect(rgba)
 
-        # convert to physics segments (y-up), then refresh shapes in space
-        self._rebuild_physics(edges, screen_geometry=screen.geometry())
+        # 2) stabilize over time
+        stable_edges = self.tracker.update(raw_edges)
+        self.last_edges = stable_edges if self.cfg.visualize else None
+
+        # 3) use stable edges for physics
+        self._rebuild_physics(stable_edges, screen_geometry=screen.geometry())
 
     def _rebuild_physics(
         self, edges: DetectedEdges, screen_geometry: QtCore.QRect
