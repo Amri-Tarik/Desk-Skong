@@ -29,7 +29,7 @@ def grab_screen_rgba_and_qimage(
 
 @dataclass
 class EdgePhysConfig:
-    interval_sec: float = 1.0  # how often to rescan
+    interval_sec: float = 0.5  # how often to rescan
     horiz_radius: float = 2.0  # pymunk Segment radius for platforms
     vert_radius: float = 6.0  # pymunk Segment radius for walls
     # If your window height differs from capture height, set a transform

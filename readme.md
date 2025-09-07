@@ -10,7 +10,7 @@
 
 - `HK_TK2D_Exporter/` — a small one-time tool that converts Hollow Knight’s tk2d sprite collections into our PNG+JSON format.  
   (See its own README inside that folder for usage.)
-- Overlay code (planned): renders sprites, reads the screen, runs basic pathfinding/AI.
+- Overlay code : renders sprites, reads the screen, runs basic pathfinding/AI.
 
 ---
 

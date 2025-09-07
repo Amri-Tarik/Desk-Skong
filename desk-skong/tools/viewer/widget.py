@@ -70,6 +70,7 @@ class OverlayWidget(QtWidgets.QWidget):
         self.in_right = False
         self.in_down = False
         self.in_jump_press = False
+        self.in_challenge = False
 
         # Tick
         self._timer = QtCore.QTimer(self)
@@ -169,6 +170,8 @@ class OverlayWidget(QtWidgets.QWidget):
             self.set_transparent_mode(not self.transparent_mode)
         elif k == QtCore.Qt.Key_C:
             self.set_click_through(not self.click_through)
+        elif k == QtCore.Qt.Key_E:
+            self.in_challenge = True
         else:
             super().keyPressEvent(e)
 
@@ -180,6 +183,8 @@ class OverlayWidget(QtWidgets.QWidget):
             self.in_right = False
         elif k in (QtCore.Qt.Key_S, QtCore.Qt.Key_Down):
             self.in_down = False
+        elif k == QtCore.Qt.Key_E:
+            self.in_challenge = False
         else:
             super().keyReleaseEvent(e)
 
@@ -191,8 +196,10 @@ class OverlayWidget(QtWidgets.QWidget):
             right=self.in_right,
             down=self.in_down,
             jump_press=self.in_jump_press,
+            challenge=self.in_challenge,
         )
         self.in_jump_press = False  # consume
+        self.in_challenge = False  # consume
         self.scene.step()
         self.update()
 
