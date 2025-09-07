@@ -246,6 +246,9 @@ class AnimGroup:
         None  # e.g., for animation idle : {"run": "idle_to_run"}
     )
     flipped: bool = False  # if we should flip this animation group by default
+    force_animation: bool = (
+        False  # if the animation should be forcibly completed once started
+    )
 
 
 class AnimationConfig:
@@ -260,12 +263,13 @@ class AnimationConfig:
         for g in raw["groups"]:
             groups[g["name"]] = AnimGroup(
                 name=g["name"],
-                fps=float(g.get("fps", 30.0)),
+                fps=float(g.get("fps", 12.0)),
                 loop=bool(g.get("loop", True)),
                 order=g.get("order"),
                 prefix=g.get("prefix"),
                 transition_frames=g.get("transition_frames", {}),
                 flipped=bool(g.get("flipped", False)),
+                force_animation=bool(g.get("force_animation", False)),
             )
         return cls(groups)
 
@@ -315,6 +319,8 @@ class SpritePlayer:
 
         self.facing_sign: int = -1  # -1 = left (default), +1 = right
 
+        self.in_forced_animation: bool = False  # currently playing a forced animation
+
     # ---- group resolution & switching ----
 
     def _resolve_group(self, name: str) -> List[int]:
@@ -339,15 +345,26 @@ class SpritePlayer:
         return out
 
     def _apply_group(
-        self, name: str, loop: Optional[bool] = None, fps: Optional[float] = None
+        self,
+        name: str,
+        loop: Optional[bool] = None,
+        fps: Optional[float] = None,
+        forced_animation: Optional[bool] = False,
     ):
         self._seq = self._resolve_group(name)
         g = self.config.get(name)
         self.loop = g.loop if loop is None else bool(loop)
         self.fps = g.fps if fps is None else float(fps)
         self.current_group = name
-        self.accum = 0.0
-        self.index = 0
+        # if just starting the forced animation
+        if forced_animation and not self.in_forced_animation:
+            self.in_forced_animation == True
+            self.accum = 0.0
+            self.index = 0
+        # if just starting a regular animation
+        elif not forced_animation:
+            self.accum = 0.0
+            self.index = 0
 
     def goto(self, target: str):
         """Switch to target, optionally passing through a one-shot transition."""
@@ -362,6 +379,16 @@ class SpritePlayer:
 
         cur_g = self.config.get(self.current_group)
         used_transition = False
+
+        target_data = self.config.get(target)
+
+        if target_data.force_animation:
+            self._apply_group(target, loop=False, forced_animation=True)  # one-shot
+            return
+        elif cur_g.force_animation:
+            self.pending_after_transition = target
+            return
+
         if cur_g and cur_g.transition_frames and target in cur_g.transition_frames:
             trans_name = cur_g.transition_frames[target]
             tg = self.config.get(trans_name)
@@ -370,7 +397,7 @@ class SpritePlayer:
                 self.pending_after_transition = target
                 used_transition = True
 
-        if not used_transition:
+        if not used_transition and not self.in_forced_animation:
             self._apply_group(target)
             self.pending_after_transition = None
             self._queued_target = None
@@ -389,6 +416,8 @@ class SpritePlayer:
             else:
                 if self.index >= len(self._seq):
                     self.index = len(self._seq) - 1
+                    # end forced animations
+                    self.in_forced_animation = False
                     # If a transition just finished, go to queued target (if any), else the original
                     if self.pending_after_transition is not None:
                         next_target = (

@@ -101,6 +101,7 @@ class Scene:
         self.in_right = False
         self.in_down = False
         self.in_jump_press = False
+        self.in_challenge = False
 
         # timing
         self._last_t = time.perf_counter()
@@ -116,6 +117,7 @@ class Scene:
         right: bool | None = None,
         down: bool | None = None,
         jump_press: bool | None = None,
+        challenge: bool | None = None,
     ) -> None:
         if left is not None:
             self.in_left = left
@@ -125,6 +127,8 @@ class Scene:
             self.in_down = down
         if jump_press:
             self.in_jump_press = True
+        if challenge:
+            self.in_challenge = True
 
     def step(self, dt_visual: float | None = None) -> None:
         """Advance physics (fixed substeps inside world.step), then animation."""
@@ -151,6 +155,8 @@ class Scene:
         self._sync_anim_to_physics()
         self.player.update(dt)
 
+        self.in_challenge = False  # consume
+
     def _sync_anim_to_physics(self) -> None:
         vx, vy = self.player_phys.vel
         c = self.player_phys.contacts
@@ -172,7 +178,12 @@ class Scene:
             else:
                 target = "idle"
         else:
-            target = "run" if abs(vx) > run_threshold else "idle"
+            if abs(vx) > run_threshold:
+                target = "run"
+            elif self.in_challenge:
+                target = "knight_challenge"
+            else:
+                target = "idle"
 
         try:
             self.player.goto(target)

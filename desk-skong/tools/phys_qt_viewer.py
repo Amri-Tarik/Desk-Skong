@@ -81,7 +81,7 @@ class PhysViewer(QtWidgets.QWidget):
 
         # Player in center
         px, py = self.W * 0.5, self.H * 0.5
-        self.player = CharacterBody(self.space, x=px, y=py, w=60, h=110)
+        self.player = CharacterBody(self.space, x=px, y=py, w=60, h=60)
         setup_handlers(self.space, self.player)
 
         # Input state

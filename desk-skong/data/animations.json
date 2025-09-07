@@ -79,6 +79,13 @@
       "prefix": "wall_jump000",
       "loop": false,
       "flipped": true
+    },
+    {
+      "name": "knight_challenge",
+      "fps": 12.0,
+      "prefix": "knight_challenge00",
+      "loop": false,
+      "force_animation": true
     }
   ]
 }
