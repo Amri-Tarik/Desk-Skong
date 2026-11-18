@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
+use skong_core::acts::{ActLibrary, ActPlayer, ActStatus};
 use skong_core::anim::{AnimEvent, Animator, ClipLibrary};
 use skong_core::assets::{Skin, SpriteBank};
 use skong_win::monitor;
@@ -46,6 +47,8 @@ const HK_FLIP: i32 = 5;
 const HK_RESTART: i32 = 6;
 const HK_CLICK_THROUGH: i32 = 7;
 const HK_QUIT: i32 = 8;
+const HK_NEXT_ACT: i32 = 9;
+const HK_WAKE: i32 = 10;
 
 fn main() -> Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
@@ -64,6 +67,7 @@ fn main() -> Result<()> {
 
     let mut bank = SpriteBank::load_metadata(&args.data)?;
     let lib = ClipLibrary::load(&args.data.join("animations/Knight.json"), &bank)?;
+    let acts = ActLibrary::load(&args.data.join("../acts.json"), &lib)?;
     let keys = lib.sprite_keys();
     let ppu = 64.0 * args.scale;
     let load_skin = |bank: &mut SpriteBank, i: usize| -> Result<()> {
@@ -105,22 +109,28 @@ fn main() -> Result<()> {
         (HK_RESTART, vk::VK_R),
         (HK_CLICK_THROUGH, vk::VK_C),
         (HK_QUIT, vk::VK_Q),
+        (HK_NEXT_ACT, vk::VK_A),
+        (HK_WAKE, vk::VK_W),
     ] {
         rl.register_hotkey(id, key)?;
     }
-    log::info!("hotkeys: Ctrl+Alt + Left/Right clip, Up/Down skin, F flip, R restart, C click-through, Q quit");
+    log::info!("hotkeys: Ctrl+Alt + Left/Right clip, Up/Down skin, F flip, R restart, A next act, W wake, C click-through, Q quit");
 
     let mut facing_right = false;
     let mut click_through = false;
     let mut dirty = true;
     let mut events = Vec::new();
     let mut last_raise = Instant::now();
+    let mut act: Option<ActPlayer> = None;
+    let mut act_idx = acts.len() - 1;
+    let idle = lib.id("Idle").context("Idle clip")?;
 
     rl.run(|tick| {
         for &hk in &tick.hotkeys {
             match hk {
                 HK_NEXT_CLIP | HK_PREV_CLIP => {
                     clip_idx = if hk == HK_NEXT_CLIP { (clip_idx + 1) % clips.len() } else { (clip_idx + clips.len() - 1) % clips.len() };
+                    act = None;
                     anim.play(&lib, clips[clip_idx], true);
                     describe(clip_idx);
                 }
@@ -137,6 +147,17 @@ fn main() -> Result<()> {
                     log::info!("click-through {click_through}");
                 }
                 HK_QUIT => return Ok(Flow::Quit),
+                HK_NEXT_ACT => {
+                    act_idx = (act_idx + 1) % acts.len();
+                    let (id, a) = acts.iter().nth(act_idx).context("act")?;
+                    log::info!("act {}/{}: '{}' tags {:?}", act_idx + 1, acts.len(), a.name, a.tags);
+                    act = Some(ActPlayer::start(&acts, &lib, &mut anim, id, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(7, |d| d.subsec_nanos())));
+                }
+                HK_WAKE => {
+                    if let Some(p) = act.as_mut() {
+                        p.signal(&acts, &lib, &mut anim, "woken");
+                    }
+                }
                 _ => {}
             }
             dirty = true;
@@ -144,6 +165,14 @@ fn main() -> Result<()> {
 
         events.clear();
         dirty |= anim.update(&lib, tick.dt, &mut events);
+        if let Some(p) = act.as_mut() {
+            if p.update(&acts, &lib, &mut anim, tick.dt, &events) == ActStatus::Done {
+                act = None;
+                anim.play(&lib, idle, true);
+            }
+            dirty = true;
+            events.clear();
+        }
         for e in &events {
             match e {
                 AnimEvent::Finished(_) => {
