@@ -6,13 +6,14 @@ use anyhow::{Context, Result, bail};
 mod app;
 mod browser;
 mod keyboard;
+mod settings;
 mod wander;
 
 pub struct Args {
     pub data: PathBuf,
     pub skins: PathBuf,
     pub skin: Option<String>,
-    pub scale: f32,
+    pub scale: Option<f32>,
     pub clip: String,
     pub browse: bool,
     pub capturable: bool,
@@ -25,7 +26,7 @@ fn parse_args() -> Result<Args> {
         data: "data/hk".into(),
         skins: "skins".into(),
         skin: None,
-        scale: 0.6,
+        scale: None,
         clip: "Idle".into(),
         browse: false,
         capturable: false,
@@ -37,7 +38,7 @@ fn parse_args() -> Result<Args> {
             "--data" => a.data = v()?.into(),
             "--skins" => a.skins = v()?.into(),
             "--skin" => a.skin = Some(v()?),
-            "--scale" => a.scale = v()?.parse()?,
+            "--scale" => a.scale = Some(v()?.parse()?),
             "--clip" => a.clip = v()?,
             "--browse" => a.browse = true,
             "--capturable" => a.capturable = true,

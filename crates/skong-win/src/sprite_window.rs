@@ -14,7 +14,7 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_EXSTYLE, GetWindowLongPtrW, HWND_TOPMOST,
-    IDC_ARROW, LoadCursorW, RegisterClassExW, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowDisplayAffinity,
+    IDC_ARROW, LoadCursorW, RegisterClassExW, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowDisplayAffinity,
     SetWindowLongPtrW, SetWindowPos, ShowWindow, ULW_ALPHA, UpdateLayeredWindow, WDA_EXCLUDEFROMCAPTURE, WDA_NONE, WNDCLASSEXW, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_SETTINGCHANGE,
     WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
@@ -198,6 +198,14 @@ impl SpriteWindow {
             let ex = GetWindowLongPtrW(self.hwnd, GWL_EXSTYLE);
             let t = WS_EX_TRANSPARENT.0 as isize;
             SetWindowLongPtrW(self.hwnd, GWL_EXSTYLE, if on { ex | t } else { ex & !t });
+        }
+    }
+
+    /// Hide or show the sprite (pause).
+    pub fn set_visible(&self, on: bool) {
+        // SAFETY: show state of our own window.
+        unsafe {
+            let _ = ShowWindow(self.hwnd, if on { SW_SHOWNOACTIVATE } else { SW_HIDE });
         }
     }
 
