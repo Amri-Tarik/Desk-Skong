@@ -774,6 +774,7 @@ impl Character {
     /// Call after the terrain was rebuilt from a new desktop snapshot.
     ///
     /// * Standing on a window that moved: carried by the window's delta ([`MoveEvent::CarriedBy`]).
+    ///   This includes content ledges, which belong to the window showing them.
     /// * Support closed / hidden / moved away: falls ([`MoveEvent::LostSupport`]).
     /// * A window appeared or moved so its top is at most `pop_up_height` above the feet:
     ///   stand on it. Deeper overlaps fall under the overlap-ignore rule.
@@ -796,9 +797,10 @@ impl Character {
         let q = Query::new(new, body, pop, self.drop_y);
         // Ledges more than a step above the feet only count if their window just arrived
         // under the body (otherwise we may be inside it on purpose, or rising through it).
+        // Content ledges never pop the body up: they appear wherever something is drawn.
         let arrived = |l: &Ledge| {
             l.y >= body.bottom - step
-                || l.owner.is_some_and(|id| old.window_rect(id).is_none_or(|r| !r.overlaps(&body)))
+                || (l.kind != LedgeKind::Content && l.owner.is_some_and(|id| old.window_rect(id).is_none_or(|r| !r.overlaps(&body))))
         };
         if self.support.is_some() {
             match q.find_ledge(body, pop, step, arrived) {

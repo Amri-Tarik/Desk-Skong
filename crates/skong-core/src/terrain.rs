@@ -8,6 +8,11 @@
 //!
 //! Parts of edges hidden behind higher windows are removed. Monitor work-area bottoms
 //! (taskbar tops) are solid ground; monitor outer edges are inward-facing walls.
+//!
+//! On top of that, **content ledges** ([`LedgeKind::Content`]) come from what is drawn on
+//! screen ([`crate::vision`]): one-way platforms owned by the front-most window showing
+//! them, usable even from inside that window. See [`content`] and
+//! [`Terrain::from_desktop_and_content`].
 use crate::desktop::{DesktopSnapshot, WindowId};
 use crate::geom::RectF;
 
@@ -17,6 +22,16 @@ pub enum LedgeKind {
     Ground,
     /// One-way: pass up through it, land on it, drop through with "down".
     OneWay,
+    /// Detected on-screen content (a drawn line, a table border...). One-way like
+    /// [`LedgeKind::OneWay`], but never ignored while the body is inside its owner window.
+    Content,
+}
+
+impl LedgeKind {
+    /// Can be passed upward and dropped through.
+    pub fn is_one_way(self) -> bool {
+        matches!(self, LedgeKind::OneWay | LedgeKind::Content)
+    }
 }
 
 /// Horizontal surface at height `y`, spanning `x0..x1`.
@@ -74,11 +89,25 @@ pub struct TerrainOptions {
     pub min_wall_len: f32,
     /// Windows narrower/shorter than this are ignored entirely.
     pub min_window_size: i32,
+    /// Content ledges shorter than this after clipping are dropped (px).
+    pub min_content_len: f32,
+    /// Content ledges within this many px of a window-top / ground ledge are dropped
+    /// where they overlap it (the window frame itself is visible content too).
+    pub content_dedupe_px: f32,
+    /// Keep content ledges on the desktop wallpaper (owner `None`).
+    pub include_wallpaper_content: bool,
 }
 
 impl Default for TerrainOptions {
     fn default() -> Self {
-        Self { min_ledge_len: 24.0, min_wall_len: 24.0, min_window_size: 48 }
+        Self {
+            min_ledge_len: 24.0,
+            min_wall_len: 24.0,
+            min_window_size: 48,
+            min_content_len: 32.0,
+            content_dedupe_px: 3.0,
+            include_wallpaper_content: false,
+        }
     }
 }
 
@@ -89,8 +118,19 @@ impl Terrain {
 
     /// Build terrain from a desktop snapshot. See module docs for the model.
     pub fn from_desktop(desk: &DesktopSnapshot, opts: &TerrainOptions) -> Self {
-        build::build(desk, opts)
+        build::build(desk, &[], opts)
+    }
+
+    /// [`Self::from_desktop`] plus content ledges (virtual-desktop pixels, owners as
+    /// assigned by [`ContentLayer`]). Content is clipped to work areas, hidden behind
+    /// windows in front of its owner, dropped inside fullscreen windows (and on the
+    /// wallpaper unless enabled), and de-duplicated against window tops.
+    pub fn from_desktop_and_content(desk: &DesktopSnapshot, content: &[ContentLedge], opts: &TerrainOptions) -> Self {
+        build::build(desk, content, opts)
     }
 }
 
 mod build;
+pub mod content;
+
+pub use content::{ContentLayer, ContentLedge};
