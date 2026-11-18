@@ -15,7 +15,7 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_EXSTYLE, GetWindowLongPtrW, HWND_TOPMOST,
     IDC_ARROW, LoadCursorW, RegisterClassExW, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowDisplayAffinity,
-    SetWindowLongPtrW, SetWindowPos, ShowWindow, ULW_ALPHA, UpdateLayeredWindow, WDA_EXCLUDEFROMCAPTURE, WNDCLASSEXW,
+    SetWindowLongPtrW, SetWindowPos, ShowWindow, ULW_ALPHA, UpdateLayeredWindow, WDA_EXCLUDEFROMCAPTURE, WDA_NONE, WNDCLASSEXW, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_SETTINGCHANGE,
     WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
 use windows::core::w;
@@ -32,6 +32,10 @@ pub struct SpriteWindow {
 }
 
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    // Display layout changes raise no WinEvents; tell the desktop watcher directly.
+    if matches!(msg, WM_DISPLAYCHANGE | WM_SETTINGCHANGE | WM_DPICHANGED) {
+        crate::desktop::mark_dirty();
+    }
     // SAFETY: plain forwarding to the default procedure.
     unsafe { DefWindowProcW(hwnd, msg, wp, lp) }
 }
@@ -122,6 +126,11 @@ impl SpriteWindow {
 
     /// Show `img` with its top-left at screen (x, y).
     pub fn present(&mut self, img: &Image, x: i32, y: i32) -> Result<()> {
+        self.present_flipped(img, x, y, false)
+    }
+
+    /// Like [`Self::present`], optionally mirrored horizontally (no extra allocation).
+    pub fn present_flipped(&mut self, img: &Image, x: i32, y: i32, flip_x: bool) -> Result<()> {
         let (w, h) = (img.width.max(1), img.height.max(1));
         self.ensure_capacity(w, h)?;
         let stride = self.cap.0 as usize;
@@ -129,7 +138,11 @@ impl SpriteWindow {
         let dib = unsafe { std::slice::from_raw_parts_mut(self.bits, stride * self.cap.1 as usize) };
         for row in 0..img.height as usize {
             let src = &img.px[row * img.width as usize..(row + 1) * img.width as usize];
-            dib[row * stride..row * stride + src.len()].copy_from_slice(src);
+            let dst = &mut dib[row * stride..row * stride + src.len()];
+            dst.copy_from_slice(src);
+            if flip_x {
+                dst.reverse();
+            }
         }
         self.update_layered(Some((x, y)), Some((w, h)))
     }
@@ -167,6 +180,15 @@ impl SpriteWindow {
         let (w, h) = size.unwrap_or((prev.2, prev.3));
         self.shown = Some((x, y, w, h));
         Ok(())
+    }
+
+    /// Debug: allow screenshots / capture to see the sprite (excluded by default).
+    pub fn set_capturable(&self, on: bool) {
+        let aff = if on { WDA_NONE } else { WDA_EXCLUDEFROMCAPTURE };
+        // SAFETY: display affinity of our own window.
+        if let Err(e) = unsafe { SetWindowDisplayAffinity(self.hwnd, aff) } {
+            log::warn!("SetWindowDisplayAffinity: {e}");
+        }
     }
 
     /// Let mouse input pass through the sprite entirely.

@@ -2,12 +2,13 @@
 use skong_core::geom::RectI;
 use windows::Win32::Foundation::POINT;
 use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MonitorFromPoint};
-use windows::Win32::UI::HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext};
+use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
 
-/// Opt into per-monitor DPI awareness so all coordinates are physical pixels.
-pub fn enable_dpi_awareness() {
-    // SAFETY: process-wide setting; failure (already set by manifest) is harmless.
-    let _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
+/// Current mouse cursor position in virtual-desktop pixels.
+pub fn cursor_pos() -> Option<(i32, i32)> {
+    let mut p = POINT::default();
+    // SAFETY: writes into a local POINT.
+    unsafe { GetCursorPos(&mut p) }.ok().map(|_| (p.x, p.y))
 }
 
 /// Work area (screen minus taskbar) of the primary monitor.
