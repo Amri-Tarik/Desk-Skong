@@ -85,6 +85,9 @@ pub const SKIN_FILES: &[(&str, &str)] = &[
     ("Shade", "Shade.png"),
 ];
 
+/// Folder name of the vanilla atlases written by `HK_TK2D_Exporter --textures`.
+pub const VANILLA: &str = "Vanilla";
+
 /// A skin is a folder with `Knight.png` (required) and optionally the other atlases.
 #[derive(Clone, Debug)]
 pub struct Skin {
@@ -99,22 +102,29 @@ impl Skin {
         Some(Skin { name, dir: dir.to_path_buf() })
     }
 
-    /// Atlas file for a collection, if the skin provides it (case-insensitive).
+    /// Atlas file for a collection, if the skin provides it (case-insensitive). Custom
+    /// Knight names first (`Sprint.png` …), then the exporter's `<Collection_Name>.png`.
     pub fn atlas_for(&self, collection: &str) -> Option<PathBuf> {
-        let file = SKIN_FILES.iter().find(|(c, _)| *c == collection)?.1;
-        find_ci(&self.dir, file)
+        if let Some((_, file)) = SKIN_FILES.iter().find(|(c, _)| *c == collection) {
+            return find_ci(&self.dir, file);
+        }
+        find_ci(&self.dir, &format!("{}.png", collection.replace(' ', "_")))
     }
 
-    /// All skins directly under `root` (each subfolder containing a Knight.png), sorted by name.
+    /// Skins under `root`: every folder (up to two levels deep) containing a Knight.png,
+    /// sorted by name, with the vanilla export first.
     pub fn discover(root: &Path) -> Vec<Skin> {
-        let mut out: Vec<Skin> = std::fs::read_dir(root)
-            .into_iter()
-            .flatten()
-            .flatten()
-            .filter(|e| e.path().is_dir())
-            .filter_map(|e| Skin::from_dir(&e.path()))
-            .collect();
-        out.sort_by_key(|s| s.name.to_lowercase());
+        let subdirs = |d: &Path| -> Vec<PathBuf> {
+            std::fs::read_dir(d).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect()
+        };
+        let mut out: Vec<Skin> = Vec::new();
+        for d in subdirs(root) {
+            match Skin::from_dir(&d) {
+                Some(s) => out.push(s),
+                None => out.extend(subdirs(&d).iter().filter_map(|d2| Skin::from_dir(d2))),
+            }
+        }
+        out.sort_by_key(|s| (!s.name.eq_ignore_ascii_case(VANILLA), s.name.to_lowercase()));
         out
     }
 }
@@ -351,8 +361,9 @@ impl SpriteBank {
 
     /// Rasterize `keys` from `skin` at `px_per_unit`, replacing any previous frames.
     /// Atlases are decoded one at a time and dropped right after, so peak memory is one
-    /// atlas plus the (small) rasterized frames. Collections the skin lacks are skipped.
-    pub fn rasterize_skin(&mut self, skin: &Skin, keys: &[SpriteKey], px_per_unit: f32) -> Result<()> {
+    /// atlas plus the (small) rasterized frames. Collections the skin lacks come from
+    /// `fallback` (normally the vanilla export) or are skipped.
+    pub fn rasterize_skin(&mut self, skin: &Skin, fallback: Option<&Skin>, keys: &[SpriteKey], px_per_unit: f32) -> Result<()> {
         self.frames.clear();
         self.px_per_unit = px_per_unit;
         let mut by_col: HashMap<u16, Vec<u32>> = HashMap::new();
@@ -363,8 +374,8 @@ impl SpriteBank {
             ids.sort_unstable();
             ids.dedup();
             let meta = &self.collections[col as usize];
-            let Some(path) = skin.atlas_for(&meta.name) else {
-                log::debug!("skin '{}' has no atlas for '{}'", skin.name, meta.name);
+            let Some(path) = skin.atlas_for(&meta.name).or_else(|| fallback?.atlas_for(&meta.name)) else {
+                log::debug!("skin '{}' (and fallback) has no atlas for '{}'", skin.name, meta.name);
                 continue;
             };
             let atlas = Atlas::load_png(&path)?;

@@ -27,6 +27,12 @@ dotnet run -c Release -- --data "<...>/hollow_knight_Data" --out ../data/hk \
     --animations "Knight,Knight Effects Anim,Strikes,Spells Anim,Dust,Hollow Shade,Grimmchild Anim,Weaverling Anim,Knight Hatchling Anim"
 ```
 
+Add `--textures ../skins/Vanilla` to also decode each exported collection's atlas (BC7 etc.)
+to PNG. Atlases get Custom Knight names (`Knight.png`, `Sprint.png`, `Unn.png`, …; others
+`<Collection_Name>.png`), so the folder is a complete skin and the runtime's fallback for
+anything a community skin lacks. **This is game art: keep it in the git-ignored `skins/`
+folder and never redistribute it.**
+
 Options: `--collections A,B` exports collections by name instead of by reference;
 `--files resources.assets,level1` scans other asset files (default `resources.assets`).
 

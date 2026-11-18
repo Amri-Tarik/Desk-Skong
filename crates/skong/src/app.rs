@@ -37,9 +37,9 @@ struct Look {
     feet_offset: f32,
 }
 
-fn load_look(mut bank: SpriteBank, skin: &Skin, lib: &ClipLibrary, ppu: f32) -> Result<Look> {
+fn load_look(mut bank: SpriteBank, skin: &Skin, fallback: Option<&Skin>, lib: &ClipLibrary, ppu: f32) -> Result<Look> {
     let t = Instant::now();
-    bank.rasterize_skin(skin, &lib.sprite_keys(), ppu)?;
+    bank.rasterize_skin(skin, fallback, &lib.sprite_keys(), ppu)?;
     let feet_offset = lib
         .id("Idle")
         .and_then(|id| lib.get(id).frames.first()?.sprite)
@@ -60,7 +60,8 @@ pub fn run(args: &Args) -> Result<()> {
     let lib = ClipLibrary::load(&args.data.join("animations/Knight.json"), &meta)?;
     let acts = ActLibrary::load(&args.data.join("../acts.json"), &lib)?;
     let ppu = 64.0 * args.scale;
-    let mut look = load_look(meta, &skins[skin_idx], &lib, ppu)?;
+    let vanilla = vanilla_of(&skins);
+    let mut look = load_look(meta, &skins[skin_idx], vanilla, &lib, ppu)?;
 
     let mut watcher = DesktopWatcher::new()?;
     let topts = TerrainOptions::default();
@@ -135,7 +136,7 @@ pub fn run(args: &Args) -> Result<()> {
                 HK_SKIN => {
                     skin_idx = (skin_idx + 1) % skins.len();
                     let bank = SpriteBank::load_metadata(&args.data)?;
-                    look = load_look(bank, &skins[skin_idx], &lib, ppu)?;
+                    look = load_look(bank, &skins[skin_idx], vanilla, &lib, ppu)?;
                     drawn = None;
                 }
                 HK_CLICK_THROUGH => {
@@ -234,6 +235,10 @@ pub fn run(args: &Args) -> Result<()> {
 fn brain_pick(acts: &ActLibrary) -> Option<skong_core::acts::ActId> {
     let pool: Vec<_> = acts.iter().filter(|(_, a)| a.weight > 0.0).map(|(id, _)| id).collect();
     pool.get(seed() as usize % pool.len().max(1)).copied()
+}
+
+pub fn vanilla_of(skins: &[Skin]) -> Option<&Skin> {
+    skins.iter().find(|s| s.name.eq_ignore_ascii_case(skong_core::assets::VANILLA))
 }
 
 fn seed() -> u32 {
