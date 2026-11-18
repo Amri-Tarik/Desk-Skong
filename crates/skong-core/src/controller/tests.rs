@@ -380,6 +380,26 @@ fn drop_through_one_way_but_not_ground() {
 }
 
 #[test]
+fn holding_down_slips_through_one_way_but_not_ground() {
+    let t = with_window(1, RectF::new(800.0, 600.0, 1200.0, 900.0));
+    let mut c = standing(&t, 1000.0, 500.0);
+    let hold = MoveInput { down: true, ..idle() };
+    // A brief tap does nothing.
+    let ev = run(&mut c, &t, hold, secs(0.1));
+    assert!(!ev.contains(&MoveEvent::DroppedThrough));
+    run(&mut c, &t, idle(), 1);
+    // Holding past `drop_hold_time` slips through, then lands on the ground below.
+    let ev = run(&mut c, &t, hold, secs(0.3));
+    assert!(ev.contains(&MoveEvent::DroppedThrough), "{ev:?}");
+    run_until_grounded(&mut c, &t, hold, 240);
+    assert_eq!(c.pos.y, FLOOR);
+    // Holding down on monitor ground never drops.
+    let ev = run(&mut c, &t, hold, secs(1.0));
+    assert!(!ev.contains(&MoveEvent::DroppedThrough));
+    assert_eq!(c.pos.y, FLOOR);
+}
+
+#[test]
 fn hard_landing_after_long_fall() {
     // Two stacked monitors: a long way down.
     let t = world_sized(1920.0, 2160.0);

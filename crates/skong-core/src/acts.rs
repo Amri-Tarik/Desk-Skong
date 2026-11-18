@@ -63,6 +63,9 @@ pub enum Requirement {
     #[default]
     Grounded,
     Any,
+    /// Seated: perched on a ledge edge (legs dangling) or on a placed bench. Sitting
+    /// clips are a front-facing pose with dangling legs.
+    Seat,
 }
 
 #[derive(Clone, Debug)]

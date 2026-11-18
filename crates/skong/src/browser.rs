@@ -42,10 +42,10 @@ pub fn run(args: &Args) -> Result<()> {
     let lib = ClipLibrary::load(&args.data.join("animations/Knight.json"), &bank)?;
     let acts = ActLibrary::load(&args.data.join("../acts.json"), &lib)?;
     let keys = lib.sprite_keys();
-    let ppu = 64.0 * args.scale;
+    let ppu = 64.0 * args.scale.unwrap_or(0.6);
     let load_skin = |bank: &mut SpriteBank, i: usize| -> Result<()> {
         let t = Instant::now();
-        bank.rasterize_skin(&skins[i], &keys, ppu)?;
+        bank.rasterize_skin(&skins[i], crate::app::vanilla_of(&skins), &keys, ppu)?;
         log::info!("skin '{}' ({}/{}) ready in {:?}, frames {} KiB", skins[i].name, i + 1, skins.len(), t.elapsed(), bank.frame_bytes() / 1024);
         Ok(())
     };

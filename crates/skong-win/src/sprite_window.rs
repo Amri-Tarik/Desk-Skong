@@ -12,10 +12,11 @@ use windows::Win32::Graphics::Gdi::{
     DIB_RGB_COLORS, DeleteDC, DeleteObject, HBITMAP, HDC, HGDIOBJ, SelectObject,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::UI::Input::KeyboardAndMouse::{ReleaseCapture, SetCapture};
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_EXSTYLE, GetWindowLongPtrW, HWND_TOPMOST,
-    IDC_ARROW, LoadCursorW, RegisterClassExW, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowDisplayAffinity,
-    SetWindowLongPtrW, SetWindowPos, ShowWindow, ULW_ALPHA, UpdateLayeredWindow, WDA_EXCLUDEFROMCAPTURE, WDA_NONE, WNDCLASSEXW, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_SETTINGCHANGE,
+    IDC_ARROW, LoadCursorW, RegisterClassExW, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowDisplayAffinity,
+    SetWindowLongPtrW, SetWindowPos, ShowWindow, ULW_ALPHA, UpdateLayeredWindow, WDA_EXCLUDEFROMCAPTURE, WDA_NONE, WNDCLASSEXW, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_SETTINGCHANGE, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_RBUTTONUP, GetCursorPos,
     WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
 use windows::core::w;
@@ -31,7 +32,54 @@ pub struct SpriteWindow {
     shown: Option<(i32, i32, u32, u32)>,
 }
 
+/// Mouse activity on a sprite window (screen coordinates).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MouseEvent {
+    Down { x: i32, y: i32 },
+    Move { x: i32, y: i32 },
+    Up { x: i32, y: i32 },
+    RightClick { x: i32, y: i32 },
+}
+
+thread_local! {
+    static MOUSE: std::cell::RefCell<Vec<(isize, MouseEvent)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+fn cursor() -> (i32, i32) {
+    let mut p = POINT::default();
+    // SAFETY: writes a local POINT.
+    let _ = unsafe { GetCursorPos(&mut p) };
+    (p.x, p.y)
+}
+
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    let ev = match msg {
+        WM_LBUTTONDOWN => {
+            // SAFETY: capture the mouse for our own window so a drag keeps reporting.
+            unsafe { SetCapture(hwnd) };
+            let (x, y) = cursor();
+            Some(MouseEvent::Down { x, y })
+        }
+        WM_MOUSEMOVE => {
+            let (x, y) = cursor();
+            Some(MouseEvent::Move { x, y })
+        }
+        WM_LBUTTONUP => {
+            // SAFETY: releasing our own capture.
+            let _ = unsafe { ReleaseCapture() };
+            let (x, y) = cursor();
+            Some(MouseEvent::Up { x, y })
+        }
+        WM_RBUTTONUP => {
+            let (x, y) = cursor();
+            Some(MouseEvent::RightClick { x, y })
+        }
+        _ => None,
+    };
+    if let Some(ev) = ev {
+        MOUSE.with(|q| q.borrow_mut().push((hwnd.0 as isize, ev)));
+        return LRESULT(0);
+    }
     // Display layout changes raise no WinEvents; tell the desktop watcher directly.
     if matches!(msg, WM_DISPLAYCHANGE | WM_SETTINGCHANGE | WM_DPICHANGED) {
         crate::desktop::mark_dirty();
@@ -87,6 +135,17 @@ impl SpriteWindow {
 
     pub fn hwnd(&self) -> HWND {
         self.hwnd
+    }
+
+    /// Mouse events received by this window since the last call.
+    pub fn take_mouse(&self) -> Vec<MouseEvent> {
+        let me = self.hwnd.0 as isize;
+        MOUSE.with(|q| {
+            let mut q = q.borrow_mut();
+            let (mine, rest): (Vec<_>, Vec<_>) = q.drain(..).partition(|(h, _)| *h == me);
+            *q = rest;
+            mine.into_iter().map(|(_, e)| e).collect()
+        })
     }
 
     /// Grow the backing DIB if needed (never shrinks, so steady-state presents don't allocate).
@@ -198,6 +257,14 @@ impl SpriteWindow {
             let ex = GetWindowLongPtrW(self.hwnd, GWL_EXSTYLE);
             let t = WS_EX_TRANSPARENT.0 as isize;
             SetWindowLongPtrW(self.hwnd, GWL_EXSTYLE, if on { ex | t } else { ex & !t });
+        }
+    }
+
+    /// Hide or show the sprite (pause).
+    pub fn set_visible(&self, on: bool) {
+        // SAFETY: show state of our own window.
+        unsafe {
+            let _ = ShowWindow(self.hwnd, if on { SW_SHOWNOACTIVATE } else { SW_HIDE });
         }
     }
 

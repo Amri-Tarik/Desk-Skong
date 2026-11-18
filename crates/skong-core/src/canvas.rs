@@ -30,6 +30,74 @@ impl Image {
         unsafe { std::slice::from_raw_parts(self.px.as_ptr() as *const u8, self.px.len() * 4) }
     }
 
+    /// Straight-alpha RGBA8 rows (top-down) → premultiplied image.
+    pub fn from_rgba(width: u32, height: u32, rgba: &[u8]) -> Image {
+        let px = rgba.chunks_exact(4).map(|p| premul(p[0], p[1], p[2], p[3])).collect();
+        Image { width, height, px }
+    }
+
+    /// Area-averaged (downscale) / bilinear-ish (upscale) resize by `factor`.
+    pub fn scaled(&self, factor: f32) -> Image {
+        let w = ((self.width as f32 * factor).round() as u32).max(1);
+        let h = ((self.height as f32 * factor).round() as u32).max(1);
+        let mut out = Image::new(w, h);
+        let (sx, sy) = (self.width as f32 / w as f32, self.height as f32 / h as f32);
+        for y in 0..h {
+            let y0 = (y as f32 * sy) as u32;
+            let y1 = (((y + 1) as f32 * sy).ceil() as u32).clamp(y0 + 1, self.height);
+            for x in 0..w {
+                let x0 = (x as f32 * sx) as u32;
+                let x1 = (((x + 1) as f32 * sx).ceil() as u32).clamp(x0 + 1, self.width);
+                let mut acc = [0u32; 4];
+                for yy in y0..y1 {
+                    for xx in x0..x1 {
+                        let p = self.px[(yy * self.width + xx) as usize];
+                        for (k, a) in acc.iter_mut().enumerate() {
+                            *a += (p >> (24 - 8 * k as u32)) & 0xff;
+                        }
+                    }
+                }
+                let n = (y1 - y0) * (x1 - x0);
+                let c = |k: usize| (acc[k] + n / 2) / n;
+                out.px[(y * w + x) as usize] = (c(0) << 24) | (c(1) << 16) | (c(2) << 8) | c(3);
+            }
+        }
+        out
+    }
+
+    /// Box-filtered copy fitted (aspect preserved, centered) into a `size`×`size` square.
+    pub fn fit_square(&self, size: u32) -> Image {
+        let mut out = Image::new(size, size);
+        if self.width == 0 || self.height == 0 {
+            return out;
+        }
+        let scale = (size as f32 / self.width.max(self.height) as f32).min(1.0);
+        let (w, h) = (((self.width as f32 * scale).round() as u32).max(1), ((self.height as f32 * scale).round() as u32).max(1));
+        let (ox, oy) = ((size - w) / 2, (size - h) / 2);
+        for y in 0..h {
+            for x in 0..w {
+                // Average the source pixels covering this destination pixel.
+                let (sx0, sx1) = ((x * self.width / w), (((x + 1) * self.width).div_ceil(w)).min(self.width));
+                let (sy0, sy1) = ((y * self.height / h), (((y + 1) * self.height).div_ceil(h)).min(self.height));
+                let mut acc = [0u32; 4];
+                let mut n = 0;
+                for sy in sy0..sy1 {
+                    for sx in sx0..sx1 {
+                        let p = self.px[(sy * self.width + sx) as usize];
+                        for (k, a) in acc.iter_mut().enumerate() {
+                            *a += (p >> (24 - 8 * k as u32)) & 0xff;
+                        }
+                        n += 1;
+                    }
+                }
+                let n = n.max(1);
+                let c = |k: usize| (acc[k] + n / 2) / n;
+                out.px[((y + oy) * size + x + ox) as usize] = (c(0) << 24) | (c(1) << 16) | (c(2) << 8) | c(3);
+            }
+        }
+        out
+    }
+
     /// Source-over composite `src` with its top-left at (x, y). `flip_x` mirrors `src`.
     pub fn blit_over(&mut self, src: &Image, x: i32, y: i32, flip_x: bool) {
         let (dw, dh) = (self.width as i32, self.height as i32);

@@ -5,6 +5,7 @@
 //! Game data (tk2d) is y-up world units; conversion happens once in `assets`.
 
 pub mod acts;
+pub mod ai;
 pub mod anim;
 pub mod assets;
 pub mod canvas;
@@ -13,4 +14,5 @@ pub mod desktop;
 pub mod geom;
 pub mod locomotion;
 pub mod nav;
+pub mod props;
 pub mod terrain;

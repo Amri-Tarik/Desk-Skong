@@ -13,10 +13,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using AssetsTools.NET;
 using AssetsTools.NET.Extra;
+using AssetsTools.NET.Texture;
 
 internal static class Program
 {
-    sealed record Options(string DataDir, string? OutDir, bool List, HashSet<string>? Collections, HashSet<string>? Animations, string[] Files, string? DumpMono, int MaxArray);
+    sealed record Options(string DataDir, string? OutDir, bool List, HashSet<string>? Collections, HashSet<string>? Animations, string[] Files, string? DumpMono, int MaxArray, string? TexturesDir, string? Find, HashSet<string>? ExportSprites);
 
     static int Main(string[] args)
     {
@@ -32,6 +33,11 @@ internal static class Program
             .FirstOrDefault(File.Exists);
         if (tpk is null) { Console.Error.WriteLine("classdata.tpk not found"); return 3; }
         am.LoadClassPackage(tpk);
+
+        if (opt.Find is not null)
+            return Find(am, opt);
+        if (opt.ExportSprites is not null)
+            return opt.TexturesDir is null ? Fail("--export-sprites needs --textures <dir>") : Find(am, opt);
 
         var scan = new Scanner(am) { DumpClass = opt.DumpMono };
         foreach (var f in opt.Files)
@@ -85,8 +91,141 @@ internal static class Program
             var p = Path.Combine(opt.OutDir, "collections", Safe(c.Name) + ".json");
             File.WriteAllText(p, JsonSerializer.Serialize(col, json));
             Console.WriteLine($"collection {c.Name}: {col.Sprites.Count} sprites, atlas {col.AtlasName} {col.AtlasWidth}x{col.AtlasHeight} -> {p}");
+            if (opt.TexturesDir is not null) ExportAtlas(am, c, opt.TexturesDir);
         }
         return 0;
+    }
+
+    // ------------------------------------------------------------------ find
+
+    /// List Sprite / Texture2D assets whose name contains `opt.Find`, across resources and
+    /// every sharedassets file (or `--files` if given explicitly).
+    static int Find(AssetsManager am, Options opt)
+    {
+        var files = opt.Files.Length == 1 && opt.Files[0] == "resources.assets"
+            ? Directory.GetFiles(opt.DataDir, "sharedassets*.assets").Prepend(Path.Combine(opt.DataDir, "resources.assets"))
+            : opt.Files.Select(f => Path.Combine(opt.DataDir, f));
+        var needle = opt.Find ?? "";
+        var wanted = opt.ExportSprites;
+        foreach (var path in files)
+        {
+            AssetsFileInstance afi;
+            try { afi = am.LoadAssetsFile(path, false); am.LoadClassDatabaseFromPackage(afi.file.Metadata.UnityVersion); }
+            catch (Exception e) { Console.Error.WriteLine($"skip {Path.GetFileName(path)}: {e.Message}"); continue; }
+            foreach (var (type, label) in new[] { (AssetClassID.Sprite, "Sprite"), (AssetClassID.Texture2D, "Texture2D") })
+            {
+                foreach (var info in afi.file.GetAssetsOfType(type))
+                {
+                    try
+                    {
+                        var bf = am.GetBaseField(afi, info);
+                        var name = bf["m_Name"].AsString ?? "";
+                        if (wanted is not null)
+                        {
+                            if (type == AssetClassID.Sprite && wanted.Remove(name)) ExportSprite(am, afi, bf, name, opt.TexturesDir!);
+                            continue;
+                        }
+                        if (!name.Contains(needle, StringComparison.OrdinalIgnoreCase)) continue;
+                        var size = type == AssetClassID.Texture2D
+                            ? $"{bf["m_Width"].AsInt}x{bf["m_Height"].AsInt}"
+                            : $"{bf["m_Rect"]["width"].AsFloat}x{bf["m_Rect"]["height"].AsFloat}";
+                        Console.WriteLine($"{Path.GetFileName(path),-24} {label,-9} {info.PathId,20} {size,11}  {name}");
+                    }
+                    catch { }
+                }
+            }
+            am.UnloadAssetsFile(afi);
+            if (wanted is { Count: 0 }) break;
+        }
+        if (wanted is { Count: > 0 }) Console.Error.WriteLine($"not found: {string.Join(", ", wanted)}");
+        return 0;
+    }
+
+    static int Fail(string msg) { Console.Error.WriteLine(msg); return 2; }
+
+    /// For sprites packed into a SpriteAtlas: the atlas's render data (texture + textureRect)
+    /// matching the sprite's `m_RenderDataKey`.
+    static AssetTypeValueField? AtlasRenderData(AssetsManager am, AssetsFileInstance afi, AssetTypeValueField sprite)
+    {
+        var atlas = am.GetExtAsset(afi, sprite["m_SpriteAtlas"]).baseField;
+        if (atlas is null) return null;
+        var key = sprite["m_RenderDataKey"];
+        string Key(AssetTypeValueField k) =>
+            string.Join(",", k["first"].Children.Select(c => c.AsUInt.ToString())) + ":" + k["second"].AsLong;
+        var want = Key(key);
+        foreach (var entry in atlas["m_RenderDataMap.Array"].Children)
+            if (Key(entry["first"]) == want)
+                return entry["second"];
+        return null;
+    }
+
+    /// Crop a Unity Sprite out of its texture and save `<name>.png` + `<name>.json` (pivot,
+    /// pixels-per-unit). Game art: keep it in the git-ignored skins folder.
+    static void ExportSprite(AssetsManager am, AssetsFileInstance afi, AssetTypeValueField sprite, string name, string dir)
+    {
+        try
+        {
+            var rd = sprite["m_RD"];
+            if (rd["texture"]["m_PathID"].AsLong == 0)
+                rd = AtlasRenderData(am, afi, sprite) ?? throw new InvalidOperationException("sprite has no texture and no atlas entry");
+            var tex = am.GetExtAsset(afi, rd["texture"]);
+            var tf = TextureFile.ReadTextureFile(tex.baseField);
+            var raw = tf.FillPictureData(Path.GetDirectoryName(tex.file.path) ?? ".");
+            var rgba = tf.DecodeTextureRaw(raw, false);
+            var r = rd["textureRect"];
+            int x = (int)MathF.Round(r["x"].AsFloat), y = (int)MathF.Round(r["y"].AsFloat);
+            int w = (int)MathF.Round(r["width"].AsFloat), h = (int)MathF.Round(r["height"].AsFloat);
+            int tw = tf.m_Width, th = tf.m_Height;
+            var outPx = new byte[w * h * 4];
+            // Texture rows are bottom-up; rect origin is bottom-left. Output top-down.
+            for (int row = 0; row < h; row++)
+                Buffer.BlockCopy(rgba, ((y + h - 1 - row) * tw + x) * 4, outPx, row * w * 4, w * 4);
+            Directory.CreateDirectory(dir);
+            using (var fs = File.Create(Path.Combine(dir, name + ".png")))
+                new StbImageWriteSharp.ImageWriter().WritePng(outPx, w, h, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, fs);
+            var pivot = sprite["m_Pivot"];
+            File.WriteAllText(Path.Combine(dir, name + ".json"), JsonSerializer.Serialize(new { name, width = w, height = h, pivot = new[] { pivot["x"].AsFloat, pivot["y"].AsFloat }, pixels_per_unit = sprite["m_PixelsToUnits"].AsFloat }));
+            Console.WriteLine($"sprite {name} {w}x{h} (texture {tw}x{th}) -> {dir}");
+        }
+        catch (Exception e) { Console.Error.WriteLine($"sprite {name}: {e.Message}"); }
+    }
+
+    // ------------------------------------------------------------------ export: atlas textures
+
+    /// Custom-Knight skin file names, so a vanilla export is itself a valid skin folder.
+    static readonly Dictionary<string, string> SkinFileNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Knight"] = "Knight.png",
+        ["Knight Dream Gate Cln"] = "Sprint.png",
+        ["Knight Slug Cln"] = "Unn.png",
+        ["Grimmchild Cln"] = "Grimm.png",
+        ["Weaverling Cln"] = "Weaver.png",
+        ["Knight Hatchling Cln"] = "Hatchling.png",
+        ["Shade"] = "Shade.png",
+    };
+
+    /// Decode the collection's first atlas texture and save it as PNG (top-down rows).
+    /// The output is game art: write it somewhere git-ignored and never redistribute it.
+    static void ExportAtlas(AssetsManager am, Scanner.Entry c, string dir)
+    {
+        try
+        {
+            var textures = c.Field["textures.Array"];
+            if (textures.AsArray.size == 0) return;
+            var ext = am.GetExtAsset(c.Afi, textures[0]);
+            var tf = TextureFile.ReadTextureFile(ext.baseField);
+            var raw = tf.FillPictureData(Path.GetDirectoryName(ext.file.path) ?? ".");
+            Directory.CreateDirectory(dir);
+            var name = SkinFileNames.TryGetValue(c.Name, out var n) ? n : Safe(c.Name) + ".png";
+            var path = Path.Combine(dir, name);
+            if (raw is null || !tf.DecodeTextureImage(raw, path, ImageExportType.Png, 100))
+            {
+                Console.Error.WriteLine($"  texture {c.Name}: could not decode {(TextureFormat)tf.m_TextureFormat}");
+                return;
+            }
+            Console.WriteLine($"  atlas {tf.m_Width}x{tf.m_Height} {(TextureFormat)tf.m_TextureFormat} -> {path}");
+        }
+        catch (Exception e) { Console.Error.WriteLine($"  texture {c.Name}: {e.Message}"); }
     }
 
     // ------------------------------------------------------------------ export: collections
@@ -435,7 +574,7 @@ internal static class Program
         string? data = null, outDir = null; bool list = false;
         HashSet<string>? cols = null, anims = null;
         string[] files = ["resources.assets"];
-        string? dumpMono = null; int maxArray = 64;
+        string? dumpMono = null; int maxArray = 64; string? textures = null; string? find = null; HashSet<string>? exportSprites = null;
         for (int i = 0; i < args.Length; i++)
         {
             string Next() => i + 1 < args.Length ? args[++i] : throw new ArgumentException($"missing value for {args[i]}");
@@ -449,14 +588,17 @@ internal static class Program
                 case "--animations": anims = Set(Next()); break;
                 case "--dump-mono": dumpMono = Next(); break;
                 case "--max-array": maxArray = int.Parse(Next()); break;
+                case "--textures": textures = Next(); break;
+                case "--find": find = Next(); break;
+                case "--export-sprites": exportSprites = Set(Next()); break;
                 case "--files": files = Next().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries); break;
                 default: throw new ArgumentException($"unknown arg {args[i]}");
             }
         }
         if (data is null) throw new ArgumentException("--data is required");
-        return new Options(data, outDir, list, cols, anims, files, dumpMono, maxArray);
+        return new Options(data, outDir, list, cols, anims, files, dumpMono, maxArray, textures, find, exportSprites);
     }
 
     static void PrintUsage() => Console.Error.WriteLine(
-        "usage: HK_TK2D_Exporter --data <hollow_knight_Data> (--list | --out <dir> | --dump-mono <Class>) [--collections A,B] [--animations A,B] [--files resources.assets,level1] [--max-array N]");
+        "usage: HK_TK2D_Exporter --data <hollow_knight_Data> (--list | --out <dir> | --dump-mono <Class>) [--collections A,B] [--animations A,B] [--files resources.assets,level1] [--max-array N] [--textures <dir>] [--find <name-substring>] [--export-sprites a,b --textures <dir>]");
 }

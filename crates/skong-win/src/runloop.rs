@@ -16,6 +16,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     QS_ALLINPUT, TranslateMessage, WM_HOTKEY, WM_QUIT,
 };
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Flow {
     Continue,
     Quit,
