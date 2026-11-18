@@ -11,6 +11,7 @@ pub mod assets;
 pub mod canvas;
 pub mod controller;
 pub mod desktop;
+pub mod effects;
 pub mod geom;
 pub mod locomotion;
 pub mod nav;
