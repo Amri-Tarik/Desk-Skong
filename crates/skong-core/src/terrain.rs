@@ -48,10 +48,19 @@ pub struct Wall {
     pub owner: Option<WindowId>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WindowBox {
+    pub id: WindowId,
+    pub rect: RectF,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Terrain {
     /// Desktop generation this terrain was built from.
     pub generation: u64,
+    /// Window boxes, front to back. A window's ledges/walls are ignored by a body that
+    /// overlaps its interior (e.g. a window opened on top of the knight).
+    pub windows: Vec<WindowBox>,
     pub ledges: Vec<Ledge>,
     pub walls: Vec<Wall>,
     /// Union of monitor rects: the playable area.
@@ -74,6 +83,10 @@ impl Default for TerrainOptions {
 }
 
 impl Terrain {
+    pub fn window_rect(&self, id: WindowId) -> Option<RectF> {
+        self.windows.iter().find(|w| w.id == id).map(|w| w.rect)
+    }
+
     /// Build terrain from a desktop snapshot. See module docs for the model.
     pub fn from_desktop(desk: &DesktopSnapshot, opts: &TerrainOptions) -> Self {
         build::build(desk, opts)
