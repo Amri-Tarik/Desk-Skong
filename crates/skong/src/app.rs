@@ -7,9 +7,14 @@ use std::time::Instant;
 use anyhow::{Context, Result, bail};
 use skong_core::acts::{ActId, ActLibrary, ActPlayer, ActStatus, Requirement};
 use skong_core::anim::{AnimEvent, Animator, ClipId, ClipLibrary};
-use skong_core::assets::{Skin, SpriteBank, SpriteKey, VANILLA};
+use std::collections::HashMap;
+
+use skong_core::assets::{Frame, Skin, SpriteBank, SpriteKey, VANILLA};
+use skong_core::effects::EffectSet;
+
+use crate::fx::Fx;
 use skong_core::controller::{Abilities, Character, CharacterParams, MoveEvent, MoveInput, MoveState, Side};
-use skong_core::ai::{ActCatalog, Brain, BrainConfig, Cursor, GraphNavigator, Motion, Percepts, Poke, RunningAct, UserActivity};
+use skong_core::ai::{ActCatalog, AttackDir, Brain, BrainConfig, Cursor, GraphNavigator, Motion, Percepts, Poke, RunningAct, UserActivity};
 use skong_win::input::{self, UserInput};
 
 use crate::grab::Grab;
@@ -95,13 +100,21 @@ impl Data {
         vanilla_of(&self.skins)
     }
 
-    fn load_look(&self, skin: usize, scale: f32) -> Result<Look> {
+    /// Rasterize the knight and every effect (each at its own scale) in one pass.
+    fn load_look(&self, skin: usize, scale: f32, fx: &Fx) -> Result<(Look, Vec<HashMap<SpriteKey, Frame>>)> {
         let t = Instant::now();
+        let ppu = 64.0 * scale;
+        let keys = self.lib.sprite_keys();
+        let fx_sets = fx.raster_sets();
+        let mut sets: Vec<(&[SpriteKey], f32)> = vec![(&keys, ppu)];
+        sets.extend(fx_sets.iter().map(|(k, s)| (k.as_slice(), ppu * s)));
         let mut bank = SpriteBank::load_metadata(&self.args_data)?;
-        bank.rasterize_skin(&self.skins[skin], self.vanilla(), &self.lib.sprite_keys(), 64.0 * scale)?;
+        let mut frames = bank.rasterize_sets(&self.skins[skin], self.vanilla(), &sets)?;
+        let fx_frames = frames.split_off(1);
+        bank.install_frames(frames.pop().unwrap_or_default(), ppu);
         let feet_offset = self.lib.get(self.idle).frames.first().and_then(|f| f.sprite).and_then(|k| bank.frame(k)).map_or(0.0, |f| f.image.height as f32 - f.anchor[1]);
         log::info!("skin '{}' at x{scale} ready in {:?} ({} KiB of frames)", self.skins[skin].name, t.elapsed(), bank.frame_bytes() / 1024);
-        Ok(Look { bank, feet_offset })
+        Ok((Look { bank, feet_offset }, fx_frames))
     }
 }
 
@@ -124,6 +137,9 @@ struct Pet {
     /// Seat line (screen y) while a seated act plays.
     seat_y: Option<f32>,
     benches: Benches,
+    fx: Fx,
+    /// Debug (`--fx-test`): seconds since start, drives a scripted superdash.
+    fx_test: Option<f32>,
     brain: Brain,
     nav: GraphNavigator,
     navb: NavBuilder,
@@ -166,7 +182,10 @@ pub fn run(args: &Args) -> Result<()> {
     let acts = ActLibrary::load(&args.data.join("../acts.json"), &lib)?;
     let idle = lib.id("Idle").context("Idle clip")?;
     let data = Data { args_data: args.data.clone(), lib, acts, skins, idle };
-    let look = data.load_look(skin, settings.scale)?;
+    let mut fx = Fx::new(EffectSet::load(&args.data.join("../effects.json"), &args.data.join("animations"), &meta)?);
+    fx.capturable = args.capturable;
+    let (look, fx_frames) = data.load_look(skin, settings.scale, &fx)?;
+    fx.install_frames(fx_frames);
 
     let watcher = DesktopWatcher::new()?;
     let topts = TerrainOptions::default();
@@ -212,6 +231,8 @@ pub fn run(args: &Args) -> Result<()> {
         act,
         seat_y: None,
         benches,
+        fx,
+        fx_test: args.fx_test.then_some(0.0),
         brain,
         nav: GraphNavigator::new(),
         navb,
@@ -299,6 +320,13 @@ impl Pet {
 
         // 2. Intent: keyboard in manual mode, otherwise the brain.
         let mut input = if self.manual { self.keyboard.read() } else { self.think(dt) };
+        if let Some(t) = self.fx_test.as_mut() {
+            // Scripted: idle 3 s, charge a superdash for 1.2 s, release, repeat every 6 s.
+            *t += dt;
+            let phase = *t % 6.0;
+            input = MoveInput { superdash_held: (3.0..4.2).contains(&phase), ..MoveInput::default() };
+            self.act = None;
+        }
         let d = &self.data;
         if let Some(p) = &self.act {
             let wants_to_move = input.x != 0.0 || input.jump_pressed || input.dash_pressed;
@@ -349,7 +377,58 @@ impl Pet {
             self.brain_events.drain(..128);
         }
 
-        self.draw()
+        self.draw()?;
+        self.trigger_fx();
+        let origin = self.knight_origin();
+        self.fx.update(dt, origin, self.ch.facing == Side::Right, self.ch.params.px_per_unit)
+    }
+
+    /// Screen position of the knight sprite's origin (seated acts put the sitting pose's
+    /// seat line on the seat; otherwise feet on the ground).
+    fn knight_origin(&self) -> Vec2 {
+        let y = match self.seat_y.filter(|_| self.act.is_some()) {
+            Some(seat) => seat - SEAT_BELOW_ORIGIN * self.ch.params.px_per_unit,
+            None => self.ch.pos.y - self.look.feet_offset,
+        };
+        Vec2::new(self.ch.pos.x, y)
+    }
+
+    /// Spawn / stop effects for this tick's movement events (game offsets from the prefab).
+    fn trigger_fx(&mut self) {
+        let origin = self.knight_origin();
+        let right = self.ch.facing == Side::Right;
+        for e in &self.move_events {
+            match e {
+                MoveEvent::SuperdashCharging => {
+                    let on_wall = matches!(self.ch.state, MoveState::SuperdashCharge { wall: Some(_) });
+                    self.fx.spawn(if on_wall { "sd_charge_wall" } else { "sd_charge" }, origin, right);
+                }
+                MoveEvent::SuperdashCharged => self.fx.spawn("sd_bling", origin, right),
+                MoveEvent::SuperdashCancelled => {
+                    self.fx.stop("sd_charge");
+                    self.fx.stop("sd_charge_wall");
+                }
+                MoveEvent::SuperdashLaunched => {
+                    self.fx.stop("sd_charge");
+                    self.fx.stop("sd_charge_wall");
+                    self.fx.spawn("sd_burst", origin, right);
+                    self.fx.spawn("sd_trail", origin, right);
+                }
+                MoveEvent::SuperdashHitWall => {
+                    self.fx.stop("sd_trail");
+                    self.fx.spawn("sd_break", origin, right);
+                    self.fx.spawn("sd_trail_end", origin, right);
+                }
+                MoveEvent::SuperdashEnded if self.fx.is_live("sd_trail") => {
+                    self.fx.stop("sd_trail");
+                    self.fx.spawn("sd_trail_end", origin, right);
+                }
+                MoveEvent::DoubleJumped => self.fx.spawn("double_jump", origin, right),
+                MoveEvent::WallJumped { .. } => self.fx.spawn("wall_puff", origin, right),
+                MoveEvent::DashStarted { shadow: true } => self.fx.spawn("shadow_burst", origin, right),
+                _ => {}
+            }
+        }
     }
 
     /// Present only when the frame changed; otherwise just move the window.
@@ -357,13 +436,9 @@ impl Pet {
         let flip = self.ch.facing == Side::Right; // HK sprites face left
         let Some(key) = self.anim.current(&self.data.lib) else { return Ok(()) };
         let Some(frame) = self.look.bank.frame(key) else { return Ok(()) };
-        let x = (self.ch.pos.x - frame.anchor_x(flip)).round() as i32;
-        // Seated acts put the sitting pose's seat line on the seat; otherwise feet on the ground.
-        let origin_y = match self.seat_y.filter(|_| self.act.is_some()) {
-            Some(seat) => seat - SEAT_BELOW_ORIGIN * self.ch.params.px_per_unit,
-            None => self.ch.pos.y - self.look.feet_offset,
-        };
-        let y = (origin_y - frame.anchor[1]).round() as i32;
+        let origin = self.knight_origin();
+        let x = (origin.x - frame.anchor_x(flip)).round() as i32;
+        let y = (origin.y - frame.anchor[1]).round() as i32;
         if self.drawn != Some((key, flip)) {
             self.win.present_flipped(&frame.image, x, y, flip)?;
             self.drawn = Some((key, flip));
@@ -427,6 +502,14 @@ impl Pet {
             && let Some(id) = d.acts.id(a.dir.act_name())
         {
             self.ch.facing = a.side;
+            let slash = match a.dir {
+                AttackDir::Forward if seed().is_multiple_of(2) => "slash_alt",
+                AttackDir::Forward => "slash",
+                AttackDir::Up => "up_slash",
+                AttackDir::Down => "down_slash",
+            };
+            let origin = Vec2::new(self.ch.pos.x, self.ch.pos.y - self.look.feet_offset);
+            self.fx.spawn(slash, origin, a.side == Side::Right);
             self.seat_y = None;
             self.act = Some(ActPlayer::start(&d.acts, &d.lib, &mut self.anim, id, seed()));
         }
@@ -561,7 +644,9 @@ impl Pet {
     }
 
     fn reload_look(&mut self) -> Result<()> {
-        self.look = self.data.load_look(self.skin, self.settings.scale)?;
+        let (look, fx_frames) = self.data.load_look(self.skin, self.settings.scale, &self.fx)?;
+        self.look = look;
+        self.fx.install_frames(fx_frames);
         self.drawn = None;
         if let Err(e) = self.tray.set_icon(&tray_icon(&self.data, &self.look)) {
             log::warn!("tray icon: {e:#}");

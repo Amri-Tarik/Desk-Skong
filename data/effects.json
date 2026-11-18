@@ -1,0 +1,19 @@
+{
+  "$comment": "Hero effects. Offsets/scales come from the Knight prefab (HK_TK2D_Exporter --dump-mono HeroController --hierarchy): local position in game units relative to the hero origin (y up, +x = behind a left-facing knight), local scale (negative x = mirrored). `attached` effects follow the knight; others stay where they spawned. `library` defaults to Knight.",
+  "effects": [
+    { "name": "sd_charge",       "clip": "SD Fx Charge",       "pos": [0.241, 0.96],    "scale": [2.0, 2.0] },
+    { "name": "sd_charge_wall",  "clip": "SD Fx Charge",       "pos": [2.135, -0.37],   "scale": [2.0, 2.0] },
+    { "name": "sd_bling",        "clip": "SD Fx Bling",        "pos": [0.058, 0.5],     "scale": [2.296, 2.296] },
+    { "name": "sd_burst",        "clip": "SD Fx Burst",        "pos": [5.0, -0.454],    "scale": [3.0, 3.0], "attached": false },
+    { "name": "sd_trail",        "clip": "SD Trail",           "pos": [5.822, -0.528],  "scale": [-1.504, 1.504] },
+    { "name": "sd_trail_end",    "clip": "SD Trail End",       "pos": [5.822, -0.528],  "scale": [-1.504, 1.504], "attached": false },
+    { "name": "sd_break",        "clip": "SD Break",           "pos": [-1.186, -0.366], "scale": [1.504, 1.504], "attached": false },
+    { "name": "slash",           "clip": "SlashEffect",        "pos": [-0.01, -0.41],   "scale": [1.62, 1.645] },
+    { "name": "slash_alt",       "clip": "SlashEffectAlt",     "pos": [0.08, -0.436],   "scale": [1.257, 1.422] },
+    { "name": "up_slash",        "clip": "UpSlashEffect",      "pos": [0.0, 0.69],      "scale": [1.15, 1.4] },
+    { "name": "down_slash",      "clip": "DownSlashEffect",    "pos": [0.16, -1.59],    "scale": [1.125, 1.28] },
+    { "name": "double_jump",     "clip": "Double Jump Wings 2","pos": [0.22, -0.064],   "scale": [1.0, 1.0] },
+    { "name": "wall_puff",       "library": "Dust", "clip": "Wall Puff", "pos": [0.91, -0.32], "scale": [1.421, 1.421], "attached": false },
+    { "name": "shadow_burst",    "clip": "Shadow Dash Burst",  "pos": [5.21, -0.58],    "scale": [1.92, 1.92], "attached": false }
+  ]
+}

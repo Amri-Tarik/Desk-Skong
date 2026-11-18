@@ -5,6 +5,7 @@ use anyhow::{Context, Result, bail};
 
 mod app;
 mod benches;
+mod fx;
 mod grab;
 mod browser;
 mod keyboard;
@@ -22,6 +23,7 @@ pub struct Args {
     /// Live content terrain (screen capture). Off with `--no-vision`.
     pub vision: bool,
     pub sit_test: bool,
+    pub fx_test: bool,
 }
 
 const USAGE: &str = "usage: skong [--browse] [--capturable] [--no-vision] [--data DIR] [--skins DIR] [--skin NAME] [--scale F] [--clip NAME]";
@@ -37,6 +39,7 @@ fn parse_args() -> Result<Args> {
         capturable: false,
         vision: true,
         sit_test: false,
+        fx_test: false,
     };
     let mut it = std::env::args().skip(1);
     while let Some(k) = it.next() {
@@ -51,6 +54,7 @@ fn parse_args() -> Result<Args> {
             "--capturable" => a.capturable = true,
             "--no-vision" => a.vision = false,
             "--sit-test" => a.sit_test = true,
+            "--fx-test" => a.fx_test = true,
             "-h" | "--help" => {
                 println!("{USAGE}");
                 std::process::exit(0);
