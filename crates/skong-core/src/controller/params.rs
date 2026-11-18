@@ -125,6 +125,9 @@ pub struct CharacterParams {
     pub coyote_time: f32,
     /// A jump press is remembered this long before landing (*chosen*).
     pub jump_buffer_time: f32,
+    /// Holding down this long while standing on a one-way ledge slips through it (s).
+    /// Down + jump drops instantly. (Ours; HK has no drop-through.)
+    pub drop_hold_time: f32,
 
     /// *HK* `WALLSLIDE_SPEED` (magnitude).
     pub wall_slide_speed: f32,
@@ -190,6 +193,7 @@ impl CharacterParams {
             double_jump_time: steps(9.0),
             coyote_time: 0.08,
             jump_buffer_time: 0.1,
+            drop_hold_time: 0.2,
             wall_slide_speed: 8.0,
             wall_jump_kickoff: 16.0,
             wall_jump_lock_short: steps(5.0),

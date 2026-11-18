@@ -49,7 +49,8 @@ pub struct MoveInput {
     pub down: bool,
     /// Jump button currently held (variable jump height).
     pub jump_held: bool,
-    /// Jump pressed this tick (edge). With `down` on a one-way ledge: drop through.
+    /// Jump pressed this tick (edge). With `down` on a one-way ledge: drop through at once.
+    /// Holding `down` alone for `drop_hold_time` also slips through.
     pub jump_pressed: bool,
     pub dash_pressed: bool,
     /// Superdash button held: hold to charge (ground or wall), release to launch.
@@ -181,6 +182,8 @@ struct Timers {
     /// Superdash flight time elapsed.
     superdash: f32,
     hard_landing: f32,
+    /// How long down has been held while grounded (hold-down drop-through).
+    down_held: f32,
     /// Time spent falling (for hard landings).
     fall: f32,
 }
@@ -318,6 +321,12 @@ impl Character {
         let dash_dir = Side::of(x_in).unwrap_or(self.facing);
         match self.state {
             MoveState::Grounded => {
+                self.timers.down_held = if input.down { self.timers.down_held + dt } else { 0.0 };
+                if self.timers.down_held >= p.drop_hold_time && q.can_drop_through(self.body()) {
+                    self.timers.down_held = 0.0;
+                    self.drop_through(events);
+                    return;
+                }
                 if self.timers.dash_buffer > 0.0 && self.can_dash() {
                     self.start_dash(dash_dir, events);
                     return;
