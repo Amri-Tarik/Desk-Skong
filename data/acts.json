@@ -1,271 +1,582 @@
 {
-  "$comment": "Behaviour choreographies built from Knight clips. Each step plays a clip; looping clips run for `hold` seconds (random in [min,max]); one-shot clips play `repeat` times (default once) then hold their last frame for `hold` seconds if given. `until` ends a step on an external signal instead (e.g. 'woken'). `move` walks with a gait during the step. `interruptible: false` protects a step from being cut short. Tags feed the mood-driven AI; `requires` is checked before starting.",
+  "$comment": "Behaviour choreographies built from Knight clips. Each step plays a clip; looping clips run for `hold` seconds (random in [min,max]); one-shot clips play `repeat` times (default once) then hold their last frame for `hold` seconds if given. `until` ends a step on an external signal instead (e.g. 'woken'). `move` walks with a gait during the step. `interruptible: false` protects a step from being cut short. Tags feed the mood-driven AI; `requires` is checked before starting. `requires` is grounded | any | bench (standing at a placed bench). Weight 0 = never picked at random; the AI triggers it by tag.",
   "acts": [
     {
       "name": "look_up",
-      "tags": ["curious"],
+      "tags": [
+        "curious"
+      ],
       "requires": "grounded",
       "weight": 1.0,
       "cooldown": 20,
       "steps": [
-        { "clip": "LookUp", "hold": [1.5, 4.0] },
-        { "clip": "LookUpEnd" }
+        {
+          "clip": "LookUp",
+          "hold": [
+            1.5,
+            4.0
+          ]
+        },
+        {
+          "clip": "LookUpEnd"
+        }
       ]
     },
     {
       "name": "look_down",
-      "tags": ["curious"],
+      "tags": [
+        "curious"
+      ],
       "requires": "grounded",
       "weight": 0.8,
       "cooldown": 20,
       "steps": [
-        { "clip": "LookDown", "hold": [1.5, 4.0] },
-        { "clip": "LookDownEnd" }
+        {
+          "clip": "LookDown",
+          "hold": [
+            1.5,
+            4.0
+          ]
+        },
+        {
+          "clip": "LookDownEnd"
+        }
       ]
     },
     {
       "name": "rest",
-      "tags": ["calm", "tired"],
-      "requires": "grounded",
+      "tags": [
+        "bench",
+        "calm",
+        "tired"
+      ],
+      "requires": "bench",
       "weight": 1.0,
       "cooldown": 60,
       "steps": [
-        { "clip": "Sit" },
-        { "clip": "Sit Idle", "hold": [6.0, 20.0] },
-        { "clip": "Get Off" }
+        {
+          "clip": "Sit"
+        },
+        {
+          "clip": "Sit Idle",
+          "hold": [
+            6.0,
+            20.0
+          ]
+        },
+        {
+          "clip": "Get Off"
+        }
       ]
     },
     {
       "name": "lean_back",
-      "tags": ["calm"],
-      "requires": "grounded",
+      "tags": [
+        "bench",
+        "calm"
+      ],
+      "requires": "bench",
       "weight": 0.7,
       "cooldown": 60,
       "steps": [
-        { "clip": "Sit" },
-        { "clip": "Sit Lean", "hold": [5.0, 15.0] },
-        { "clip": "Get Off" }
+        {
+          "clip": "Sit"
+        },
+        {
+          "clip": "Sit Lean",
+          "hold": [
+            5.0,
+            15.0
+          ]
+        },
+        {
+          "clip": "Get Off"
+        }
       ]
     },
     {
       "name": "nap",
-      "tags": ["tired"],
-      "requires": "grounded",
+      "tags": [
+        "bench",
+        "tired"
+      ],
+      "requires": "bench",
       "weight": 1.0,
       "cooldown": 300,
       "steps": [
-        { "clip": "Sit" },
-        { "clip": "Sit Idle", "hold": [2.0, 4.0] },
-        { "clip": "Sit Fall Asleep" },
-        { "clip": "Sitting Asleep", "until": "woken", "hold": [60.0, 600.0] },
-        { "clip": "Wake", "interruptible": false },
-        { "clip": "Get Off" }
+        {
+          "clip": "Sit"
+        },
+        {
+          "clip": "Sit Idle",
+          "hold": [
+            2.0,
+            4.0
+          ]
+        },
+        {
+          "clip": "Sit Fall Asleep"
+        },
+        {
+          "clip": "Sitting Asleep",
+          "until": "woken",
+          "hold": [
+            60.0,
+            600.0
+          ]
+        },
+        {
+          "clip": "Wake",
+          "interruptible": false
+        },
+        {
+          "clip": "Get Off"
+        }
       ]
     },
     {
       "name": "read_map",
-      "tags": ["calm", "curious"],
-      "requires": "grounded",
+      "tags": [
+        "bench",
+        "calm",
+        "curious"
+      ],
+      "requires": "bench",
       "weight": 1.0,
       "cooldown": 120,
       "steps": [
-        { "clip": "Sit" },
-        { "clip": "Sit Map Open" },
-        { "clip": "Map Update", "repeat": [1, 3] },
-        { "clip": "Sit Map Close" },
-        { "clip": "Get Off" }
+        {
+          "clip": "Sit"
+        },
+        {
+          "clip": "Sit Map Open"
+        },
+        {
+          "clip": "Map Update",
+          "repeat": [
+            1,
+            3
+          ]
+        },
+        {
+          "clip": "Sit Map Close"
+        },
+        {
+          "clip": "Get Off"
+        }
       ]
     },
     {
       "name": "map_stroll",
-      "tags": ["calm", "curious"],
+      "tags": [
+        "calm",
+        "curious"
+      ],
       "requires": "grounded",
       "weight": 0.8,
       "cooldown": 120,
       "steps": [
-        { "clip": "Map Open" },
-        { "clip": "Map Idle", "hold": [1.5, 3.0] },
-        { "clip": "Map Walk", "move": "walk", "hold": [2.0, 5.0] },
-        { "clip": "Map Idle", "hold": [1.0, 2.5] },
-        { "clip": "Map Away" }
+        {
+          "clip": "Map Open"
+        },
+        {
+          "clip": "Map Idle",
+          "hold": [
+            1.5,
+            3.0
+          ]
+        },
+        {
+          "clip": "Map Walk",
+          "move": "walk",
+          "hold": [
+            2.0,
+            5.0
+          ]
+        },
+        {
+          "clip": "Map Idle",
+          "hold": [
+            1.0,
+            2.5
+          ]
+        },
+        {
+          "clip": "Map Away"
+        }
       ]
     },
     {
       "name": "stare_at_user",
-      "tags": ["playful", "curious"],
+      "tags": [
+        "playful",
+        "curious"
+      ],
       "requires": "grounded",
       "weight": 0.5,
       "cooldown": 180,
       "steps": [
-        { "clip": "Exit", "hold": [1.5, 3.0] },
-        { "clip": "Exit Door To Idle" }
+        {
+          "clip": "Exit",
+          "hold": [
+            1.5,
+            3.0
+          ]
+        },
+        {
+          "clip": "Exit Door To Idle"
+        }
       ]
     },
     {
       "name": "gaze_into_screen",
-      "tags": ["calm", "curious"],
+      "tags": [
+        "calm",
+        "curious"
+      ],
       "requires": "grounded",
       "weight": 0.6,
       "cooldown": 120,
       "steps": [
-        { "clip": "TurnToBG" },
-        { "clip": "Look At King", "hold": [2.0, 5.0] },
-        { "clip": "TurnFromBG" }
+        {
+          "clip": "TurnToBG"
+        },
+        {
+          "clip": "Look At King",
+          "hold": [
+            2.0,
+            5.0
+          ]
+        },
+        {
+          "clip": "TurnFromBG"
+        }
       ]
     },
     {
       "name": "challenge",
-      "tags": ["playful", "bold"],
+      "tags": [
+        "playful",
+        "bold"
+      ],
       "requires": "grounded",
       "weight": 0.6,
       "cooldown": 90,
       "steps": [
-        { "clip": "Challenge Start", "interruptible": false, "hold": [0.6, 1.2] },
-        { "clip": "Challenge End" }
+        {
+          "clip": "Challenge Start",
+          "interruptible": false,
+          "hold": [
+            0.6,
+            1.2
+          ]
+        },
+        {
+          "clip": "Challenge End"
+        }
       ]
     },
     {
       "name": "focus",
-      "tags": ["calm", "hurt"],
+      "tags": [
+        "calm",
+        "hurt"
+      ],
       "requires": "grounded",
       "weight": 0.6,
       "cooldown": 60,
       "steps": [
-        { "clip": "Focus", "hold": [0.8, 1.2] },
-        { "clip": "Focus Get Once", "interruptible": false },
-        { "clip": "Focus End" }
+        {
+          "clip": "Focus",
+          "hold": [
+            0.8,
+            1.2
+          ]
+        },
+        {
+          "clip": "Focus Get Once",
+          "interruptible": false
+        },
+        {
+          "clip": "Focus End"
+        }
       ]
     },
     {
       "name": "startled",
-      "tags": ["scared"],
+      "tags": [
+        "scared"
+      ],
       "requires": "grounded",
       "weight": 1.0,
       "cooldown": 10,
       "steps": [
-        { "clip": "Roar Lock", "hold": [0.6, 1.2], "interruptible": false }
+        {
+          "clip": "Roar Lock",
+          "hold": [
+            0.6,
+            1.2
+          ],
+          "interruptible": false
+        }
       ]
     },
     {
       "name": "windswept",
-      "tags": ["calm"],
+      "tags": [
+        "calm"
+      ],
       "requires": "grounded",
       "weight": 0.4,
       "cooldown": 60,
       "steps": [
-        { "clip": "Idle Wind", "hold": [3.0, 8.0] }
+        {
+          "clip": "Idle Wind",
+          "hold": [
+            3.0,
+            8.0
+          ]
+        }
       ]
     },
     {
       "name": "pick_up_trinket",
-      "tags": ["curious", "playful"],
+      "tags": [
+        "curious",
+        "playful"
+      ],
       "requires": "grounded",
       "weight": 0.5,
       "cooldown": 120,
       "steps": [
-        { "clip": "Collect Normal 1", "interruptible": false },
-        { "clip": "Collect Normal 2", "hold": [0.8, 1.5] },
-        { "clip": "Collect Normal 3" }
+        {
+          "clip": "Collect Normal 1",
+          "interruptible": false
+        },
+        {
+          "clip": "Collect Normal 2",
+          "hold": [
+            0.8,
+            1.5
+          ]
+        },
+        {
+          "clip": "Collect Normal 3"
+        }
       ]
     },
     {
       "name": "ascend",
-      "tags": ["bold"],
+      "tags": [
+        "bold"
+      ],
       "requires": "grounded",
       "weight": 0.2,
       "cooldown": 900,
       "steps": [
-        { "clip": "Collect Magical 1", "interruptible": false, "hold": [0.8, 1.2] },
-        { "clip": "Collect Magical 2", "interruptible": false, "hold": [1.5, 2.5] },
-        { "clip": "Collect Magical 3", "interruptible": false },
-        { "clip": "Collect StandToIdle" }
+        {
+          "clip": "Collect Magical 1",
+          "interruptible": false,
+          "hold": [
+            0.8,
+            1.2
+          ]
+        },
+        {
+          "clip": "Collect Magical 2",
+          "interruptible": false,
+          "hold": [
+            1.5,
+            2.5
+          ]
+        },
+        {
+          "clip": "Collect Magical 3",
+          "interruptible": false
+        },
+        {
+          "clip": "Collect StandToIdle"
+        }
       ]
     },
     {
       "name": "bow_down",
-      "tags": ["calm", "sad"],
+      "tags": [
+        "knocked_out",
+        "deep_sleep"
+      ],
       "requires": "grounded",
-      "weight": 0.3,
+      "weight": 0.0,
       "cooldown": 600,
       "steps": [
-        { "clip": "ToProne" },
-        { "clip": "Prostrate", "hold": [3.0, 8.0] },
-        { "clip": "Prostrate Rise", "interruptible": false }
-      ]
+        {
+          "clip": "ToProne"
+        },
+        {
+          "clip": "Prostrate",
+          "hold": [
+            3.0,
+            8.0
+          ]
+        },
+        {
+          "clip": "Prostrate Rise",
+          "interruptible": false
+        }
+      ],
+      "$comment": "Not idle: used when knocked out (lost a cursor battle, big fall) or deep sleep while the user is away."
     },
     {
       "name": "lantern_patrol",
-      "tags": ["calm", "curious"],
+      "tags": [
+        "calm",
+        "curious"
+      ],
       "requires": "grounded",
       "weight": 0.4,
       "cooldown": 300,
       "steps": [
-        { "clip": "Lantern Idle", "hold": [1.0, 2.0] },
-        { "clip": "Lantern Run", "move": "walk", "hold": [3.0, 8.0] },
-        { "clip": "Lantern Idle", "hold": [1.0, 2.0] }
+        {
+          "clip": "Lantern Idle",
+          "hold": [
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "clip": "Lantern Run",
+          "move": "walk",
+          "hold": [
+            3.0,
+            8.0
+          ]
+        },
+        {
+          "clip": "Lantern Idle",
+          "hold": [
+            1.0,
+            2.0
+          ]
+        }
       ]
     },
     {
       "name": "wake_up",
-      "tags": ["intro"],
+      "tags": [
+        "intro"
+      ],
       "requires": "grounded",
       "weight": 0.0,
       "cooldown": 0,
       "steps": [
-        { "clip": "Prostrate", "hold": [1.0, 2.0] },
-        { "clip": "Wake Up Ground", "interruptible": false }
+        {
+          "clip": "Prostrate",
+          "hold": [
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "clip": "Wake Up Ground",
+          "interruptible": false
+        }
       ]
     },
     {
       "name": "walk_into_window",
-      "tags": ["travel"],
+      "tags": [
+        "travel"
+      ],
       "requires": "grounded",
       "weight": 0.0,
       "cooldown": 0,
       "steps": [
-        { "clip": "Enter", "interruptible": false, "hold": [0.0, 0.0] }
+        {
+          "clip": "Enter",
+          "interruptible": false,
+          "hold": [
+            0.0,
+            0.0
+          ]
+        }
       ]
     },
     {
       "name": "walk_out_of_window",
-      "tags": ["travel"],
+      "tags": [
+        "travel"
+      ],
       "requires": "grounded",
       "weight": 0.0,
       "cooldown": 0,
       "steps": [
-        { "clip": "Exit", "interruptible": false, "hold": [0.3, 0.6] },
-        { "clip": "Exit Door To Idle" }
+        {
+          "clip": "Exit",
+          "interruptible": false,
+          "hold": [
+            0.3,
+            0.6
+          ]
+        },
+        {
+          "clip": "Exit Door To Idle"
+        }
       ]
     },
     {
       "name": "dreamgate_out",
-      "tags": ["travel"],
+      "tags": [
+        "travel"
+      ],
       "requires": "grounded",
       "weight": 0.0,
       "cooldown": 0,
       "steps": [
-        { "clip": "DG Warp Charge", "hold": [0.8, 1.2], "interruptible": false },
-        { "clip": "DG Warp", "interruptible": false }
+        {
+          "clip": "DG Warp Charge",
+          "hold": [
+            0.8,
+            1.2
+          ],
+          "interruptible": false
+        },
+        {
+          "clip": "DG Warp",
+          "interruptible": false
+        }
       ]
     },
     {
       "name": "dreamgate_in",
-      "tags": ["travel"],
+      "tags": [
+        "travel"
+      ],
       "requires": "any",
       "weight": 0.0,
       "cooldown": 0,
       "steps": [
-        { "clip": "DG Warp In", "interruptible": false }
+        {
+          "clip": "DG Warp In",
+          "interruptible": false
+        }
       ]
     },
     {
       "name": "hurt_idle",
-      "tags": ["hurt"],
+      "tags": [
+        "hurt"
+      ],
       "requires": "grounded",
       "weight": 1.0,
       "cooldown": 30,
       "steps": [
-        { "clip": "Idle Hurt", "hold": [3.0, 8.0] }
+        {
+          "clip": "Idle Hurt",
+          "hold": [
+            3.0,
+            8.0
+          ]
+        }
       ]
     }
   ]

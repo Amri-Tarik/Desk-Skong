@@ -100,7 +100,11 @@ impl Wander {
                 a.weight > 0.0
                     && !a.has_tag("travel")
                     && !a.has_tag("intro")
-                    && (a.requires == Requirement::Any || ch.is_grounded())
+                    && match a.requires {
+                        Requirement::Any => true,
+                        Requirement::Grounded => ch.is_grounded(),
+                        Requirement::Bench => false, // no bench placed yet
+                    }
                     && self.cooldowns.get(id).is_none_or(|c| *c <= 0.0)
             })
             .map(|(id, a)| (id, a.weight))

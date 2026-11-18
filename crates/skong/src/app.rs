@@ -316,7 +316,7 @@ impl Pet {
             }
             Command::RandomAct => {
                 if self.ch.is_grounded() {
-                    let pool: Vec<ActId> = self.data.acts.iter().filter(|(_, a)| a.weight > 0.0).map(|(id, _)| id).collect();
+                    let pool: Vec<ActId> = self.data.acts.iter().filter(|(_, a)| a.weight > 0.0 && a.requires != skong_core::acts::Requirement::Bench).map(|(id, _)| id).collect();
                     if let Some(&id) = pool.get(seed() as usize % pool.len().max(1)) {
                         self.start_act(id);
                     }
