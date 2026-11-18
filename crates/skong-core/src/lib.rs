@@ -14,3 +14,4 @@ pub mod geom;
 pub mod locomotion;
 pub mod nav;
 pub mod terrain;
+pub mod vision;
