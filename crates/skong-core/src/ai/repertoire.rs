@@ -21,11 +21,12 @@ pub struct ActInfo {
 
 impl ActInfo {
     /// Can this act start in the knight's current situation?
+    /// `at_bench` = a seat is available here (at a bench, or able to perch on this ledge).
     pub fn startable(&self, grounded: bool, at_bench: bool) -> bool {
         match self.requires {
             Requirement::Any => true,
             Requirement::Grounded => grounded,
-            Requirement::Bench => grounded && at_bench,
+            Requirement::Seat => grounded && at_bench,
         }
     }
 

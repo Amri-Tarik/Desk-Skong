@@ -34,6 +34,9 @@ pub struct Percepts<'a> {
     /// Placed benches (feet position of the sitting spot). Bench acts (sitting clips)
     /// are only picked while the knight stands at one.
     pub benches: &'a [Vec2],
+    /// The knight can perch (sit with dangling legs) on the ledge he stands on: a window or
+    /// content edge with room below. Seated acts then work without a bench.
+    pub perch: bool,
     /// Controller events since the previous brain tick (incl. `on_terrain_rebuilt`).
     pub move_events: &'a [MoveEvent],
 }
@@ -196,6 +199,8 @@ pub struct Senses {
     pub user_returned: bool,
     /// The bench the knight is standing at, if any.
     pub at_bench: Option<Vec2>,
+    /// Can perch on the current ledge (from [`Percepts::perch`]).
+    pub perch: bool,
     /// Something woke the knight this tick (poke, user returned). Set by reflexes.
     pub woken: bool,
 }
@@ -249,7 +254,13 @@ impl Senses {
             .iter()
             .copied()
             .find(|b| k.is_grounded() && (b.x - k.pos.x).abs() <= BENCH_REACH && (b.y - k.pos.y).abs() <= 8.0);
+        self.perch = p.perch && k.is_grounded();
         self.woken = false;
+    }
+
+    /// A seat is available right here: at a bench, or perched on a ledge edge.
+    pub fn can_sit(&self) -> bool {
+        self.at_bench.is_some() || self.perch
     }
 
     /// Seconds since the knight was last carried by a moving window.

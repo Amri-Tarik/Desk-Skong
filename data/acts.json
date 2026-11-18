@@ -1,5 +1,5 @@
 {
-  "$comment": "Behaviour choreographies built from Knight clips. Each step plays a clip; looping clips run for `hold` seconds (random in [min,max]); one-shot clips play `repeat` times (default once) then hold their last frame for `hold` seconds if given. `until` ends a step on an external signal instead (e.g. 'woken'). `move` walks with a gait during the step. `interruptible: false` protects a step from being cut short. Tags feed the mood-driven AI; `requires` is checked before starting. `requires` is grounded | any | bench (standing at a placed bench). Weight 0 = never picked at random; the AI triggers it by tag.",
+  "$comment": "Behaviour choreographies built from Knight clips. Each step plays a clip; looping clips run for `hold` seconds (random in [min,max]); one-shot clips play `repeat` times (default once) then hold their last frame for `hold` seconds if given. `until` ends a step on an external signal instead (e.g. 'woken'). `move` walks with a gait during the step. `interruptible: false` protects a step from being cut short. Tags feed the mood-driven AI; `requires` is checked before starting. `requires` is grounded | any | seat (perched on a window edge or at a bench; sitting clips are a front-facing pose with dangling legs). Weight 0 = never picked at random; the AI triggers it by tag.",
   "acts": [
     {
       "name": "look_up",
@@ -46,11 +46,11 @@
     {
       "name": "rest",
       "tags": [
-        "bench",
+        "seat",
         "calm",
         "tired"
       ],
-      "requires": "bench",
+      "requires": "seat",
       "weight": 1.0,
       "cooldown": 60,
       "steps": [
@@ -72,10 +72,10 @@
     {
       "name": "lean_back",
       "tags": [
-        "bench",
+        "seat",
         "calm"
       ],
-      "requires": "bench",
+      "requires": "seat",
       "weight": 0.7,
       "cooldown": 60,
       "steps": [
@@ -97,10 +97,10 @@
     {
       "name": "nap",
       "tags": [
-        "bench",
+        "seat",
         "tired"
       ],
-      "requires": "bench",
+      "requires": "seat",
       "weight": 1.0,
       "cooldown": 300,
       "steps": [
@@ -137,11 +137,11 @@
     {
       "name": "read_map",
       "tags": [
-        "bench",
+        "seat",
         "calm",
         "curious"
       ],
-      "requires": "bench",
+      "requires": "seat",
       "weight": 1.0,
       "cooldown": 120,
       "steps": [
@@ -581,55 +581,118 @@
     },
     {
       "name": "slash",
-      "tags": ["fight"],
+      "tags": [
+        "fight"
+      ],
       "requires": "any",
       "weight": 0.0,
-      "steps": [{ "clip": "Slash", "interruptible": false }],
+      "steps": [
+        {
+          "clip": "Slash",
+          "interruptible": false
+        }
+      ],
       "$comment": "Fight acts (weight 0: only started by the AI by name). Slashes can render the AI Attack intent on the ground."
     },
     {
       "name": "slash_alt",
-      "tags": ["fight"],
+      "tags": [
+        "fight"
+      ],
       "requires": "any",
       "weight": 0.0,
-      "steps": [{ "clip": "SlashAlt", "interruptible": false }]
+      "steps": [
+        {
+          "clip": "SlashAlt",
+          "interruptible": false
+        }
+      ]
     },
     {
       "name": "up_slash",
-      "tags": ["fight"],
+      "tags": [
+        "fight"
+      ],
       "requires": "any",
       "weight": 0.0,
-      "steps": [{ "clip": "UpSlash", "interruptible": false }]
+      "steps": [
+        {
+          "clip": "UpSlash",
+          "interruptible": false
+        }
+      ]
     },
     {
       "name": "down_slash",
-      "tags": ["fight"],
+      "tags": [
+        "fight"
+      ],
       "requires": "any",
       "weight": 0.0,
-      "steps": [{ "clip": "DownSlash", "interruptible": false }]
+      "steps": [
+        {
+          "clip": "DownSlash",
+          "interruptible": false
+        }
+      ]
     },
     {
       "name": "recoil",
-      "tags": ["fight", "hurt"],
-      "requires": "grounded",
-      "weight": 0.0,
-      "steps": [{ "clip": "Recoil", "hold": [0.1, 0.2], "interruptible": false }]
-    },
-    {
-      "name": "stunned",
-      "tags": ["fight", "hurt"],
-      "requires": "grounded",
-      "weight": 0.0,
-      "steps": [{ "clip": "Stun", "hold": [1.0, 1.6], "interruptible": false }]
-    },
-    {
-      "name": "victory",
-      "tags": ["fight", "bold"],
+      "tags": [
+        "fight",
+        "hurt"
+      ],
       "requires": "grounded",
       "weight": 0.0,
       "steps": [
-        { "clip": "Challenge Start", "hold": [0.8, 1.2] },
-        { "clip": "Challenge End" }
+        {
+          "clip": "Recoil",
+          "hold": [
+            0.1,
+            0.2
+          ],
+          "interruptible": false
+        }
+      ]
+    },
+    {
+      "name": "stunned",
+      "tags": [
+        "fight",
+        "hurt"
+      ],
+      "requires": "grounded",
+      "weight": 0.0,
+      "steps": [
+        {
+          "clip": "Stun",
+          "hold": [
+            1.0,
+            1.6
+          ],
+          "interruptible": false
+        }
+      ]
+    },
+    {
+      "name": "victory",
+      "tags": [
+        "fight",
+        "bold"
+      ],
+      "requires": "grounded",
+      "weight": 0.0,
+      "steps": [
+        {
+          "clip": "Challenge Start",
+          "hold": [
+            0.8,
+            1.2
+          ]
+        },
+        {
+          "clip": "Challenge End"
+        }
       ]
     }
   ]

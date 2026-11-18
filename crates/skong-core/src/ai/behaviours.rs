@@ -123,7 +123,7 @@ impl Ctx<'_, '_> {
 
     /// Ask the app to start `id` (only when nothing plays and requirements hold).
     pub fn request_act(&mut self, id: ActId) {
-        let ok = self.rep.catalog.get(id).is_some_and(|a| a.startable(self.grounded(), self.senses.at_bench.is_some()));
+        let ok = self.rep.catalog.get(id).is_some_and(|a| a.startable(self.grounded(), self.senses.can_sit()));
         if self.p.act.is_none() && ok {
             self.out.act = Some(id);
             self.rep.used(id, self.now);
@@ -132,7 +132,7 @@ impl Ctx<'_, '_> {
 
     /// Pick an act by mood (optionally preferring a tag).
     pub fn pick_act(&mut self, prefer: Option<&str>) -> Option<ActId> {
-        let situation = (self.grounded(), self.senses.at_bench.is_some());
+        let situation = (self.grounded(), self.senses.can_sit());
         self.rep.pick(self.mind, self.senses.user_away, situation, prefer, self.now, self.rng)
     }
 

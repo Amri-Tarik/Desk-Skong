@@ -33,6 +33,10 @@ to PNG. Atlases get Custom Knight names (`Knight.png`, `Sprint.png`, `Unn.png`, 
 anything a community skin lacks. **This is game art: keep it in the git-ignored `skins/`
 folder and never redistribute it.**
 
+Props: `--find bench` lists matching Sprite/Texture2D assets across all asset files;
+`--export-sprites town_bench,guardian_bench --textures ../skins/Vanilla/props` crops those sprites
+(including ones packed in SpriteAtlases) to PNG plus a `.json` with pivot and pixels-per-unit.
+
 Options: `--collections A,B` exports collections by name instead of by reference;
 `--files resources.assets,level1` scans other asset files (default `resources.assets`).
 

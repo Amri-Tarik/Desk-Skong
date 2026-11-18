@@ -160,6 +160,7 @@ impl Sim {
             fullscreen_front: false,
             pokes: &self.pokes,
             benches: &self.benches,
+            perch: false,
             act: self.act.as_ref().map(|a| a.act),
             move_events: &self.events,
         };

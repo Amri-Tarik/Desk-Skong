@@ -14,4 +14,5 @@ pub mod desktop;
 pub mod geom;
 pub mod locomotion;
 pub mod nav;
+pub mod props;
 pub mod terrain;
