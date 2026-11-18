@@ -1,11 +1,11 @@
 //! The live pet: desktop → terrain → controller → locomotion/acts → sprite window,
 //! controlled from a tray menu and global hotkeys (Ctrl+Alt+…): K manual control,
-//! A random act, W wake, R respawn at cursor, S next skin, C click-through,
+//! A random act, W wake, R respawn at cursor, S next skin, B bench at cursor, C click-through,
 //! P pause, Q quit.
 use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
-use skong_core::acts::{ActId, ActLibrary, ActPlayer, ActStatus};
+use skong_core::acts::{ActId, ActLibrary, ActPlayer, ActStatus, Requirement};
 use skong_core::anim::{AnimEvent, Animator, ClipId, ClipLibrary};
 use skong_core::assets::{Skin, SpriteBank, SpriteKey, VANILLA};
 use skong_core::controller::{Abilities, Character, CharacterParams, MoveEvent, MoveInput, Side};
@@ -22,7 +22,8 @@ use skong_win::vk;
 use crate::Args;
 use crate::keyboard::Keyboard;
 use crate::settings::{BOTHER, SCALES, Settings};
-use crate::wander::Wander;
+use crate::benches::{Benches, SEAT_BELOW_ORIGIN};
+use crate::wander::{Seating, Wander};
 
 /// Everything the user can ask for, from hotkeys or the tray menu.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -36,6 +37,9 @@ enum Command {
     SetScale(f32),
     SetBother(f32),
     ToggleClickThrough,
+    PlaceBenchAtCursor(usize),
+    PlaceBenchNearKnight(usize),
+    ClearBenches,
     TogglePause,
     Quit,
 }
@@ -49,6 +53,7 @@ const HOTKEYS: &[(i32, vk::VIRTUAL_KEY, Command)] = &[
     (6, vk::VK_C, Command::ToggleClickThrough),
     (7, vk::VK_P, Command::TogglePause),
     (8, vk::VK_Q, Command::Quit),
+    (9, vk::VK_B, Command::PlaceBenchAtCursor(0)),
 ];
 
 // Tray menu ids.
@@ -57,10 +62,12 @@ const ID_CLICK: u32 = 2;
 const ID_PAUSE: u32 = 3;
 const ID_ACT: u32 = 4;
 const ID_RESPAWN: u32 = 5;
+const ID_CLEAR_BENCHES: u32 = 6;
 const ID_QUIT: u32 = 9;
 const ID_SKIN0: u32 = 1000;
 const ID_SCALE0: u32 = 2000;
 const ID_BOTHER0: u32 = 3000;
+const ID_BENCH0: u32 = 4000;
 
 /// Rasterized frames for one skin at one scale.
 struct Look {
@@ -107,6 +114,9 @@ struct Pet {
     loco: Locomotion,
     anim: Animator,
     act: Option<ActPlayer>,
+    /// Seat line (screen y) while a seated act plays.
+    seat_y: Option<f32>,
+    benches: Benches,
     brain: Wander,
     keyboard: Keyboard,
     manual: bool,
@@ -159,6 +169,7 @@ pub fn run(args: &Args) -> Result<()> {
     }
     win.set_click_through(settings.click_through);
     let tray = Tray::new("Desk-Skong", &tray_icon(&data, &look))?;
+    let benches = Benches::load(&args.data.join("../props.json"), data.vanilla().map(|s| s.dir.as_path()), settings.scale)?;
 
     let mut pet = Pet {
         data,
@@ -172,6 +183,8 @@ pub fn run(args: &Args) -> Result<()> {
         loco,
         anim,
         act,
+        seat_y: None,
+        benches,
         brain: Wander::new(seed()),
         keyboard: Keyboard::default(),
         manual: false,
@@ -182,6 +195,11 @@ pub fn run(args: &Args) -> Result<()> {
         move_events: Vec::new(),
         anim_events: Vec::new(),
     };
+
+    pet.benches.capturable = args.capturable;
+    if args.sit_test {
+        pet.sit_test();
+    }
 
     let mut rl = RunLoop::new(120.0)?;
     for &(id, key, _) in HOTKEYS {
@@ -211,6 +229,7 @@ pub fn run(args: &Args) -> Result<()> {
         }
         if last_housekeeping.elapsed().as_secs() >= 2 {
             last_housekeeping = Instant::now();
+            pet.benches.raise_all();
             pet.win.raise();
             log::debug!(
                 "knight at ({:.0},{:.0}) {:?} clip '{}' act {:?}",
@@ -234,6 +253,7 @@ impl Pet {
         if self.watcher.poll() {
             let new = Terrain::from_desktop(self.watcher.snapshot(), &self.topts);
             self.ch.on_terrain_rebuilt(&self.terrain, &new, &mut self.move_events);
+            self.benches.follow(&self.terrain, &new);
             self.terrain = new;
         }
 
@@ -241,13 +261,19 @@ impl Pet {
         let mut input = if self.manual {
             self.keyboard.read()
         } else {
-            let dec = self.brain.decide(&self.ch, &d.acts, self.act.is_some(), dt);
+            let seat = self.benches.seat_here(&self.ch, &self.terrain);
+            let seating = Seating { here: seat.is_some(), bench_x: self.benches.on_my_surface(&self.ch).map(|i| self.benches.placed[i].0.pos.x) };
+            let dec = self.brain.decide(&self.ch, &d.acts, self.act.is_some(), seating, dt);
             if let Some(id) = dec.act
                 && self.ch.is_grounded()
                 && !self.loco.busy()
             {
-                log::info!("act '{}'", d.acts.get(id).name);
-                self.act = Some(ActPlayer::start(&d.acts, &d.lib, &mut self.anim, id, seed()));
+                let seated = d.acts.get(id).requires == Requirement::Seat;
+                if !seated || seat.is_some() {
+                    log::info!("act '{}'{}", d.acts.get(id).name, if seated { " (seated)" } else { "" });
+                    self.seat_y = if seated { seat } else { None };
+                    self.act = Some(ActPlayer::start(&d.acts, &d.lib, &mut self.anim, id, seed()));
+                }
             }
             dec.input
         };
@@ -293,7 +319,12 @@ impl Pet {
         let Some(key) = self.anim.current(&self.data.lib) else { return Ok(()) };
         let Some(frame) = self.look.bank.frame(key) else { return Ok(()) };
         let x = (self.ch.pos.x - frame.anchor_x(flip)).round() as i32;
-        let y = (self.ch.pos.y - self.look.feet_offset - frame.anchor[1]).round() as i32;
+        // Seated acts put the sitting pose's seat line on the seat; otherwise feet on the ground.
+        let origin_y = match self.seat_y.filter(|_| self.act.is_some()) {
+            Some(seat) => seat - SEAT_BELOW_ORIGIN * self.ch.params.px_per_unit,
+            None => self.ch.pos.y - self.look.feet_offset,
+        };
+        let y = (origin_y - frame.anchor[1]).round() as i32;
         if self.drawn != Some((key, flip)) {
             self.win.present_flipped(&frame.image, x, y, flip)?;
             self.drawn = Some((key, flip));
@@ -316,7 +347,7 @@ impl Pet {
             }
             Command::RandomAct => {
                 if self.ch.is_grounded() {
-                    let pool: Vec<ActId> = self.data.acts.iter().filter(|(_, a)| a.weight > 0.0 && a.requires != skong_core::acts::Requirement::Bench).map(|(id, _)| id).collect();
+                    let pool: Vec<ActId> = self.data.acts.iter().filter(|(_, a)| a.weight > 0.0 && a.requires != Requirement::Seat).map(|(id, _)| id).collect();
                     if let Some(&id) = pool.get(seed() as usize % pool.len().max(1)) {
                         self.start_act(id);
                     }
@@ -347,6 +378,7 @@ impl Pet {
                 let params = CharacterParams::hollow_knight(64.0 * s);
                 self.ch = Character::new(params, self.ch.abilities, self.ch.pos);
                 self.loco = Locomotion::new(&self.data.lib, &params)?;
+                self.benches.rescale(s);
                 self.settings.save();
             }
             Command::SetBother(b) => {
@@ -362,9 +394,37 @@ impl Pet {
                 self.paused = !self.paused;
                 self.win.set_visible(!self.paused);
             }
+            Command::PlaceBenchAtCursor(style) => {
+                if let Some((x, y)) = monitor::cursor_pos() {
+                    self.place_bench(style, Vec2::new(x as f32, y as f32));
+                }
+            }
+            Command::PlaceBenchNearKnight(style) => {
+                let at = Vec2::new(self.ch.pos.x + self.ch.facing.sign() * 90.0 * self.settings.scale, self.ch.pos.y - 4.0);
+                self.place_bench(style, at);
+            }
+            Command::ClearBenches => self.benches.clear(),
             Command::Quit => return Ok(Flow::Quit),
         }
         Ok(Flow::Continue)
+    }
+
+    /// Debug (`--sit-test`): bench under the knight, then read the map on it.
+    fn sit_test(&mut self) {
+        self.place_bench(0, self.ch.pos - Vec2::new(0.0, 4.0));
+        let id = self.data.acts.id("read_map");
+        if let (Some(i), Some(id)) = (self.benches.placed.len().checked_sub(1), id) {
+            self.ch.pos.x = self.benches.placed[i].0.pos.x;
+            self.seat_y = Some(self.benches.seat_y(i));
+            self.act = Some(ActPlayer::start(&self.data.acts, &self.data.lib, &mut self.anim, id, seed()));
+        }
+    }
+
+    fn place_bench(&mut self, style: usize, at: Vec2) {
+        match self.benches.place(style, at, &self.terrain) {
+            Ok(()) => self.win.raise(), // keep the knight in front of his furniture
+            Err(e) => log::warn!("bench: {e:#}"),
+        }
     }
 
     fn reload_look(&mut self) -> Result<()> {
@@ -392,6 +452,8 @@ impl Pet {
             MenuItem::sub(format!("Skin ({})", self.data.skins.len()), skins),
             MenuItem::sub("Size", scales),
             MenuItem::sub("Mischief", bother),
+            MenuItem::sub("Place bench", self.benches.styles.iter().enumerate().map(|(i, s)| MenuItem::Action { id: ID_BENCH0 + i as u32, label: s.name.clone(), checked: false, enabled: self.benches.available(i) }).collect()),
+            MenuItem::action(ID_CLEAR_BENCHES, "Remove benches"),
             MenuItem::Separator,
             MenuItem::action(ID_ACT, "Do something!"),
             MenuItem::action(ID_RESPAWN, "Come here (respawn at cursor)"),
@@ -411,6 +473,8 @@ impl Pet {
             ID_ACT => Command::RandomAct,
             ID_RESPAWN => Command::RespawnAtCursor,
             ID_QUIT => Command::Quit,
+            ID_CLEAR_BENCHES => Command::ClearBenches,
+            i if (ID_BENCH0..ID_BENCH0 + self.benches.styles.len() as u32).contains(&i) => Command::PlaceBenchNearKnight((i - ID_BENCH0) as usize),
             i if (ID_SKIN0..ID_SKIN0 + self.data.skins.len() as u32).contains(&i) => Command::SetSkin((i - ID_SKIN0) as usize),
             i if (ID_SCALE0..ID_SCALE0 + SCALES.len() as u32).contains(&i) => Command::SetScale(SCALES[(i - ID_SCALE0) as usize].1),
             i if (ID_BOTHER0..ID_BOTHER0 + BOTHER.len() as u32).contains(&i) => Command::SetBother(BOTHER[(i - ID_BOTHER0) as usize].1),
