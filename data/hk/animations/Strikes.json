@@ -1,0 +1,780 @@
+{
+  "name": "Strikes",
+  "clips": [
+    {
+      "name": "Sword",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 8,
+          "sprite": "strike_effect0000"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 9,
+          "sprite": "strike_effect0001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 10,
+          "sprite": "strike_effect0002"
+        }
+      ]
+    },
+    {
+      "name": "Death Wave Infected",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 29,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 11,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 17,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 27,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 37,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 13,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 36,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 23,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 39,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 12,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 20,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 22,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 16,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 18,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 19,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 32,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 35,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 14,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 21,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 33,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 26,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 28,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 40,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 24,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 30,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 34,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 15,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 25,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 31,
+          "sprite": ""
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 38,
+          "sprite": ""
+        }
+      ]
+    },
+    {
+      "name": "Block",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 43,
+          "sprite": "block_effect0000"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 42,
+          "sprite": "block_effect0001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 44,
+          "sprite": "block_effect0002"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 41,
+          "sprite": "block_effect0003"
+        }
+      ]
+    },
+    {
+      "name": "Slash Impact 1",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 51,
+          "sprite": "impact_slash_01000"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 54,
+          "sprite": "impact_slash_01001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 49,
+          "sprite": "impact_slash_01002"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 50,
+          "sprite": "impact_slash_01003"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 52,
+          "sprite": "impact_slash_01004"
+        }
+      ]
+    },
+    {
+      "name": "Slash Impact 2",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 45,
+          "sprite": "impact_particle_02_v02000"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 48,
+          "sprite": "impact_particle_02_v02001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 47,
+          "sprite": "impact_particle_02_v02002"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 53,
+          "sprite": "impact_particle_02_v02003"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 46,
+          "sprite": "impact_particle_02_v02004"
+        }
+      ]
+    },
+    {
+      "name": "Slam",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 59,
+          "sprite": "smash_effect0000"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 60,
+          "sprite": "smash_effect0001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 58,
+          "sprite": "smash_effect0002"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 56,
+          "sprite": "smash_effect0003"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 57,
+          "sprite": "smash_effect0004"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 55,
+          "sprite": "smash_effect0005"
+        }
+      ]
+    },
+    {
+      "name": "Thunk",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 69,
+          "sprite": "thunk_effect0005"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 63,
+          "sprite": "thunk_effect0006"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 61,
+          "sprite": "thunk_effect0007"
+        }
+      ]
+    },
+    {
+      "name": "Splat",
+      "fps": 24,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 76,
+          "sprite": "splat_effect0000"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 73,
+          "sprite": "splat_effect0001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 74,
+          "sprite": "splat_effect0002"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 75,
+          "sprite": "splat_effect0003"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 72,
+          "sprite": "splat_effect0004"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 77,
+          "sprite": "splat_effect0005"
+        }
+      ]
+    },
+    {
+      "name": "Health Get",
+      "fps": 24,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 78,
+          "sprite": "health_collect0000"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 82,
+          "sprite": "health_collect0001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 81,
+          "sprite": "health_collect0002"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 79,
+          "sprite": "health_collect0003"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 80,
+          "sprite": "health_collect0004"
+        }
+      ]
+    },
+    {
+      "name": "Slash Ghost 1",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 93,
+          "sprite": "slash_animations0000"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 95,
+          "sprite": "slash_animations0001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 97,
+          "sprite": "slash_animations0002"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 96,
+          "sprite": "slash_animations0003"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 92,
+          "sprite": "slash_animations0004"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 94,
+          "sprite": "slash_animations0005"
+        },
+        {
+          "collection": "Prompts Cln",
+          "sprite_id": 77,
+          "sprite": "prompt_blank"
+        }
+      ]
+    },
+    {
+      "name": "Slash Ghost 2",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 88,
+          "sprite": "Impact_slashes_020000"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 89,
+          "sprite": "Impact_slashes_020001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 90,
+          "sprite": "Impact_slashes_020002"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 91,
+          "sprite": "Impact_slashes_020003"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 87,
+          "sprite": "Impact_slashes_020004"
+        },
+        {
+          "collection": "Prompts Cln",
+          "sprite_id": 77,
+          "sprite": "prompt_blank"
+        }
+      ]
+    },
+    {
+      "name": "Slash Shade",
+      "fps": 25,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 84,
+          "sprite": "impact_slashes_050000"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 86,
+          "sprite": "impact_slashes_050001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 85,
+          "sprite": "impact_slashes_050002"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 83,
+          "sprite": "impact_slashes_050003"
+        }
+      ]
+    },
+    {
+      "name": "Impact Lines",
+      "fps": 25,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 100,
+          "sprite": "impact_slashes_050000 1"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 99,
+          "sprite": "impact_slashes_050001 1"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 101,
+          "sprite": "impact_slashes_050002 1"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 98,
+          "sprite": "impact_slashes_050003 1"
+        }
+      ]
+    },
+    {
+      "name": "Pierce Spike",
+      "fps": 24,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 112,
+          "sprite": "dash_impact0000"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 110,
+          "sprite": "dash_impact0001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 110,
+          "sprite": "dash_impact0001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 110,
+          "sprite": "dash_impact0001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 110,
+          "sprite": "dash_impact0001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 109,
+          "sprite": "dash_impact0002"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 111,
+          "sprite": "dash_impact0003"
+        }
+      ]
+    },
+    {
+      "name": "Slash Ghost 2 Slow",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 88,
+          "sprite": "Impact_slashes_020000"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 89,
+          "sprite": "Impact_slashes_020001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 90,
+          "sprite": "Impact_slashes_020002"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 91,
+          "sprite": "Impact_slashes_020003"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 87,
+          "sprite": "Impact_slashes_020004"
+        },
+        {
+          "collection": "Prompts Cln",
+          "sprite_id": 77,
+          "sprite": "prompt_blank"
+        }
+      ]
+    },
+    {
+      "name": "Enemy Shot",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 113,
+          "sprite": "shot_blast0000"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 114,
+          "sprite": "shot_blast0001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 115,
+          "sprite": "shot_blast0002"
+        }
+      ]
+    },
+    {
+      "name": "Slam Fast",
+      "fps": 24,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 59,
+          "sprite": "smash_effect0000"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 60,
+          "sprite": "smash_effect0001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 58,
+          "sprite": "smash_effect0002"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 57,
+          "sprite": "smash_effect0004"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 55,
+          "sprite": "smash_effect0005"
+        }
+      ]
+    },
+    {
+      "name": "Thunk Fast",
+      "fps": 24,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 69,
+          "sprite": "thunk_effect0005"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 63,
+          "sprite": "thunk_effect0006"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 61,
+          "sprite": "thunk_effect0007"
+        }
+      ]
+    },
+    {
+      "name": "Nail Clash",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 117,
+          "sprite": "sword_tink_effect0000"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 116,
+          "sprite": "sword_tink_effect0001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 118,
+          "sprite": "sword_tink_effect0002"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 119,
+          "sprite": "sword_tink_effect0003"
+        }
+      ]
+    },
+    {
+      "name": "Splat2",
+      "fps": 24,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 76,
+          "sprite": "splat_effect0000"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 73,
+          "sprite": "splat_effect0001"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 74,
+          "sprite": "splat_effect0002"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 75,
+          "sprite": "splat_effect0003"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 72,
+          "sprite": "splat_effect0004"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 77,
+          "sprite": "splat_effect0005"
+        },
+        {
+          "collection": "EnemyHitEffects",
+          "sprite_id": 120,
+          "sprite": "splat_effect0006"
+        }
+      ]
+    }
+  ]
+}

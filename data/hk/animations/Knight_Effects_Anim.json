@@ -1,0 +1,48 @@
+{
+  "name": "Knight Effects Anim",
+  "clips": [
+    {
+      "name": "Acid Armour",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Knight Effects Cln",
+          "sprite_id": 6,
+          "sprite": "acid_armour_effect0000"
+        },
+        {
+          "collection": "Knight Effects Cln",
+          "sprite_id": 2,
+          "sprite": "acid_armour_effect0001"
+        },
+        {
+          "collection": "Knight Effects Cln",
+          "sprite_id": 5,
+          "sprite": "acid_armour_effect0002"
+        },
+        {
+          "collection": "Knight Effects Cln",
+          "sprite_id": 4,
+          "sprite": "acid_armour_effect0003"
+        },
+        {
+          "collection": "Knight Effects Cln",
+          "sprite_id": 0,
+          "sprite": "acid_armour_effect0004"
+        },
+        {
+          "collection": "Knight Effects Cln",
+          "sprite_id": 3,
+          "sprite": "acid_armour_effect0005"
+        },
+        {
+          "collection": "Knight Effects Cln",
+          "sprite_id": 1,
+          "sprite": "acid_armour_effect0006"
+        }
+      ]
+    }
+  ]
+}

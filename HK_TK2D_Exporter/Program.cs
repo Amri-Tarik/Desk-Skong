@@ -1,425 +1,363 @@
-﻿using System.Text.Json;
+﻿// HK_TK2D_Exporter — dumps tk2d sprite collections + sprite animation libraries
+// from a Hollow Knight install into plain JSON (no art is copied).
+//
+//   dotnet run -c Release -- --data "<...>/hollow_knight_Data" --list
+//   dotnet run -c Release -- --data "<...>/hollow_knight_Data" --out ../data/tk2d \
+//        [--collections Knight,Sprint] [--animations Knight]
+//
+// Collections/animations are matched by m_Name (case-insensitive). Without filters,
+// every collection referenced by the exported animation libraries is exported.
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using AssetsTools.NET;
 using AssetsTools.NET.Extra;
 
-public sealed class ExportRoot
+internal static class Program
 {
-    public int AtlasWidth { get; set; }
-    public int AtlasHeight { get; set; }
-    public List<ExportSprite> Sprites { get; set; } = new();
-}
+    sealed record Options(string DataDir, string? OutDir, bool List, HashSet<string>? Collections, HashSet<string>? Animations, string[] Files);
 
-public sealed class ExportSprite
-{
-    public string Name { get; set; } = "";
-    public PixelRect PixelRect { get; set; } = new();    // atlas pixels (bottom-left origin)
-    public float[] Pivot { get; set; } = new float[2];   // bounds.center in world units
-    public string Flip { get; set; } = "None";           // None | Tk2d | TPackerCW
-    public Size2D SourceSize { get; set; } = new();      // original (untrimmed) size in pixels
-    public Offset2D SpriteSourceOffset { get; set; } = new(); // bottom-left offset of trimmed rect within untrimmed
-}
-
-public sealed class PixelRect { public int X, Y, W, H; }
-public sealed class Size2D { public int W, H; }
-public sealed class Offset2D { public int X, Y; }
-internal class Program
-{
-    private static string? TryGetMonoBehaviourClassName(AssetsManager am, AssetsFileInstance afi, AssetFileInfo mbInfo)
+    static int Main(string[] args)
     {
-        try
-        {
-            var baseField = am.GetBaseField(afi, mbInfo);
-            var scriptExt = am.GetExtAsset(afi, baseField["m_Script"]);
-            var scriptBF = scriptExt.baseField;
-            var nspace = scriptBF["m_Namespace"].AsString;
-            var cname = scriptBF["m_ClassName"].AsString;
-            return string.IsNullOrEmpty(nspace) ? cname : $"{nspace}.{cname}";
-        }
-        catch { return null; }
-    }
+        Options opt;
+        try { opt = ParseArgs(args); }
+        catch (Exception e) { Console.Error.WriteLine(e.Message); PrintUsage(); return 2; }
 
-    static int Main()
-    {
-        // --- Hardcoded paths (relative to project root) ---
-        // When running from bin/Debug|Release/netX.Y, go up 3 levels to project root.
-        var exeBase = AppContext.BaseDirectory;
-        var projRoot = Path.GetFullPath(Path.Combine(exeBase, "..", "..", ".."));
+        var managed = Path.Combine(opt.DataDir, "Managed");
+        if (!Directory.Exists(managed)) { Console.Error.WriteLine($"Managed dir not found: {managed}"); return 4; }
 
-        // Your layout under HK_TK2D_Exporter/
-        var assetsPath = Path.Combine(projRoot, "assets", "resources.assets");
-        var managedDir = Path.Combine(projRoot, "Managed");
-        var outJsonPath = Path.Combine(projRoot, "Knight_tk2d.json");
+        var am = new AssetsManager { MonoTempGenerator = new MonoCecilTempGenerator(managed) };
+        var tpk = new[] { Path.Combine(AppContext.BaseDirectory, "classdata.tpk"), Path.Combine(Directory.GetCurrentDirectory(), "classdata.tpk") }
+            .FirstOrDefault(File.Exists);
+        if (tpk is null) { Console.Error.WriteLine("classdata.tpk not found"); return 3; }
+        am.LoadClassPackage(tpk);
 
-        if (!File.Exists(assetsPath))
+        var scan = new Scanner(am);
+        foreach (var f in opt.Files)
         {
-            Console.Error.WriteLine($"assets not found: {assetsPath}");
-            return 3;
-        }
-        if (!Directory.Exists(managedDir))
-        {
-            Console.Error.WriteLine($"Managed dir not found: {managedDir}");
-            return 4;
+            var path = Path.Combine(opt.DataDir, f);
+            if (!File.Exists(path)) { Console.Error.WriteLine($"skip missing {path}"); continue; }
+            scan.Scan(path);
         }
 
-        var am = new AssetsManager();
-
-        am.MonoTempGenerator = new MonoCecilTempGenerator(managedDir);
-
-        // Optional: load classdata.tpk if you have it next to the project or exe (improves non-Mono types like Texture2D)
-        var tpkCandidates = new[] {
-            Path.Combine(projRoot, "classdata.tpk"),
-            Path.Combine(exeBase, "classdata.tpk")
-        };
-        foreach (var tpk in tpkCandidates)
+        if (opt.List)
         {
-            if (File.Exists(tpk))
-            {
-                am.LoadClassPackage(tpk);
-                break;
-            }
+            Console.WriteLine("== tk2dSpriteCollectionData ==");
+            foreach (var c in scan.Collections.OrderBy(c => c.Name))
+                Console.WriteLine($"  {c.Name,-40} sprites:{c.Field["spriteDefinitions.Array"].AsArray.size,5}  file:{Path.GetFileName(c.Afi.path)}");
+            Console.WriteLine("== tk2dSpriteAnimation ==");
+            foreach (var a in scan.Animations.OrderBy(a => a.Name))
+                Console.WriteLine($"  {a.Name,-40} clips:{a.Field["clips.Array"].AsArray.size,5}  file:{Path.GetFileName(a.Afi.path)}");
+            return 0;
         }
 
-        var afi = am.LoadAssetsFile(assetsPath, true);
-        var afile = afi.file;
-        am.LoadClassDatabaseFromPackage(afile.Metadata.UnityVersion);
+        if (opt.OutDir is null) { PrintUsage(); return 2; }
+        Directory.CreateDirectory(Path.Combine(opt.OutDir, "collections"));
+        Directory.CreateDirectory(Path.Combine(opt.OutDir, "animations"));
 
-        // --- DEBUG: environment sanity ---
-        Console.WriteLine($"Unity version: {afile.Metadata.UnityVersion}");
-        Console.WriteLine($"Managed dir: {managedDir}");
-        Console.WriteLine($"  - Assembly-CSharp.dll: {File.Exists(Path.Combine(managedDir, "Assembly-CSharp.dll"))}");
-        Console.WriteLine($"  - tk2dRuntime.dll:     {File.Exists(Path.Combine(managedDir, "tk2dRuntime.dll"))}");
-
-        // Print which Mono generator is actually set
-        var monoGen = typeof(AssetsManager).GetProperty("MonoTempGenerator")?.GetValue(am);
-        Console.WriteLine("MonoTempGenerator: " + (monoGen?.GetType().FullName ?? "<null>"));
-
-        // How many MonoBehaviours does this file have?
-        int mbTotal = 0;
-        foreach (var _ in afile.GetAssetsOfType(AssetClassID.MonoBehaviour)) mbTotal++;
-        Console.WriteLine($"MonoBehaviours in {Path.GetFileName(assetsPath)}: {mbTotal}");
-        // ---------------------------------
-
-        // // --- DEBUG: enumerate MonoBehaviours with class-name resolution ---
-        // int mb_idx = 0, resolved = 0, unresolved = 0;
-        // Console.WriteLine("=== MonoBehaviours in " + Path.GetFileName(assetsPath) + " ===");
-        // foreach (var mb in afile.GetAssetsOfType(AssetClassID.MonoBehaviour))
-        // {
-        //     string status, className = "";
-        //     try
-        //     {
-        //         var bf = am.GetBaseField(afi, mb);
-        //         var scriptField = bf["m_Script"]; // PPtr<MonoScript>
-        //         try
-        //         {
-        //             var scriptExt = am.GetExtAsset(afi, scriptField);
-        //             var scriptBF = scriptExt.baseField;
-        //             var nspace = scriptBF["m_Namespace"].AsString;
-        //             var cname = scriptBF["m_ClassName"].AsString;
-        //             className = string.IsNullOrEmpty(nspace) ? cname : ($"{nspace}.{cname}");
-        //             status = "RESOLVED";
-        //             resolved++;
-        //         }
-        //         catch
-        //         {
-        //             status = "UNRESOLVED_SCRIPT"; // m_Script couldn't be resolved across loaded files
-        //             unresolved++;
-        //         }
-
-        //         var mName = bf["m_Name"].AsString;
-        //         if (status != "UNRESOLVED_SCRIPT")
-        //         {
-        //             Console.WriteLine($"[{mb_idx}] {status}  class:{className}  name:{mName}");
-        //         }
-        //     }
-        //     catch (Exception e)
-        //     {
-        //         Console.WriteLine($"[{mb_idx}] ERROR reading MB: {e.GetType().Name}: {e.Message}");
-        //     }
-        //     mb_idx++;
-        // }
-        // Console.WriteLine($"Resolved:{resolved}  Unresolved:{unresolved}");
-        // Console.WriteLine("=========================================");
-        // // ------------------------------------------------------------------
-
-        // // --- DEBUG: heuristic candidates that have tk2d-like fields ---
-        // Console.WriteLine("=== Heuristic candidates (have spriteDefinitions/textures fields) ===");
-        // int cand = 0;
-        // foreach (var mb in afile.GetAssetsOfType(AssetClassID.MonoBehaviour))
-        // {
-        //     try
-        //     {
-        //         var bf = am.GetBaseField(afi, mb);
-        //         bool hasDefs = false, hasTex = false;
-        //         try { var _ = bf["spriteDefinitions.Array"].AsArray.size; hasDefs = true; } catch { }
-        //         try { var _ = bf["textures.Array"].AsArray.size; hasTex = true; } catch { }
-        //         if (hasDefs || hasTex)
-        //         {
-        //             var name = bf["m_Name"].AsString ?? "(no name)";
-        //             Console.WriteLine($"[{cand}] name:{name}  hasDefs:{hasDefs}  hasTex:{hasTex}");
-        //             cand++;
-        //         }
-        //     }
-        //     catch { /* ignore */ }
-        // }
-        // Console.WriteLine("=========================================");
-        // // ------------------------------------------------------------------
-
-
-
-        // {
-        //     int idx = 0;
-        //     Console.WriteLine("=== tk2dSpriteCollectionData found in " + Path.GetFileName(assetsPath) + " ===");
-        //     foreach (var mb in afile.GetAssetsOfType(AssetClassID.MonoBehaviour))
-        //     {
-        //         var cls = TryGetMonoBehaviourClassName(am, afi, mb);
-        //         if (string.Equals(cls, "tk2dSpriteCollectionData", StringComparison.Ordinal))
-        //         {
-        //             var bf = am.GetBaseField(afi, mb);
-        //             var colName = bf["m_Name"].AsString ?? "(no name)";
-        //             int spriteCount = 0, texCount = 0;
-        //             try { spriteCount = bf["spriteDefinitions.Array"].AsArray.size; } catch { }
-        //             try { texCount = bf["textures.Array"].AsArray.size; } catch { }
-        //             Console.WriteLine($"[{idx}] {colName}  sprites:{spriteCount}  textures:{texCount}");
-        //             idx++;
-        //         }
-        //     }
-        //     Console.WriteLine("=========================================");
-        // }
-
-        // {
-        //     int idx = 0;
-        //     Console.WriteLine("=== tk2dSpriteCollectionData details in " + Path.GetFileName(assetsPath) + " ===");
-        //     foreach (var mb in afile.GetAssetsOfType(AssetClassID.MonoBehaviour))
-        //     {
-        //         var cls = TryGetMonoBehaviourClassName(am, afi, mb);
-        //         if (!string.Equals(cls, "tk2dSpriteCollectionData", StringComparison.Ordinal))
-        //             continue;
-
-        //         var bf = am.GetBaseField(afi, mb);
-        //         var colName = bf["m_Name"].AsString ?? "";
-
-        //         int spriteCount = 0, texCount = 0;
-        //         try { spriteCount = bf["spriteDefinitions.Array"].AsArray.size; } catch { }
-        //         try { texCount = bf["textures.Array"].AsArray.size; } catch { }
-
-        //         string tex0Name = "";
-        //         int texW = 0, texH = 0;
-        //         try
-        //         {
-        //             var texArr = bf["textures.Array"];
-        //             if (texArr.AsArray.size > 0)
-        //             {
-        //                 var texExt = am.GetExtAsset(afi, texArr[0]);
-        //                 var tbf = texExt.baseField;
-        //                 tex0Name = tbf["m_Name"].AsString ?? "";
-        //                 try { texW = tbf["m_Width"].AsInt; texH = tbf["m_Height"].AsInt; } catch { }
-        //             }
-        //         }
-        //         catch { }
-
-        //         // Grab up to 5 sprite names as a fingerprint
-        //         var samples = new List<string>();
-        //         try
-        //         {
-        //             var defsField = bf["spriteDefinitions.Array"];
-        //             int take = Math.Min(defsField.AsArray.size, 5);
-        //             for (int i = 0; i < take; i++)
-        //             {
-        //                 var dn = defsField[i]["name"].AsString;
-        //                 if (!string.IsNullOrEmpty(dn)) samples.Add(dn);
-        //             }
-        //         }
-        //         catch { }
-
-        //         Console.WriteLine($"[{idx}] coll:'{colName}' sprites:{spriteCount} textures:{texCount} " +
-        //                         $"tex0:'{tex0Name}' {texW}x{texH} " +
-        //                         $"samples:[{string.Join(", ", samples)}]");
-        //         idx++;
-        //     }
-        //     Console.WriteLine("==============================================================");
-        // }
-        // // ----------------------------------------------------------------
-
-        // Find all tk2dSpriteCollectionData (no name filter) and pick by index.
-        var collections = new List<(AssetsFileInstance afi, AssetFileInfo info)>();
-        foreach (var mbInfo in afile.GetAssetsOfType(AssetClassID.MonoBehaviour))
-        {
-            var cls = TryGetMonoBehaviourClassName(am, afi, mbInfo);
-            if (string.Equals(cls, "tk2dSpriteCollectionData", StringComparison.Ordinal))
-                collections.Add((afi, mbInfo));
-        }
-
-        if (collections.Count == 0)
-        {
-            Console.Error.WriteLine("No tk2dSpriteCollectionData found in this assets file.");
-            return 5;
-        }
-
-        // Hardcode the desired collection index from your listing:
-        int collectionIndex = 0; // <-- Knight collection
-
-        if (collectionIndex < 0 || collectionIndex >= collections.Count)
-        {
-            Console.Error.WriteLine($"collectionIndex {collectionIndex} is out of range (0..{collections.Count - 1}).");
-            return 5;
-        }
-
-        var pickedAfi = collections[collectionIndex].afi;
-        var pickedInfo = collections[collectionIndex].info;
-        var pickedField = am.GetBaseField(pickedAfi, pickedInfo);
-        Console.WriteLine($"Exporting collection index {collectionIndex}");
-
-        // Atlas dims from first Texture2D in 'textures'
-        int atlasW = 0, atlasH = 0;
-        try
-        {
-            var textures = pickedField["textures.Array"];
-            if (textures.AsArray.size > 0)
-            {
-                var texExt = am.GetExtAsset(pickedAfi, textures[0]);
-                var tbf = texExt.baseField;
-                atlasW = tbf["m_Width"].AsInt;
-                atlasH = tbf["m_Height"].AsInt;
-            }
-        }
-        catch { /* ok */ }
-
-        var root = new ExportRoot { AtlasWidth = atlasW, AtlasHeight = atlasH };
-
-        var defsField = pickedField["spriteDefinitions.Array"];
-        int defCount = defsField.AsArray.size;
-
-        for (int i = 0; i < defCount; i++)
-        {
-            var def = defsField[i];
-            var name = def["name"].AsString ?? $"sprite_{i}";
-
-            // 1) Rotation / flip (tk2d FlipMode)
-            int flipInt = 0;
-            try { flipInt = def["flipped"].AsInt; } catch { }
-            string flipStr = flipInt switch { 1 => "Tk2d", 2 => "TPackerCW", _ => "None" };
-
-            // 2) PixelRect (prefer precise region; else UVs)
-            int px = 0, py = 0, pw = 0, ph = 0;
-            bool usedRegion = false;
-            try
-            {
-                if (def["extractRegion"].AsBool)
-                {
-                    px = def["regionX"].AsInt;
-                    py = def["regionY"].AsInt;
-                    pw = def["regionW"].AsInt;
-                    ph = def["regionH"].AsInt;
-                    usedRegion = true;
-                }
-            }
-            catch { /* fall through */ }
-
-            if (!usedRegion && atlasW > 0 && atlasH > 0)
-            {
-                float uMin = 1e9f, vMin = 1e9f, uMax = -1e9f, vMax = -1e9f;
-                try
-                {
-                    var uvs = def["uvs.Array"];
-                    int uvCount = uvs.AsArray.size;
-                    for (int j = 0; j < uvCount; j++)
-                    {
-                        var u = uvs[j]["x"].AsFloat;
-                        var v = uvs[j]["y"].AsFloat;
-                        if (u < uMin) uMin = u; if (v < vMin) vMin = v;
-                        if (u > uMax) uMax = u; if (v > vMax) vMax = v;
-                    }
-                }
-                catch { uMin = vMin = uMax = vMax = 0; }
-
-                px = (int)MathF.Round(uMin * atlasW);
-                pw = (int)MathF.Round((uMax - uMin) * atlasW);
-                py = (int)MathF.Round(vMin * atlasH);
-                ph = (int)MathF.Round((vMax - vMin) * atlasH);
-            }
-
-            // 3) Pivot (keep bounds.center in world units; don’t serialize bounds)
-            float pivotX = 0f, pivotY = 0f;
-            float bx = 0, by = 0, ex = 0, ey = 0, ubx = 0, uby = 0, uex = 0, uey = 0;
-            bool haveBounds = false, haveUntrimmed = false;
-            try
-            {
-                var bd = def["boundsData.Array"];
-                bx = bd[0]["x"].AsFloat; by = bd[0]["y"].AsFloat;
-                ex = bd[1]["x"].AsFloat; ey = bd[1]["y"].AsFloat;
-                pivotX = bx; pivotY = by;
-                haveBounds = true;
-            }
-            catch { /* ok */ }
-
-            try
-            {
-                var ubd = def["untrimmedBoundsData.Array"];
-                ubx = ubd[0]["x"].AsFloat; uby = ubd[0]["y"].AsFloat;
-                uex = ubd[1]["x"].AsFloat; uey = ubd[1]["y"].AsFloat;
-                haveUntrimmed = true;
-            }
-            catch { /* ok */ }
-
-            // 4) Compute TexturePacker-style trim offsets in pixels
-            //    We use texelSize (world units per pixel) internally but DO NOT serialize it.
-            float texelX = 1f, texelY = 1f;
-            try
-            {
-                texelX = pickedField["texelSize"]["x"].AsFloat;
-                texelY = pickedField["texelSize"]["y"].AsFloat;
-            }
-            catch { /* default 1 */ }
-
-            // Source (untrimmed) size in pixels
-            int srcW = 0, srcH = 0, offX = 0, offY = 0;
-            if (haveUntrimmed)
-            {
-                // width/height in world units: 2*extents; convert to pixels by dividing by texel
-                srcW = (int)MathF.Round((uex * 2f) / texelX);
-                srcH = (int)MathF.Round((uey * 2f) / texelY);
-
-                if (haveBounds)
-                {
-                    // bottom-left in world units
-                    var untrimBLx = ubx - uex;
-                    var untrimBLy = uby - uey;
-                    var trimBLx = bx - ex;
-                    var trimBLy = by - ey;
-
-                    // offset in pixels from untrimmed bottom-left to trimmed bottom-left
-                    offX = (int)MathF.Round((trimBLx - untrimBLx) / texelX);
-                    offY = (int)MathF.Round((trimBLy - untrimBLy) / texelY);
-
-                    // clamp to sane range
-                    if (offX < 0) offX = 0;
-                    if (offY < 0) offY = 0;
-                    if (pw > 0 && srcW > 0 && offX + pw > srcW) offX = Math.Max(0, srcW - pw);
-                    if (ph > 0 && srcH > 0 && offY + ph > srcH) offY = Math.Max(0, srcH - ph);
-                }
-            }
-
-            // 5) Emit
-            root.Sprites.Add(new ExportSprite
-            {
-                Name = name,
-                PixelRect = new PixelRect { X = px, Y = py, W = pw, H = ph },
-                Pivot = new[] { pivotX, pivotY },
-                Flip = flipStr,
-                SourceSize = new Size2D { W = srcW, H = srcH },
-                SpriteSourceOffset = new Offset2D { X = offX, Y = offY }
-            });
-        }
-
-        var json = JsonSerializer.Serialize(root, new JsonSerializerOptions
+        var json = new JsonSerializerOptions
         {
             WriteIndented = true,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            IncludeFields = true
-        });
-        File.WriteAllText(outJsonPath, json);
-        Console.WriteLine($"Exported {root.Sprites.Count} sprites → {outJsonPath}");
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        };
+
+        // --- animations first: they tell us which collections matter
+        var neededCollections = new HashSet<long>();
+        var anims = scan.Animations.Where(a => opt.Animations is null || opt.Animations.Contains(a.Name)).ToList();
+        foreach (var a in anims)
+        {
+            var lib = ExportAnimation(am, scan, a, neededCollections);
+            var p = Path.Combine(opt.OutDir, "animations", Safe(a.Name) + ".json");
+            File.WriteAllText(p, JsonSerializer.Serialize(lib, json));
+            Console.WriteLine($"animation  {a.Name}: {lib.Clips.Count} clips -> {p}");
+        }
+
+        var cols = scan.Collections.Where(c =>
+            opt.Collections is not null ? opt.Collections.Contains(c.Name) : neededCollections.Contains(c.Key)).ToList();
+        foreach (var c in cols)
+        {
+            var col = ExportCollection(am, c);
+            var p = Path.Combine(opt.OutDir, "collections", Safe(c.Name) + ".json");
+            File.WriteAllText(p, JsonSerializer.Serialize(col, json));
+            Console.WriteLine($"collection {c.Name}: {col.Sprites.Count} sprites, atlas {col.AtlasName} {col.AtlasWidth}x{col.AtlasHeight} -> {p}");
+        }
         return 0;
     }
+
+    // ------------------------------------------------------------------ export: collections
+
+    sealed class CollectionOut
+    {
+        public string Name { get; set; } = "";
+        public string AtlasName { get; set; } = "";
+        public int AtlasWidth { get; set; }
+        public int AtlasHeight { get; set; }
+        public List<SpriteOut> Sprites { get; set; } = new();
+    }
+
+    sealed class SpriteOut
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        /// Quad/mesh vertices in local world units (x right, y up). Origin = sprite anchor.
+        public float[][] Positions { get; set; } = [];
+        /// Matching atlas UVs (0..1, v up / bottom-left origin).
+        public float[][] Uvs { get; set; } = [];
+        public int[] Indices { get; set; } = [];
+        /// tk2d FlipMode: 0 None, 1 Tk2d, 2 TPackerCW (informational; UVs already encode it).
+        public int Flipped { get; set; }
+        /// World units per texel.
+        public float[] TexelSize { get; set; } = [];
+        public float[][] Bounds { get; set; } = [];          // [center, extents]
+        public float[][] UntrimmedBounds { get; set; } = []; // [center, extents]
+        public int MaterialId { get; set; }
+    }
+
+    static CollectionOut ExportCollection(AssetsManager am, Scanner.Entry c)
+    {
+        var bf = c.Field;
+        var outc = new CollectionOut { Name = c.Name };
+        try
+        {
+            var textures = bf["textures.Array"];
+            if (textures.AsArray.size > 0)
+            {
+                var tex = am.GetExtAsset(c.Afi, textures[0]).baseField;
+                outc.AtlasName = tex["m_Name"].AsString;
+                outc.AtlasWidth = tex["m_Width"].AsInt;
+                outc.AtlasHeight = tex["m_Height"].AsInt;
+            }
+        }
+        catch { /* texture lives in an unloaded file */ }
+
+        var defs = bf["spriteDefinitions.Array"];
+        for (int i = 0; i < defs.AsArray.size; i++)
+        {
+            var d = defs[i];
+            outc.Sprites.Add(new SpriteOut
+            {
+                Id = i,
+                Name = d["name"].AsString ?? "",
+                Positions = Vec3Array(d["positions.Array"]),
+                Uvs = Vec2Array(d["uvs.Array"]),
+                Indices = d["indices.Array"].Children.Select(x => x.AsInt).ToArray(),
+                Flipped = TryInt(d, "flipped"),
+                TexelSize = Vec2(d["texelSize"]),
+                Bounds = Vec3Array(d["boundsData.Array"]),
+                UntrimmedBounds = Vec3Array(d["untrimmedBoundsData.Array"]),
+                MaterialId = TryInt(d, "materialId"),
+            });
+        }
+        return outc;
+    }
+
+    // ------------------------------------------------------------------ export: animations
+
+    sealed class AnimLibOut
+    {
+        public string Name { get; set; } = "";
+        public List<ClipOut> Clips { get; set; } = new();
+    }
+
+    sealed class ClipOut
+    {
+        public string Name { get; set; } = "";
+        public float Fps { get; set; }
+        public int LoopStart { get; set; }
+        /// Loop | LoopSection | Once | PingPong | RandomFrame | RandomLoop | Single
+        public string WrapMode { get; set; } = "";
+        public List<FrameOut> Frames { get; set; } = new();
+    }
+
+    sealed class FrameOut
+    {
+        public string Collection { get; set; } = "";
+        public int SpriteId { get; set; }
+        public string Sprite { get; set; } = "";
+        public EventOut? Event { get; set; }
+    }
+
+    sealed class EventOut
+    {
+        public string Info { get; set; } = "";
+        public int Int { get; set; }
+        public float Float { get; set; }
+    }
+
+    static readonly string[] WrapModes = ["Loop", "LoopSection", "Once", "PingPong", "RandomFrame", "RandomLoop", "Single"];
+
+    static AnimLibOut ExportAnimation(AssetsManager am, Scanner scan, Scanner.Entry a, HashSet<long> needed)
+    {
+        var lib = new AnimLibOut { Name = a.Name };
+        var clips = a.Field["clips.Array"];
+        for (int i = 0; i < clips.AsArray.size; i++)
+        {
+            var c = clips[i];
+            var name = c["name"].AsString ?? "";
+            if (string.IsNullOrEmpty(name)) continue;
+            int wrap = TryInt(c, "wrapMode");
+            var clip = new ClipOut
+            {
+                Name = name,
+                Fps = c["fps"].AsFloat,
+                LoopStart = TryInt(c, "loopStart"),
+                WrapMode = wrap >= 0 && wrap < WrapModes.Length ? WrapModes[wrap] : wrap.ToString(),
+            };
+            var frames = c["frames.Array"];
+            for (int f = 0; f < frames.AsArray.size; f++)
+            {
+                var fr = frames[f];
+                var colRef = scan.Resolve(a.Afi, fr["spriteCollection"]);
+                int sid = fr["spriteId"].AsInt;
+                if (colRef is not null) needed.Add(colRef.Key);
+                var fo = new FrameOut
+                {
+                    Collection = colRef?.Name ?? "?",
+                    SpriteId = sid,
+                    Sprite = colRef?.SpriteName(sid) ?? "",
+                };
+                if (fr["triggerEvent"].AsBool)
+                    fo.Event = new EventOut { Info = fr["eventInfo"].AsString ?? "", Int = fr["eventInt"].AsInt, Float = fr["eventFloat"].AsFloat };
+                clip.Frames.Add(fo);
+            }
+            lib.Clips.Add(clip);
+        }
+        return lib;
+    }
+
+    // ------------------------------------------------------------------ scanning
+
+    sealed class Scanner(AssetsManager am)
+    {
+        public sealed class Entry(AssetsFileInstance afi, AssetFileInfo info, AssetTypeValueField field, string name)
+        {
+            public AssetsFileInstance Afi { get; } = afi;
+            public AssetFileInfo Info { get; } = info;
+            public AssetTypeValueField Field { get; } = field;
+            /// m_Name, or the owning GameObject's name (Unity 6 builds leave m_Name empty).
+            public string Name { get; } = name;
+            public long Key => KeyOf(Afi, Info.PathId);
+            string[]? _names;
+            public string SpriteName(int id)
+            {
+                _names ??= Field["spriteDefinitions.Array"].Children.Select(d => d["name"].AsString ?? "").ToArray();
+                return id >= 0 && id < _names.Length ? _names[id] : "";
+            }
+        }
+
+        public List<Entry> Collections { get; } = new();
+        public List<Entry> Animations { get; } = new();
+        readonly Dictionary<long, Entry> _byKey = new();
+        readonly Dictionary<string, int> _fileIds = new(StringComparer.OrdinalIgnoreCase);
+
+        static long KeyOf(AssetsFileInstance afi, long pathId) => ((long)afi.path.GetHashCode() << 32) ^ pathId;
+
+        public void Scan(string path)
+        {
+            var afi = am.LoadAssetsFile(path, true);
+            am.LoadClassDatabaseFromPackage(afi.file.Metadata.UnityVersion);
+            Console.Error.WriteLine($"scanning {Path.GetFileName(path)} (Unity {afi.file.Metadata.UnityVersion})");
+            foreach (var info in afi.file.GetAssetsOfType(AssetClassID.MonoBehaviour))
+            {
+                var cls = ClassName(afi, info);
+                if (cls is not ("tk2dSpriteCollectionData" or "tk2dSpriteAnimation")) continue;
+                AssetTypeValueField bf;
+                try { bf = am.GetBaseField(afi, info); } catch { continue; }
+                var e = new Entry(afi, info, bf, NameOf(afi, bf));
+                (cls == "tk2dSpriteAnimation" ? Animations : Collections).Add(e);
+                _byKey[e.Key] = e;
+            }
+        }
+
+        public Entry? Resolve(AssetsFileInstance from, AssetTypeValueField pptr)
+        {
+            int fileId = pptr["m_FileID"].AsInt;
+            long pathId = pptr["m_PathID"].AsLong;
+            if (pathId == 0) return null;
+            AssetsFileInstance target = from;
+            if (fileId != 0)
+            {
+                target = from.GetDependency(am, fileId - 1);
+                if (target is null) return null;
+            }
+            if (_byKey.TryGetValue(KeyOf(target, pathId), out var hit)) return hit;
+            try
+            {
+                var ext = am.GetExtAsset(from, pptr);
+                if (ext.baseField is null) return null;
+                var e = new Entry(ext.file, ext.info, ext.baseField, NameOf(ext.file, ext.baseField));
+                _byKey[e.Key] = e;
+                Collections.Add(e);
+                return e;
+            }
+            catch { return null; }
+        }
+
+        string NameOf(AssetsFileInstance afi, AssetTypeValueField bf)
+        {
+            var n = bf["m_Name"].AsString;
+            if (!string.IsNullOrEmpty(n)) return n;
+            try
+            {
+                var go = am.GetExtAsset(afi, bf["m_GameObject"]).baseField;
+                n = go?["m_Name"].AsString;
+            }
+            catch { }
+            if (!string.IsNullOrEmpty(n)) return n;
+            // last resort: collections carry spriteCollectionName
+            try { n = bf["spriteCollectionName"].AsString; } catch { }
+            return string.IsNullOrEmpty(n) ? $"unnamed_{bf["m_GameObject"]["m_PathID"].AsLong}" : n;
+        }
+
+        string? ClassName(AssetsFileInstance afi, AssetFileInfo info)
+        {
+            try
+            {
+                var bf = am.GetBaseField(afi, info, AssetReadFlags.SkipMonoBehaviourFields);
+                var script = am.GetExtAsset(afi, bf["m_Script"]).baseField;
+                return script["m_ClassName"].AsString;
+            }
+            catch { return null; }
+        }
+    }
+
+    // ------------------------------------------------------------------ helpers
+
+    static float[] Vec2(AssetTypeValueField f) => [f["x"].AsFloat, f["y"].AsFloat];
+    static float[][] Vec2Array(AssetTypeValueField arr) => arr.Children.Select(Vec2).ToArray();
+    static float[][] Vec3Array(AssetTypeValueField arr) => arr.Children.Select(v => new[] { v["x"].AsFloat, v["y"].AsFloat, v["z"].AsFloat }).ToArray();
+
+    static int TryInt(AssetTypeValueField f, string name)
+    {
+        try { var c = f[name]; return c.IsDummy ? 0 : c.AsInt; } catch { return 0; }
+    }
+
+    static string Safe(string s) => string.Concat(s.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) || ch == ' ' ? '_' : ch));
+
+    static Options ParseArgs(string[] args)
+    {
+        string? data = null, outDir = null; bool list = false;
+        HashSet<string>? cols = null, anims = null;
+        string[] files = ["resources.assets"];
+        for (int i = 0; i < args.Length; i++)
+        {
+            string Next() => i + 1 < args.Length ? args[++i] : throw new ArgumentException($"missing value for {args[i]}");
+            HashSet<string> Set(string v) => new(v.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.OrdinalIgnoreCase);
+            switch (args[i])
+            {
+                case "--data": data = Next(); break;
+                case "--out": outDir = Next(); break;
+                case "--list": list = true; break;
+                case "--collections": cols = Set(Next()); break;
+                case "--animations": anims = Set(Next()); break;
+                case "--files": files = Next().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries); break;
+                default: throw new ArgumentException($"unknown arg {args[i]}");
+            }
+        }
+        if (data is null) throw new ArgumentException("--data is required");
+        return new Options(data, outDir, list, cols, anims, files);
+    }
+
+    static void PrintUsage() => Console.Error.WriteLine(
+        "usage: HK_TK2D_Exporter --data <hollow_knight_Data> (--list | --out <dir>) [--collections A,B] [--animations A,B] [--files resources.assets,level1]");
 }

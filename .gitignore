@@ -34,7 +34,9 @@ HK_TK2D_Exporter/*.TestResults/
 HK_TK2D_Exporter/Managed/**
 HK_TK2D_Exporter/assets/**
 
-Knight.*
+# Game art (atlases) — never commit
+[Kk]night.png
+Sprint.png
 
 # Python
 __pycache__/
@@ -54,3 +56,6 @@ dist/
 build/
 
 
+
+# User-provided skins (copyrighted assets)
+skins/

@@ -1,49 +1,64 @@
 # HK_TK2D_Exporter
 
-A one-shot tool that extracts **sprite bounds and UVs** from Hollow Knight’s
-**tk2d sprite collections** and saves them as a clean JSON you can ship with your own PNGs.
+Reads Hollow Knight's **tk2d sprite collections** and **sprite animation libraries**
+straight from your game install and writes plain JSON. No game art is copied — the
+overlay pairs this metadata with a `Knight.png` (vanilla or any community skin).
 
-- ✅ Reads `tk2dSpriteCollectionData` (MonoBehaviour) directly from Unity `.assets`
-- ✅ Exports per-sprite:
-  - `name`
-  - `uvRect` (u/v min/max)
-  - `pixelRect` (x/y/w/h in atlas pixels)
-  - `bounds` (center/extents)
-  - `untrimmedBounds` (center/extents)
-  - `pivot` (derived—bounds center)
-  - `indices` (if present)
-- ✅ Includes atlas width/height and collection `texelSize`
-- ❌ Does **not** ship any game files. **You must provide your own files** from your legal copy.
-
----
-
-## Why this exists
-
-Hollow Knight mods/skins often reuse **big atlas images** with per-sprite metadata stored in Unity assets (tk2d).
-This tool extracts that metadata once, so the overlay can use a simple **PNG + JSON** at runtime.
-
----
+Verified against the Unity 6 build of Hollow Knight (`6000.0.61f1`). Community skins
+made for older versions still line up: the Knight atlas layout is unchanged.
 
 ## Prerequisites
 
-- **.NET SDK** 8 or 9 (either is fine)
+- **.NET SDK 9**
 - A legal copy of **Hollow Knight**
-- Your game’s:
-  - `hollow_knight_Data/resources.assets`
-  - `hollow_knight_Data/globalgamemanagers.assets` (required to resolve scripts)
-  - `hollow_knight_Data/Managed/` folder (contains `Assembly-CSharp.dll` and others)
-- The provided **`classdata.tpk`** (used to parse built-in Unity types like `Texture2D`)
+- `classdata.tpk` (kept in this folder; replace it from AssetRipper's Tpk releases if Unity changes)
 
-> If you need a different `classdata.tpk` (for other Unity versions), grab the uncompressed version from the AssetRipper **Tpk** releases and replace the file in the repo root.
-
----
-
-## Install & build
+## Usage
 
 ```bash
-# From the repo root:
 cd HK_TK2D_Exporter
-dotnet restore
 dotnet build -c Release
-dotnet run -c Release
+
+# what's in the game?
+dotnet run -c Release -- --data "<Steam>/steamapps/common/Hollow Knight/hollow_knight_Data" --list
+
+# export animation libraries + every collection their frames reference
+dotnet run -c Release -- --data "<...>/hollow_knight_Data" --out ../data/hk \
+    --animations "Knight,Knight Effects Anim,Strikes,Spells Anim,Dust,Hollow Shade,Grimmchild Anim,Weaverling Anim,Knight Hatchling Anim"
+```
+
+Options: `--collections A,B` exports collections by name instead of by reference;
+`--files resources.assets,level1` scans other asset files (default `resources.assets`).
+
+## Output
+
+`<out>/collections/<Name>.json`
+
+```jsonc
+{
+  "name": "Knight", "atlas_name": "atlas0", "atlas_width": 4096, "atlas_height": 4096,
+  "sprites": [{
+    "id": 0, "name": "idle_still_020003",
+    "positions": [[x,y,z] x4],   // quad corners, local world units, origin = sprite anchor
+    "uvs": [[u,v] x4],           // matching atlas UVs (bottom-left origin) — rotation baked in
+    "indices": [0,3,1,2,3,0],
+    "flipped": 1,                // tk2d FlipMode (informational)
+    "texel_size": [0.015625, 0.015625],   // world units per pixel (Knight = 64 px/unit)
+    "bounds": [[cx,cy,cz],[ex,ey,ez]], "untrimmed_bounds": [...], "material_id": 0
+  }]
+}
+```
+
+Render a sprite by drawing `positions` (scaled by `1 / texel_size`) textured with `uvs`;
+trim, pivot and atlas rotation are all already encoded.
+
+`<out>/animations/<Library>.json`
+
+```jsonc
+{ "name": "Knight", "clips": [{
+    "name": "Run", "fps": 12, "loop_start": 3,
+    "wrap_mode": "LoopSection",   // Loop | LoopSection | Once | PingPong | RandomFrame | RandomLoop | Single
+    "frames": [{ "collection": "Knight", "sprite_id": 412, "sprite": "run0001",
+                 "event": { "info": "", "int": 0, "float": 0 } }]   // event only on trigger frames
+}]}
 ```

@@ -1,0 +1,336 @@
+{
+  "name": "Weaverling Anim",
+  "clips": [
+    {
+      "name": "Run",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 0,
+          "sprite": "Weaver_Charm_spawn_spider0008"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 14,
+          "sprite": "Weaver_Charm_spawn_spider0009"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 2,
+          "sprite": "Weaver_Charm_spawn_spider0010"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 4,
+          "sprite": "Weaver_Charm_spawn_spider0011"
+        }
+      ]
+    },
+    {
+      "name": "Launch",
+      "fps": 15,
+      "loop_start": 4,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 11,
+          "sprite": "Weaver_Charm_spawn_spider0000"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 1,
+          "sprite": "Weaver_Charm_spawn_spider0001"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 13,
+          "sprite": "Weaver_Charm_spawn_spider0002"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 20,
+          "sprite": "Weaver_Charm_spawn_spider0003"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 12,
+          "sprite": "Weaver_Charm_spawn_spider0004"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 10,
+          "sprite": "Weaver_Charm_spawn_spider0005"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 3,
+          "sprite": "Weaver_Charm_spawn_spider0006"
+        }
+      ]
+    },
+    {
+      "name": "TurnToRun",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 18,
+          "sprite": "Weaver_Charm_spawn_spider0012"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 19,
+          "sprite": "Weaver_Charm_spawn_spider0013"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 0,
+          "sprite": "Weaver_Charm_spawn_spider0008"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 14,
+          "sprite": "Weaver_Charm_spawn_spider0009"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 2,
+          "sprite": "Weaver_Charm_spawn_spider0010"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 4,
+          "sprite": "Weaver_Charm_spawn_spider0011"
+        }
+      ]
+    },
+    {
+      "name": "Land",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 7,
+          "sprite": "Weaver_Charm_spawn_spider0007"
+        }
+      ]
+    },
+    {
+      "name": "Attack",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 6,
+          "sprite": "Weaver_Charm_spawn_spider0015"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 16,
+          "sprite": "Weaver_Charm_spawn_spider0016"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 6,
+          "sprite": "Weaver_Charm_spawn_spider0015"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 5,
+          "sprite": "Weaver_Charm_spawn_spider0014"
+        }
+      ]
+    },
+    {
+      "name": "Leave",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 17,
+          "sprite": "Weaver_Charm_spawn_spider0017"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 9,
+          "sprite": "Weaver_Charm_spawn_spider0018"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 8,
+          "sprite": "Weaver_Charm_spawn_spider0019"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 15,
+          "sprite": "Weaver_Charm_spawn_spider0020"
+        }
+      ]
+    },
+    {
+      "name": "Climb",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 28,
+          "sprite": "spawn_spider_wall_walk0000"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 22,
+          "sprite": "spawn_spider_wall_walk0001"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 27,
+          "sprite": "spawn_spider_wall_walk0002"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 25,
+          "sprite": "spawn_spider_wall_walk0003"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 21,
+          "sprite": "spawn_spider_wall_walk0004"
+        }
+      ]
+    },
+    {
+      "name": "ClimbToRun",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 28,
+          "sprite": "spawn_spider_wall_walk0000"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 0,
+          "sprite": "Weaver_Charm_spawn_spider0008"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 14,
+          "sprite": "Weaver_Charm_spawn_spider0009"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 2,
+          "sprite": "Weaver_Charm_spawn_spider0010"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 4,
+          "sprite": "Weaver_Charm_spawn_spider0011"
+        }
+      ]
+    },
+    {
+      "name": "Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 0,
+          "sprite": "Weaver_Charm_spawn_spider0008"
+        }
+      ]
+    },
+    {
+      "name": "Turn",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 18,
+          "sprite": "Weaver_Charm_spawn_spider0012"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 19,
+          "sprite": "Weaver_Charm_spawn_spider0013"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 0,
+          "sprite": "Weaver_Charm_spawn_spider0008"
+        }
+      ]
+    },
+    {
+      "name": "Sleep",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 24,
+          "sprite": "spawn_spider_sleep0000"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 29,
+          "sprite": "spawn_spider_sleep0001"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 23,
+          "sprite": "spawn_spider_sleep0002"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 26,
+          "sprite": "spawn_spider_sleep0003"
+        }
+      ]
+    },
+    {
+      "name": "Wake",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 23,
+          "sprite": "spawn_spider_sleep0002"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 29,
+          "sprite": "spawn_spider_sleep0001"
+        },
+        {
+          "collection": "Weaverling Cln",
+          "sprite_id": 24,
+          "sprite": "spawn_spider_sleep0000"
+        }
+      ]
+    }
+  ]
+}
