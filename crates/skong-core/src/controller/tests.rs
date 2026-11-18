@@ -711,3 +711,94 @@ fn reachability_numbers_match_docs() {
     close(h2, 758.0, 6.0, "double jump apex");
     close(run2, 996.0, 8.0, "run double jump distance");
 }
+
+// ------------------------------------------------------------------ content ledges
+
+/// A tall window (id 1) with a content ledge (a drawn line) inside it at `y`.
+fn window_with_content(win: RectF, x0: f32, x1: f32, y: f32) -> Terrain {
+    let mut t = with_window(1, win);
+    t.ledges.push(Ledge { x0, x1, y, kind: LedgeKind::Content, owner: Some(1) });
+    t
+}
+
+const PAINT: RectF = RectF::new(600.0, 200.0, 1400.0, 1040.0);
+
+#[test]
+fn content_ledge_inside_owner_window_is_solid() {
+    let t = window_with_content(PAINT, 800.0, 1200.0, 700.0);
+    // Spawned inside the window: its frame is ignored, the drawn line is not.
+    let mut c = knight(1000.0, 400.0);
+    let ev = run_until_grounded(&mut c, &t, idle(), 240);
+    assert!(ev.contains(&MoveEvent::Landed { hard: false }), "{ev:?}");
+    assert_eq!(c.pos.y, 700.0);
+    let s = c.support.expect("support");
+    assert_eq!((s.kind, s.owner), (LedgeKind::Content, Some(1)));
+    // Walk off its end: fall to the floor (the window's walls stay ignored inside it).
+    run(&mut c, &t, right(), secs(1.5));
+    run_until_grounded(&mut c, &t, right(), 240);
+    assert_eq!(c.pos.y, FLOOR);
+    assert!(c.pos.x > 1200.0);
+}
+
+#[test]
+fn jumps_up_through_content_and_drops_through_it() {
+    let t = window_with_content(PAINT, 800.0, 1200.0, 900.0);
+    let mut c = standing(&t, 1000.0, FLOOR);
+    assert_eq!(c.pos.y, FLOOR);
+    // Full jump (~379 px) rises through the line 140 px above and lands on it.
+    run(&mut c, &t, press_jump(0.0), 1);
+    run(&mut c, &t, hold_jump(0.0), secs(0.4));
+    run_until_grounded(&mut c, &t, idle(), 240);
+    assert_eq!(c.pos.y, 900.0);
+    assert_eq!(c.support.map(|s| s.kind), Some(LedgeKind::Content));
+
+    let ev = run(&mut c, &t, MoveInput { down: true, ..press_jump(0.0) }, 1);
+    assert!(ev.contains(&MoveEvent::DroppedThrough), "{ev:?}");
+    run_until_grounded(&mut c, &t, MoveInput { down: true, ..idle() }, 240);
+    assert_eq!(c.pos.y, FLOOR);
+}
+
+#[test]
+fn carried_by_window_while_standing_on_its_content() {
+    let old = window_with_content(PAINT, 800.0, 1200.0, 700.0);
+    let mut c = standing(&old, 1000.0, 400.0);
+    assert_eq!(c.pos.y, 700.0);
+    let moved = RectF::new(PAINT.left + 50.0, PAINT.top - 30.0, PAINT.right + 50.0, PAINT.bottom - 30.0);
+    let new = window_with_content(moved, 850.0, 1250.0, 670.0);
+    let mut ev = vec![];
+    c.on_terrain_rebuilt(&old, &new, &mut ev);
+    assert_eq!(ev, vec![MoveEvent::CarriedBy { owner: 1 }]);
+    assert_eq!(c.pos, Vec2::new(1050.0, 670.0));
+    assert_eq!(c.support.map(|s| s.kind), Some(LedgeKind::Content));
+    let ev = run(&mut c, &new, idle(), 10);
+    assert!(ev.is_empty(), "{ev:?}");
+}
+
+#[test]
+fn content_vanishing_underfoot_drops_the_knight() {
+    let old = window_with_content(PAINT, 800.0, 1200.0, 700.0);
+    let mut c = standing(&old, 1000.0, 400.0);
+    let new = with_window(1, PAINT); // the line was erased
+    let mut ev = vec![];
+    c.on_terrain_rebuilt(&old, &new, &mut ev);
+    assert_eq!(ev, vec![MoveEvent::LostSupport]);
+    run_until_grounded(&mut c, &new, idle(), 240);
+    assert_eq!(c.pos.y, FLOOR);
+}
+
+#[test]
+fn content_appearing_above_feet_does_not_pop_up() {
+    let old = with_window(1, PAINT);
+    let mut c = standing(&old, 1000.0, FLOOR);
+    // A line drawn 20 px above the feet (a window edge there would lift the knight).
+    let new = window_with_content(PAINT, 800.0, 1200.0, FLOOR - 20.0);
+    let mut ev = vec![];
+    c.on_terrain_rebuilt(&old, &new, &mut ev);
+    assert!(ev.is_empty(), "{ev:?}");
+    assert_eq!(c.pos.y, FLOOR);
+    // But one drawn right at the feet is stood on.
+    let new = window_with_content(PAINT, 800.0, 1200.0, FLOOR - 3.0);
+    c.on_terrain_rebuilt(&old, &new, &mut ev);
+    assert_eq!(c.pos.y, FLOOR - 3.0);
+    assert_eq!(c.support.map(|s| s.kind), Some(LedgeKind::Content));
+}

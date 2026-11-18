@@ -6,7 +6,8 @@
 //! Rules (see `terrain` module docs):
 //! * a [`Wall`] blocks only bodies that start on its face side and move into it;
 //! * a [`Ledge`] blocks only bodies whose feet start at/above it and move down;
-//! * edges of a window are ignored while the body overlaps that window's interior;
+//! * edges of a window are ignored while the body overlaps that window's interior, except
+//!   [`LedgeKind::Content`] ledges (content drawn inside a window is meant to be stood on);
 //! * `Terrain::bounds` adds an implicit ground floor and inward walls.
 use super::Side;
 use crate::desktop::WindowId;
@@ -59,12 +60,12 @@ impl<'a> Query<'a> {
             .ledges
             .iter()
             .copied()
-            .filter(|l| !self.ignores(l.owner) && !self.dropping_through(l))
+            .filter(|l| (l.kind == LedgeKind::Content || !self.ignores(l.owner)) && !self.dropping_through(l))
             .chain(floor)
     }
 
     fn dropping_through(&self, l: &Ledge) -> bool {
-        l.kind == LedgeKind::OneWay && self.drop_y.is_some_and(|d| (l.y - d).abs() < EPS)
+        l.kind.is_one_way() && self.drop_y.is_some_and(|d| (l.y - d).abs() < EPS)
     }
 
     /// Active walls, plus the inward-facing bounds sides.
@@ -131,7 +132,7 @@ impl<'a> Query<'a> {
     pub fn can_drop_through(&self, body: RectF) -> bool {
         let mut any = false;
         for l in self.ledges().filter(|l| overlaps_x(l, body) && (l.y - body.bottom).abs() <= EPS) {
-            if l.kind != LedgeKind::OneWay {
+            if !l.kind.is_one_way() {
                 return false;
             }
             any = true;
