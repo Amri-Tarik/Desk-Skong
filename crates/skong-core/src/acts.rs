@@ -203,6 +203,11 @@ impl ActPlayer {
         self.done
     }
 
+    /// Gait the current step wants the character to walk with, if any.
+    pub fn gait(&self, acts: &ActLibrary) -> Option<Gait> {
+        if self.done { None } else { acts.get(self.act).steps[self.step].gait }
+    }
+
     /// Whether the current step may be cut short.
     pub fn interruptible(&self, acts: &ActLibrary) -> bool {
         self.done || acts.get(self.act).steps[self.step].interruptible

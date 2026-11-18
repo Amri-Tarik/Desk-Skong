@@ -11,4 +11,5 @@ pub mod canvas;
 pub mod controller;
 pub mod desktop;
 pub mod geom;
+pub mod locomotion;
 pub mod terrain;
