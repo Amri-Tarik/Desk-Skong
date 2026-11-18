@@ -11,8 +11,30 @@
 //! * [`PathFollower`] executes a [`Route`], re-planning when the terrain changes or the
 //!   character drifts off the plan.
 //!
-//! TODO(path_planner): implementation.
-use crate::controller::{Character, Gait, MoveInput};
+//! Implementation:
+//! * `surface`: nodes are ledge segments (ledges split where walls stand on them).
+//! * `graph`: for every surface pair that the analytic reach (`controller::params`) does
+//!   not rule out, candidate scripts (take-off x, direction, gait, jump / double jump / dash /
+//!   wall-jump / superdash timing) are forward-simulated against a local copy of the
+//!   terrain; the first that lands on the target becomes the edge. Results are cached by
+//!   the geometry they depend on, so [`NavGraph::rebuild`] after a window drag only
+//!   re-simulates nearby pairs.
+//! * `search`: Dijkstra over landing states (surface + landing x), cost = estimated time
+//!   plus small style penalties.
+//! * `follow`: replays the edge scripts with the same executor the validation used.
+mod follow;
+mod graph;
+mod script;
+mod search;
+mod surface;
+#[cfg(test)]
+mod tests;
+
+pub use follow::PathFollower;
+pub use graph::{BuildStats, Edge};
+pub use surface::{Surface, SurfaceId};
+
+use crate::controller::{Character, Gait};
 use crate::desktop::WindowId;
 use crate::geom::Vec2;
 use crate::terrain::Terrain;
@@ -35,6 +57,15 @@ impl TravelStyle {
             TravelStyle::Stroll => Gait::Walk,
             TravelStyle::Normal => Gait::Run,
             TravelStyle::Hurry => Gait::Sprint,
+        }
+    }
+
+    /// Can this style use `edge`?
+    pub fn allows(self, edge: &Edge) -> bool {
+        match self {
+            TravelStyle::Stroll => edge.gait == Gait::Walk && matches!(edge.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::Jump),
+            TravelStyle::Normal => edge.kind != MoveKind::Superdash,
+            TravelStyle::Hurry => true,
         }
     }
 }
@@ -62,6 +93,20 @@ pub enum MoveKind {
     Superdash,
 }
 
+impl MoveKind {
+    pub const ALL: [MoveKind; 9] = [
+        MoveKind::Walk,
+        MoveKind::Drop,
+        MoveKind::DropThrough,
+        MoveKind::Jump,
+        MoveKind::DoubleJump,
+        MoveKind::WallJump,
+        MoveKind::Dash,
+        MoveKind::ShadowDash,
+        MoveKind::Superdash,
+    ];
+}
+
 /// A planned sequence of moves (opaque to the AI beyond inspection).
 #[derive(Clone, Debug, Default)]
 pub struct Route {
@@ -71,6 +116,26 @@ pub struct Route {
     pub eta: f32,
     /// Final feet position.
     pub end: Vec2,
+    /// Edges to replay, with copies of their surfaces (valid even if the graph changes).
+    pub(crate) steps: Vec<RouteStep>,
+    /// Surface the route ends on.
+    pub(crate) finish: Option<Surface>,
+    /// Graph generation the route was planned on.
+    pub(crate) generation: u64,
+}
+
+impl Route {
+    /// The edges of the route (for the debug overlay).
+    pub fn edges(&self) -> impl Iterator<Item = &Edge> {
+        self.steps.iter().map(|s| &s.edge)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct RouteStep {
+    pub edge: Edge,
+    pub from: Surface,
+    pub to: Surface,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -85,30 +150,86 @@ pub enum FollowStatus {
 #[derive(Clone, Debug, Default)]
 pub struct NavGraph {
     pub generation: u64,
+    surfaces: Vec<Surface>,
+    edges: Vec<Edge>,
+    /// Edge indices grouped by source surface: `edges[out_start[s]..out_start[s + 1]]`.
+    out_start: Vec<usize>,
+    /// Copy of the terrain (predicting where an airborne character lands).
+    terrain: Terrain,
+    cache: graph::EdgeCache,
+    stats: BuildStats,
 }
 
 impl NavGraph {
-    pub fn build(_terrain: &Terrain, _template: &Character) -> Self {
-        todo!("path_planner")
+    pub fn build(terrain: &Terrain, template: &Character) -> Self {
+        Self::default().rebuild(terrain, template)
+    }
+
+    /// Build for a new terrain generation, reusing this graph's simulation results for every
+    /// surface pair whose surrounding geometry did not change (e.g. after one window moved).
+    pub fn rebuild(&self, terrain: &Terrain, template: &Character) -> Self {
+        let p = template.params;
+        let hit = p.hitbox_px();
+        let surfaces = surface::extract(terrain, hit.x * 0.5, hit.y, p.step_height_px());
+        let (mut edges, cache, stats) = graph::build_edges(terrain, template, &surfaces, &self.cache);
+        edges.sort_by_key(|e| e.from);
+        let mut out_start = vec![0; surfaces.len() + 1];
+        for e in &edges {
+            out_start[e.from + 1] += 1;
+        }
+        for i in 0..surfaces.len() {
+            out_start[i + 1] += out_start[i];
+        }
+        Self {
+            generation: terrain.generation,
+            surfaces,
+            edges,
+            out_start,
+            terrain: terrain.clone(),
+            cache,
+            stats,
+        }
     }
 
     /// Plan from the character's current state.
-    pub fn plan(&self, _from: &Character, _goal: NavGoal, _style: TravelStyle) -> Option<Route> {
-        todo!("path_planner")
-    }
-}
-
-/// Drives a character along a route.
-#[derive(Clone, Debug, Default)]
-pub struct PathFollower;
-
-impl PathFollower {
-    pub fn new(_route: Route, _goal: NavGoal, _style: TravelStyle) -> Self {
-        todo!("path_planner")
+    pub fn plan(&self, from: &Character, goal: NavGoal, style: TravelStyle) -> Option<Route> {
+        search::plan(self, from, goal, style)
     }
 
-    /// Input for this tick. Call once per fixed step before `Character::step`.
-    pub fn next_input(&mut self, _ch: &Character, _graph: &NavGraph, _terrain: &Terrain, _dt: f32) -> (MoveInput, FollowStatus) {
-        todo!("path_planner")
+    pub fn surfaces(&self) -> &[Surface] {
+        &self.surfaces
+    }
+
+    pub fn edges(&self) -> &[Edge] {
+        &self.edges
+    }
+
+    /// Edges leaving surface `s`.
+    pub fn edges_from(&self, s: SurfaceId) -> &[Edge] {
+        match (self.out_start.get(s), self.out_start.get(s + 1)) {
+            (Some(&a), Some(&b)) => &self.edges[a..b],
+            _ => &[],
+        }
+    }
+
+    /// The surface the character stands on (None while airborne).
+    pub fn surface_at(&self, ch: &Character) -> Option<SurfaceId> {
+        surface::surface_at(&self.surfaces, ch)
+    }
+
+    /// Counters and timing of the build that produced this graph.
+    pub fn stats(&self) -> BuildStats {
+        self.stats
+    }
+
+    /// Number of edges of each kind (in [`MoveKind::ALL`] order).
+    pub fn edge_counts(&self) -> [usize; 9] {
+        let mut n = [0; 9];
+        for e in &self.edges {
+            if let Some(i) = MoveKind::ALL.iter().position(|k| *k == e.kind) {
+                n[i] += 1;
+            }
+        }
+        n
     }
 }
