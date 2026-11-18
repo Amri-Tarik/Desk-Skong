@@ -1,0 +1,1907 @@
+{
+  "name": "Spells Anim",
+  "clips": [
+    {
+      "name": "Blast",
+      "fps": 24,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 3,
+          "sprite": "blast_effect_v020000"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 4,
+          "sprite": "blast_effect_v020001"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 2,
+          "sprite": "blast_effect_v020002"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 6,
+          "sprite": "blast_effect_v020004"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 5,
+          "sprite": "blast_effect_v020005"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 7,
+          "sprite": "blast_effect_v020006"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 1,
+          "sprite": "blast_effect_v020007"
+        }
+      ]
+    },
+    {
+      "name": "Ball",
+      "fps": 20,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 19,
+          "sprite": "fireball_v020000"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 24,
+          "sprite": "fireball_v020001"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 16,
+          "sprite": "fireball_v020002"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 23,
+          "sprite": "fireball_v020003"
+        }
+      ]
+    },
+    {
+      "name": "Ball End",
+      "fps": 24,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 17,
+          "sprite": "fireball_v020007"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 18,
+          "sprite": "fireball_v020008"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 15,
+          "sprite": "fireball_v020009"
+        }
+      ]
+    },
+    {
+      "name": "Impact",
+      "fps": 24,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        }
+      ]
+    },
+    {
+      "name": "Wisp",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 41,
+          "sprite": "ghost_wisp0000"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 36,
+          "sprite": "ghost_wisp0001"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 44,
+          "sprite": "ghost_wisp0002"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 34,
+          "sprite": "ghost_wisp0003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 38,
+          "sprite": "ghost_wisp0004"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 46,
+          "sprite": "ghost_wisp0005"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 42,
+          "sprite": "ghost_wisp0006"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 40,
+          "sprite": "ghost_wisp0007"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 43,
+          "sprite": "ghost_wisp0008"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 37,
+          "sprite": "ghost_wisp0009"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 32,
+          "sprite": "ghost_wisp0010"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 39,
+          "sprite": "ghost_wisp0011"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 45,
+          "sprite": "ghost_wisp0012"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 35,
+          "sprite": "ghost_wisp0013"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 33,
+          "sprite": "ghost_wisp0014"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 47,
+          "sprite": "ghost_wisp0015"
+        }
+      ]
+    },
+    {
+      "name": "Fireball Wall Impact",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 27,
+          "sprite": "fireball_wall_impact_effect0000"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 26,
+          "sprite": "fireball_wall_impact_effect0001"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 30,
+          "sprite": "fireball_wall_impact_effect0002"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 25,
+          "sprite": "fireball_wall_impact_effect0003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 29,
+          "sprite": "fireball_wall_impact_effect0004"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 31,
+          "sprite": "fireball_wall_impact_effect0005"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 28,
+          "sprite": "fireball_wall_impact_effect0006"
+        }
+      ]
+    },
+    {
+      "name": "White Wave",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 0,
+          "sprite": "blast_effect_v020003"
+        }
+      ]
+    },
+    {
+      "name": "Quake Blast",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 139,
+          "sprite": "quake_blast0000"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 140,
+          "sprite": "quake_blast0001"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 141,
+          "sprite": "quake_blast0002",
+          "event": {
+            "info": "",
+            "int": 0,
+            "float": 0
+          }
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 142,
+          "sprite": "quake_blast0003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 143,
+          "sprite": "quake_blast0004",
+          "event": {
+            "info": "",
+            "int": 0,
+            "float": 0
+          }
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 144,
+          "sprite": "quake_blast0005"
+        }
+      ]
+    },
+    {
+      "name": "White Wave Loop",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 61,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 67,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 65,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 58,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 70,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 72,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 55,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 69,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 68,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 75,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 64,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 60,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 63,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 66,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 57,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 81,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 62,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 53,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 54,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 79,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 82,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 71,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 73,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 56,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 59,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 76,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 74,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 80,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 78,
+          "sprite": ""
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 77,
+          "sprite": ""
+        }
+      ]
+    },
+    {
+      "name": "Quake Charge",
+      "fps": 40,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 130,
+          "sprite": "quake_charge0000"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 131,
+          "sprite": "quake_charge0001"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 132,
+          "sprite": "quake_charge0002"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 133,
+          "sprite": "quake_charge0003"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 134,
+          "sprite": "quake_charge0004"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 135,
+          "sprite": "quake_charge0005"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 136,
+          "sprite": "quake_charge0006"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 129,
+          "sprite": "quake_charge0007"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 137,
+          "sprite": "quake_charge0008"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 138,
+          "sprite": "quake_charge0009"
+        }
+      ]
+    },
+    {
+      "name": "Quake Dash",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 125,
+          "sprite": "quake_dash_lines0000"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 126,
+          "sprite": "quake_dash_lines0001"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 127,
+          "sprite": "quake_dash_lines0002"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 128,
+          "sprite": "quake_dash_lines0003"
+        }
+      ]
+    },
+    {
+      "name": "Ball Lv2",
+      "fps": 20,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 33,
+          "sprite": "single_fireball0000"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 34,
+          "sprite": "single_fireball0001"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 35,
+          "sprite": "single_fireball0002"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 36,
+          "sprite": "single_fireball0003"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 37,
+          "sprite": "single_fireball0004"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 38,
+          "sprite": "single_fireball0005"
+        }
+      ]
+    },
+    {
+      "name": "Blast Lv2",
+      "fps": 24,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 8,
+          "sprite": "fireball_lvl_02_blast_effect0000"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 9,
+          "sprite": "fireball_lvl_02_blast_effect0001"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 10,
+          "sprite": "fireball_lvl_02_blast_effect0002"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 11,
+          "sprite": "fireball_lvl_02_blast_effect0003"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 12,
+          "sprite": "fireball_lvl_02_blast_effect0004"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 13,
+          "sprite": "fireball_lvl_02_blast_effect0005"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 14,
+          "sprite": "fireball_lvl_02_blast_effect0006"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 15,
+          "sprite": "fireball_lvl_02_blast_effect0007"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 16,
+          "sprite": "fireball_lvl_02_blast_effect0008"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 17,
+          "sprite": "fireball_lvl_02_blast_effect0009"
+        }
+      ]
+    },
+    {
+      "name": "Quake 2 Blast",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 71,
+          "sprite": "quake_lvl_02_blast_010000"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 72,
+          "sprite": "quake_lvl_02_blast_010001"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 73,
+          "sprite": "quake_lvl_02_blast_010002"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 74,
+          "sprite": "quake_lvl_02_blast_010003"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 75,
+          "sprite": "quake_lvl_02_blast_010004"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 76,
+          "sprite": "quake_lvl_02_blast_010005"
+        }
+      ]
+    },
+    {
+      "name": "Quake 2 Mega",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 52,
+          "sprite": "quake_lvl2_blast_020000"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 53,
+          "sprite": "quake_lvl2_blast_020001"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 54,
+          "sprite": "quake_lvl2_blast_020002",
+          "event": {
+            "info": "",
+            "int": 0,
+            "float": 0
+          }
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 55,
+          "sprite": "quake_lvl2_blast_020003"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 56,
+          "sprite": "quake_lvl2_blast_020004"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 57,
+          "sprite": "quake_lvl2_blast_020005"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 58,
+          "sprite": "quake_lvl2_blast_020006",
+          "event": {
+            "info": "",
+            "int": 0,
+            "float": 0
+          }
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 59,
+          "sprite": "quake_lvl2_blast_020007"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 60,
+          "sprite": "quake_lvl2_blast_020008"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 61,
+          "sprite": "quake_lvl2_blast_020009"
+        }
+      ]
+    },
+    {
+      "name": "Quake 2 Pillar",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 65,
+          "sprite": "quake_lvl2_short_blast0000"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 66,
+          "sprite": "quake_lvl2_short_blast0001"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 67,
+          "sprite": "quake_lvl2_short_blast0002"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 68,
+          "sprite": "quake_lvl2_short_blast0003"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 69,
+          "sprite": "quake_lvl2_short_blast0004"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 70,
+          "sprite": "quake_lvl2_short_blast0005"
+        }
+      ]
+    },
+    {
+      "name": "Quake 2 Trail",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 64,
+          "sprite": "quake_lvl2_dash_effect0002"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 63,
+          "sprite": "quake_lvl2_dash_effect0001"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 62,
+          "sprite": "quake_lvl2_dash_effect0000"
+        }
+      ]
+    },
+    {
+      "name": "Scream1",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 1,
+          "sprite": "scream_effect0000"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 3,
+          "sprite": "scream_effect0001",
+          "event": {
+            "info": "",
+            "int": 0,
+            "float": 0
+          }
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 4,
+          "sprite": "scream_effect0002"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 6,
+          "sprite": "scream_effect0003"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 8,
+          "sprite": "scream_effect0004"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 11,
+          "sprite": "scream_effect0005"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 13,
+          "sprite": "scream_effect0006"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 14,
+          "sprite": "scream_effect0007"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 16,
+          "sprite": "scream_effect0008"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 19,
+          "sprite": "scream_effect0009",
+          "event": {
+            "info": "",
+            "int": 0,
+            "float": 0
+          }
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 20,
+          "sprite": "scream_effect0010"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 21,
+          "sprite": "scream_effect0011"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 28,
+          "sprite": "scream_effect0012"
+        }
+      ]
+    },
+    {
+      "name": "Scream1 Base",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 0,
+          "sprite": "power_blast0000"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 2,
+          "sprite": "power_blast0001"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 5,
+          "sprite": "power_blast0002"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 7,
+          "sprite": "power_blast0003"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 9,
+          "sprite": "power_blast0004"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 15,
+          "sprite": "power_blast0005"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 17,
+          "sprite": "power_blast0006"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 18,
+          "sprite": "power_blast0007"
+        }
+      ]
+    },
+    {
+      "name": "Scream2",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 0,
+          "sprite": "scream_blast_level_020000"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 1,
+          "sprite": "scream_blast_level_020001",
+          "event": {
+            "info": "",
+            "int": 0,
+            "float": 0
+          }
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 2,
+          "sprite": "scream_blast_level_020002"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 3,
+          "sprite": "scream_blast_level_020003"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 4,
+          "sprite": "scream_blast_level_020004"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 5,
+          "sprite": "scream_blast_level_020005"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 6,
+          "sprite": "scream_blast_level_020006"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 7,
+          "sprite": "scream_blast_level_020007"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 39,
+          "sprite": "scream_blast_level_020008"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 40,
+          "sprite": "scream_blast_level_020009",
+          "event": {
+            "info": "",
+            "int": 0,
+            "float": 0
+          }
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 41,
+          "sprite": "scream_blast_level_020010"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 42,
+          "sprite": "scream_blast_level_020011"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 43,
+          "sprite": "scream_blast_level_020012"
+        }
+      ]
+    },
+    {
+      "name": "Scream2 Base",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 44,
+          "sprite": "scream_ground_blast_lvl_020000"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 45,
+          "sprite": "scream_ground_blast_lvl_020001"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 46,
+          "sprite": "scream_ground_blast_lvl_020002"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 47,
+          "sprite": "scream_ground_blast_lvl_020003"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 48,
+          "sprite": "scream_ground_blast_lvl_020004"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 49,
+          "sprite": "scream_ground_blast_lvl_020005"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 50,
+          "sprite": "scream_ground_blast_lvl_020006"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 51,
+          "sprite": "scream_ground_blast_lvl_020007"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 78,
+          "sprite": "scream_ground_blast_lvl_020008"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 77,
+          "sprite": "scream_ground_blast_lvl_020009"
+        }
+      ]
+    },
+    {
+      "name": "Sharp Flash",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 145,
+          "sprite": "sharp_flash0000"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 146,
+          "sprite": "sharp_flash0001"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 147,
+          "sprite": "sharp_flash0002"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 148,
+          "sprite": "sharp_flash0003"
+        }
+      ]
+    },
+    {
+      "name": "White Wave Default",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 0,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 1,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 2,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 3,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 4,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 5,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 6,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 7,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 8,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 9,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 10,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 11,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 12,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 13,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 14,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 15,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 16,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 17,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 18,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 19,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 20,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 21,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 22,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 23,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 24,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 25,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 26,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 27,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 28,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 29,
+          "sprite": ""
+        }
+      ]
+    },
+    {
+      "name": "Quake 1 Pillar",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 79,
+          "sprite": "quake_impact_020000"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 80,
+          "sprite": "quake_impact_020001"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 81,
+          "sprite": "quake_impact_020002"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 82,
+          "sprite": "quake_impact_020003"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 83,
+          "sprite": "quake_impact_020004"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 84,
+          "sprite": "quake_impact_020005"
+        }
+      ]
+    },
+    {
+      "name": "DN Charge",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 30,
+          "sprite": "slash_effect0005"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 31,
+          "sprite": "slash_effect0006"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 32,
+          "sprite": "slash_effect0007"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 33,
+          "sprite": "slash_effect0008"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 34,
+          "sprite": "slash_effect0009"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 35,
+          "sprite": "slash_effect0010"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 36,
+          "sprite": "slash_effect0011"
+        }
+      ]
+    },
+    {
+      "name": "DN Antic",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 37,
+          "sprite": "slash_effect0012"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 38,
+          "sprite": "slash_effect0013"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 39,
+          "sprite": "slash_effect0014"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 40,
+          "sprite": "slash_effect0015"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 41,
+          "sprite": "slash_effect0016"
+        }
+      ]
+    },
+    {
+      "name": "DN Slash",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 42,
+          "sprite": "slash_effect0017"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 43,
+          "sprite": "slash_effect0018"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 44,
+          "sprite": "slash_effect0019"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 45,
+          "sprite": "slash_effect0020"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 29,
+          "sprite": "slash_effect0004"
+        }
+      ]
+    },
+    {
+      "name": "Shade Quake",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 54,
+          "sprite": "quake_lvl2_blast_020002"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 55,
+          "sprite": "quake_lvl2_blast_020003"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 56,
+          "sprite": "quake_lvl2_blast_020004"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 57,
+          "sprite": "quake_lvl2_blast_020005"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 58,
+          "sprite": "quake_lvl2_blast_020006"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 59,
+          "sprite": "quake_lvl2_blast_020007"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 60,
+          "sprite": "quake_lvl2_blast_020008"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 61,
+          "sprite": "quake_lvl2_blast_020009"
+        }
+      ]
+    },
+    {
+      "name": "White Wave Default Q",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 0,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 2,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 4,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 6,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 8,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 10,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 12,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 14,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 16,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 18,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 20,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 22,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 24,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 26,
+          "sprite": ""
+        },
+        {
+          "collection": "White Wave Lone",
+          "sprite_id": 29,
+          "sprite": ""
+        }
+      ]
+    },
+    {
+      "name": "Sharp Shadow Impact",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 89,
+          "sprite": "shade_impact_effect0000"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 86,
+          "sprite": "shade_impact_effect0001"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 87,
+          "sprite": "shade_impact_effect0002"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 85,
+          "sprite": "shade_impact_effect0003"
+        },
+        {
+          "collection": "Spell Effects Neutral",
+          "sprite_id": 88,
+          "sprite": "shade_impact_effect0004"
+        }
+      ]
+    },
+    {
+      "name": "DG Set Charge",
+      "fps": 16,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 56,
+          "sprite": "Knight_Dream_Gate_Create_Blade0000"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 58,
+          "sprite": "Knight_Dream_Gate_Create_Blade0001"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 53,
+          "sprite": "Knight_Dream_Gate_Create_Blade0002"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 52,
+          "sprite": "Knight_Dream_Gate_Create_Blade0003"
+        }
+      ]
+    },
+    {
+      "name": "DG Set",
+      "fps": 16,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 54,
+          "sprite": "Knight_Dream_Gate_Create_Blade0004"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 57,
+          "sprite": "Knight_Dream_Gate_Create_Blade0005"
+        }
+      ]
+    },
+    {
+      "name": "DG Set Ready",
+      "fps": 16,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 73,
+          "sprite": "tele_charge_new0000"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 74,
+          "sprite": "tele_charge_new0001"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 59,
+          "sprite": "tele_charge_new0002"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 72,
+          "sprite": "tele_charge_new0003"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 55,
+          "sprite": "tele_charge_new0004"
+        }
+      ]
+    },
+    {
+      "name": "DG Warp Charge",
+      "fps": 15,
+      "loop_start": 7,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 64,
+          "sprite": "Knight_Dream_Gate_enter_blade0000"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 68,
+          "sprite": "Knight_Dream_Gate_enter_blade0001"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 66,
+          "sprite": "Knight_Dream_Gate_enter_blade0002"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 67,
+          "sprite": "Knight_Dream_Gate_enter_blade0003"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 65,
+          "sprite": "Knight_Dream_Gate_enter_blade0004"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 63,
+          "sprite": "Knight_Dream_Gate_enter_blade0005"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 60,
+          "sprite": "Knight_Dream_Gate_enter_blade0006"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 71,
+          "sprite": "Knight_Dream_Gate_enter_blade0007"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 69,
+          "sprite": "Knight_Dream_Gate_enter_blade0008"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 70,
+          "sprite": "Knight_Dream_Gate_enter_blade0009"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 61,
+          "sprite": "Knight_Dream_Gate_enter_blade0010"
+        },
+        {
+          "collection": "Spell Effects 2",
+          "sprite_id": 62,
+          "sprite": "Knight_Dream_Gate_enter_blade0011"
+        }
+      ]
+    }
+  ]
+}

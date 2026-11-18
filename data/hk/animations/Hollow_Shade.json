@@ -1,0 +1,1290 @@
+{
+  "name": "Hollow Shade",
+  "clips": [
+    {
+      "name": "Cast",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 0,
+          "sprite": "cast0001"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 3,
+          "sprite": "cast0002"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 2,
+          "sprite": "cast0003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 6,
+          "sprite": "cast0004"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 1,
+          "sprite": "cast0005"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 7,
+          "sprite": "cast0006"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 4,
+          "sprite": "cast0007"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 8,
+          "sprite": "cast0008"
+        }
+      ]
+    },
+    {
+      "name": "Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 53,
+          "sprite": "idle0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 60,
+          "sprite": "idle0001"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 55,
+          "sprite": "idle0002"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 57,
+          "sprite": "idle0003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 58,
+          "sprite": "idle0004"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 61,
+          "sprite": "idle0005"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 54,
+          "sprite": "idle0006"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 51,
+          "sprite": "idle0007"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 62,
+          "sprite": "idle0008"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 52,
+          "sprite": "idle0009"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 59,
+          "sprite": "idle0010"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 56,
+          "sprite": "idle0011"
+        }
+      ]
+    },
+    {
+      "name": "Death",
+      "fps": 16,
+      "loop_start": 3,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 12,
+          "sprite": "death000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 11,
+          "sprite": "death001"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 9,
+          "sprite": "death002"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 10,
+          "sprite": "death003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 63,
+          "sprite": "death004"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 141,
+          "sprite": "death005"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 10,
+          "sprite": "death003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 63,
+          "sprite": "death004"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 141,
+          "sprite": "death005"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 142,
+          "sprite": "death_explode0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 144,
+          "sprite": "death_explode0001"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 143,
+          "sprite": "death_explode0002"
+        }
+      ]
+    },
+    {
+      "name": "Depart",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 19,
+          "sprite": "depart000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 17,
+          "sprite": "depart001"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 15,
+          "sprite": "depart002"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 21,
+          "sprite": "depart003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 20,
+          "sprite": "depart004"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 13,
+          "sprite": "depart005"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 14,
+          "sprite": "depart006"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 18,
+          "sprite": "depart007"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 16,
+          "sprite": "depart008"
+        }
+      ]
+    },
+    {
+      "name": "Fly",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 26,
+          "sprite": "fly000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 22,
+          "sprite": "fly001"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 23,
+          "sprite": "fly002"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 24,
+          "sprite": "fly003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 25,
+          "sprite": "fly004"
+        }
+      ]
+    },
+    {
+      "name": "Slash Effect",
+      "fps": 24,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 72,
+          "sprite": "slash_effect007"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 73,
+          "sprite": "slash_effect008"
+        }
+      ]
+    },
+    {
+      "name": "Slash",
+      "fps": 24,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 33,
+          "sprite": "slash007"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 30,
+          "sprite": "slash008"
+        }
+      ]
+    },
+    {
+      "name": "Startle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 74,
+          "sprite": "startle0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 76,
+          "sprite": "startle0001"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 77,
+          "sprite": "startle0002"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 80,
+          "sprite": "startle0003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 78,
+          "sprite": "startle0004"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 79,
+          "sprite": "startle0005"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 75,
+          "sprite": "startle0006"
+        }
+      ]
+    },
+    {
+      "name": "TurnToFly",
+      "fps": 12,
+      "loop_start": 4,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 49,
+          "sprite": "turn003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 50,
+          "sprite": "turn002"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 48,
+          "sprite": "turn001"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 47,
+          "sprite": "turn000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 26,
+          "sprite": "fly000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 22,
+          "sprite": "fly001"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 23,
+          "sprite": "fly002"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 24,
+          "sprite": "fly003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 25,
+          "sprite": "fly004"
+        }
+      ]
+    },
+    {
+      "name": "Slash Antic",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 37,
+          "sprite": "slash000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 34,
+          "sprite": "slash001"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 28,
+          "sprite": "slash002"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 27,
+          "sprite": "slash003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 27,
+          "sprite": "slash003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 29,
+          "sprite": "slash006"
+        }
+      ]
+    },
+    {
+      "name": "Slash CD",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 36,
+          "sprite": "slash009"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 31,
+          "sprite": "slash010"
+        }
+      ]
+    },
+    {
+      "name": "Cast Antic",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 5,
+          "sprite": "cast0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 0,
+          "sprite": "cast0001"
+        }
+      ]
+    },
+    {
+      "name": "Death Start",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 12,
+          "sprite": "death000"
+        }
+      ]
+    },
+    {
+      "name": "Death Glow",
+      "fps": 24,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 51,
+          "sprite": "Ghost_flash0004"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 52,
+          "sprite": "Ghost_flash0005"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 49,
+          "sprite": "Ghost_flash0006"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 50,
+          "sprite": "Ghost_flash0007"
+        },
+        {
+          "collection": "Spell Effects",
+          "sprite_id": 48,
+          "sprite": "Ghost_flash0008"
+        }
+      ]
+    },
+    {
+      "name": "Cast Charge",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "PingPong",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 2,
+          "sprite": "cast0003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 6,
+          "sprite": "cast0004"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 1,
+          "sprite": "cast0005"
+        }
+      ]
+    },
+    {
+      "name": "Cast Ring",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 159,
+          "sprite": "black_spell_portal0001"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 155,
+          "sprite": "black_spell_portal0002"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 158,
+          "sprite": "black_spell_portal0003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 162,
+          "sprite": "black_spell_portal0004"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 163,
+          "sprite": "black_spell_portal0005"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 161,
+          "sprite": "black_spell_portal0006"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 157,
+          "sprite": "black_spell_portal0007"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 156,
+          "sprite": "black_spell_portal0008"
+        }
+      ]
+    },
+    {
+      "name": "Fireball",
+      "fps": 20,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 145,
+          "sprite": "Black_spell0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 149,
+          "sprite": "Black_spell0001"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 153,
+          "sprite": "Black_spell0002"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 152,
+          "sprite": "Black_spell0003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 154,
+          "sprite": "Black_spell0004"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 151,
+          "sprite": "Black_spell0005"
+        }
+      ]
+    },
+    {
+      "name": "Fireball End",
+      "fps": 24,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 148,
+          "sprite": "Black_spell0006"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 146,
+          "sprite": "Black_spell0007"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 147,
+          "sprite": "Black_spell0008"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 150,
+          "sprite": "Black_spell0009"
+        }
+      ]
+    },
+    {
+      "name": "Appear",
+      "fps": 20,
+      "loop_start": 35,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 86,
+          "sprite": "appear0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 86,
+          "sprite": "appear0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 86,
+          "sprite": "appear0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 86,
+          "sprite": "appear0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 86,
+          "sprite": "appear0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 86,
+          "sprite": "appear0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 86,
+          "sprite": "appear0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 86,
+          "sprite": "appear0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 86,
+          "sprite": "appear0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 86,
+          "sprite": "appear0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 86,
+          "sprite": "appear0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 86,
+          "sprite": "appear0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 86,
+          "sprite": "appear0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 86,
+          "sprite": "appear0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 86,
+          "sprite": "appear0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 99,
+          "sprite": "appear0001"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 103,
+          "sprite": "appear0002"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 96,
+          "sprite": "appear0003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 101,
+          "sprite": "appear0004"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 97,
+          "sprite": "appear0005"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 108,
+          "sprite": "appear0006"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 95,
+          "sprite": "appear0007"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 89,
+          "sprite": "appear0008"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 85,
+          "sprite": "appear0009"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 102,
+          "sprite": "appear0010"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 83,
+          "sprite": "appear0011"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 107,
+          "sprite": "appear0012"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 105,
+          "sprite": "appear0013"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 90,
+          "sprite": "appear0014"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 92,
+          "sprite": "appear0015"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 84,
+          "sprite": "appear0016"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 94,
+          "sprite": "appear0017"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 88,
+          "sprite": "appear0018"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 104,
+          "sprite": "appear0019"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 45,
+          "sprite": "appear0020"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 106,
+          "sprite": "appear0021"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 46,
+          "sprite": "appear0022"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 91,
+          "sprite": "appear0023"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 82,
+          "sprite": "appear0024"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 100,
+          "sprite": "appear0025"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 81,
+          "sprite": "appear0026"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 98,
+          "sprite": "appear0027"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 93,
+          "sprite": "appear0028"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 87,
+          "sprite": "appear0029"
+        }
+      ]
+    },
+    {
+      "name": "Retreat Start",
+      "fps": 16,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 94,
+          "sprite": "appear0017"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 84,
+          "sprite": "appear0016"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 85,
+          "sprite": "appear0009"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 89,
+          "sprite": "appear0008"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 95,
+          "sprite": "appear0007"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 108,
+          "sprite": "appear0006"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 97,
+          "sprite": "appear0005"
+        }
+      ]
+    },
+    {
+      "name": "Quake Antic",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 120,
+          "sprite": "shade_quake_attack0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 111,
+          "sprite": "shade_quake_attack0001"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 114,
+          "sprite": "shade_quake_attack0002"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 110,
+          "sprite": "shade_quake_attack0003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 115,
+          "sprite": "shade_quake_attack0004"
+        }
+      ]
+    },
+    {
+      "name": "Retreat End",
+      "fps": 16,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 97,
+          "sprite": "appear0005"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 108,
+          "sprite": "appear0006"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 95,
+          "sprite": "appear0007"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 89,
+          "sprite": "appear0008"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 85,
+          "sprite": "appear0009"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 84,
+          "sprite": "appear0016"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 94,
+          "sprite": "appear0017"
+        }
+      ]
+    },
+    {
+      "name": "TurnToIdle",
+      "fps": 12,
+      "loop_start": 4,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 49,
+          "sprite": "turn003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 50,
+          "sprite": "turn002"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 48,
+          "sprite": "turn001"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 47,
+          "sprite": "turn000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 53,
+          "sprite": "idle0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 60,
+          "sprite": "idle0001"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 55,
+          "sprite": "idle0002"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 57,
+          "sprite": "idle0003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 58,
+          "sprite": "idle0004"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 61,
+          "sprite": "idle0005"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 54,
+          "sprite": "idle0006"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 51,
+          "sprite": "idle0007"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 62,
+          "sprite": "idle0008"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 52,
+          "sprite": "idle0009"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 59,
+          "sprite": "idle0010"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 56,
+          "sprite": "idle0011"
+        }
+      ]
+    },
+    {
+      "name": "Quake Start",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 119,
+          "sprite": "shade_quake_attack0005"
+        }
+      ]
+    },
+    {
+      "name": "Quake",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 109,
+          "sprite": "shade_quake_attack0006"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 116,
+          "sprite": "shade_quake_attack0007"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 117,
+          "sprite": "shade_quake_attack0008"
+        }
+      ]
+    },
+    {
+      "name": "Quake Land",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 112,
+          "sprite": "shade_quake_attack0009"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 113,
+          "sprite": "shade_quake_attack0010"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 118,
+          "sprite": "shade_quake_attack0011"
+        }
+      ]
+    },
+    {
+      "name": "Scream Antic",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 131,
+          "sprite": "Shade_scream_cast0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 136,
+          "sprite": "Shade_scream_cast0001"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 122,
+          "sprite": "Shade_scream_cast0002"
+        }
+      ]
+    },
+    {
+      "name": "Scream",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 127,
+          "sprite": "Shade_scream_cast0003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 134,
+          "sprite": "Shade_scream_cast0004"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 133,
+          "sprite": "Shade_scream_cast0005"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 132,
+          "sprite": "Shade_scream_cast0006"
+        }
+      ]
+    },
+    {
+      "name": "Scream End",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 140,
+          "sprite": "Shade_scream_cast0007"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 121,
+          "sprite": "Shade_scream_cast0008"
+        }
+      ]
+    },
+    {
+      "name": "Scream Blast",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Shade",
+          "sprite_id": 124,
+          "sprite": "Scream_attack_shade0000"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 137,
+          "sprite": "Scream_attack_shade0001"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 130,
+          "sprite": "Scream_attack_shade0002"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 128,
+          "sprite": "Scream_attack_shade0003"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 129,
+          "sprite": "Scream_attack_shade0004"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 139,
+          "sprite": "Scream_attack_shade0005"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 135,
+          "sprite": "Scream_attack_shade0006"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 123,
+          "sprite": "Scream_attack_shade0007"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 125,
+          "sprite": "Scream_attack_shade0008"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 126,
+          "sprite": "Scream_attack_shade0009"
+        },
+        {
+          "collection": "Shade",
+          "sprite_id": 138,
+          "sprite": "Scream_attack_shade0010"
+        }
+      ]
+    }
+  ]
+}

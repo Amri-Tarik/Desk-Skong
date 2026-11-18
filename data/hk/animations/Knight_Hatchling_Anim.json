@@ -1,0 +1,968 @@
+{
+  "name": "Knight Hatchling Anim",
+  "clips": [
+    {
+      "name": "Hatch",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 34,
+          "sprite": "hatch_to_fly0000"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 35,
+          "sprite": "hatch_to_fly0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 36,
+          "sprite": "hatch_to_fly0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 37,
+          "sprite": "hatch_to_fly0003"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 38,
+          "sprite": "hatch_to_fly0004"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 39,
+          "sprite": "hatch_to_fly0005"
+        }
+      ]
+    },
+    {
+      "name": "Fly",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 28,
+          "sprite": "hatch_fly0000"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 29,
+          "sprite": "hatch_fly0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 30,
+          "sprite": "hatch_fly0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 31,
+          "sprite": "hatch_fly0003"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 32,
+          "sprite": "hatch_fly0004"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 33,
+          "sprite": "hatch_fly0005"
+        }
+      ]
+    },
+    {
+      "name": "Burst",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 0,
+          "sprite": "burst0000"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 1,
+          "sprite": "burst0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 2,
+          "sprite": "burst0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 3,
+          "sprite": "burst0003"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 4,
+          "sprite": "burst0004"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 5,
+          "sprite": "burst0005"
+        }
+      ]
+    },
+    {
+      "name": "TurnToFly",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 40,
+          "sprite": "hatch_turn0000"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 41,
+          "sprite": "hatch_turn0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 28,
+          "sprite": "hatch_fly0000"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 29,
+          "sprite": "hatch_fly0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 30,
+          "sprite": "hatch_fly0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 31,
+          "sprite": "hatch_fly0003"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 32,
+          "sprite": "hatch_fly0004"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 33,
+          "sprite": "hatch_fly0005"
+        }
+      ]
+    },
+    {
+      "name": "Attack",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 24,
+          "sprite": "hatch_charge0000"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 25,
+          "sprite": "hatch_charge0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 26,
+          "sprite": "hatch_charge0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 27,
+          "sprite": "hatch_charge0003"
+        }
+      ]
+    },
+    {
+      "name": "TurnToAttack",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 40,
+          "sprite": "hatch_turn0000"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 41,
+          "sprite": "hatch_turn0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 25,
+          "sprite": "hatch_charge0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 26,
+          "sprite": "hatch_charge0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 27,
+          "sprite": "hatch_charge0003"
+        }
+      ]
+    },
+    {
+      "name": "D Hatch",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 16,
+          "sprite": "dung_hatchling_spawn0000"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 17,
+          "sprite": "dung_hatchling_spawn0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 18,
+          "sprite": "dung_hatchling_spawn0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 19,
+          "sprite": "dung_hatchling_spawn0003"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 20,
+          "sprite": "dung_hatchling_spawn0004"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 21,
+          "sprite": "dung_hatchling_spawn0005"
+        }
+      ]
+    },
+    {
+      "name": "D Fly",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 10,
+          "sprite": "dung_hatchling_idle0000"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 11,
+          "sprite": "dung_hatchling_idle0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 12,
+          "sprite": "dung_hatchling_idle0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 13,
+          "sprite": "dung_hatchling_idle0003"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 14,
+          "sprite": "dung_hatchling_idle0004"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 15,
+          "sprite": "dung_hatchling_idle0005"
+        }
+      ]
+    },
+    {
+      "name": "D Attack",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 6,
+          "sprite": "dung_hatchling_attack0000"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 7,
+          "sprite": "dung_hatchling_attack0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 8,
+          "sprite": "dung_hatchling_attack0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 9,
+          "sprite": "dung_hatchling_attack0003"
+        }
+      ]
+    },
+    {
+      "name": "D TurnToAttack",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 22,
+          "sprite": "dung_hatchling_turn0000"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 23,
+          "sprite": "dung_hatchling_turn0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 7,
+          "sprite": "dung_hatchling_attack0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 8,
+          "sprite": "dung_hatchling_attack0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 9,
+          "sprite": "dung_hatchling_attack0003"
+        }
+      ]
+    },
+    {
+      "name": "D TurnToFly",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 22,
+          "sprite": "dung_hatchling_turn0000"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 23,
+          "sprite": "dung_hatchling_turn0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 10,
+          "sprite": "dung_hatchling_idle0000"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 11,
+          "sprite": "dung_hatchling_idle0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 12,
+          "sprite": "dung_hatchling_idle0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 13,
+          "sprite": "dung_hatchling_idle0003"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 14,
+          "sprite": "dung_hatchling_idle0004"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 15,
+          "sprite": "dung_hatchling_idle0005"
+        }
+      ]
+    },
+    {
+      "name": "Tele Start",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 38,
+          "sprite": "hatch_to_fly0004"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 37,
+          "sprite": "hatch_to_fly0003"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 36,
+          "sprite": "hatch_to_fly0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 35,
+          "sprite": "hatch_to_fly0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 34,
+          "sprite": "hatch_to_fly0000"
+        }
+      ]
+    },
+    {
+      "name": "Tele End",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 36,
+          "sprite": "hatch_to_fly0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 37,
+          "sprite": "hatch_to_fly0003"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 38,
+          "sprite": "hatch_to_fly0004"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 39,
+          "sprite": "hatch_to_fly0005"
+        }
+      ]
+    },
+    {
+      "name": "D Tele Start",
+      "fps": 20,
+      "loop_start": 4,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 21,
+          "sprite": "dung_hatchling_spawn0005"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 20,
+          "sprite": "dung_hatchling_spawn0004"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 19,
+          "sprite": "dung_hatchling_spawn0003"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 18,
+          "sprite": "dung_hatchling_spawn0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 17,
+          "sprite": "dung_hatchling_spawn0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 16,
+          "sprite": "dung_hatchling_spawn0000"
+        }
+      ]
+    },
+    {
+      "name": "D Tele End",
+      "fps": 15,
+      "loop_start": 4,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 18,
+          "sprite": "dung_hatchling_spawn0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 19,
+          "sprite": "dung_hatchling_spawn0003"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 20,
+          "sprite": "dung_hatchling_spawn0004"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 21,
+          "sprite": "dung_hatchling_spawn0005"
+        }
+      ]
+    },
+    {
+      "name": "Rest Start",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 48,
+          "sprite": "hatchling_sleep0000"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 51,
+          "sprite": "hatchling_sleep0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 44,
+          "sprite": "hatchling_sleep0003"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 45,
+          "sprite": "hatchling_sleep0004"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 50,
+          "sprite": "hatchling_sleep0005"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 44,
+          "sprite": "hatchling_sleep0003"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 45,
+          "sprite": "hatchling_sleep0004"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 50,
+          "sprite": "hatchling_sleep0005"
+        }
+      ]
+    },
+    {
+      "name": "Rest End",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 42,
+          "sprite": "hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 51,
+          "sprite": "hatchling_sleep0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 48,
+          "sprite": "hatchling_sleep0000"
+        }
+      ]
+    },
+    {
+      "name": "D Rest Start",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 46,
+          "sprite": "poo_hatchling_sleep0000"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 43,
+          "sprite": "poo_hatchling_sleep0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 49,
+          "sprite": "poo_hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 47,
+          "sprite": "poo_hatchling_sleep0003"
+        }
+      ]
+    },
+    {
+      "name": "D Rest End",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 49,
+          "sprite": "poo_hatchling_sleep0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 43,
+          "sprite": "poo_hatchling_sleep0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 46,
+          "sprite": "poo_hatchling_sleep0000"
+        }
+      ]
+    },
+    {
+      "name": "Dreamgate In",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 55,
+          "sprite": "hatchling_teleport0003"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 52,
+          "sprite": "hatchling_teleport0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 54,
+          "sprite": "hatchling_teleport0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 53,
+          "sprite": "hatchling_teleport0000"
+        }
+      ]
+    },
+    {
+      "name": "Dreamgate Out",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 53,
+          "sprite": "hatchling_teleport0000"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 54,
+          "sprite": "hatchling_teleport0001"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 52,
+          "sprite": "hatchling_teleport0002"
+        },
+        {
+          "collection": "Knight Hatchling Cln",
+          "sprite_id": 55,
+          "sprite": "hatchling_teleport0003"
+        }
+      ]
+    }
+  ]
+}

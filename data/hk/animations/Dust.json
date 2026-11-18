@@ -1,0 +1,124 @@
+{
+  "name": "Dust",
+  "clips": [
+    {
+      "name": "Dash Puff",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 15,
+          "sprite": "dash_puff0000"
+        },
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 17,
+          "sprite": "dash_puff0001"
+        },
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 19,
+          "sprite": "dash_puff0002"
+        },
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 14,
+          "sprite": "dash_puff0003"
+        },
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 18,
+          "sprite": "dash_puff0004"
+        },
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 20,
+          "sprite": "dash_puff0005"
+        },
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 21,
+          "sprite": "dash_puff0006"
+        },
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 16,
+          "sprite": "dash_puff0007"
+        }
+      ]
+    },
+    {
+      "name": "Jump Puff",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 13,
+          "sprite": "jump_puff0000"
+        },
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 12,
+          "sprite": "jump_puff0001"
+        },
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 11,
+          "sprite": "jump_puff0002"
+        },
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 10,
+          "sprite": "jump_puff0003"
+        },
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 9,
+          "sprite": "jump_puff0004"
+        }
+      ]
+    },
+    {
+      "name": "Wall Puff",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 30,
+          "sprite": "wall_puff0000"
+        },
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 31,
+          "sprite": "wall_puff0001"
+        },
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 32,
+          "sprite": "wall_puff0002"
+        },
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 33,
+          "sprite": "wall_puff0003"
+        },
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 34,
+          "sprite": "wall_puff0004"
+        },
+        {
+          "collection": "Dust Effects",
+          "sprite_id": 35,
+          "sprite": "wall_puff0005"
+        }
+      ]
+    }
+  ]
+}
