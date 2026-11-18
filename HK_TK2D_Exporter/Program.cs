@@ -13,10 +13,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using AssetsTools.NET;
 using AssetsTools.NET.Extra;
+using AssetsTools.NET.Texture;
 
 internal static class Program
 {
-    sealed record Options(string DataDir, string? OutDir, bool List, HashSet<string>? Collections, HashSet<string>? Animations, string[] Files, string? DumpMono, int MaxArray);
+    sealed record Options(string DataDir, string? OutDir, bool List, HashSet<string>? Collections, HashSet<string>? Animations, string[] Files, string? DumpMono, int MaxArray, string? TexturesDir);
 
     static int Main(string[] args)
     {
@@ -85,8 +86,47 @@ internal static class Program
             var p = Path.Combine(opt.OutDir, "collections", Safe(c.Name) + ".json");
             File.WriteAllText(p, JsonSerializer.Serialize(col, json));
             Console.WriteLine($"collection {c.Name}: {col.Sprites.Count} sprites, atlas {col.AtlasName} {col.AtlasWidth}x{col.AtlasHeight} -> {p}");
+            if (opt.TexturesDir is not null) ExportAtlas(am, c, opt.TexturesDir);
         }
         return 0;
+    }
+
+    // ------------------------------------------------------------------ export: atlas textures
+
+    /// Custom-Knight skin file names, so a vanilla export is itself a valid skin folder.
+    static readonly Dictionary<string, string> SkinFileNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Knight"] = "Knight.png",
+        ["Knight Dream Gate Cln"] = "Sprint.png",
+        ["Knight Slug Cln"] = "Unn.png",
+        ["Grimmchild Cln"] = "Grimm.png",
+        ["Weaverling Cln"] = "Weaver.png",
+        ["Knight Hatchling Cln"] = "Hatchling.png",
+        ["Shade"] = "Shade.png",
+    };
+
+    /// Decode the collection's first atlas texture and save it as PNG (top-down rows).
+    /// The output is game art: write it somewhere git-ignored and never redistribute it.
+    static void ExportAtlas(AssetsManager am, Scanner.Entry c, string dir)
+    {
+        try
+        {
+            var textures = c.Field["textures.Array"];
+            if (textures.AsArray.size == 0) return;
+            var ext = am.GetExtAsset(c.Afi, textures[0]);
+            var tf = TextureFile.ReadTextureFile(ext.baseField);
+            var raw = tf.FillPictureData(Path.GetDirectoryName(ext.file.path) ?? ".");
+            Directory.CreateDirectory(dir);
+            var name = SkinFileNames.TryGetValue(c.Name, out var n) ? n : Safe(c.Name) + ".png";
+            var path = Path.Combine(dir, name);
+            if (raw is null || !tf.DecodeTextureImage(raw, path, ImageExportType.Png, 100))
+            {
+                Console.Error.WriteLine($"  texture {c.Name}: could not decode {(TextureFormat)tf.m_TextureFormat}");
+                return;
+            }
+            Console.WriteLine($"  atlas {tf.m_Width}x{tf.m_Height} {(TextureFormat)tf.m_TextureFormat} -> {path}");
+        }
+        catch (Exception e) { Console.Error.WriteLine($"  texture {c.Name}: {e.Message}"); }
     }
 
     // ------------------------------------------------------------------ export: collections
@@ -435,7 +475,7 @@ internal static class Program
         string? data = null, outDir = null; bool list = false;
         HashSet<string>? cols = null, anims = null;
         string[] files = ["resources.assets"];
-        string? dumpMono = null; int maxArray = 64;
+        string? dumpMono = null; int maxArray = 64; string? textures = null;
         for (int i = 0; i < args.Length; i++)
         {
             string Next() => i + 1 < args.Length ? args[++i] : throw new ArgumentException($"missing value for {args[i]}");
@@ -449,14 +489,15 @@ internal static class Program
                 case "--animations": anims = Set(Next()); break;
                 case "--dump-mono": dumpMono = Next(); break;
                 case "--max-array": maxArray = int.Parse(Next()); break;
+                case "--textures": textures = Next(); break;
                 case "--files": files = Next().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries); break;
                 default: throw new ArgumentException($"unknown arg {args[i]}");
             }
         }
         if (data is null) throw new ArgumentException("--data is required");
-        return new Options(data, outDir, list, cols, anims, files, dumpMono, maxArray);
+        return new Options(data, outDir, list, cols, anims, files, dumpMono, maxArray, textures);
     }
 
     static void PrintUsage() => Console.Error.WriteLine(
-        "usage: HK_TK2D_Exporter --data <hollow_knight_Data> (--list | --out <dir> | --dump-mono <Class>) [--collections A,B] [--animations A,B] [--files resources.assets,level1] [--max-array N]");
+        "usage: HK_TK2D_Exporter --data <hollow_knight_Data> (--list | --out <dir> | --dump-mono <Class>) [--collections A,B] [--animations A,B] [--files resources.assets,level1] [--max-array N] [--textures <dir>]");
 }

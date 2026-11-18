@@ -45,7 +45,7 @@ pub fn run(args: &Args) -> Result<()> {
     let ppu = 64.0 * args.scale;
     let load_skin = |bank: &mut SpriteBank, i: usize| -> Result<()> {
         let t = Instant::now();
-        bank.rasterize_skin(&skins[i], &keys, ppu)?;
+        bank.rasterize_skin(&skins[i], crate::app::vanilla_of(&skins), &keys, ppu)?;
         log::info!("skin '{}' ({}/{}) ready in {:?}, frames {} KiB", skins[i].name, i + 1, skins.len(), t.elapsed(), bank.frame_bytes() / 1024);
         Ok(())
     };

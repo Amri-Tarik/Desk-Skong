@@ -23,7 +23,7 @@ const USAGE: &str = "usage: skong [--browse] [--capturable] [--data DIR] [--skin
 fn parse_args() -> Result<Args> {
     let mut a = Args {
         data: "data/hk".into(),
-        skins: "skins/extracted".into(),
+        skins: "skins".into(),
         skin: None,
         scale: 0.6,
         clip: "Idle".into(),

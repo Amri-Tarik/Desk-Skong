@@ -18,7 +18,7 @@ fn main() -> Result<()> {
     let lib = ClipLibrary::load(&data.join("animations/Knight.json"), &bank)?;
     let ppu = 64.0 * scale.parse::<f32>()?;
     let t = std::time::Instant::now();
-    bank.rasterize_skin(&skin, &lib.sprite_keys(), ppu)?;
+    bank.rasterize_skin(&skin, None, &lib.sprite_keys(), ppu)?;
     eprintln!("rasterized all Knight clip frames in {:?}, {} KiB", t.elapsed(), bank.frame_bytes() / 1024);
 
     let cell = (3.2 * ppu) as i32;
