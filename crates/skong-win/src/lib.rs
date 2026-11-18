@@ -2,6 +2,7 @@
 
 pub mod capture;
 pub mod desktop;
+pub mod input;
 pub mod monitor;
 pub mod runloop;
 pub mod sprite_window;

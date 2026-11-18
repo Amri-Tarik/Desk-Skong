@@ -1,0 +1,10 @@
+{
+  "$comment": "Placeable props. `sprite` names a PNG exported with `HK_TK2D_Exporter --export-sprites` into skins/Vanilla/props (game art, git-ignored). `seat` is the seat height as a fraction of the sprite height (from the bottom). `sit_offset` nudges the knight's sitting pose in game units.",
+  "benches": [
+    { "name": "Dirtmouth bench", "sprite": "town_bench", "seat": 0.45 },
+    { "name": "Dirtmouth bench (lit)", "sprite": "town_bench_lit", "seat": 0.45 },
+    { "name": "Hive bed", "sprite": "guardian_bench", "seat": 0.57 },
+    { "name": "Fungal sofa", "sprite": "fung_bench_new", "seat": 0.40 },
+    { "name": "Tram seat", "sprite": "tram_interior_bench", "seat": 0.38 }
+  ]
+}

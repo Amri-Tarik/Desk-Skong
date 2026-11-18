@@ -4,6 +4,8 @@ use std::path::PathBuf;
 use anyhow::{Context, Result, bail};
 
 mod app;
+mod benches;
+mod grab;
 mod browser;
 mod keyboard;
 mod settings;
@@ -19,6 +21,7 @@ pub struct Args {
     pub capturable: bool,
     /// Live content terrain (screen capture). Off with `--no-vision`.
     pub vision: bool,
+    pub sit_test: bool,
 }
 
 const USAGE: &str = "usage: skong [--browse] [--capturable] [--no-vision] [--data DIR] [--skins DIR] [--skin NAME] [--scale F] [--clip NAME]";
@@ -33,6 +36,7 @@ fn parse_args() -> Result<Args> {
         browse: false,
         capturable: false,
         vision: true,
+        sit_test: false,
     };
     let mut it = std::env::args().skip(1);
     while let Some(k) = it.next() {
@@ -46,6 +50,7 @@ fn parse_args() -> Result<Args> {
             "--browse" => a.browse = true,
             "--capturable" => a.capturable = true,
             "--no-vision" => a.vision = false,
+            "--sit-test" => a.sit_test = true,
             "-h" | "--help" => {
                 println!("{USAGE}");
                 std::process::exit(0);

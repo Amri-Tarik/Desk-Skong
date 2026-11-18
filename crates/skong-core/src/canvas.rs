@@ -30,6 +30,41 @@ impl Image {
         unsafe { std::slice::from_raw_parts(self.px.as_ptr() as *const u8, self.px.len() * 4) }
     }
 
+    /// Straight-alpha RGBA8 rows (top-down) → premultiplied image.
+    pub fn from_rgba(width: u32, height: u32, rgba: &[u8]) -> Image {
+        let px = rgba.chunks_exact(4).map(|p| premul(p[0], p[1], p[2], p[3])).collect();
+        Image { width, height, px }
+    }
+
+    /// Area-averaged (downscale) / bilinear-ish (upscale) resize by `factor`.
+    pub fn scaled(&self, factor: f32) -> Image {
+        let w = ((self.width as f32 * factor).round() as u32).max(1);
+        let h = ((self.height as f32 * factor).round() as u32).max(1);
+        let mut out = Image::new(w, h);
+        let (sx, sy) = (self.width as f32 / w as f32, self.height as f32 / h as f32);
+        for y in 0..h {
+            let y0 = (y as f32 * sy) as u32;
+            let y1 = (((y + 1) as f32 * sy).ceil() as u32).clamp(y0 + 1, self.height);
+            for x in 0..w {
+                let x0 = (x as f32 * sx) as u32;
+                let x1 = (((x + 1) as f32 * sx).ceil() as u32).clamp(x0 + 1, self.width);
+                let mut acc = [0u32; 4];
+                for yy in y0..y1 {
+                    for xx in x0..x1 {
+                        let p = self.px[(yy * self.width + xx) as usize];
+                        for (k, a) in acc.iter_mut().enumerate() {
+                            *a += (p >> (24 - 8 * k as u32)) & 0xff;
+                        }
+                    }
+                }
+                let n = (y1 - y0) * (x1 - x0);
+                let c = |k: usize| (acc[k] + n / 2) / n;
+                out.px[(y * w + x) as usize] = (c(0) << 24) | (c(1) << 16) | (c(2) << 8) | c(3);
+            }
+        }
+        out
+    }
+
     /// Box-filtered copy fitted (aspect preserved, centered) into a `size`×`size` square.
     pub fn fit_square(&self, size: u32) -> Image {
         let mut out = Image::new(size, size);
