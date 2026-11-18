@@ -4,5 +4,6 @@ pub mod desktop;
 pub mod monitor;
 pub mod runloop;
 pub mod sprite_window;
+pub mod tray;
 
 pub use windows::Win32::UI::Input::KeyboardAndMouse as vk;

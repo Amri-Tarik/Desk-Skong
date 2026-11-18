@@ -365,6 +365,8 @@ dependencies = [
  "anyhow",
  "env_logger",
  "log",
+ "serde",
+ "serde_json",
  "skong-core",
  "skong-win",
 ]
