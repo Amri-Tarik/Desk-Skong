@@ -9,7 +9,7 @@ mod grab;
 mod browser;
 mod keyboard;
 mod settings;
-mod wander;
+mod navbuild;
 
 pub struct Args {
     pub data: PathBuf,
@@ -65,5 +65,17 @@ fn main() -> Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     skong_win::desktop::enable_per_monitor_dpi();
     let args = parse_args()?;
+    // Only one pet at a time: two instances fight over global hotkeys and screen capture.
+    let _instance = if args.browse {
+        None
+    } else {
+        match skong_win::monitor::single_instance() {
+            Some(g) => Some(g),
+            None => {
+                log::warn!("Desk-Skong is already running (see the tray); exiting");
+                return Ok(());
+            }
+        }
+    };
     if args.browse { browser::run(&args) } else { app::run(&args) }
 }

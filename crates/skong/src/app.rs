@@ -9,7 +9,8 @@ use skong_core::acts::{ActId, ActLibrary, ActPlayer, ActStatus, Requirement};
 use skong_core::anim::{AnimEvent, Animator, ClipId, ClipLibrary};
 use skong_core::assets::{Skin, SpriteBank, SpriteKey, VANILLA};
 use skong_core::controller::{Abilities, Character, CharacterParams, MoveEvent, MoveInput, MoveState, Side};
-use skong_core::ai::Poke;
+use skong_core::ai::{ActCatalog, Brain, BrainConfig, Cursor, GraphNavigator, Motion, Percepts, Poke, RunningAct, UserActivity};
+use skong_win::input::{self, UserInput};
 
 use crate::grab::Grab;
 use skong_core::geom::Vec2;
@@ -27,7 +28,7 @@ use crate::Args;
 use crate::keyboard::Keyboard;
 use crate::settings::{BOTHER, SCALES, Settings};
 use crate::benches::{Benches, SEAT_BELOW_ORIGIN};
-use crate::wander::{Seating, Wander};
+use crate::navbuild::NavBuilder;
 
 /// Everything the user can ask for, from hotkeys or the tray menu.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -123,7 +124,14 @@ struct Pet {
     /// Seat line (screen y) while a seated act plays.
     seat_y: Option<f32>,
     benches: Benches,
-    brain: Wander,
+    brain: Brain,
+    nav: GraphNavigator,
+    navb: NavBuilder,
+    user_input: UserInput,
+    /// Controller events not yet seen by the brain.
+    brain_events: Vec<MoveEvent>,
+    /// Last brain debug line (behaviour, mood, top utilities).
+    brain_debug: String,
     keyboard: Keyboard,
     manual: bool,
     paused: bool,
@@ -184,6 +192,11 @@ pub fn run(args: &Args) -> Result<()> {
     let tray = Tray::new("Desk-Skong", &tray_icon(&data, &look))?;
     let benches = Benches::load(&args.data.join("../props.json"), data.vanilla().map(|s| s.dir.as_path()), settings.scale)?;
 
+    let mut brain = Brain::new(BrainConfig::default(), ActCatalog::from_library(&data.acts), seed());
+    brain.set_bother_level(settings.bother);
+    let navb = NavBuilder::new();
+    navb.reset(&terrain, &ch);
+
     let mut pet = Pet {
         data,
         settings,
@@ -199,7 +212,12 @@ pub fn run(args: &Args) -> Result<()> {
         act,
         seat_y: None,
         benches,
-        brain: Wander::new(seed()),
+        brain,
+        nav: GraphNavigator::new(),
+        navb,
+        user_input: UserInput::new()?,
+        brain_events: Vec::new(),
+        brain_debug: String::new(),
         keyboard: Keyboard::default(),
         manual: false,
         paused: false,
@@ -248,12 +266,13 @@ pub fn run(args: &Args) -> Result<()> {
             pet.benches.raise_all();
             pet.win.raise();
             log::debug!(
-                "knight at ({:.0},{:.0}) {:?} clip '{}' act {:?}",
+                "knight at ({:.0},{:.0}) {:?} clip '{}' act {:?} | brain: {}",
                 pet.ch.pos.x,
                 pet.ch.pos.y,
                 pet.ch.state,
                 pet.data.lib.get(pet.anim.clip()).name,
-                pet.act.as_ref().map(|p| pet.data.acts.get(p.act()).name.as_str())
+                pet.act.as_ref().map(|p| pet.data.acts.get(p.act()).name.as_str()),
+                pet.brain_debug
             );
         }
         Ok(Flow::Continue)
@@ -263,8 +282,10 @@ pub fn run(args: &Args) -> Result<()> {
 impl Pet {
     fn tick(&mut self, dt: f32) -> Result<()> {
         self.handle_mouse();
-        let d = &self.data;
         self.move_events.clear();
+        if let Some(g) = self.navb.poll() {
+            self.nav.set_graph(g);
+        }
 
         // 1. World: rebuild terrain only when the desktop or the on-screen content changed.
         let desk_changed = self.watcher.poll();
@@ -273,28 +294,12 @@ impl Pet {
             self.ch.on_terrain_rebuilt(&self.terrain, &new, &mut self.move_events);
             self.benches.follow(&self.terrain, &new);
             self.terrain = new;
+            self.navb.request(&self.terrain, &self.ch);
         }
 
-        // 2. Intent.
-        let mut input = if self.manual {
-            self.keyboard.read()
-        } else {
-            let seat = self.benches.seat_here(&self.ch, &self.terrain);
-            let seating = Seating { here: seat.is_some(), bench_x: self.benches.on_my_surface(&self.ch).map(|i| self.benches.placed[i].0.pos.x) };
-            let dec = self.brain.decide(&self.ch, &d.acts, self.act.is_some(), seating, dt);
-            if let Some(id) = dec.act
-                && self.ch.is_grounded()
-                && !self.loco.busy()
-            {
-                let seated = d.acts.get(id).requires == Requirement::Seat;
-                if !seated || seat.is_some() {
-                    log::info!("act '{}'{}", d.acts.get(id).name, if seated { " (seated)" } else { "" });
-                    self.seat_y = if seated { seat } else { None };
-                    self.act = Some(ActPlayer::start(&d.acts, &d.lib, &mut self.anim, id, seed()));
-                }
-            }
-            dec.input
-        };
+        // 2. Intent: keyboard in manual mode, otherwise the brain.
+        let mut input = if self.manual { self.keyboard.read() } else { self.think(dt) };
+        let d = &self.data;
         if let Some(p) = &self.act {
             let wants_to_move = input.x != 0.0 || input.jump_pressed || input.dash_pressed;
             if self.manual && wants_to_move && p.interruptible(&d.acts) {
@@ -338,6 +343,12 @@ impl Pet {
             self.anim.play(&d.lib, d.idle, true);
         }
 
+        // The brain sees this tick's controller events on its next tick.
+        self.brain_events.extend_from_slice(&self.move_events);
+        if self.brain_events.len() > 256 {
+            self.brain_events.drain(..128);
+        }
+
         self.draw()
     }
 
@@ -362,6 +373,77 @@ impl Pet {
         Ok(())
     }
 
+    /// One brain tick: gather percepts, apply the intent's acts/signals/attacks, and
+    /// return this tick's movement input.
+    fn think(&mut self, dt: f32) -> MoveInput {
+        let seat = self.benches.seat_here(&self.ch, &self.terrain);
+        let benches: Vec<Vec2> = self.benches.placed.iter().map(|(b, _)| b.pos).collect();
+        let (left, right) = input::mouse_buttons();
+        let cursor = monitor::cursor_pos().map(|(x, y)| Cursor { pos: Vec2::new(x as f32, y as f32), left, right });
+        let user = UserActivity { idle_secs: input::idle_secs(), keys_per_sec: self.user_input.keys_per_sec() };
+        let act = self.act.as_ref().map(|p| RunningAct { id: p.act(), interruptible: p.interruptible(&self.data.acts) });
+        let percepts = Percepts {
+            dt,
+            knight: &self.ch,
+            terrain: &self.terrain,
+            desktop: self.watcher.snapshot(),
+            cursor,
+            user,
+            fullscreen_front: false,
+            pokes: &self.pokes,
+            act,
+            benches: &benches,
+            perch: seat.is_some(),
+            move_events: &self.brain_events,
+        };
+        let intent = self.brain.tick(&percepts, &mut self.nav);
+        self.pokes.clear();
+        self.brain_events.clear();
+        if intent.debug != self.brain_debug {
+            self.brain_debug = intent.debug;
+        }
+
+        let d = &self.data;
+        if intent.cancel_act && self.act.as_ref().is_some_and(|p| p.interruptible(&d.acts)) {
+            self.act = None;
+        }
+        if let Some(sig) = intent.signal
+            && let Some(p) = self.act.as_mut()
+        {
+            p.signal(&d.acts, &d.lib, &mut self.anim, sig);
+        }
+        let can_start = self.act.is_none() && self.ch.is_grounded() && !self.loco.busy();
+        if let Some(id) = intent.act.filter(|_| can_start) {
+            let seated = d.acts.get(id).requires == Requirement::Seat;
+            if !seated || seat.is_some() {
+                log::info!("act '{}'{}", d.acts.get(id).name, if seated { " (seated)" } else { "" });
+                self.seat_y = if seated { seat } else { None };
+                self.act = Some(ActPlayer::start(&d.acts, &d.lib, &mut self.anim, id, seed()));
+            }
+        }
+        if let Some(a) = intent.attack
+            && self.act.is_none()
+            && self.ch.is_grounded()
+            && let Some(id) = d.acts.id(a.dir.act_name())
+        {
+            self.ch.facing = a.side;
+            self.seat_y = None;
+            self.act = Some(ActPlayer::start(&d.acts, &d.lib, &mut self.anim, id, seed()));
+        }
+        if let Some(f) = intent.face
+            && self.act.is_none()
+            && self.ch.is_grounded()
+            && self.ch.vel.x.abs() < 1.0
+        {
+            self.ch.facing = f;
+        }
+        match intent.motion {
+            Motion::Hold => MoveInput::default(),
+            Motion::Navigate { .. } => self.nav.next_input(&self.ch, &self.terrain, dt),
+            Motion::Direct(i) => i,
+        }
+    }
+
     /// Clicks on the knight poke him; press-and-drag picks him up; release throws him.
     fn handle_mouse(&mut self) {
         for ev in self.win.take_mouse() {
@@ -376,14 +458,6 @@ impl Pet {
                 }
                 Some(Poke::Click { pos }) => {
                     self.pokes.push(Poke::Click { pos });
-                    // Until the brain is wired in: wake a napping knight, otherwise startle him.
-                    if let Some(p) = self.act.as_mut() {
-                        p.signal(&self.data.acts, &self.data.lib, &mut self.anim, "woken");
-                    } else if self.ch.is_grounded()
-                        && let Some(id) = self.data.acts.id("startled")
-                    {
-                        self.start_act(id);
-                    }
                 }
                 None => {}
             }
@@ -436,9 +510,11 @@ impl Pet {
                 self.ch = Character::new(params, self.ch.abilities, self.ch.pos);
                 self.loco = Locomotion::new(&self.data.lib, &params)?;
                 self.benches.rescale(s);
+                self.navb.reset(&self.terrain, &self.ch);
                 self.settings.save();
             }
             Command::SetBother(b) => {
+                self.brain.set_bother_level(b);
                 self.settings.bother = b;
                 self.settings.save();
             }

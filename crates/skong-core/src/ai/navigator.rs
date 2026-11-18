@@ -3,6 +3,8 @@
 //! actual per-tick [`MoveInput`] whenever the intent says [`super::Motion::Navigate`].
 //!
 //! [`GraphNavigator`] adapts the planner in [`crate::nav`]; tests use a fake.
+use std::sync::Arc;
+
 use crate::controller::{Character, MoveInput};
 use crate::nav::{FollowStatus, NavGoal, NavGraph, PathFollower, TravelStyle};
 use crate::terrain::Terrain;
@@ -35,7 +37,7 @@ pub trait Navigator {
 /// [`GraphNavigator::next_input`] on ticks where the brain's motion is `Navigate`.
 #[derive(Debug, Default)]
 pub struct GraphNavigator {
-    graph: Option<NavGraph>,
+    graph: Option<Arc<NavGraph>>,
     follower: Option<PathFollower>,
     status: NavStatus,
 }
@@ -47,7 +49,17 @@ impl GraphNavigator {
 
     pub fn rebuild(&mut self, terrain: &Terrain, template: &Character) {
         // Rebuilding from the previous graph reuses its simulated edges where nothing moved.
-        self.graph = Some(self.graph.as_ref().map_or_else(|| NavGraph::build(terrain, template), |g| g.rebuild(terrain, template)));
+        self.graph = Some(Arc::new(self.graph.as_ref().map_or_else(|| NavGraph::build(terrain, template), |g| g.rebuild(terrain, template))));
+    }
+
+    /// Install a graph built elsewhere (e.g. on a background thread). An active route keeps
+    /// following; the follower re-plans if it references surfaces that no longer exist.
+    pub fn set_graph(&mut self, graph: Arc<NavGraph>) {
+        self.graph = Some(graph);
+    }
+
+    pub fn graph(&self) -> Option<&Arc<NavGraph>> {
+        self.graph.as_ref()
     }
 
     /// Input for this tick; neutral when idle. Updates [`Navigator::status`].
