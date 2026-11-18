@@ -5,6 +5,7 @@ use anyhow::{Context, Result, bail};
 
 mod app;
 mod benches;
+mod grab;
 mod browser;
 mod keyboard;
 mod settings;

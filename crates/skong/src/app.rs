@@ -8,7 +8,10 @@ use anyhow::{Context, Result, bail};
 use skong_core::acts::{ActId, ActLibrary, ActPlayer, ActStatus, Requirement};
 use skong_core::anim::{AnimEvent, Animator, ClipId, ClipLibrary};
 use skong_core::assets::{Skin, SpriteBank, SpriteKey, VANILLA};
-use skong_core::controller::{Abilities, Character, CharacterParams, MoveEvent, MoveInput, Side};
+use skong_core::controller::{Abilities, Character, CharacterParams, MoveEvent, MoveInput, MoveState, Side};
+use skong_core::ai::Poke;
+
+use crate::grab::Grab;
 use skong_core::geom::Vec2;
 use skong_core::locomotion::Locomotion;
 use skong_core::terrain::{Terrain, TerrainOptions};
@@ -121,6 +124,9 @@ struct Pet {
     keyboard: Keyboard,
     manual: bool,
     paused: bool,
+    grab: Grab,
+    /// Clicks / grabs / throws since the brain last looked.
+    pokes: Vec<Poke>,
 
     win: SpriteWindow,
     tray: Tray,
@@ -189,6 +195,8 @@ pub fn run(args: &Args) -> Result<()> {
         keyboard: Keyboard::default(),
         manual: false,
         paused: false,
+        grab: Grab::default(),
+        pokes: Vec::new(),
         win,
         tray,
         drawn: None,
@@ -246,6 +254,7 @@ pub fn run(args: &Args) -> Result<()> {
 
 impl Pet {
     fn tick(&mut self, dt: f32) -> Result<()> {
+        self.handle_mouse();
         let d = &self.data;
         self.move_events.clear();
 
@@ -290,8 +299,15 @@ impl Pet {
             input.x = self.ch.facing.sign();
         }
 
-        // 3. Physics.
-        self.ch.step(&input, &self.terrain, dt, &mut self.move_events);
+        // 3. Physics (suspended while the user holds the knight).
+        if let Some(p) = self.grab.held_pos() {
+            self.ch.pos = p;
+            self.ch.vel = Vec2::ZERO;
+            self.ch.support = None;
+            self.ch.state = MoveState::Airborne;
+        } else {
+            self.ch.step(&input, &self.terrain, dt, &mut self.move_events);
+        }
         if self.act.is_some() && !self.ch.is_grounded() {
             self.act = None; // knocked off / fell: acts are grounded choreography
         }
@@ -299,7 +315,10 @@ impl Pet {
         // 4. Animation: acts own the animator while running; otherwise locomotion.
         let req = self.loco.update(&self.ch, &self.move_events, &self.anim_events, dt);
         if self.act.is_none() {
-            self.anim.play(&d.lib, req.clip, req.restart);
+            match self.grab.held_pos() {
+                Some(_) => self.anim.play(&d.lib, d.lib.id("Fall").unwrap_or(d.idle), false),
+                None => self.anim.play(&d.lib, req.clip, req.restart),
+            }
         }
         self.anim_events.clear();
         self.anim.update(&d.lib, dt, &mut self.anim_events);
@@ -332,6 +351,35 @@ impl Pet {
             self.win.move_to(x, y)?;
         }
         Ok(())
+    }
+
+    /// Clicks on the knight poke him; press-and-drag picks him up; release throws him.
+    fn handle_mouse(&mut self) {
+        for ev in self.win.take_mouse() {
+            match self.grab.on_event(ev, self.ch.pos) {
+                Some(Poke::Grab) => {
+                    self.act = None;
+                    self.pokes.push(Poke::Grab);
+                }
+                Some(Poke::Release { vel }) => {
+                    self.ch.vel = vel;
+                    self.pokes.push(Poke::Release { vel });
+                }
+                Some(Poke::Click { pos }) => {
+                    self.pokes.push(Poke::Click { pos });
+                    // Until the brain is wired in: wake a napping knight, otherwise startle him.
+                    if let Some(p) = self.act.as_mut() {
+                        p.signal(&self.data.acts, &self.data.lib, &mut self.anim, "woken");
+                    } else if self.ch.is_grounded()
+                        && let Some(id) = self.data.acts.id("startled")
+                    {
+                        self.start_act(id);
+                    }
+                }
+                None => {}
+            }
+        }
+        self.pokes.truncate(32);
     }
 
     fn start_act(&mut self, id: ActId) {
