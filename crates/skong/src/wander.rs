@@ -1,5 +1,5 @@
 //! Placeholder brain until the mood AI lands: stroll / run around the current platform,
-//! hop now and then, rest, and perform random acts.
+//! hop now and then, rest, perform random acts, sit on ledge edges or walk to a bench.
 use std::collections::HashMap;
 
 use skong_core::acts::{ActId, ActLibrary, Requirement};
@@ -7,7 +7,16 @@ use skong_core::controller::{Character, Gait, MoveInput};
 
 enum Plan {
     Rest { left: f32 },
-    Walk { target_x: f32, gait: Gait, left: f32, hop_in: Option<f32>, hop_hold: f32 },
+    Walk { target_x: f32, gait: Gait, left: f32, hop_in: Option<f32>, hop_hold: f32, then_sit: bool },
+}
+
+/// Where the knight could sit right now, computed by the app each tick.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Seating {
+    /// A seat is available exactly here (perch on this ledge edge, or at a bench).
+    pub here: bool,
+    /// x of a bench on the knight's current surface, if any.
+    pub bench_x: Option<f32>,
 }
 
 pub struct Decision {
@@ -27,7 +36,7 @@ impl Wander {
     }
 
     /// Called every tick. `act_running` freezes planning while an act plays.
-    pub fn decide(&mut self, ch: &Character, acts: &ActLibrary, act_running: bool, dt: f32) -> Decision {
+    pub fn decide(&mut self, ch: &Character, acts: &ActLibrary, act_running: bool, seating: Seating, dt: f32) -> Decision {
         for cd in self.cooldowns.values_mut() {
             *cd -= dt;
         }
@@ -40,17 +49,20 @@ impl Wander {
                 *left -= dt;
                 if *left <= 0.0 && ch.is_grounded() {
                     let roll = self.rand();
-                    if roll < 0.45 {
+                    if let Some(bx) = seating.bench_x.filter(|bx| (bx - ch.pos.x).abs() > 4.0 && roll < 0.2) {
+                        // Wander over to the bench and sit there.
+                        self.plan = Plan::Walk { target_x: bx, gait: Gait::Walk, left: 20.0, hop_in: None, hop_hold: 0.0, then_sit: true };
+                    } else if roll < 0.45 {
                         self.plan = self.walk_plan(ch);
-                    } else if roll < 0.75 {
-                        d.act = self.pick_act(ch, acts);
+                    } else if roll < 0.8 {
+                        d.act = self.pick_act(ch, acts, seating.here);
                         self.plan = Plan::Rest { left: 1.0 + 2.0 * self.rand() };
                     } else {
                         self.plan = Plan::Rest { left: 1.0 + 3.0 * self.rand() };
                     }
                 }
             }
-            Plan::Walk { target_x, gait, left, hop_in, hop_hold } => {
+            Plan::Walk { target_x, gait, left, hop_in, hop_hold, then_sit } => {
                 *left -= dt;
                 let dx = *target_x - ch.pos.x;
                 d.input.gait = *gait;
@@ -67,8 +79,12 @@ impl Wander {
                     *hop_hold -= dt;
                     d.input.jump_held = true;
                 }
-                if dx.abs() < 6.0 || *left <= 0.0 {
+                let arrived = dx.abs() < 4.0;
+                if arrived || *left <= 0.0 {
                     d.input.x = 0.0;
+                    if arrived && *then_sit && seating.here {
+                        d.act = self.pick_seat_act(acts);
+                    }
                     self.plan = Plan::Rest { left: 1.5 + 4.0 * self.rand() };
                 }
             }
@@ -90,23 +106,25 @@ impl Wander {
         let speed = ch.params.gait_speed_px(gait).max(1.0);
         let eta = (target_x - ch.pos.x).abs() / speed;
         let hop_in = (self.rand() < 0.2).then(|| eta * self.rand());
-        Plan::Walk { target_x, gait, left: eta * 1.5 + 1.0, hop_in, hop_hold: 0.0 }
+        Plan::Walk { target_x, gait, left: eta * 1.5 + 1.0, hop_in, hop_hold: 0.0, then_sit: false }
     }
 
-    fn pick_act(&mut self, ch: &Character, acts: &ActLibrary) -> Option<ActId> {
+    fn pick_act(&mut self, ch: &Character, acts: &ActLibrary, seat_here: bool) -> Option<ActId> {
+        self.pick(acts, |a| match a.requires {
+            Requirement::Any => true,
+            Requirement::Grounded => ch.is_grounded(),
+            Requirement::Seat => seat_here,
+        })
+    }
+
+    fn pick_seat_act(&mut self, acts: &ActLibrary) -> Option<ActId> {
+        self.pick(acts, |a| a.requires == Requirement::Seat)
+    }
+
+    fn pick(&mut self, acts: &ActLibrary, ok: impl Fn(&skong_core::acts::Act) -> bool) -> Option<ActId> {
         let candidates: Vec<(ActId, f32)> = acts
             .iter()
-            .filter(|(id, a)| {
-                a.weight > 0.0
-                    && !a.has_tag("travel")
-                    && !a.has_tag("intro")
-                    && match a.requires {
-                        Requirement::Any => true,
-                        Requirement::Grounded => ch.is_grounded(),
-                        Requirement::Bench => false, // no bench placed yet
-                    }
-                    && self.cooldowns.get(id).is_none_or(|c| *c <= 0.0)
-            })
+            .filter(|(id, a)| a.weight > 0.0 && !a.has_tag("travel") && !a.has_tag("intro") && ok(a) && self.cooldowns.get(id).is_none_or(|c| *c <= 0.0))
             .map(|(id, a)| (id, a.weight))
             .collect();
         let total: f32 = candidates.iter().map(|c| c.1).sum();

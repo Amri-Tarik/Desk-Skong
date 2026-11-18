@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result, bail};
 
 mod app;
+mod benches;
 mod browser;
 mod keyboard;
 mod settings;
@@ -17,6 +18,7 @@ pub struct Args {
     pub clip: String,
     pub browse: bool,
     pub capturable: bool,
+    pub sit_test: bool,
 }
 
 const USAGE: &str = "usage: skong [--browse] [--capturable] [--data DIR] [--skins DIR] [--skin NAME] [--scale F] [--clip NAME]";
@@ -30,6 +32,7 @@ fn parse_args() -> Result<Args> {
         clip: "Idle".into(),
         browse: false,
         capturable: false,
+        sit_test: false,
     };
     let mut it = std::env::args().skip(1);
     while let Some(k) = it.next() {
@@ -42,6 +45,7 @@ fn parse_args() -> Result<Args> {
             "--clip" => a.clip = v()?,
             "--browse" => a.browse = true,
             "--capturable" => a.capturable = true,
+            "--sit-test" => a.sit_test = true,
             "-h" | "--help" => {
                 println!("{USAGE}");
                 std::process::exit(0);

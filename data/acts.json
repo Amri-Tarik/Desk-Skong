@@ -1,5 +1,5 @@
 {
-  "$comment": "Behaviour choreographies built from Knight clips. Each step plays a clip; looping clips run for `hold` seconds (random in [min,max]); one-shot clips play `repeat` times (default once) then hold their last frame for `hold` seconds if given. `until` ends a step on an external signal instead (e.g. 'woken'). `move` walks with a gait during the step. `interruptible: false` protects a step from being cut short. Tags feed the mood-driven AI; `requires` is checked before starting. `requires` is grounded | any | bench (standing at a placed bench). Weight 0 = never picked at random; the AI triggers it by tag.",
+  "$comment": "Behaviour choreographies built from Knight clips. Each step plays a clip; looping clips run for `hold` seconds (random in [min,max]); one-shot clips play `repeat` times (default once) then hold their last frame for `hold` seconds if given. `until` ends a step on an external signal instead (e.g. 'woken'). `move` walks with a gait during the step. `interruptible: false` protects a step from being cut short. Tags feed the mood-driven AI; `requires` is checked before starting. `requires` is grounded | any | seat (perched on a window edge or at a bench; sitting clips are a front-facing pose with dangling legs). Weight 0 = never picked at random; the AI triggers it by tag.",
   "acts": [
     {
       "name": "look_up",
@@ -46,11 +46,11 @@
     {
       "name": "rest",
       "tags": [
-        "bench",
+        "seat",
         "calm",
         "tired"
       ],
-      "requires": "bench",
+      "requires": "seat",
       "weight": 1.0,
       "cooldown": 60,
       "steps": [
@@ -72,10 +72,10 @@
     {
       "name": "lean_back",
       "tags": [
-        "bench",
+        "seat",
         "calm"
       ],
-      "requires": "bench",
+      "requires": "seat",
       "weight": 0.7,
       "cooldown": 60,
       "steps": [
@@ -97,10 +97,10 @@
     {
       "name": "nap",
       "tags": [
-        "bench",
+        "seat",
         "tired"
       ],
-      "requires": "bench",
+      "requires": "seat",
       "weight": 1.0,
       "cooldown": 300,
       "steps": [
@@ -137,11 +137,11 @@
     {
       "name": "read_map",
       "tags": [
-        "bench",
+        "seat",
         "calm",
         "curious"
       ],
-      "requires": "bench",
+      "requires": "seat",
       "weight": 1.0,
       "cooldown": 120,
       "steps": [
