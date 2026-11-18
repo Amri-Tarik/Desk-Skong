@@ -63,6 +63,8 @@ pub enum Requirement {
     #[default]
     Grounded,
     Any,
+    /// Grounded at a placed bench (sitting clips are the bench pose).
+    Bench,
 }
 
 #[derive(Clone, Debug)]
