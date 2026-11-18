@@ -4,6 +4,8 @@
 //   dotnet run -c Release -- --data "<...>/hollow_knight_Data" --list
 //   dotnet run -c Release -- --data "<...>/hollow_knight_Data" --out ../data/tk2d \
 //        [--collections Knight,Sprint] [--animations Knight]
+//   dotnet run -c Release -- --data "<...>/hollow_knight_Data" --dump-mono HeroController
+//        [--files resources.assets,level1] [--max-array 64]
 //
 // Collections/animations are matched by m_Name (case-insensitive). Without filters,
 // every collection referenced by the exported animation libraries is exported.
@@ -14,7 +16,7 @@ using AssetsTools.NET.Extra;
 
 internal static class Program
 {
-    sealed record Options(string DataDir, string? OutDir, bool List, HashSet<string>? Collections, HashSet<string>? Animations, string[] Files);
+    sealed record Options(string DataDir, string? OutDir, bool List, HashSet<string>? Collections, HashSet<string>? Animations, string[] Files, string? DumpMono, int MaxArray);
 
     static int Main(string[] args)
     {
@@ -31,13 +33,16 @@ internal static class Program
         if (tpk is null) { Console.Error.WriteLine("classdata.tpk not found"); return 3; }
         am.LoadClassPackage(tpk);
 
-        var scan = new Scanner(am);
+        var scan = new Scanner(am) { DumpClass = opt.DumpMono };
         foreach (var f in opt.Files)
         {
             var path = Path.Combine(opt.DataDir, f);
             if (!File.Exists(path)) { Console.Error.WriteLine($"skip missing {path}"); continue; }
             scan.Scan(path);
         }
+
+        if (opt.DumpMono is not null)
+            return DumpMono(am, scan, opt);
 
         if (opt.List)
         {
@@ -247,6 +252,9 @@ internal static class Program
 
         public List<Entry> Collections { get; } = new();
         public List<Entry> Animations { get; } = new();
+        /// MonoBehaviours of this script class are collected into <see cref="Dumped"/>.
+        public string? DumpClass { get; init; }
+        public List<Entry> Dumped { get; } = new();
         readonly Dictionary<long, Entry> _byKey = new();
         readonly Dictionary<string, int> _fileIds = new(StringComparer.OrdinalIgnoreCase);
 
@@ -257,12 +265,23 @@ internal static class Program
             var afi = am.LoadAssetsFile(path, true);
             am.LoadClassDatabaseFromPackage(afi.file.Metadata.UnityVersion);
             Console.Error.WriteLine($"scanning {Path.GetFileName(path)} (Unity {afi.file.Metadata.UnityVersion})");
+            // `--dump-mono` also accepts a built-in Unity class (e.g. Physics2DSettings).
+            if (DumpClass is not null && Enum.TryParse<AssetClassID>(DumpClass, true, out var builtin) && builtin != AssetClassID.MonoBehaviour)
+            {
+                foreach (var info in afi.file.GetAssetsOfType(builtin))
+                {
+                    try { Dumped.Add(new Entry(afi, info, am.GetBaseField(afi, info), builtin.ToString())); } catch { }
+                }
+                return;
+            }
             foreach (var info in afi.file.GetAssetsOfType(AssetClassID.MonoBehaviour))
             {
                 var cls = ClassName(afi, info);
-                if (cls is not ("tk2dSpriteCollectionData" or "tk2dSpriteAnimation")) continue;
+                bool dump = DumpClass is not null && string.Equals(cls, DumpClass, StringComparison.OrdinalIgnoreCase);
+                if (!dump && cls is not ("tk2dSpriteCollectionData" or "tk2dSpriteAnimation")) continue;
                 AssetTypeValueField bf;
                 try { bf = am.GetBaseField(afi, info); } catch { continue; }
+                if (dump) { Dumped.Add(new Entry(afi, info, bf, NameOf(afi, bf))); continue; }
                 var e = new Entry(afi, info, bf, NameOf(afi, bf));
                 (cls == "tk2dSpriteAnimation" ? Animations : Collections).Add(e);
                 _byKey[e.Key] = e;
@@ -309,7 +328,7 @@ internal static class Program
             return string.IsNullOrEmpty(n) ? $"unnamed_{bf["m_GameObject"]["m_PathID"].AsLong}" : n;
         }
 
-        string? ClassName(AssetsFileInstance afi, AssetFileInfo info)
+        public string? ClassName(AssetsFileInstance afi, AssetFileInfo info)
         {
             try
             {
@@ -319,6 +338,83 @@ internal static class Program
             }
             catch { return null; }
         }
+    }
+
+    // ------------------------------------------------------------------ dump: MonoBehaviour fields
+
+    /// Prints every MonoBehaviour of class <c>--dump-mono</c> as JSON: its serialized fields
+    /// plus the built-in components on the same GameObject (BoxCollider2D, Rigidbody2D, ...).
+    /// Only serialized data is read; no game code is decompiled.
+    static int DumpMono(AssetsManager am, Scanner scan, Options opt)
+    {
+        if (scan.Dumped.Count == 0)
+        {
+            Console.Error.WriteLine($"no MonoBehaviour of class {opt.DumpMono} in {string.Join(",", opt.Files)}");
+            return 5;
+        }
+        var result = new List<object?>();
+        foreach (var e in scan.Dumped)
+        {
+            var obj = new Dictionary<string, object?>
+            {
+                ["file"] = Path.GetFileName(e.Afi.path),
+                ["path_id"] = e.Info.PathId,
+                ["game_object"] = e.Name,
+                ["fields"] = ToJson(e.Field, opt.MaxArray),
+            };
+            var comps = new List<object?>();
+            try
+            {
+                if (e.Field["m_GameObject"].IsDummy) { result.Add(obj); continue; }
+                var go = am.GetExtAsset(e.Afi, e.Field["m_GameObject"]);
+                foreach (var c in go.baseField["m_Component.Array"].Children)
+                {
+                    var ext = am.GetExtAsset(go.file, c["component"]);
+                    if (ext.info is null || ext.baseField is null) continue;
+                    var type = (AssetClassID)ext.info.TypeId;
+                    if (type == AssetClassID.MonoBehaviour)
+                        comps.Add(new Dictionary<string, object?> { ["type"] = "MonoBehaviour", ["class"] = scan.ClassName(ext.file, ext.info) });
+                    else
+                        comps.Add(new Dictionary<string, object?> { ["type"] = type.ToString(), ["fields"] = ToJson(ext.baseField, opt.MaxArray) });
+                }
+            }
+            catch (Exception ex) { comps.Add(new Dictionary<string, object?> { ["error"] = ex.Message }); }
+            obj["components"] = comps;
+            result.Add(obj);
+        }
+        Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+        return 0;
+    }
+
+    /// Generic serialized-field tree -> JSON-friendly objects. Arrays longer than
+    /// <paramref name="maxArray"/> are summarised by their length.
+    static object? ToJson(AssetTypeValueField f, int maxArray)
+    {
+        var v = f.Value;
+        if (v is not null)
+        {
+            switch (v.ValueType)
+            {
+                case AssetValueType.Bool: return v.AsBool;
+                case AssetValueType.Int8: case AssetValueType.Int16: case AssetValueType.Int32: return v.AsInt;
+                case AssetValueType.UInt8: case AssetValueType.UInt16: case AssetValueType.UInt32: return v.AsUInt;
+                case AssetValueType.Int64: return v.AsLong;
+                case AssetValueType.UInt64: return v.AsULong;
+                case AssetValueType.Float: return float.IsFinite(v.AsFloat) ? v.AsFloat : v.AsFloat.ToString();
+                case AssetValueType.Double: return double.IsFinite(v.AsDouble) ? v.AsDouble : v.AsDouble.ToString();
+                case AssetValueType.String: return v.AsString;
+                case AssetValueType.ByteArray: return new Dictionary<string, object?> { ["bytes"] = v.AsByteArray?.Length ?? 0 };
+                case AssetValueType.Array:
+                    if (f.Children.Count > maxArray) return new Dictionary<string, object?> { ["array_len"] = f.Children.Count };
+                    return f.Children.Select(c => ToJson(c, maxArray)).ToList();
+            }
+        }
+        if (f.Children is null || f.Children.Count == 0) return null;
+        // Collapse Unity's `field.Array` wrapper into the field itself.
+        if (f.Children.Count == 1 && f.Children[0].FieldName == "Array") return ToJson(f.Children[0], maxArray);
+        var d = new Dictionary<string, object?>();
+        foreach (var c in f.Children) d[c.FieldName] = ToJson(c, maxArray);
+        return d;
     }
 
     // ------------------------------------------------------------------ helpers
@@ -339,6 +435,7 @@ internal static class Program
         string? data = null, outDir = null; bool list = false;
         HashSet<string>? cols = null, anims = null;
         string[] files = ["resources.assets"];
+        string? dumpMono = null; int maxArray = 64;
         for (int i = 0; i < args.Length; i++)
         {
             string Next() => i + 1 < args.Length ? args[++i] : throw new ArgumentException($"missing value for {args[i]}");
@@ -350,14 +447,16 @@ internal static class Program
                 case "--list": list = true; break;
                 case "--collections": cols = Set(Next()); break;
                 case "--animations": anims = Set(Next()); break;
+                case "--dump-mono": dumpMono = Next(); break;
+                case "--max-array": maxArray = int.Parse(Next()); break;
                 case "--files": files = Next().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries); break;
                 default: throw new ArgumentException($"unknown arg {args[i]}");
             }
         }
         if (data is null) throw new ArgumentException("--data is required");
-        return new Options(data, outDir, list, cols, anims, files);
+        return new Options(data, outDir, list, cols, anims, files, dumpMono, maxArray);
     }
 
     static void PrintUsage() => Console.Error.WriteLine(
-        "usage: HK_TK2D_Exporter --data <hollow_knight_Data> (--list | --out <dir>) [--collections A,B] [--animations A,B] [--files resources.assets,level1]");
+        "usage: HK_TK2D_Exporter --data <hollow_knight_Data> (--list | --out <dir> | --dump-mono <Class>) [--collections A,B] [--animations A,B] [--files resources.assets,level1] [--max-array N]");
 }

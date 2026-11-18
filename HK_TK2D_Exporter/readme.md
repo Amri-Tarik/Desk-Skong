@@ -30,6 +30,23 @@ dotnet run -c Release -- --data "<...>/hollow_knight_Data" --out ../data/hk \
 Options: `--collections A,B` exports collections by name instead of by reference;
 `--files resources.assets,level1` scans other asset files (default `resources.assets`).
 
+### Dumping serialized tuning (`--dump-mono`)
+
+```bash
+# HeroController fields + the BoxCollider2D / Rigidbody2D / ... on the Knight GameObject
+dotnet run -c Release -- --data "<...>/hollow_knight_Data" --dump-mono HeroController > hero.json
+
+# built-in Unity classes work too (here: project gravity and fixed timestep)
+dotnet run -c Release -- --data "<...>/hollow_knight_Data" --files globalgamemanagers --dump-mono Physics2DSettings
+dotnet run -c Release -- --data "<...>/hollow_knight_Data" --files globalgamemanagers --dump-mono TimeManager
+```
+
+Prints a JSON array to stdout, one entry per matching object: its serialized fields and,
+for components, every component on the same GameObject (built-in ones with their fields,
+MonoBehaviours by class name). Arrays longer than `--max-array N` (default 64) are
+summarised by length. Only serialized data is read; no game code is decompiled.
+The movement constants in `crates/skong-core/src/controller/params.rs` come from this.
+
 ## Output
 
 `<out>/collections/<Name>.json`
