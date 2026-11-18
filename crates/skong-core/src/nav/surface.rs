@@ -60,7 +60,7 @@ impl Surface {
             && ch.pos.x < self.ledge_x1 + half
     }
 
-    fn from_ledge(&self, s: &Support) -> bool {
+    fn is_cut_from(&self, s: &Support) -> bool {
         s.y == self.y && s.x0 == self.ledge_x0 && s.x1 == self.ledge_x1 && s.owner == self.owner && s.kind == self.kind
     }
 }
@@ -71,14 +71,14 @@ pub(super) fn surface_at(surfaces: &[Surface], ch: &Character) -> Option<Surface
     let support = ch.support?;
     let half = ch.size.x * 0.5;
     let x = ch.pos.x;
-    let by_support = surfaces.iter().position(|s| s.from_ledge(&support) && s.claims(x, half));
+    let by_support = surfaces.iter().position(|s| s.is_cut_from(&support) && s.claims(x, half));
     by_support.or_else(|| {
         surfaces.iter().position(|s| (ch.pos.y - s.y).abs() <= 1.0 && s.claims(x, half)).or_else(|| {
             // Nearest segment of the supporting ledge (feet just past a split point).
             surfaces
                 .iter()
                 .enumerate()
-                .filter(|(_, s)| s.from_ledge(&support))
+                .filter(|(_, s)| s.is_cut_from(&support))
                 .min_by(|a, b| dist_to(a.1, x).total_cmp(&dist_to(b.1, x)))
                 .map(|(i, _)| i)
         })

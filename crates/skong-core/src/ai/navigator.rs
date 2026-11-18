@@ -46,7 +46,8 @@ impl GraphNavigator {
     }
 
     pub fn rebuild(&mut self, terrain: &Terrain, template: &Character) {
-        self.graph = Some(NavGraph::build(terrain, template));
+        // Rebuilding from the previous graph reuses its simulated edges where nothing moved.
+        self.graph = Some(self.graph.as_ref().map_or_else(|| NavGraph::build(terrain, template), |g| g.rebuild(terrain, template)));
     }
 
     /// Input for this tick; neutral when idle. Updates [`Navigator::status`].

@@ -451,47 +451,25 @@ fn edges_are_consistent() {
     }
 }
 
-fn dump(name: &str, t: &Terrain, ch: &Character) {
-    let g = NavGraph::build(t, ch);
-    println!("== {name}: {:?}", g.stats());
-    for (i, s) in g.surfaces().iter().enumerate() {
-        println!("  S{i}: x {}..{} y {} stand {}..{} owner {:?}", s.x0, s.x1, s.y, s.lo, s.hi, s.owner);
-    }
-    for e in g.edges() {
-        println!("  E {}->{} {:?} {:?} takeoff {} land {:?} dur {:.2} {:?}", e.from, e.to, e.kind, e.gait, e.takeoff, e.land, e.duration, e.script.recipe);
-    }
-}
-
 #[test]
-fn zz_debug() {
-    let t = with_windows(world(), &[(1, RectF::new(200.0, 600.0, 1700.0, 700.0))]);
-    dump("dropthrough", &t, &knight(&t, 950.0, 0.0));
-    let t = high_platforms(1920.0, 1150.0);
-    dump("dash", &t, &knight(&t, 300.0, 0.0));
-    let t = with_windows(world(), &[(1, RectF::new(800.0, 0.0, 1000.0, 1040.0))]);
-    dump("shadow", &t, &knight(&t, 300.0, FLOOR));
+fn follows_at_a_different_tick_rate() {
+    // Edges are validated at 120 Hz; a 60 Hz caller still gets there (closed-loop scripts,
+    // re-planning on drift).
     let t = office();
-    dump("office", &t, &knight(&t, 60.0, FLOOR));
-}
-
-#[test]
-fn zz_trace() {
-    use super::script::*;
-    use crate::controller::{Gait, Side};
-    let t = office();
-    let ch0 = knight(&t, 361.0, FLOOR);
-    let g = NavGraph::build(&t, &ch0);
-    let (s, tt) = (g.surfaces()[1], g.surfaces()[0]);
-    let sc = Script { recipe: Recipe::Walk, start: Start::Pass, dir: Side::Left, gait: Gait::Walk, takeoff: 301.0, back: 361.0, tx: 259.5, ty: FLOOR, needs_shadow: false };
-    let mut ch = ch0.clone();
-    let mut ex = Exec::new(sc);
-    let mut ev = vec![];
-    for i in 0..80 {
-        let inp = ex.input(&ch, Gait::Walk, DT);
-        ev.clear();
-        ch.step(&inp, &t, DT, &mut ev);
-        let o = ex.outcome(&ch, &s, &tt);
-        println!("{i} stage {:?} x {:.2} y {:.2} vx {:.1} in.x {:.2} {:?} {:?} {:?}", ex.stage, ch.pos.x, ch.pos.y, ch.vel.x, inp.x, ch.state, o, ev);
-        if o != Outcome::Continue { break; }
+    let mut ch = knight(&t, 60.0, FLOOR);
+    let g = NavGraph::build(&t, &ch);
+    let goal = NavGoal::OnWindow(2);
+    let mut f = PathFollower::new(g.plan(&ch, goal, TravelStyle::Normal).expect("route"), goal, TravelStyle::Normal);
+    let (dt, mut ev) = (1.0 / 60.0, vec![]);
+    let mut status = FollowStatus::Moving;
+    for _ in 0..(30.0 / dt) as usize {
+        let (input, s) = f.next_input(&ch, &g, &t, dt);
+        status = s;
+        if status != FollowStatus::Moving {
+            break;
+        }
+        ch.step(&input, &t, dt, &mut ev);
     }
+    assert_eq!(status, FollowStatus::Arrived, "at {:?}", ch.pos);
+    assert_eq!(owner_under(&ch), Some(2));
 }

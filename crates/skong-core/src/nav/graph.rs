@@ -172,6 +172,8 @@ struct Builder<'a> {
     /// Terrain around the current pair, and its walls plus the bounds sides.
     local: Terrain,
     local_walls: Vec<Wall>,
+    /// Terrain for the current simulation (a subset of `local`).
+    sim: Terrain,
     events: Vec<MoveEvent>,
     candidates: Vec<Script>,
     old: &'a HashMap<u64, PairResult>,
@@ -201,6 +203,7 @@ pub(crate) fn build_edges(
         reach: Reach::new(&template.params),
         local: Terrain::default(),
         local_walls: Vec::new(),
+        sim: Terrain::default(),
         events: Vec::new(),
         candidates: Vec::new(),
         old,
@@ -300,26 +303,27 @@ impl Builder<'_> {
     /// Simulation region (feet positions) for a pair: leaving it fails the run.
     fn region(&self, s: &Surface, t: &Surface) -> RectF {
         let r = self.reach;
-        let mx = r.dash + 4.0 * r.half + 64.0;
-        let up = r.jump + r.double + r.height + 32.0;
-        RectF::new(s.x0.min(t.x0) - mx, s.y.min(t.y) - up, s.x1.max(t.x1) + mx, s.y.max(t.y) + 1.0)
+        // Horizontal slack for overshoot / wall kicks; vertical room up to a double jump above
+        // the take-off (or a single jump above a higher target, for climbs).
+        let mx = r.dash + 2.0 * r.half + 32.0;
+        let top = (s.y - r.jump - r.double).min(t.y - r.jump) - 16.0;
+        // Side by side: every candidate leaves from the facing end of `s` (after a run-up)
+        // and aims at the facing part of `t`, so only the stretch between them matters. This
+        // keeps the per-tick terrain small when `s` or `t` is a monitor-wide floor.
+        let reach_in = self.runup(Gait::Sprint) + 2.0 * r.half + mx;
+        let (left, right) = match separated(s, t) {
+            Some(Side::Right) => ((s.hi - reach_in).max(s.x0), (t.lo + reach_in).min(t.x1)),
+            Some(Side::Left) => ((t.hi - reach_in).max(t.x0), (s.lo + reach_in).min(s.x1)),
+            None => (s.x0.min(t.x0), s.x1.max(t.x1)),
+        };
+        RectF::new(left - mx, top, right + mx, s.y.max(t.y) + 1.0)
     }
 
     /// Copy the terrain overlapping `region` (grown by the body) into `self.local`; returns
     /// a hash of that geometry.
     fn fill_local(&mut self, region: RectF) -> u64 {
-        let r = self.reach;
-        let g = RectF::new(region.left - r.half - 2.0, region.top - r.height - 2.0, region.right + r.half + 2.0, region.bottom + 2.0);
-        let src = self.terrain;
-        let l = &mut self.local;
-        l.generation = src.generation;
-        l.bounds = src.bounds;
-        l.windows.clear();
-        l.windows.extend(src.windows.iter().filter(|w| w.rect.overlaps(&g)));
-        l.ledges.clear();
-        l.ledges.extend(src.ledges.iter().filter(|e| e.x0 <= g.right && e.x1 >= g.left && e.y >= g.top && e.y <= g.bottom));
-        l.walls.clear();
-        l.walls.extend(src.walls.iter().filter(|w| w.x >= g.left && w.x <= g.right && w.y0 <= g.bottom && w.y1 >= g.top));
+        copy_around(self.terrain, &mut self.local, region, self.reach);
+        let l = &self.local;
         self.local_walls.clear();
         self.local_walls.extend(all_walls(l));
         let mut h = DefaultHasher::new();
@@ -330,7 +334,7 @@ impl Builder<'_> {
             bits(&mut h, &[w.rect.left, w.rect.top, w.rect.right, w.rect.bottom]);
         }
         for e in &l.ledges {
-            (e.kind == LedgeKind::Ground, e.owner).hash(&mut h);
+            (e.kind as u8, e.owner).hash(&mut h);
             bits(&mut h, &[e.x0, e.x1, e.y]);
         }
         for w in &l.walls {
@@ -355,12 +359,18 @@ impl Builder<'_> {
     fn search_pair(&mut self, s: &Surface, t: &Surface, region: RectF, tiers: [bool; 3]) -> PairResult {
         let mut out = [None; 3];
         let mut blocked: Vec<f32> = Vec::new();
-        for (i, tier) in [Tier::Stroll, Tier::Normal, Tier::Hurry].into_iter().enumerate() {
-            let skip = !tiers[i] || (tier == Tier::Hurry && (out[0].is_some() || out[1].is_some()));
-            if !skip {
-                let stroll = out[0].map(|f: Found| f.script.recipe);
-                out[i] = self.search(tier, s, t, region, stroll, &mut blocked);
-            }
+        if tiers[1] {
+            out[1] = self.search(Tier::Normal, s, t, region, None, &mut blocked);
+        }
+        // Strolling only uses walk / drop / single jump at walking pace: if running could not
+        // connect the pair with those, walking will not either.
+        let basic = |f: &Found| matches!(f.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::DropThrough | MoveKind::Jump);
+        if tiers[0] && out[1].as_ref().is_some_and(basic) {
+            let hint = out[1].map(|f| f.script.recipe);
+            out[0] = self.search(Tier::Stroll, s, t, region, hint, &mut blocked);
+        }
+        if tiers[2] && out[1].is_none() {
+            out[2] = self.search(Tier::Hurry, s, t, region, None, &mut blocked);
         }
         out
     }
@@ -372,28 +382,31 @@ impl Builder<'_> {
         s: &Surface,
         t: &Surface,
         region: RectF,
-        stroll: Option<Recipe>,
+        hint: Option<Recipe>,
         blocked: &mut Vec<f32>,
     ) -> Option<Found> {
         let mut cands = std::mem::take(&mut self.candidates);
         cands.clear();
         self.candidates_for(tier, s, t, &mut cands);
-        if let Some(r) = stroll
+        if let Some(r) = hint
             && let Some(i) = cands.iter().position(|c| c.recipe == r)
         {
-            // Retry the stroll's winner first (likely to work at run speed too), but never
+            // Retry the other tier.s winner first (likely to work at this pace too), but never
             // ahead of a drop-through, which beats walking to an edge.
             let c = cands.remove(i);
             let at = usize::from(cands.first().is_some_and(|c| c.recipe == Recipe::DropThrough));
             cands.insert(at, c);
         }
         let mut found = None;
+        let mut caught = false;
         for c in &cands {
-            if blocked.contains(&c.tx) {
+            // Caught on the way by another surface: an air dash (flying further at the same
+            // heights) will not do better, unless it is meant to shadow-dash through a wall.
+            let dash_jump = matches!(c.recipe, Recipe::Jump { dash: true, .. });
+            if blocked.contains(&c.tx) || (caught && dash_jump && !c.needs_shadow) {
                 continue;
             }
             let res = self.simulate(*c, s, t, region);
-            if std::env::var("NAV_DEBUG").is_ok() { eprintln!("{tier:?} s {}..{}@{} t {}..{}@{} {:?} -> {:?}", s.x0, s.x1, s.y, t.x0, t.x1, t.y, c, res.as_ref().map(|f| f.kind)); }
             match res {
                 Ok(f) => {
                     let ok = match tier {
@@ -407,6 +420,7 @@ impl Builder<'_> {
                     }
                 }
                 Err(Fail::Landed { above: true, near: true, source: false }) if c.recipe != Recipe::Climb => blocked.push(c.tx),
+                Err(Fail::Landed { source: false, .. }) if matches!(c.recipe, Recipe::Jump { .. }) => caught = true,
                 Err(_) => {}
             }
         }
@@ -452,7 +466,7 @@ impl Builder<'_> {
         }
 
         // Drop through the floor we stand on onto a surface right below.
-        if tier == Tier::Normal && below && s.kind == LedgeKind::OneWay && overlap.0 <= overlap.1 {
+        if tier == Tier::Normal && below && s.kind != LedgeKind::Ground && overlap.0 <= overlap.1 {
             let mid = (overlap.0 + overlap.1) * 0.5;
             if let Some(x) = land(mid).filter(|x| (overlap.0..=overlap.1).contains(x)) {
                 out.push(mk(Recipe::DropThrough, Start::Stand, Side::Right, x, x));
@@ -507,10 +521,21 @@ impl Builder<'_> {
             }
         };
         let Some(jtx) = land(want) else {
-            return self.climbs(s, t, &mk, out);
+            if tier == Tier::Normal {
+                self.climbs(s, t, &mk, out);
+            }
+            return;
         };
         let jump = |double: bool, dash: bool, low: bool| mk(Recipe::Jump { double, dash, low }, Start::Run, jdir, jtakeoff, jtx);
-        let single_ok = rise < r.jump - 4.0;
+        // A wall in the path that rises above the move's apex and reaches down to the level
+        // of the endpoints cannot be passed (except a window wall by a shadow dash).
+        let floor = s.y.max(t.y) - r.step;
+        let walled = |apex: f32, shadow: bool| {
+            self.walls_between(jdir, jtakeoff, jtx).any(|w| w.y0 < apex && w.y1 >= floor && !(shadow && w.owner.is_some()))
+        };
+        let (single_apex, double_apex) = (s.y - r.jump, s.y - r.jump - r.double);
+        let shadow = ab.shadow_dash;
+        let single_ok = rise < r.jump - 4.0 && !walled(single_apex, false);
         let single_reaches = single_ok && within(gap, r.single(v, rise));
         if single_reaches {
             out.push(jump(false, false, false));
@@ -524,8 +549,15 @@ impl Builder<'_> {
         // Escalate only when height, distance or a wall in the way calls for it: a pair that a
         // plain jump fails for other reasons (something else catches the knight) rarely
         // becomes possible with more power, and every candidate costs a simulation.
-        let air_band = (s.y.min(t.y) - r.jump - r.double - r.height, s.y.max(t.y) - r.step);
-        let wall_in_way = self.wall_between(jdir, jtakeoff, jtx, air_band, false);
+        //  * double jump: a wall in the way whose top a single jump cannot clear but a double
+        //    jump can;
+        //  * air dash: a window wall in the way too tall to jump over (shadow dash through).
+        let low = s.y.min(t.y);
+        let reachable = |w: &Wall| w.y1 > low - r.jump - r.double;
+        let clears_double =
+            self.walls_between(jdir, jtakeoff, jtx).any(|w| reachable(w) && w.y0 < single_apex + 8.0 && w.y0 > double_apex - 8.0);
+        let too_tall =
+            shadow && self.walls_between(jdir, jtakeoff, jtx).any(|w| w.owner.is_some() && reachable(w) && w.y0 <= double_apex - 8.0);
         if ab.dash && rise <= r.step && within(gap, dash + r.walk_off(v, rise)) {
             let dir = sep.unwrap_or(jdir);
             let takeoff = edge_x(s, dir, r.half) - dir.sign() * (r.half + 2.0);
@@ -535,15 +567,17 @@ impl Builder<'_> {
             }
         }
         let double_ok = ab.double_jump && rise < r.jump + r.double - 4.0;
-        let double_reaches = double_ok && within(gap, r.double(v, rise));
-        if double_reaches && (!single_reaches || wall_in_way) {
+        let double_reaches = double_ok && within(gap, r.double(v, rise)) && !walled(double_apex, false);
+        if double_reaches && (!single_reaches || clears_double) {
             out.push(jump(true, false, false));
         }
-        if ab.dash && single_ok && within(gap, r.single(v, rise) + dash) && (!single_reaches || wall_in_way) {
-            out.push(jump(false, true, false));
+        let single_dash = rise < r.jump - 4.0 && !walled(single_apex, shadow);
+        if ab.dash && single_dash && within(gap, r.single(v, rise) + dash) && (!single_reaches || too_tall) {
+            out.push(Script { needs_shadow: too_tall, ..jump(false, true, false) });
         }
-        if ab.dash && double_ok && within(gap, r.double(v, rise) + dash) && (!double_reaches || wall_in_way) {
-            out.push(jump(true, true, false));
+        let double_dash = double_ok && !walled(double_apex, shadow);
+        if ab.dash && double_dash && within(gap, r.double(v, rise) + dash) && (!double_reaches || too_tall) {
+            out.push(Script { needs_shadow: too_tall, ..jump(true, true, false) });
         }
         self.climbs(s, t, &mk, out);
     }
@@ -592,15 +626,19 @@ impl Builder<'_> {
     /// leading side sweeps the span) and overlap the height band `(top, bottom)`?
     /// `windows_only`: only walls a shadow dash passes.
     fn wall_between(&self, dir: Side, a: f32, b: f32, (top, bottom): (f32, f32), windows_only: bool) -> bool {
+        self.walls_between(dir, a, b).any(|w| w.y0 < bottom && top < w.y1 && (!windows_only || w.owner.is_some()))
+    }
+
+    /// Local walls blocking travel in `dir` that the body's leading side meets between feet
+    /// x `a` and `b`.
+    fn walls_between(&self, dir: Side, a: f32, b: f32) -> impl Iterator<Item = &Wall> {
         let face = match dir {
             Side::Right => Facing::Left,
             Side::Left => Facing::Right,
         };
         let lead = dir.sign() * self.reach.half;
         let (lo, hi) = (a.min(b) + lead - 1.0, a.max(b) + lead + 1.0);
-        self.local_walls.iter().any(|w| {
-            w.face == face && w.x > lo && w.x < hi && w.y0 < bottom && top < w.y1 && (!windows_only || w.owner.is_some())
-        })
+        self.local_walls.iter().filter(move |w| w.face == face && w.x > lo && w.x < hi)
     }
 
     /// Walls next to `t`'s ends that can be climbed from `s`: (wall, direction towards it).
@@ -638,10 +676,38 @@ impl Builder<'_> {
     /// Forward-simulate one candidate; `Ok` if it ends standing on `t`.
     fn simulate(&mut self, mut script: Script, s: &Surface, t: &Surface, region: RectF) -> Result<Found, Fail> {
         self.stats.sims += 1;
-        let local = &self.local;
         let r = self.reach;
+        // Per-tick cost grows with the terrain in view, so each run gets only the part of the
+        // pair's local terrain its move can reach: its horizontal span and its apex.
+        let region = {
+            let xs = [script.back, script.takeoff, script.tx];
+            let lo = xs.iter().copied().fold(f32::INFINITY, f32::min);
+            let hi = xs.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+            let slack = r.dash + 2.0 * r.half + 32.0;
+            let (apex, mx) = match script.recipe {
+                Recipe::Jump { double: true, .. } => (s.y - r.jump - r.double, slack),
+                Recipe::Jump { double: false, .. } => (s.y - r.jump, slack),
+                Recipe::Climb => (t.y - r.jump, slack + 128.0),
+                Recipe::Walk | Recipe::DropThrough | Recipe::GroundDash | Recipe::Superdash => (s.y, slack),
+            };
+            let top = apex.min(t.y) - 16.0;
+            let bottom = s.y.max(t.y) + 1.0;
+            RectF::new((lo - mx).max(region.left), top.max(region.top), (hi + mx).min(region.right), bottom)
+        };
+        copy_around(&self.local, &mut self.sim, region, r);
+        let local = &self.sim;
         let p = self.params;
-        let start_x = if script.start == Start::Stand { script.takeoff } else { script.back };
+        let v_air = p.gait_speed_px(script.gait);
+        let sign = script.dir.sign();
+        // With room for a full run-up the follower reaches the take-off at gait speed: start
+        // there (a tick early) already running instead of simulating the run-up.
+        let full_runup = (script.takeoff - script.back) * sign >= 0.9 * self.runup(script.gait);
+        let running = script.start != Start::Stand && full_runup;
+        let start_x = match script.start {
+            Start::Stand => script.takeoff,
+            _ if running => script.takeoff - sign * v_air * SIM_DT,
+            _ => script.back,
+        };
         let mut ch = Character::new(p, self.abilities, Vec2::new(start_x, s.y));
         ch.facing = script.dir;
         let ev = &mut self.events;
@@ -650,11 +716,14 @@ impl Builder<'_> {
         if !s.holds(&ch) {
             return Err(Fail::Other);
         }
+        if running {
+            ch.vel.x = sign * v_air;
+        }
         let mut exec = Exec::new(script);
-        let v_air = p.gait_speed_px(script.gait);
         let limit = match script.recipe {
             Recipe::Walk => (script.tx - script.takeoff).abs() / v_air + 2.0,
-            Recipe::Climb => 8.0,
+            // About one wall-jump cycle (~1 s) per double-jump height, plus slack.
+            Recipe::Climb => 1.5 + (s.y - t.y) / (r.jump + r.double).max(1.0) * 1.5,
             Recipe::Superdash => p.superdash_charge_time + 3.0,
             _ => 4.0,
         };
@@ -711,7 +780,10 @@ impl Builder<'_> {
                 }
             }
             still = if (ch.pos.x - old_x).abs() < 0.01 && ch.is_grounded() { still + 1 } else { 0 };
-            let stuck = still > 12 && script.recipe == Recipe::Walk;
+            // Standing still on the ground mid-script (pressed into a wall) never recovers; a
+            // superdash charge is the one legitimate pause.
+            let charging = matches!(ch.state, MoveState::SuperdashCharge { .. });
+            let stuck = still > 12 && !charging;
             let inside = (region.left..=region.right).contains(&ch.pos.x) && (region.top..=region.bottom).contains(&ch.pos.y);
             if stuck || !inside || exec.t > limit {
                 return Err(Fail::Other);
@@ -740,6 +812,19 @@ impl Builder<'_> {
         let duration = exec.t.max(SIM_DT) + if hard { p.hard_landing_time } else { 0.0 };
         Ok(Found { kind, duration, land: ch.pos, script })
     }
+}
+
+/// Copy into `dst` the part of `src` a body whose feet stay inside `region` can touch.
+fn copy_around(src: &Terrain, dst: &mut Terrain, region: RectF, r: Reach) {
+    let g = RectF::new(region.left - r.half - 2.0, region.top - r.height - 2.0, region.right + r.half + 2.0, region.bottom + 2.0);
+    dst.generation = src.generation;
+    dst.bounds = src.bounds;
+    dst.windows.clear();
+    dst.windows.extend(src.windows.iter().filter(|w| w.rect.overlaps(&g)));
+    dst.ledges.clear();
+    dst.ledges.extend(src.ledges.iter().filter(|e| e.x0 <= g.right && e.x1 >= g.left && e.y >= g.top && e.y <= g.bottom));
+    dst.walls.clear();
+    dst.walls.extend(src.walls.iter().filter(|w| w.x >= g.left && w.x <= g.right && w.y0 <= g.bottom && w.y1 >= g.top));
 }
 
 /// Did the body just pass (from `old_x`) through a window wall that blocks that direction?
