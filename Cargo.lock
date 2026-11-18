@@ -388,6 +388,7 @@ name = "skong-win"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "env_logger",
  "log",
  "skong-core",
  "windows",

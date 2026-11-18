@@ -17,9 +17,11 @@ pub struct Args {
     pub clip: String,
     pub browse: bool,
     pub capturable: bool,
+    /// Live content terrain (screen capture). Off with `--no-vision`.
+    pub vision: bool,
 }
 
-const USAGE: &str = "usage: skong [--browse] [--capturable] [--data DIR] [--skins DIR] [--skin NAME] [--scale F] [--clip NAME]";
+const USAGE: &str = "usage: skong [--browse] [--capturable] [--no-vision] [--data DIR] [--skins DIR] [--skin NAME] [--scale F] [--clip NAME]";
 
 fn parse_args() -> Result<Args> {
     let mut a = Args {
@@ -30,6 +32,7 @@ fn parse_args() -> Result<Args> {
         clip: "Idle".into(),
         browse: false,
         capturable: false,
+        vision: true,
     };
     let mut it = std::env::args().skip(1);
     while let Some(k) = it.next() {
@@ -42,6 +45,7 @@ fn parse_args() -> Result<Args> {
             "--clip" => a.clip = v()?,
             "--browse" => a.browse = true,
             "--capturable" => a.capturable = true,
+            "--no-vision" => a.vision = false,
             "-h" | "--help" => {
                 println!("{USAGE}");
                 std::process::exit(0);

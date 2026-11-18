@@ -12,6 +12,7 @@ use skong_core::controller::{Abilities, Character, CharacterParams, MoveEvent, M
 use skong_core::geom::Vec2;
 use skong_core::locomotion::Locomotion;
 use skong_core::terrain::{Terrain, TerrainOptions};
+use skong_win::capture::ContentFeed;
 use skong_win::desktop::DesktopWatcher;
 use skong_win::monitor;
 use skong_win::runloop::{Flow, RunLoop};
@@ -102,6 +103,8 @@ struct Pet {
     watcher: DesktopWatcher,
     topts: TerrainOptions,
     terrain: Terrain,
+    /// Live on-screen content surfaces (lines, borders...) as extra one-way ledges.
+    content: ContentFeed,
 
     ch: Character,
     loco: Locomotion,
@@ -143,7 +146,8 @@ pub fn run(args: &Args) -> Result<()> {
 
     let watcher = DesktopWatcher::new()?;
     let topts = TerrainOptions::default();
-    let terrain = Terrain::from_desktop(watcher.snapshot(), &topts);
+    let content = ContentFeed::new(args.vision, watcher.snapshot());
+    let terrain = content.terrain(watcher.snapshot(), &topts);
     log::info!("terrain: {} ledges, {} walls, {} windows", terrain.ledges.len(), terrain.walls.len(), terrain.windows.len());
 
     let params = CharacterParams::hollow_knight(64.0 * settings.scale);
@@ -156,6 +160,9 @@ pub fn run(args: &Args) -> Result<()> {
     let win = SpriteWindow::new()?;
     if args.capturable {
         win.set_capturable(true);
+        if args.vision {
+            log::warn!("--capturable: the knight is now visible to content capture and may stand on himself");
+        }
     }
     win.set_click_through(settings.click_through);
     let tray = Tray::new("Desk-Skong", &tray_icon(&data, &look))?;
@@ -168,6 +175,7 @@ pub fn run(args: &Args) -> Result<()> {
         watcher,
         topts,
         terrain,
+        content,
         ch,
         loco,
         anim,
@@ -230,9 +238,10 @@ impl Pet {
         let d = &self.data;
         self.move_events.clear();
 
-        // 1. World: rebuild terrain only when the desktop actually changed.
-        if self.watcher.poll() {
-            let new = Terrain::from_desktop(self.watcher.snapshot(), &self.topts);
+        // 1. World: rebuild terrain only when the desktop or the on-screen content changed.
+        let desk_changed = self.watcher.poll();
+        if self.content.poll(self.watcher.snapshot(), desk_changed) || desk_changed {
+            let new = self.content.terrain(self.watcher.snapshot(), &self.topts);
             self.ch.on_terrain_rebuilt(&self.terrain, &new, &mut self.move_events);
             self.terrain = new;
         }
