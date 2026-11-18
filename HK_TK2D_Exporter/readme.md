@@ -37,6 +37,10 @@ Props: `--find bench` lists matching Sprite/Texture2D assets across all asset fi
 `--export-sprites town_bench,guardian_bench --textures ../skins/Vanilla/props` crops those sprites
 (including ones packed in SpriteAtlases) to PNG plus a `.json` with pivot and pixels-per-unit.
 
+`--dump-mono HeroController --hierarchy` prints the hero prefab's object tree (local position,
+scale, components, tk2d collection / animation library + default clip) — the source of the effect
+offsets in `data/effects.json`.
+
 Options: `--collections A,B` exports collections by name instead of by reference;
 `--files resources.assets,level1` scans other asset files (default `resources.assets`).
 
