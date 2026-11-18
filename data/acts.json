@@ -578,6 +578,59 @@
           ]
         }
       ]
+    },
+    {
+      "name": "slash",
+      "tags": ["fight"],
+      "requires": "any",
+      "weight": 0.0,
+      "steps": [{ "clip": "Slash", "interruptible": false }],
+      "$comment": "Fight acts (weight 0: only started by the AI by name). Slashes can render the AI Attack intent on the ground."
+    },
+    {
+      "name": "slash_alt",
+      "tags": ["fight"],
+      "requires": "any",
+      "weight": 0.0,
+      "steps": [{ "clip": "SlashAlt", "interruptible": false }]
+    },
+    {
+      "name": "up_slash",
+      "tags": ["fight"],
+      "requires": "any",
+      "weight": 0.0,
+      "steps": [{ "clip": "UpSlash", "interruptible": false }]
+    },
+    {
+      "name": "down_slash",
+      "tags": ["fight"],
+      "requires": "any",
+      "weight": 0.0,
+      "steps": [{ "clip": "DownSlash", "interruptible": false }]
+    },
+    {
+      "name": "recoil",
+      "tags": ["fight", "hurt"],
+      "requires": "grounded",
+      "weight": 0.0,
+      "steps": [{ "clip": "Recoil", "hold": [0.1, 0.2], "interruptible": false }]
+    },
+    {
+      "name": "stunned",
+      "tags": ["fight", "hurt"],
+      "requires": "grounded",
+      "weight": 0.0,
+      "steps": [{ "clip": "Stun", "hold": [1.0, 1.6], "interruptible": false }]
+    },
+    {
+      "name": "victory",
+      "tags": ["fight", "bold"],
+      "requires": "grounded",
+      "weight": 0.0,
+      "steps": [
+        { "clip": "Challenge Start", "hold": [0.8, 1.2] },
+        { "clip": "Challenge End" }
+      ]
     }
   ]
 }
