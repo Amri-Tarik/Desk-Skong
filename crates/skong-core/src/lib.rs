@@ -13,6 +13,7 @@ pub mod canvas;
 pub mod controller;
 pub mod desktop;
 pub mod discovery;
+pub mod dreamgate;
 pub mod effects;
 pub mod fxraster;
 pub mod geom;

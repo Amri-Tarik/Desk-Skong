@@ -36,6 +36,7 @@ mod config;
 mod greet;
 mod death;
 mod highlight;
+mod dream_gate;
 mod interest;
 mod navigator;
 mod needs;
@@ -62,6 +63,7 @@ pub use activity::{Activity, ActivitySpot, ActivityTracker, QUIET, TrackedSpot};
 pub use battle::{BattleScore, Outcome};
 pub use behaviours::{BehaviourKind, Tier};
 pub use config::{BattleConfig, BoredomConfig, BrainConfig, CompanionConfig, NeedRates, Personality, SereneConfig, TierConfig, WatchConfig};
+pub use dream_gate::{DreamGateConfig, GateWish, Prize};
 pub use greet::{STAND_OFF_UNITS, Visitor, VisitorState};
 pub use train::{LessonCue, LessonReport, LessonSignal, LessonStage};
 pub use interest::{InterestMap, Poi, PoiKey, PoiKind, PoiTarget, ScoredPoi};
@@ -168,6 +170,9 @@ pub struct Intent {
     /// Rate-limited (`BoredomConfig::event_gap`); never while the user types, is away, or a
     /// fullscreen app is up.
     pub request: Option<WorldEvent>,
+    /// Dream Gate traffic: plant a gate at a prize no route reaches, or close it (see
+    /// [`crate::dreamgate::GateRuntime`] for the app's side).
+    pub gate: Option<crate::dreamgate::GateEvent>,
 }
 
 /// Something the bored knight asks the world for (see [`Intent::request`]).
@@ -499,6 +504,7 @@ impl Brain {
             self.think(p, nav, &mut out, true);
         }
         self.stir_from_slug(p, &mut out);
+        self.dream_gate_landed();
         if p.act.is_some() || out.act.is_some() || !matches!(out.motion, Motion::Hold) {
             out.waiting = false;
         }
@@ -783,6 +789,7 @@ impl Brain {
         self.score_places(p, nav);
         self.score_shinies(p, nav);
         self.score_highlight(p, nav);
+        self.scan_dream_gate(p, nav);
         self.utilities = self.score_behaviours(p);
         let eligible = self.cfg.tiers.eligible;
         let tiered: Vec<(BehaviourKind, f32, Tier)> = self.utilities.iter().map(|&(k, u)| (k, u, self.tier_at(k, u, p))).collect();
@@ -901,6 +908,12 @@ impl Brain {
             // Called away mid-lesson: let the teacher know.
             out.lesson = Some(LessonReport { visitor: t.id, signal: LessonSignal::Stop });
         }
+        if let Active::DreamGate(g) = &self.active
+            && g.open()
+        {
+            // Called away before the warp: the planted gate fades.
+            out.gate = Some(crate::dreamgate::GateEvent::Close);
+        }
         let teacher = train::teacher(&self.senses.visitors).cloned();
         let visitor = self.visitors.target(&self.senses.visitors, p.knight.pos, self.now).cloned();
         nav.stop();
@@ -927,6 +940,7 @@ impl Brain {
         let place = self.interest.places.best;
         let shiny = self.interest.shinies.best;
         let highlight = self.interest.highlight.best;
+        let wish = if kind == BehaviourKind::DreamGate { self.stakes.gate.wish.take() } else { None };
         let flee_from = if kind == BehaviourKind::Flee { self.flee_from.take().unwrap_or(p.knight.pos) } else { p.knight.pos };
         let death = if kind == BehaviourKind::Dead { self.stakes.pending_death.take() } else { None };
         let mut ctx = self.ctx(p, nav, out);
@@ -974,6 +988,10 @@ impl Brain {
             },
             BehaviourKind::Highlight => match highlight {
                 Some(c) => Active::Highlight(highlight::LookAtHighlight::start(&mut ctx, c)),
+                None => Active::Idle(Idle::start(&mut ctx)),
+            },
+            BehaviourKind::DreamGate => match wish {
+                Some(w) => Active::DreamGate(dream_gate::DreamGate::start(&mut ctx, w)),
                 None => Active::Idle(Idle::start(&mut ctx)),
             },
         };
@@ -1227,6 +1245,7 @@ impl Brain {
             (BehaviourKind::Visit, visit),
             (BehaviourKind::Shiny, self.shiny_utility(p)),
             (BehaviourKind::Highlight, self.highlight_utility(p)),
+            (BehaviourKind::DreamGate, self.dream_gate_utility()),
         ];
         u.extend(self.stakes_utilities(p));
         let calm = self.now < self.calm_until;

@@ -100,10 +100,12 @@ pub enum BehaviourKind {
     Shiny,
     /// Go and look at text the user highlighted (opt-in; only its rectangle is known).
     Highlight,
+    /// No route to a prize: plant a dream gate by it and warp there.
+    DreamGate,
 }
 
 impl BehaviourKind {
-    pub const ALL: [BehaviourKind; 21] = [
+    pub const ALL: [BehaviourKind; 22] = [
         BehaviourKind::Idle,
         BehaviourKind::Companion,
         BehaviourKind::Watch,
@@ -125,6 +127,7 @@ impl BehaviourKind {
         BehaviourKind::Train,
         BehaviourKind::Shiny,
         BehaviourKind::Highlight,
+        BehaviourKind::DreamGate,
     ];
 
     pub fn label(self) -> &'static str {
@@ -150,6 +153,7 @@ impl BehaviourKind {
             BehaviourKind::Train => "train",
             BehaviourKind::Shiny => "shiny",
             BehaviourKind::Highlight => "highlight",
+            BehaviourKind::DreamGate => "dream gate",
         }
     }
 
@@ -163,6 +167,8 @@ impl BehaviourKind {
             BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead => Tier::Urgent,
             // Geo and visitors keep him busy: they beat anything cursor-related.
             BehaviourKind::ShadeHunt | BehaviourKind::Loot | BehaviourKind::Shiny | BehaviourKind::Greet | BehaviourKind::Train => Tier::Engagement,
+            // Only ever for one of those prizes, out of walking reach.
+            BehaviourKind::DreamGate => Tier::Engagement,
             BehaviourKind::Nap | BehaviourKind::Rest | BehaviourKind::Recover => Tier::Needs,
             // The cursor is a boredom killer (battles, pestering): an ambient pastime, never
             // allowed to interrupt Geo or visitors, and dropped the moment those show up.
@@ -175,7 +181,7 @@ impl BehaviourKind {
 
     /// Exclusive behaviours end themselves; only urgent challengers may interrupt.
     pub fn exclusive(self) -> bool {
-        matches!(self, BehaviourKind::Nap | BehaviourKind::Battle | BehaviourKind::Pester | BehaviourKind::Train | BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead | BehaviourKind::ShadeHunt | BehaviourKind::Loot)
+        matches!(self, BehaviourKind::Nap | BehaviourKind::Battle | BehaviourKind::Pester | BehaviourKind::Train | BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead | BehaviourKind::ShadeHunt | BehaviourKind::Loot | BehaviourKind::DreamGate)
     }
 }
 
@@ -1051,6 +1057,7 @@ pub(crate) enum Active {
     Visit(Visit),
     Shiny(super::shiny::PickShiny),
     Highlight(super::highlight::LookAtHighlight),
+    DreamGate(super::dream_gate::DreamGate),
 }
 
 impl Active {
@@ -1077,6 +1084,7 @@ impl Active {
             Active::Visit(_) => BehaviourKind::Visit,
             Active::Shiny(_) => BehaviourKind::Shiny,
             Active::Highlight(_) => BehaviourKind::Highlight,
+            Active::DreamGate(_) => BehaviourKind::DreamGate,
         }
     }
 
@@ -1103,6 +1111,7 @@ impl Active {
             Active::Visit(b) => b.tick(ctx),
             Active::Shiny(b) => b.tick(ctx),
             Active::Highlight(b) => b.tick(ctx),
+            Active::DreamGate(b) => b.tick(ctx),
         }
     }
 
@@ -1130,6 +1139,7 @@ impl Active {
             Active::Visit(b) => b.reason(),
             Active::Shiny(b) => b.reason(),
             Active::Highlight(b) => b.reason(ctx),
+            Active::DreamGate(b) => b.reason(),
         }
     }
 }

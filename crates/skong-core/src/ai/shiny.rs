@@ -31,7 +31,7 @@ pub struct KnownShiny {
 }
 
 /// Arrival tolerance at the pick-up spot (px).
-const PICK_TOL: f32 = 8.0;
+pub(crate) const PICK_TOL: f32 = 8.0;
 /// A shiny he went for and didn't get is left alone this long (s).
 const RETRY_SECS: f32 = 90.0;
 /// Utility ceiling: below Geo (Loot starts at 0.6 and climbs) and visitors (0.86+).
@@ -62,18 +62,23 @@ impl ShinyMemory {
     pub fn get(&self, id: u64) -> Option<KnownShiny> {
         self.shinies.iter().find(|s| s.id == id).copied()
     }
+
+    /// Forget a failed attempt (he got there by other means: a Dream Gate).
+    pub(crate) fn forget_try(&mut self, id: u64) {
+        self.tried.remove(&id);
+    }
 }
 
 /// Where to stand to pick `s` up from `side` (+1: to its right, −1: to its left), kept on
 /// its ledge.
-fn stand_spot(s: &KnownShiny, side: f32) -> Vec2 {
+pub(crate) fn stand_spot(s: &KnownShiny, side: f32) -> Vec2 {
     let x = s.pos.x + side * s.reach;
     let (lo, hi) = (s.span.0 + 4.0, s.span.1 - 4.0);
     Vec2::new(if lo < hi { x.clamp(lo, hi) } else { s.pos.x }, s.pos.y)
 }
 
 /// The side he comes from.
-fn approach(s: &KnownShiny, from: Vec2) -> f32 {
+pub(crate) fn approach(s: &KnownShiny, from: Vec2) -> f32 {
     if from.x >= s.pos.x { 1.0 } else { -1.0 }
 }
 

@@ -83,7 +83,10 @@ fn not_while_something_is_fullscreen() {
 
 #[test]
 fn an_unreachable_shiny_is_left_alone() {
-    let mut sim = calm(BrainConfig::default());
+    // No walking at it (with a Dream Gate ready he warps there instead: tests/dream_gate.rs).
+    let mut cfg = BrainConfig::default();
+    cfg.dream_gate.enabled = false;
+    let mut sim = calm(cfg);
     // Every route to its pick-up spot ends somewhere else (it lies on a ledge he can't get onto).
     for st in [TravelStyle::Stroll, TravelStyle::Normal, TravelStyle::Hurry] {
         sim.nav.ends.push((Vec2::new(1280.0, FLOOR), Some(st), Vec2::new(1100.0, FLOOR)));

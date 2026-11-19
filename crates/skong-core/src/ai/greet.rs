@@ -86,6 +86,11 @@ impl VisitorMemory {
         self.snubbed.insert(id, until);
     }
 
+    /// Worth greeting again (he warped over to them).
+    pub fn unsnub(&mut self, id: u32) {
+        self.snubbed.remove(&id);
+    }
+
     /// The visitor worth greeting now: not yet greeted, not leaving, not given up on;
     /// the one already talking first, else the nearest.
     pub fn target<'v>(&self, visitors: &'v [Visitor], knight: Vec2, now: f32) -> Option<&'v Visitor> {
