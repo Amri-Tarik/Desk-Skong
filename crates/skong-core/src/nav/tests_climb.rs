@@ -265,3 +265,47 @@ fn step_behind_a_drawn_line_instead_of_dashing() {
         }
     }
 }
+
+#[test]
+fn hanging_walls_that_stop_short_of_the_floor() {
+    // Walls whose bottom ends above the floor but below the knight's head still block him.
+    // Content lines (a box border ending just above the taskbar) and a window floating a
+    // little above the floor.
+    let mut fails = vec![];
+    for gap in [4, 12, 25, 40] {
+        let desk = DesktopSnapshot { generation: 1, monitors: vec![primary()], windows: vec![win(1, 200, 100, 1800, 1400)] };
+        let walls = [
+            ContentWallSeg { x: 1000, y0: 900, y1: 1400 - gap, face: Facing::Left, owner: Some(1) },
+            ContentWallSeg { x: 1002, y0: 900, y1: 1400 - gap, face: Facing::Right, owner: Some(1) },
+            // A short prompt box (120 px tall) floating `gap` above the floor.
+            ContentWallSeg { x: 1200, y0: 1280 - gap, y1: 1400 - gap, face: Facing::Left, owner: Some(1) },
+            ContentWallSeg { x: 1202, y0: 1280 - gap, y1: 1400 - gap, face: Facing::Right, owner: Some(1) },
+        ];
+        let t = Terrain::from_desktop_and_content(&desk, &[], &walls, &TerrainOptions::default());
+        let floating = desktop(vec![primary()], vec![win(2, 900, 700, 1300, 1400 - gap)]);
+        for (name, t) in [("content", &t), ("window", &floating)] {
+            for style in [TravelStyle::Stroll, TravelStyle::Normal, TravelStyle::Hurry] {
+                // Strolls never climb: past a tall floating window they stop at the nearest point.
+                if name == "window" && style == TravelStyle::Stroll {
+                    continue;
+                }
+                for (from, to) in [(700.0, 1500.0), (1500.0, 700.0)] {
+                    let mut ch = knight(t, from, FLOOR);
+                    let g = NavGraph::build(t, &ch);
+                    let goal = NavGoal::Point(Vec2::new(to, FLOOR));
+                    let Some(route) = g.plan(&ch, goal, style) else {
+                        fails.push(format!("{name} gap {gap} {style:?} {from}->{to}: no route"));
+                        continue;
+                    };
+                    let moves = route.moves.clone();
+                    let mut f = PathFollower::new(route, goal, style);
+                    let (status, _) = drive(&g, t, &mut ch, &mut f, 40.0);
+                    if status != FollowStatus::Arrived || (ch.pos.x - to).abs() > 6.0 {
+                        fails.push(format!("{name} gap {gap} {style:?} {from}->{to}: {status:?} {moves:?} at {:?} replans {}", ch.pos, f.replans()));
+                    }
+                }
+            }
+        }
+    }
+    assert!(fails.is_empty(), "{}", fails.join("\n"));
+}
