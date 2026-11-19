@@ -103,6 +103,8 @@ pub struct CharacterParams {
     pub run_speed: f32,
     /// *HK* `RUN_SPEED_CH` (Sprintmaster run speed; HK has no plain sprint).
     pub sprint_speed: f32,
+    /// Unn slug crawl (*chosen*: a contented desk-pet pace, a third of a walk).
+    pub crawl_speed: f32,
     /// Ground acceleration towards the target speed (*chosen*; HK sets velocity instantly).
     pub ground_accel: f32,
     /// Ground deceleration when stopping / reversing (*chosen*).
@@ -198,6 +200,7 @@ impl CharacterParams {
             walk_speed: 6.0,
             run_speed: 8.3,
             sprint_speed: 10.0,
+            crawl_speed: 2.0,
             ground_accel: 120.0,
             ground_decel: 160.0,
             air_accel: 90.0,
@@ -254,6 +257,7 @@ impl CharacterParams {
             Gait::Walk => self.walk_speed,
             Gait::Run => self.run_speed,
             Gait::Sprint => self.sprint_speed,
+            Gait::Crawl => self.crawl_speed,
         }
     }
 

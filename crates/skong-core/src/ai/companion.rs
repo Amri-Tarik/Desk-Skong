@@ -250,7 +250,11 @@ impl Companion {
         if (ctx.senses.dark || c.dist() > 250.0)
             && let Some(a) = ctx.wander_act()
         {
-            let why = if ctx.rep.catalog.get(a.id).is_some_and(|i| i.name == "lantern_patrol") { "it's dark" } else { "checking his map" };
+            let why = match ctx.rep.catalog.get(a.id).map(|i| i.name.as_str()) {
+                Some("lantern_patrol") => "it's dark",
+                Some(super::behaviours::SLUG_ACT) => "feeling serene",
+                _ => "checking his map",
+            };
             return (Some(a), why);
         }
         if ctx.senses.can_sit() && c.still_for > 2.0 && ctx.may_sit() {

@@ -36,6 +36,8 @@ pub enum Gait {
     Run,
     /// Fast ("Sprint" clip).
     Sprint,
+    /// The Unn slug's slow crawl (walking acts only; never planned by navigation).
+    Crawl,
 }
 
 /// One tick of intent. Identical for keyboard control and the AI.

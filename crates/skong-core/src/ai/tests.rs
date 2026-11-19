@@ -16,6 +16,7 @@ use crate::terrain::{LedgeKind, Terrain, TerrainOptions};
 mod greet;
 mod shiny;
 mod train;
+mod slug;
 
 const DT: f32 = 1.0 / 30.0;
 const FLOOR: f32 = 1040.0;
@@ -83,6 +84,7 @@ impl Navigator for FakeNav {
 fn act_secs(name: &str) -> f32 {
     match name {
         "nap" => 600.0,
+        "slug_crawl" => 20.0,
         "rest" => 12.0,
         "lean_back" => 10.0,
         "read_map" | "map_stroll" => 7.0,
