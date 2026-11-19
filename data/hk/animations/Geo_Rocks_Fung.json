@@ -1,0 +1,113 @@
+{
+  "name": "Geo Rocks Fung",
+  "clips": [
+    {
+      "name": "Broken 1",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 1,
+          "sprite": "_0008_fung_geo_rock_1_base"
+        }
+      ]
+    },
+    {
+      "name": "Broken 2",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 4,
+          "sprite": "_0010_fung_geo_rock_2_base"
+        }
+      ]
+    },
+    {
+      "name": "Idle 1",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 3,
+          "sprite": "_0009_fung_geo_rock_1"
+        }
+      ]
+    },
+    {
+      "name": "Idle 2",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 2,
+          "sprite": "_0011_fung_geo_rock_2"
+        }
+      ]
+    },
+    {
+      "name": "Gleam 1",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 17,
+          "sprite": "fung_rock_01_shine0000"
+        },
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 14,
+          "sprite": "fung_rock_01_shine0001"
+        },
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 15,
+          "sprite": "fung_rock_01_shine0002"
+        },
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 16,
+          "sprite": "fung_rock_01_shine0003"
+        }
+      ]
+    },
+    {
+      "name": "Gleam 2",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 10,
+          "sprite": "fung_rock_02_shine0000"
+        },
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 13,
+          "sprite": "fung_rock_02_shine0001"
+        },
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 12,
+          "sprite": "fung_rock_02_shine0002"
+        },
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 11,
+          "sprite": "fung_rock_02_shine0003"
+        }
+      ]
+    }
+  ]
+}

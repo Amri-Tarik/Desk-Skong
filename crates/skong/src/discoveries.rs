@@ -37,40 +37,135 @@ const REVEAL_FX: &str = "reveal_dust";
 
 // Sizes in px at scale 1 (the knight is ~88 px tall).
 const DEPOSIT_W: f32 = 124.0;
-/// Where the knight stands to mine a deposit (from its center).
+/// Where the knight stands to mine a deposit (from its center), at least...
 const DEPOSIT_STAND: f32 = 82.0;
+/// ... and at least this far beyond a (bigger) rock's edge.
+const STAND_CLEAR: f32 = 28.0;
 
 /// Seconds between a deposit's gleams (the game's own shimmer), varied per rock.
 const GLEAM_EVERY: f32 = 6.0;
+/// Gleam speed when a clip doesn't say.
 const GLEAM_FPS: f32 = 12.0;
+/// Regional rocks are much bigger than the crossroads one (the Resting Grounds chest is
+/// 3.5 units tall): a region is drawn smaller so its largest idle fits this box (game
+/// units; the crossroads rock is ~1.7 × 1.6).
+const ROCK_MAX_UNITS: [f32; 2] = [2.2, 2.3];
 
-/// One shape of the game's Geo Rock ("Coin Rocks": `Idle n` / `Gleam n`), at the current
-/// scale. Frames carry their anchors so the gleam lines up with the idle pose.
+/// A region's Geo Rock: an exported library (`data/hk/animations/<lib>.json`) and which of
+/// its shapes (`Idle n` / `Gleam n`) belong to that region.
+struct Region {
+    name: &'static str,
+    lib: &'static str,
+    shapes: &'static [u8],
+}
+
+/// Every app gets one region's look ([`region_of`]). The first is the fallback: a region
+/// whose art is missing shows the crossroads rock.
+const REGIONS: &[Region] = &[
+    Region { name: "Forgotten Crossroads", lib: "Coin_Rocks", shapes: &[1, 2] },
+    Region { name: "City of Tears", lib: "Geo_Rock_City", shapes: &[1] },
+    Region { name: "Greenpath", lib: "Geo_Rocks_Green", shapes: &[1, 2] },
+    Region { name: "Fungal Wastes", lib: "Geo_Rocks_Fung", shapes: &[1, 2] },
+    Region { name: "Deepnest", lib: "Geo_Rocks_Deep_Outskirts", shapes: &[1] },
+    Region { name: "Kingdom's Edge", lib: "Geo_Rocks_Deep_Outskirts", shapes: &[2] },
+    Region { name: "Resting Grounds", lib: "Geo_Rocks_Grave", shapes: &[1, 2] },
+    Region { name: "Abyss", lib: "Geo_Rocks_Extra", shapes: &[1] },
+    Region { name: "Crystal Peak", lib: "Geo_Rocks_Extra", shapes: &[2] },
+    Region { name: "Hive", lib: "Geo_Rocks_Extra", shapes: &[3] },
+];
+const FALLBACK_REGION: usize = 0;
+
+/// The region whose rocks an app's windows hold: a stable hash (FNV-1a) of its app key
+/// ([`discovery::app_key`]), so each app keeps its look across runs without saving it.
+fn region_of(app: &str) -> usize {
+    let h = app.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ b as u64).wrapping_mul(0x0100_0000_01b3));
+    (h % REGIONS.len() as u64) as usize
+}
+
+/// The region whose art is drawn for `region`: itself when loaded, else the fallback, else
+/// none (plain deposit).
+fn art_region(loaded: impl Fn(usize) -> bool, region: usize) -> Option<usize> {
+    [region, FALLBACK_REGION].into_iter().find(|&r| loaded(r))
+}
+
+/// One shape of a Geo Rock (`Idle n` / `Gleam n`), at the current scale. Frames carry
+/// their anchors so the gleam lines up with the idle pose.
 struct RockArt {
     idle: (Image, [f32; 2]),
     gleam: Vec<(Image, [f32; 2])>,
+    gleam_fps: f32,
 }
 
-/// Rasterize both Geo Rock shapes from the exported "Coin Rocks" library.
-fn rock_art(data: &Path, vanilla: &Path, px_per_unit: f32) -> anyhow::Result<Vec<RockArt>> {
+type Frames = std::collections::HashMap<skong_core::assets::SpriteKey, skong_core::assets::Frame>;
+
+/// The sprites of `region`'s shapes in `lib`.
+fn shape_keys(lib: &skong_core::anim::ClipLibrary, region: &Region) -> Vec<skong_core::assets::SpriteKey> {
+    let mut keys: Vec<_> = region
+        .shapes
+        .iter()
+        .flat_map(|n| [format!("Idle {n}"), format!("Gleam {n}")])
+        .filter_map(|c| lib.id(&c))
+        .flat_map(|id| lib.get(id).frames.iter().filter_map(|f| f.sprite))
+        .collect();
+    keys.sort_by_key(|k| (k.collection, k.sprite));
+    keys.dedup();
+    keys
+}
+
+/// `region`'s shapes from rasterized `frames` (shapes without an idle frame are skipped).
+fn region_rocks(lib: &skong_core::anim::ClipLibrary, region: &Region, frames: &Frames) -> Vec<RockArt> {
+    let clip = |name: &str| lib.id(name).map(|id| lib.get(id));
+    let images = |name: &str| -> Vec<(Image, [f32; 2])> {
+        clip(name).map(|c| c.frames.iter().filter_map(|f| f.sprite.and_then(|k| frames.get(&k))).map(|f| (f.image.clone(), f.anchor)).collect()).unwrap_or_default()
+    };
+    region
+        .shapes
+        .iter()
+        .filter_map(|n| {
+            let idle = images(&format!("Idle {n}")).into_iter().next()?;
+            let gleam_name = format!("Gleam {n}");
+            let gleam_fps = clip(&gleam_name).map_or(GLEAM_FPS, |c| c.fps).clamp(4.0, 30.0);
+            Some(RockArt { idle, gleam: images(&gleam_name), gleam_fps })
+        })
+        .collect()
+}
+
+/// Rasterize every region's Geo Rock (indexed like [`REGIONS`]); a region whose library or
+/// atlas is missing gets no shapes (it shows the fallback's).
+fn rock_art(data: &Path, vanilla: &Path, px_per_unit: f32) -> anyhow::Result<Vec<Vec<RockArt>>> {
     use skong_core::anim::ClipLibrary;
     use skong_core::assets::{Skin, SpriteBank};
     let skin = Skin { name: "Vanilla".into(), dir: vanilla.to_path_buf() };
-    let mut bank = SpriteBank::load_metadata(data)?;
-    let lib = ClipLibrary::load(&data.join("animations/Coin_Rocks.json"), &bank)?;
-    bank.rasterize_skin(&skin, None, &lib.sprite_keys(), px_per_unit)?;
-    let frames = |name: &str| -> Vec<(Image, [f32; 2])> {
-        lib.id(name)
-            .map(|id| lib.get(id).frames.iter().filter_map(|f| f.sprite.and_then(|k| bank.frame(k))).map(|f| (f.image.clone(), f.anchor)).collect())
-            .unwrap_or_default()
-    };
-    let rocks: Vec<RockArt> = (1..=2)
-        .filter_map(|n| {
-            let idle = frames(&format!("Idle {n}")).into_iter().next()?;
-            Some(RockArt { idle, gleam: frames(&format!("Gleam {n}")) })
-        })
+    let bank = SpriteBank::load_metadata(data)?;
+    let libs: Vec<Option<ClipLibrary>> = REGIONS
+        .iter()
+        .map(|r| ClipLibrary::load(&data.join(format!("animations/{}.json", r.lib)), &bank).map_err(|e| log::debug!("geo rocks of {}: {e:#}", r.name)).ok())
         .collect();
-    anyhow::ensure!(!rocks.is_empty(), "no Geo Rock clips");
+    let keys: Vec<Vec<_>> = libs.iter().zip(REGIONS).map(|(l, r)| l.as_ref().map(|l| shape_keys(l, r)).unwrap_or_default()).collect();
+    let build = |sets: &[Frames]| -> Vec<Vec<RockArt>> {
+        libs.iter().zip(REGIONS).zip(sets).map(|((l, r), f)| l.as_ref().map(|l| region_rocks(l, r, f)).unwrap_or_default()).collect()
+    };
+    let sets: Vec<(&[_], f32)> = keys.iter().map(|k| (k.as_slice(), px_per_unit)).collect();
+    let mut rocks = build(&bank.rasterize_sets(&skin, None, &sets)?);
+    // Shrink oversized regions to fit the box (each atlas decoded once more at most).
+    let max = ROCK_MAX_UNITS.map(|u| u * px_per_unit);
+    let fit: Vec<f32> = rocks
+        .iter()
+        .map(|shapes| shapes.iter().map(|s| (max[0] / s.idle.0.width.max(1) as f32).min(max[1] / s.idle.0.height.max(1) as f32)).fold(1.0f32, f32::min))
+        .collect();
+    if fit.iter().any(|&f| f < 0.999) {
+        let sets: Vec<(&[_], f32)> = keys.iter().zip(&fit).map(|(k, &f)| (if f < 0.999 { k.as_slice() } else { &[][..] }, px_per_unit * f)).collect();
+        for (i, shapes) in build(&bank.rasterize_sets(&skin, None, &sets)?).into_iter().enumerate() {
+            if fit[i] < 0.999 {
+                rocks[i] = shapes;
+            }
+        }
+    }
+    anyhow::ensure!(rocks.iter().any(|r| !r.is_empty()), "no Geo Rock clips");
+    let missing: Vec<&str> = REGIONS.iter().zip(&rocks).filter(|(_, r)| r.is_empty()).map(|(g, _)| g.name).collect();
+    if !missing.is_empty() {
+        log::info!("geo rocks: no art for {} (they show the crossroads rock)", missing.join(", "));
+    }
     Ok(rocks)
 }
 
@@ -80,8 +175,14 @@ fn rock_frame(id: FindId, rocks: &[RockArt], clock: f32) -> (usize, Option<usize
     let Some(rock) = rocks.get(variant) else { return (0, None) };
     let period = GLEAM_EVERY + (id % 5) as f32 * 0.7;
     let t = (clock + (id % 97) as f32 * 0.37) % period;
-    let f = (t * GLEAM_FPS) as usize;
+    let f = (t * rock.gleam_fps) as usize;
     (variant, (f < rock.gleam.len()).then_some(f))
+}
+
+/// How far from a deposit's center the knight stands to mine it (px), given the rock's
+/// drawn width.
+fn stand_off(rock_w: f32, scale: f32) -> f32 {
+    (DEPOSIT_STAND * scale).max(rock_w * 0.5 + STAND_CLEAR * scale)
 }
 
 #[derive(Deserialize)]
@@ -113,8 +214,10 @@ struct Prop {
     shake: f32,
     drawn_at: f32,
     dirty: bool,
-    /// Deposit frame last drawn (rock shape, gleam frame).
-    frame: (usize, Option<usize>),
+    /// Deposit frame last drawn (art region, rock shape, gleam frame).
+    frame: (usize, usize, Option<usize>),
+    /// The region of its app's rocks ([`region_of`]).
+    region: usize,
 }
 
 pub struct Discoveries {
@@ -122,10 +225,12 @@ pub struct Discoveries {
     rules: Rules,
     path: Option<PathBuf>,
     deposit_src: Option<Image>,
-    /// The deposit at the current scale (footprint; the drawn art when no Geo Rock).
+    /// The plain deposit at the current scale (drawn when there is no Geo Rock art).
     deposit: Image,
-    /// The game's Geo Rock at the current scale (empty: fall back to `deposit`).
-    rocks: Vec<RockArt>,
+    /// Room every deposit is given (px): the largest rock of any region, or `deposit`.
+    deposit_box: (f32, f32),
+    /// The game's Geo Rocks at the current scale, per [`REGIONS`] (empty: none loaded).
+    rocks: Vec<Vec<RockArt>>,
     /// Exported metadata (`data/hk`) and the vanilla skin, to re-rasterize on rescale.
     data_dir: PathBuf,
     vanilla_dir: Option<PathBuf>,
@@ -167,19 +272,31 @@ fn load_sprite(dir: &Path, name: &str) -> Option<Image> {
     Some(if (ppu - 64.0).abs() > 0.5 { img.scaled(64.0 / ppu) } else { img })
 }
 
-/// Footprint of a find at `scale`: the bench art / the deposit rock (plus room to stand
-/// beside it to mine it).
-fn footprint(scale: f32, benches: &Benches, deposit: &Image, kind: FindKind) -> Footprint {
+/// Footprint of a find at `scale`: the bench art / the deposit rock (`deposit`: the largest
+/// any region draws, so every app's rocks fit where one was placed), plus room to stand
+/// beside it to mine it.
+fn footprint(scale: f32, benches: &Benches, deposit: (f32, f32), kind: FindKind) -> Footprint {
     match kind {
         FindKind::Bench { style } => {
             let (w, h) = benches.art(style).map_or((120.0 * scale, 60.0 * scale), |i| (i.width as f32, i.height as f32));
             Footprint { w, h, room: w }
         }
         FindKind::Deposit => {
-            let (w, h) = (deposit.width as f32, deposit.height as f32);
-            Footprint { w, h, room: 2.0 * (DEPOSIT_STAND + 24.0) * scale }
+            let (w, h) = deposit;
+            Footprint { w, h, room: 2.0 * (stand_off(w, scale) + 24.0 * scale) }
         }
     }
+}
+
+/// The shapes drawn for `region` (its own, else the fallback's; empty: plain deposit), and
+/// the region they belong to.
+fn rocks_for(rocks: &[Vec<RockArt>], region: usize) -> (usize, &[RockArt]) {
+    art_region(|r| rocks.get(r).is_some_and(|v| !v.is_empty()), region).map_or((FALLBACK_REGION, &[][..]), |r| (r, rocks[r].as_slice()))
+}
+
+/// The region of the app owning window `id` (the fallback for unknown windows).
+fn window_region(desk: &DesktopSnapshot, id: WindowId) -> usize {
+    desk.window(id).and_then(discovery::app_key).map_or(FALLBACK_REGION, |k| region_of(&k))
 }
 
 impl Discoveries {
@@ -202,6 +319,7 @@ impl Discoveries {
             path,
             deposit_src,
             deposit: Image::default(),
+            deposit_box: (0.0, 0.0),
             rocks: Vec::new(),
             data_dir: data.to_path_buf(),
             vanilla_dir: vanilla.map(Path::to_path_buf),
@@ -233,9 +351,12 @@ impl Discoveries {
             }),
             None => Vec::new(),
         };
-        if let Some(r) = self.rocks.first() {
-            self.deposit = r.idle.0.clone();
-        }
+        let idles = self.rocks.iter().flatten().map(|r| &r.idle.0);
+        self.deposit_box = idles.fold(None, |b: Option<(f32, f32)>, i| {
+            let (w, h) = (i.width as f32, i.height as f32);
+            Some(b.map_or((w, h), |(bw, bh)| (bw.max(w), bh.max(h))))
+        })
+        .unwrap_or((self.deposit.width as f32, self.deposit.height as f32));
         for p in &mut self.props {
             p.dirty = true;
         }
@@ -256,8 +377,8 @@ impl Discoveries {
             self.ages.observe(terrain, clock);
             self.observed = (terrain.generation, clock);
         }
-        let (scale, deposit) = (self.scale, self.deposit.clone());
-        let fp = |k: FindKind| footprint(scale, benches, &deposit, k);
+        let (scale, deposit) = (self.scale, self.deposit_box);
+        let fp = |k: FindKind| footprint(scale, benches, deposit, k);
 
         // Arriving on a window of an app with finds that had no lasting room yet.
         let on = knight.support.and_then(|s| s.owner).filter(|_| knight.is_grounded());
@@ -313,6 +434,9 @@ impl Discoveries {
                     if p.shown.pos != s.pos {
                         p.dirty = true;
                     }
+                    if p.shown.window != s.window {
+                        p.region = window_region(desk, s.window);
+                    }
                     p.shown = *s;
                     if fresh_seen {
                         p.seen_at = clock;
@@ -327,7 +451,11 @@ impl Discoveries {
                     if revealed.is_some() {
                         fx.spawn(REVEAL_FX, s.pos, knight.pos.x < s.pos.x);
                     }
-                    self.props.push(Prop { shown: *s, win, revealed, shake: 0.0, seen_at: clock, drawn_at: f32::NEG_INFINITY, dirty: true, frame: (0, None) });
+                    let region = window_region(desk, s.window);
+                    if s.kind == FindKind::Deposit {
+                        log::debug!("discoveries: deposit #{} is a {} rock", s.id, REGIONS[rocks_for(&self.rocks, region).0].name);
+                    }
+                    self.props.push(Prop { shown: *s, win, revealed, shake: 0.0, seen_at: clock, drawn_at: f32::NEG_INFINITY, dirty: true, frame: (0, 0, None), region });
                     created = true;
                 }
             }
@@ -339,7 +467,7 @@ impl Discoveries {
             p.shake = (p.shake - dt).max(0.0);
             let revealing = p.revealed.is_some_and(|t| clock - t <= REVEAL_SECS + 0.1);
             // Geo rocks gleam now and then: redraw when the frame changes.
-            if p.shown.kind == FindKind::Deposit && !self.rocks.is_empty() && rock_frame(p.shown.id, &self.rocks, clock) != p.frame {
+            if p.shown.kind == FindKind::Deposit && deposit_frame(p, &self.rocks, clock) != p.frame {
                 p.dirty = true;
             }
             if p.dirty || ((revealing || p.shake > 0.0) && clock - p.drawn_at >= 1.0 / 30.0) {
@@ -412,25 +540,41 @@ impl Discoveries {
 
     /// What the brain knows about the finds on screen.
     pub fn places(&self) -> Vec<KnownPlace> {
-        let reach = DEPOSIT_STAND * self.scale;
         // Only finds that still exist (a broken rock lingers on screen a moment; the knight
         // must not keep swinging at it).
         let live: Vec<Shown> = self.shown.iter().filter(|s| self.world.find(s.id).is_some()).copied().collect();
         discovery::known_places(
             &live,
             |id| self.reveals.iter().any(|r| r.0 == id),
-            |f| match f.kind {
-                // Mine it from whichever side has room.
-                FindKind::Deposit if f.pos.x - reach - 20.0 >= f.span.0 => f.pos - Vec2::new(reach, 0.0),
-                FindKind::Deposit => f.pos + Vec2::new(reach, 0.0),
-                FindKind::Bench { .. } => f.pos,
+            |f| {
+                let reach = self.stand_off(f.id);
+                match f.kind {
+                    // Mine it from whichever side has room.
+                    FindKind::Deposit if f.pos.x - reach - 20.0 >= f.span.0 => f.pos - Vec2::new(reach, 0.0),
+                    FindKind::Deposit => f.pos + Vec2::new(reach, 0.0),
+                    FindKind::Bench { .. } => f.pos,
+                }
             },
         )
     }
 
+    /// How far from deposit `id`'s center the knight stands to mine it (its rock's width).
+    fn stand_off(&self, id: FindId) -> f32 {
+        let w = self
+            .props
+            .iter()
+            .find(|p| p.shown.id == id)
+            .and_then(|p| {
+                let rocks = rocks_for(&self.rocks, p.region).1;
+                rocks.get((id % rocks.len().max(1) as u64) as usize)
+            })
+            .map_or(self.deposit.width as f32, |r| r.idle.0.width as f32);
+        stand_off(w, self.scale)
+    }
+
     /// The knight explored a never-visited window: roll / reveal its room.
     pub fn explored(&mut self, id: WindowId, (desk, terrain): (&DesktopSnapshot, &Terrain), benches: &Benches, occ: &Occupancy) {
-        let (scale, deposit) = (self.scale, &self.deposit);
+        let (scale, deposit) = (self.scale, self.deposit_box);
         let fp = |k: FindKind| footprint(scale, benches, deposit, k);
         let site = Site { terrain, ages: &self.ages, now: self.clock, min_age: LASTING_SECS, occupancy: occ, footprint: &fp };
         let found = self.world.explored(id, desk, &site, &self.rules);
@@ -458,8 +602,9 @@ impl Discoveries {
     /// A slash at deposit `id` (only counts when the knight is next to it).
     /// Returns the Geo it drops when it breaks.
     pub fn struck(&mut self, id: FindId, knight: &Character, fx: &mut Fx) -> Option<DepositDrop> {
+        let near = self.stand_off(id) + (160.0 - DEPOSIT_STAND) * self.scale;
         let p = self.props.iter_mut().find(|p| p.shown.id == id)?;
-        if (p.shown.pos.x - knight.pos.x).abs() > 160.0 * self.scale || (p.shown.pos.y - knight.pos.y).abs() > 8.0 {
+        if (p.shown.pos.x - knight.pos.x).abs() > near || (p.shown.pos.y - knight.pos.y).abs() > 8.0 {
             return None;
         }
         p.shake = 0.25;
@@ -483,7 +628,7 @@ impl Discoveries {
             }
             _ => FindKind::Deposit,
         };
-        let (scale, deposit) = (self.scale, &self.deposit);
+        let (scale, deposit) = (self.scale, self.deposit_box);
         let fp = |k: FindKind| footprint(scale, benches, deposit, k);
         let site = Site { terrain, ages: &self.ages, now: self.clock, min_age: 0.0, occupancy: occ, footprint: &fp };
         match self.world.force(kind, id, desk, &site) {
@@ -511,9 +656,17 @@ impl Discoveries {
 
 // --- drawing ------------------------------------------------------------------------
 
-fn draw(p: &mut Prop, deposit: &Image, rocks: &[RockArt], benches: &Benches, s: f32, clock: f32) -> anyhow::Result<()> {
+/// The deposit frame `p` shows at `clock`: (art region, rock shape, gleam frame).
+fn deposit_frame(p: &Prop, rocks: &[Vec<RockArt>], clock: f32) -> (usize, usize, Option<usize>) {
+    let (region, rocks) = rocks_for(rocks, p.region);
+    let (shape, gleam) = rock_frame(p.shown.id, rocks, clock);
+    (region, shape, gleam)
+}
+
+fn draw(p: &mut Prop, deposit: &Image, all_rocks: &[Vec<RockArt>], benches: &Benches, s: f32, clock: f32) -> anyhow::Result<()> {
     let alpha = p.revealed.map_or(1.0, |t| ((clock - t) / REVEAL_SECS).clamp(0.0, 1.0));
     let pos = p.shown.pos;
+    let rocks = rocks_for(all_rocks, p.region).1;
     match p.shown.kind {
         FindKind::Bench { style } => {
             let Some(img) = benches.art(style) else { return Ok(()) };
@@ -521,10 +674,10 @@ fn draw(p: &mut Prop, deposit: &Image, rocks: &[RockArt], benches: &Benches, s: 
             p.win.present(&img, (pos.x - img.width as f32 * 0.5).round() as i32, (pos.y - img.height as f32).round() as i32)
         }
         FindKind::Deposit if !rocks.is_empty() => {
-            // The game's Geo Rock; every frame placed by its anchor relative to the idle
-            // pose, whose bottom center sits (sunk a little) on the ledge.
-            let (variant, gleam) = rock_frame(p.shown.id, rocks, clock);
-            p.frame = (variant, gleam);
+            // The game's Geo Rock (the app's region); every frame placed by its anchor
+            // relative to the idle pose, whose bottom center sits (sunk a little) on the ledge.
+            p.frame = deposit_frame(p, all_rocks, clock);
+            let (_, variant, gleam) = p.frame;
             let rock = &rocks[variant];
             let (idle, idle_anchor) = (&rock.idle.0, rock.idle.1);
             let (img, anchor) = gleam.and_then(|i| rock.gleam.get(i)).map_or((idle, idle_anchor), |(i, a)| (i, *a));
@@ -624,4 +777,93 @@ fn fit(src: &Image, w: u32, h: u32) -> Image {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rock(w: u32, h: u32) -> RockArt {
+        RockArt { idle: (Image::new(w, h), [w as f32 * 0.5, h as f32]), gleam: vec![(Image::new(w, h), [0.0, 0.0]); 4], gleam_fps: 15.0 }
+    }
+
+    #[test]
+    fn each_app_keeps_its_region() {
+        for app in ["code", "chrome", "explorer", "notepad", "spotify"] {
+            assert_eq!(region_of(app), region_of(app));
+            assert!(region_of(app) < REGIONS.len());
+        }
+        // Pinned: a stable hash (not std's, which may change between Rust versions), so an
+        // app's rocks look the same after an update.
+        assert_eq!(region_of("code"), 8);
+        assert_eq!(region_of("chrome"), 3);
+    }
+
+    #[test]
+    fn apps_spread_over_the_regions() {
+        let apps = [
+            "code", "chrome", "firefox", "msedge", "explorer", "notepad", "spotify", "discord", "slack", "teams", "outlook", "winword", "excel", "powerpnt", "steam", "obs64", "windowsterminal",
+            "devenv", "rider64", "idea64", "blender", "gimp", "vlc", "zoom", "telegram", "whatsapp", "notion", "obsidian", "figma", "postman",
+        ];
+        let mut used: Vec<usize> = apps.iter().map(|a| region_of(a)).collect();
+        used.sort_unstable();
+        used.dedup();
+        assert!(used.len() >= REGIONS.len() / 2, "only {} regions used: {used:?}", used.len());
+    }
+
+    #[test]
+    fn regions_name_known_libraries_and_shapes() {
+        assert_eq!(REGIONS[FALLBACK_REGION].lib, "Coin_Rocks");
+        let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/hk");
+        let bank = skong_core::assets::SpriteBank::load_metadata(&data).unwrap();
+        for r in REGIONS {
+            let lib = skong_core::anim::ClipLibrary::load(&data.join(format!("animations/{}.json", r.lib)), &bank).unwrap();
+            for n in r.shapes {
+                assert!(lib.id(&format!("Idle {n}")).is_some(), "{}: no Idle {n}", r.name);
+                assert!(lib.id(&format!("Gleam {n}")).is_some(), "{}: no Gleam {n}", r.name);
+            }
+            assert!(!shape_keys(&lib, r).is_empty(), "{}: no sprites", r.name);
+        }
+    }
+
+    #[test]
+    fn missing_art_falls_back_to_the_crossroads_rock() {
+        let mut rocks: Vec<Vec<RockArt>> = (0..REGIONS.len()).map(|_| Vec::new()).collect();
+        rocks[0] = vec![rock(60, 50), rock(66, 52)];
+        rocks[3] = vec![rock(80, 70)];
+        assert_eq!(rocks_for(&rocks, 3).0, 3);
+        assert_eq!(rocks_for(&rocks, 3).1.len(), 1);
+        // Region 5's art is missing: the crossroads rock stands in.
+        assert_eq!(rocks_for(&rocks, 5).0, FALLBACK_REGION);
+        assert_eq!(rocks_for(&rocks, 5).1.len(), 2);
+        // Out of range (an older table) too.
+        assert_eq!(rocks_for(&rocks, 99).0, FALLBACK_REGION);
+        // Nothing loaded at all: no rock (the plain deposit is drawn).
+        let none: Vec<Vec<RockArt>> = (0..REGIONS.len()).map(|_| Vec::new()).collect();
+        assert!(rocks_for(&none, 3).1.is_empty());
+        assert_eq!(art_region(|_| false, 3), None);
+        assert_eq!(art_region(|r| r == 0, 3), Some(0));
+    }
+
+    #[test]
+    fn bigger_rocks_stand_the_knight_further_out() {
+        let s = 0.6;
+        // The crossroads rock keeps the old spot ...
+        assert_eq!(stand_off(1.6 * 64.0 * s, s), DEPOSIT_STAND * s);
+        // ... a wide one moves him out so he clears its edge.
+        let w = ROCK_MAX_UNITS[0] * 64.0 * s;
+        assert!(stand_off(w, s) >= w * 0.5 + STAND_CLEAR * s);
+        // The footprint leaves room to stand on either side of the widest rock.
+        let benches_free = |w: f32| 2.0 * (stand_off(w, s) + 24.0 * s);
+        assert!(benches_free(w) >= w + 2.0 * STAND_CLEAR * s);
+    }
+
+    #[test]
+    fn gleams_play_at_the_clip_speed() {
+        let rocks = vec![rock(60, 50)];
+        // Somewhere in every period the gleam runs through all 4 frames, then rests.
+        let frames: Vec<Option<usize>> = (0..2000).map(|i| rock_frame(1, &rocks, i as f32 / 100.0).1).collect();
+        assert!(frames.contains(&Some(3)));
+        assert!(frames.iter().filter(|f| f.is_some()).count() < frames.len() / 5);
+    }
 }

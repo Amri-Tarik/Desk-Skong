@@ -1,0 +1,152 @@
+{
+  "name": "Geo Rocks Extra",
+  "clips": [
+    {
+      "name": "Idle 1",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "GeoRocks_Extra",
+          "sprite_id": 2,
+          "sprite": "geo_rock_extra_set_0004_abyss1"
+        }
+      ]
+    },
+    {
+      "name": "Idle 3",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "GeoRocks_Extra",
+          "sprite_id": 14,
+          "sprite": "geo_rock_extra_set_0013_hive1"
+        }
+      ]
+    },
+    {
+      "name": "Idle 2",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "GeoRocks_Extra",
+          "sprite_id": 11,
+          "sprite": "geo_rock_extra_set_0009_cryst_01"
+        }
+      ]
+    },
+    {
+      "name": "Gleam 1",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "GeoRocks_Extra",
+          "sprite_id": 3,
+          "sprite": "geo_rock_extra_set_0003_abyss2"
+        },
+        {
+          "collection": "GeoRocks_Extra",
+          "sprite_id": 4,
+          "sprite": "geo_rock_extra_set_0002_abyss3"
+        },
+        {
+          "collection": "GeoRocks_Extra",
+          "sprite_id": 0,
+          "sprite": "geo_rock_extra_set_0001_abyss4"
+        }
+      ]
+    },
+    {
+      "name": "Gleam 2",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "GeoRocks_Extra",
+          "sprite_id": 9,
+          "sprite": "geo_rock_extra_set_0008_cryst_02"
+        },
+        {
+          "collection": "GeoRocks_Extra",
+          "sprite_id": 6,
+          "sprite": "geo_rock_extra_set_0007_cryst_03"
+        },
+        {
+          "collection": "GeoRocks_Extra",
+          "sprite_id": 12,
+          "sprite": "geo_rock_extra_set_0006_cryst_04"
+        }
+      ]
+    },
+    {
+      "name": "Gleam 3",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "GeoRocks_Extra",
+          "sprite_id": 5,
+          "sprite": "geo_rock_extra_set_0012_hive2"
+        },
+        {
+          "collection": "GeoRocks_Extra",
+          "sprite_id": 8,
+          "sprite": "geo_rock_extra_set_0011_hive3"
+        },
+        {
+          "collection": "GeoRocks_Extra",
+          "sprite_id": 10,
+          "sprite": "geo_rock_extra_set_0010_hive4"
+        }
+      ]
+    },
+    {
+      "name": "Broken 1",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "GeoRocks_Extra",
+          "sprite_id": 1,
+          "sprite": "geo_rock_extra_set_0000_abyssbase"
+        }
+      ]
+    },
+    {
+      "name": "Broken 2",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "GeoRocks_Extra",
+          "sprite_id": 7,
+          "sprite": "geo_rock_extra_set_0005_cryst_base"
+        }
+      ]
+    },
+    {
+      "name": "Broken 3",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "GeoRocks_Extra",
+          "sprite_id": 13,
+          "sprite": "geo_rock_extra_set_0014_hivebase"
+        }
+      ]
+    }
+  ]
+}

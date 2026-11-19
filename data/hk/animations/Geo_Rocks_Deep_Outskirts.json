@@ -1,0 +1,113 @@
+{
+  "name": "Geo Rocks Deep Outskirts",
+  "clips": [
+    {
+      "name": "Broken 1",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Geo_Rock_Deep_Outskirts",
+          "sprite_id": 1,
+          "sprite": "_0003_deep_geo_rock_base"
+        }
+      ]
+    },
+    {
+      "name": "Broken 2",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Geo_Rock_Deep_Outskirts",
+          "sprite_id": 6,
+          "sprite": "_0000_outskirts_geo_rock1_base"
+        }
+      ]
+    },
+    {
+      "name": "Gleam 1",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Geo_Rock_Deep_Outskirts",
+          "sprite_id": 5,
+          "sprite": "geo_rock_shine0000"
+        },
+        {
+          "collection": "Geo_Rock_Deep_Outskirts",
+          "sprite_id": 3,
+          "sprite": "geo_rock_shine0001"
+        },
+        {
+          "collection": "Geo_Rock_Deep_Outskirts",
+          "sprite_id": 2,
+          "sprite": "geo_rock_shine0002"
+        },
+        {
+          "collection": "Geo_Rock_Deep_Outskirts",
+          "sprite_id": 4,
+          "sprite": "geo_rock_shine0003"
+        }
+      ]
+    },
+    {
+      "name": "Gleam 2",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Geo_Rock_Deep_Outskirts",
+          "sprite_id": 11,
+          "sprite": "outskirts_rock_shine0000"
+        },
+        {
+          "collection": "Geo_Rock_Deep_Outskirts",
+          "sprite_id": 8,
+          "sprite": "outskirts_rock_shine0001"
+        },
+        {
+          "collection": "Geo_Rock_Deep_Outskirts",
+          "sprite_id": 10,
+          "sprite": "outskirts_rock_shine0002"
+        },
+        {
+          "collection": "Geo_Rock_Deep_Outskirts",
+          "sprite_id": 9,
+          "sprite": "outskirts_rock_shine0003"
+        }
+      ]
+    },
+    {
+      "name": "Idle 1",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Geo_Rock_Deep_Outskirts",
+          "sprite_id": 0,
+          "sprite": "_0004_deep_geo_rock"
+        }
+      ]
+    },
+    {
+      "name": "Idle 2",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Geo_Rock_Deep_Outskirts",
+          "sprite_id": 7,
+          "sprite": "_0001_outskirts_geo_rock1"
+        }
+      ]
+    }
+  ]
+}

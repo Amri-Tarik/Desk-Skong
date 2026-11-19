@@ -1,0 +1,113 @@
+{
+  "name": "Geo Rocks Grave",
+  "clips": [
+    {
+      "name": "Broken 1",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 19,
+          "sprite": "_0005_grave_geo_chest_02_base"
+        }
+      ]
+    },
+    {
+      "name": "Broken 2",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 18,
+          "sprite": "_0006_grave_geo_chest_01_base"
+        }
+      ]
+    },
+    {
+      "name": "Idle 1",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 21,
+          "sprite": "_0002_grave_geo_chest_02"
+        }
+      ]
+    },
+    {
+      "name": "Idle 2",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 20,
+          "sprite": "_0007_grave_geo_chest_01"
+        }
+      ]
+    },
+    {
+      "name": "Gleam 2",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 28,
+          "sprite": "grave_chest_02_shine0000"
+        },
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 27,
+          "sprite": "grave_chest_02_shine0001"
+        },
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 29,
+          "sprite": "grave_chest_02_shine0002"
+        },
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 26,
+          "sprite": "grave_chest_02_shine0003"
+        }
+      ]
+    },
+    {
+      "name": "Gleam 1",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 22,
+          "sprite": "grave_chest_shine0000"
+        },
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 24,
+          "sprite": "grave_chest_shine0001"
+        },
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 25,
+          "sprite": "grave_chest_shine0002"
+        },
+        {
+          "collection": "Geo_Rocks_Green_Fung",
+          "sprite_id": 23,
+          "sprite": "grave_chest_shine0003"
+        }
+      ]
+    }
+  ]
+}
