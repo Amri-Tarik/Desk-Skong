@@ -245,8 +245,13 @@ impl Companion {
             self.last_stare = ctx.now;
             return (ActWait::named(ctx, "stare_at_user"), "cursor resting near me");
         }
-        if ctx.senses.dark && ctx.rng.chance(0.2) {
-            return (ActWait::named(ctx, "lantern_patrol"), "it's dark");
+        // The lantern comes out right next to you in the dark; the map only when you're
+        // not right here.
+        if (ctx.senses.dark || c.dist() > 250.0)
+            && let Some(a) = ctx.wander_act()
+        {
+            let why = if ctx.rep.catalog.get(a.id).is_some_and(|i| i.name == "lantern_patrol") { "it's dark" } else { "checking his map" };
+            return (Some(a), why);
         }
         if ctx.senses.can_sit() && c.still_for > 2.0 && ctx.may_sit() {
             return (ctx.seated_act(), "sitting with you");
