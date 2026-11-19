@@ -280,6 +280,7 @@ pub fn run(args: &Args) -> Result<()> {
     log::info!("tray menu ready; hotkeys Ctrl+Alt + K manual, A act, W wake, R respawn at cursor, G walk / H hurry to cursor, S skin, C click-through, P pause, D debug overlay, Q quit");
 
     let mut last_housekeeping = Instant::now();
+    let mut goto_test_at = args.goto_test.then(Instant::now);
     rl.run(|tick| {
         let mut cmds: Vec<Command> = tick.hotkeys.iter().filter_map(|h| HOTKEYS.iter().find(|k| k.0 == *h).map(|k| k.2)).collect();
         for ev in pet.tray.take_events() {
@@ -290,6 +291,14 @@ pub fn run(args: &Args) -> Result<()> {
             }
         }
         cmds.extend(pet.service_panel());
+        if let Some(t) = goto_test_at.as_mut()
+            && t.elapsed().as_secs() >= 8
+        {
+            // Simulates pressing H with the control panel focused (manual mode on).
+            *t = Instant::now();
+            cmds.push(Command::SetManual(true));
+            cmds.push(Command::GoToCursor { hurry: true });
+        }
         for c in cmds {
             if pet.apply(c)? == Flow::Quit {
                 return Ok(Flow::Quit);
@@ -327,7 +336,11 @@ impl Pet {
         // 1. World: rebuild terrain only when the desktop or the on-screen content changed.
         let desk_changed = self.watcher.poll();
         if self.content.poll(self.watcher.snapshot(), desk_changed) || desk_changed {
-            let new = self.content.terrain(self.watcher.snapshot(), &self.topts);
+            let mut new = self.content.terrain(self.watcher.snapshot(), &self.topts);
+            // Content-only changes keep the desktop generation, but the nav graph built from
+            // them has different surfaces: give every rebuild its own generation so routes
+            // planned on an older graph are re-planned.
+            new.generation = self.terrain.generation.max(new.generation) + 1;
             self.ch.on_terrain_rebuilt(&self.terrain, &new, &mut self.move_events);
             self.benches.follow(&self.terrain, &new);
             self.terrain = new;
@@ -339,10 +352,19 @@ impl Pet {
         }
 
         // 2. Intent: keyboard in manual mode, otherwise the brain.
-        let mut input = if self.manual {
-            self.keyboard.read(self.control.manual_keys())
-        } else if self.forced_nav {
+        // A requested trip (go to cursor) beats manual mode — the panel switches manual on
+        // while focused — until the user actually presses a movement key.
+        let manual_input = self.manual.then(|| self.keyboard.read(self.control.manual_keys()));
+        let user_moving = manual_input.is_some_and(|i| i.x != 0.0 || i.jump_held || i.dash_pressed || i.down || i.superdash_held);
+        if self.forced_nav && user_moving {
+            log::info!("go-to-cursor: cancelled by manual input");
+            self.forced_nav = false;
+            self.nav.stop();
+        }
+        let mut input = if self.forced_nav {
             self.follow_forced(dt)
+        } else if let Some(i) = manual_input {
+            i
         } else {
             self.think(dt)
         };
@@ -494,6 +516,7 @@ impl Pet {
     fn follow_forced(&mut self, dt: f32) -> MoveInput {
         let input = self.nav.next_input(&self.ch, &self.terrain, dt);
         let status = self.nav.status();
+        log::trace!("forced: pos ({:.0},{:.0}) {:?} input x={:.2} jump={} dash={} status {:?}", self.ch.pos.x, self.ch.pos.y, self.ch.state, input.x, input.jump_pressed, input.dash_pressed, status);
         if status != NavStatus::Moving {
             log::info!("go-to-cursor: {status:?}");
             self.forced_nav = false;
@@ -507,6 +530,15 @@ impl Pet {
         let style = if hurry { TravelStyle::Hurry } else { TravelStyle::Stroll };
         if self.nav.go(&self.ch, NavGoal::Point(Vec2::new(x as f32, y as f32)), style) {
             log::info!("go-to-cursor ({style:?}) toward ({x},{y})");
+            // The planner heads for the closest reachable point; say so when that is not the cursor.
+            if let Some(end) = self.nav.follower().map(|f| f.route().end) {
+                // Ending below a cursor that hovers in mid-air is normal; only a horizontal miss
+                // means the spot itself is out of reach.
+                let miss = (end.x - x as f32).abs();
+                if miss > 120.0 {
+                    log::warn!("go-to-cursor: can't get under the cursor {style:?}; heading to the closest point ({:.0},{:.0}), {miss:.0} px to the side", end.x, end.y);
+                }
+            }
             self.act = None;
             self.forced_nav = true;
         } else {

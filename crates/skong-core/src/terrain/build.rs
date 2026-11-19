@@ -167,10 +167,24 @@ fn add_window_terrain(t: &mut Terrain, w: &WindowInfo, front: &[&WindowInfo], mo
         }
     }
 
-    let left = visible_on_col(r.left, (r.top, r.bottom), front, monitors);
-    push_walls(t, r.left, &left, Facing::Left, owner, opts.min_wall_len);
-    let right = visible_on_col(r.right - 1, (r.top, r.bottom), front, monitors);
-    push_walls(t, r.right, &right, Facing::Right, owner, opts.min_wall_len);
+    // A side lying on a monitor edge (maximized / snapped windows) gets no wall: on outer
+    // edges the monitor wall already covers it, and on a seam between monitors it would seal
+    // one screen off from the other (only a shadow dash could pass).
+    if !on_monitor_edge(r.left, monitors) {
+        let left = visible_on_col(r.left, (r.top, r.bottom), front, monitors);
+        push_walls(t, r.left, &left, Facing::Left, owner, opts.min_wall_len);
+    }
+    if !on_monitor_edge(r.right, monitors) {
+        let right = visible_on_col(r.right - 1, (r.top, r.bottom), front, monitors);
+        push_walls(t, r.right, &right, Facing::Right, owner, opts.min_wall_len);
+    }
+}
+
+/// Within a couple of px of some monitor's left or right edge (DWM frame bounds of
+/// maximized windows can be off by a pixel).
+fn on_monitor_edge(x: i32, monitors: &[Monitor]) -> bool {
+    const SLACK: i32 = 2;
+    monitors.iter().any(|m| (x - m.rect.left).abs() <= SLACK || (x - m.rect.right).abs() <= SLACK)
 }
 
 fn push_walls(t: &mut Terrain, x: i32, spans: &[Span], face: Facing, owner: Option<WindowId>, min_len: f32) {
@@ -281,6 +295,19 @@ mod tests {
             foreground: false,
             topmost: false,
         }
+    }
+
+    #[test]
+    fn maximized_windows_do_not_seal_the_monitor_seam() {
+        // Regression: a maximized window on each monitor used to put a window wall on the seam,
+        // so the other screen was only reachable with a shadow dash.
+        let wins = vec![win(1, 0, 0, 1000, 760), win(2, 1000, -200, 2000, 900)];
+        let t = build_with(two_monitors_side_by_side(), wins, &TerrainOptions::default());
+        let seam: Vec<_> = t.walls.iter().filter(|w| w.owner.is_some() && (w.x - 1000.0).abs() < 3.0).collect();
+        assert!(seam.is_empty(), "window walls on the seam: {seam:?}");
+        // A window side away from monitor edges still gets its wall.
+        let t = build_with(one_monitor(), vec![win(3, 200, 300, 600, 700)], &TerrainOptions::default());
+        assert!(t.walls.iter().any(|w| w.owner == Some(3) && w.x == 200.0));
     }
 
     fn build_with(monitors: Vec<Monitor>, windows: Vec<WindowInfo>, opts: &TerrainOptions) -> Terrain {

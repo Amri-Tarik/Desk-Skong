@@ -38,8 +38,8 @@ setting; also `skong-panel.exe` or tray → *Open control panel*; it must sit ne
 counts, vision stats, CPU/RAM) and the pet's log stream with level/text filters, copy and
 clear. It connects to the running pet over `\\.\pipe\desk-skong` and reconnects by itself
 if the pet restarts; several panels can be open at once. While the panel window is
-focused, the arrows / Up / Shift / Ctrl / Z / X drive the knight without leaking into
-other apps ("Drive with keyboard while focused", on by default), and the plain letters
+focused and manual control is on (K — a toggle, off by default), the arrows / Up / Shift /
+Ctrl / Z / X drive the knight without leaking into other apps, and the plain letters
 `K A W R G H S B C P D` do what Ctrl+Alt+letter does (not while typing in a text field).
 `skong-panel --self-test` checks a running pet from the command line.
 
