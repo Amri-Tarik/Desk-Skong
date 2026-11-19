@@ -123,9 +123,9 @@ impl Default for BattleConfig {
             win_hits: 5,
             lose_hits: 3,
             stun_window: 1.5,
-            max_duration: 45.0,
-            give_up_distance: 900.0,
-            give_up_secs: 3.0,
+            max_duration: 90.0,
+            give_up_distance: 1400.0,
+            give_up_secs: 6.0,
             cooldown: 90.0,
         }
     }

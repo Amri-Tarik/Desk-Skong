@@ -15,10 +15,12 @@ const PLAY_RANGE: f32 = 320.0;
 /// Seconds per trick before switching to another.
 const TRICK_SECS: [f32; 2] = [2.5, 4.5];
 /// Total play time.
-const PLAY_SECS: [f32; 2] = [10.0, 18.0];
+const PLAY_SECS: [f32; 2] = [45.0, 90.0];
 /// The cursor wandered off: give up after this long beyond `LOST_RANGE`.
-const LOST_RANGE: f32 = 900.0;
-const LOST_SECS: f32 = 2.0;
+const LOST_RANGE: f32 = 2200.0;
+const LOST_SECS: f32 = 8.0;
+/// Mid-play, a cursor farther than this is chased down with the pathfinder.
+const CHASE_RANGE: f32 = 600.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Trick {
@@ -67,6 +69,8 @@ pub(crate) struct Pester {
     spun: bool,
     travel: Option<Travel>,
     goal_at: Vec2,
+    /// No chasing again before this (s left): the last chase found no route.
+    chase_cd: f32,
 }
 
 impl Pester {
@@ -86,6 +90,7 @@ impl Pester {
             spun: false,
             travel: None,
             goal_at: Vec2::ZERO,
+            chase_cd: 0.0,
         }
     }
 
@@ -134,6 +139,14 @@ impl Pester {
                     ctx.mind.excite(0.1);
                     return self.finish(ctx, "look_up");
                 }
+                // Pulled the cursor away? He's persistent: chase it down (pathfinding) and
+                // carry on there.
+                self.chase_cd -= dt;
+                if cursor.dist() > CHASE_RANGE && self.chase_cd <= 0.0 && ctx.grounded() {
+                    self.travel = None;
+                    self.phase = Phase::Approach;
+                    return Status::Running;
+                }
                 self.play(ctx, cursor);
             }
             Phase::Act(..) => {}
@@ -171,6 +184,7 @@ impl Pester {
         {
             // No route: play from wherever he is if it's close-ish, else forget it.
             self.travel = None;
+            self.chase_cd = 3.0;
             self.phase = Phase::Play;
         }
     }
