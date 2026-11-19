@@ -15,7 +15,7 @@ use skong_core::effects::EffectSet;
 use crate::fx::Fx;
 use crate::gameguard::GameGuard;
 use skong_core::controller::{Abilities, Character, CharacterParams, MoveEvent, MoveInput, MoveState, Side};
-use skong_core::ai::{Navigator, NavStatus, ActCatalog, Activity, AttackDir, Brain, BrainConfig, Cursor, GraphNavigator, Motion, Percepts, Poke, RunningAct, UserActivity};
+use skong_core::ai::{Navigator, NavStatus, ActCatalog, Activity, AttackDir, Brain, BrainConfig, Cursor, GraphNavigator, Motion, Percepts, Poke, RunningAct, SwitchReason, UserActivity};
 use skong_win::input::{self, UserInput};
 
 use crate::grab::Grab;
@@ -740,17 +740,24 @@ impl Pet {
 
         let d = &self.data;
         if let Some(p) = self.act.as_mut() {
-            // Seated life: tired → nods and dozes, bored → map checks and glances.
+            // Seated life: tired → nods and dozes, bored → map checks, mischief → fidgets.
             let needs = &self.brain.mind().needs;
-            p.set_mood(skong_core::life::Mood { tired: 1.0 - needs.energy, curious: needs.boredom });
+            p.set_mood(skong_core::life::Mood { tired: 1.0 - needs.energy, curious: needs.boredom, lively: needs.mischief });
         }
-        if intent.cancel_act && self.act.as_ref().is_some_and(|p| p.interruptible(&d.acts)) {
-            self.act = None;
+        if intent.cancel_act
+            && let Some(p) = self.act.as_mut().filter(|p| p.interruptible(&d.acts))
+            && !p.wrap_up(&d.acts, &d.lib, &mut self.anim, false)
+        {
+            self.act = None; // seated lives wrap up instead: finish the state, then get off
         }
+        // Only urgent / higher-tier switches cut a seated state short (via its exit clip);
+        // being outscored lets the current state (map, lean, doze) finish first.
+        let urgent_switch = self.brain.last_switch().is_some_and(|s| matches!(s.reason, SwitchReason::Urgent | SwitchReason::Preempted));
         // A higher-priority behaviour took over: finish the pose gracefully (get up from the
         // seat, lower the map…) instead of snapping out of the act. Seated exits keep the seat.
         if let Some(id) = intent.exit_act
-            && self.act.as_ref().is_some_and(|p| p.interruptible(&d.acts))
+            && let Some(p) = self.act.as_mut().filter(|p| p.interruptible(&d.acts))
+            && !p.wrap_up(&d.acts, &d.lib, &mut self.anim, urgent_switch)
         {
             self.act = Some(ActPlayer::start(&d.acts, &d.lib, &mut self.anim, id, seed()));
         }

@@ -267,11 +267,13 @@ pub struct ActPlayer {
     life: Option<LifeRun>,
     /// Biases life choices (set by the app from the brain's needs).
     mood: Mood,
+    /// Wrapping up: after the current life step, go straight to the act's last step.
+    wrapping: bool,
 }
 
 impl ActPlayer {
     pub fn start(acts: &ActLibrary, clips: &ClipLibrary, anim: &mut Animator, act: ActId, seed: u32) -> Self {
-        let mut p = Self { act, step: 0, phase: Phase::Playing, timer: 0.0, repeats_left: 1, done: false, rng: seed | 1, turning: false, life: None, mood: Mood::default() };
+        let mut p = Self { act, step: 0, phase: Phase::Playing, timer: 0.0, repeats_left: 1, done: false, rng: seed | 1, turning: false, life: None, mood: Mood::default(), wrapping: false };
         p.enter_step(acts, clips, anim);
         p
     }
@@ -286,6 +288,26 @@ impl ActPlayer {
 
     pub fn is_done(&self) -> bool {
         self.done
+    }
+
+    /// Asked to stop. During a `life` step the act ends gracefully instead of being cut:
+    /// not urgent, the current state plays out (bounded by its minimum); urgent, it leaves
+    /// through the state's exit clip (closing the map, sitting up). Then the act's last step
+    /// (Get Off) plays. Returns false when the current step is not a life step (the caller
+    /// cuts or replaces the act as before).
+    pub fn wrap_up(&mut self, acts: &ActLibrary, clips: &ClipLibrary, anim: &mut Animator, urgent: bool) -> bool {
+        let Some(l) = acts.get(self.act).steps.get(self.step).and_then(|s| s.life) else { return false };
+        let Some(run) = self.life.as_mut().filter(|_| !self.done) else { return false };
+        self.wrapping = true;
+        let mut seed = self.rng;
+        run.wrap_up(acts.life(l), urgent, clips, anim, &mut || xorshift(&mut seed));
+        self.rng = seed;
+        true
+    }
+
+    /// Wrapping up (see [`Self::wrap_up`]).
+    pub fn is_wrapping(&self) -> bool {
+        self.wrapping
     }
 
     /// Bias for `life` steps (tired → dozing and nodding, curious → map checks and glances).
@@ -352,6 +374,10 @@ impl ActPlayer {
             run.update(acts.life(l), self.mood, &step.bias, clips, anim, dt, anim_events, &mut || xorshift(&mut seed));
             self.rng = seed;
             if run.is_done() {
+                if self.wrapping && self.step + 1 < acts.get(self.act).steps.len() {
+                    // Skip to the way out (Get Off).
+                    self.step = acts.get(self.act).steps.len() - 2;
+                }
                 self.next_step(acts, clips, anim);
             }
             return if self.done { ActStatus::Done } else { ActStatus::Running { gait: acts.get(self.act).steps[self.step].gait } };
@@ -532,6 +558,44 @@ mod tests {
         p.signal(&acts, &clips, &mut anim, "woken");
         assert_eq!(clips.get(anim.clip()).name, "Wake To Sit");
         assert!(!p.interruptible(&acts));
+    }
+
+    #[test]
+    fn seated_acts_wrap_up_through_get_off() {
+        let (clips, acts) = libs();
+        let id = acts.id("rest").expect("rest");
+        for (urgent, max_s) in [(true, 2.5), (false, 25.0)] {
+            for seed in 1..6 {
+                let mut anim = Animator::new(clips.id("Idle").expect("Idle"));
+                let mut p = ActPlayer::start(&acts, &clips, &mut anim, id, seed);
+                let (dt, mut ev) = (1.0 / 60.0, Vec::new());
+                let mut step = |p: &mut ActPlayer, anim: &mut Animator| {
+                    ev.clear();
+                    anim.update(&clips, dt, &mut ev);
+                    p.update(&acts, &clips, anim, dt, &ev)
+                };
+                for _ in 0..(60.0 * (3.0 + seed as f32)) as usize {
+                    step(&mut p, &mut anim);
+                }
+                assert!(p.life_state(&acts).is_some(), "in the seated life");
+                assert!(p.wrap_up(&acts, &clips, &mut anim, urgent));
+                let mut seen = vec![];
+                let mut t = 0.0;
+                while step(&mut p, &mut anim) != ActStatus::Done && t < 60.0 {
+                    t += dt;
+                    let n = clips.get(anim.clip()).name.clone();
+                    if seen.last() != Some(&n) {
+                        seen.push(n);
+                    }
+                }
+                assert!(t < max_s, "urgent={urgent} seed {seed}: took {t:.1}s: {seen:?}");
+                assert_eq!(seen.last().map(String::as_str), Some("Get Off"), "{seen:?}");
+            }
+        }
+        // Not a life step: the caller decides (cut or exit act).
+        let mut anim = Animator::new(clips.id("Idle").expect("Idle"));
+        let mut p = ActPlayer::start(&acts, &clips, &mut anim, acts.id("look_up").expect("act"), 1);
+        assert!(!p.wrap_up(&acts, &clips, &mut anim, true));
     }
 
     #[test]
