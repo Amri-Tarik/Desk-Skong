@@ -171,6 +171,7 @@ impl Pet {
                     }
                 }
                 StakeEvent::AbandonCoin { at } => self.stakes.geo.abandon(at),
+                StakeEvent::Technique(t) => log::info!("combat: {t:?}"),
                 StakeEvent::Victory { at } => {
                     let [lo, hi] = self.brain.config().stakes.victory_geo;
                     let amount = lo + seed() % (hi.saturating_sub(lo) + 1);

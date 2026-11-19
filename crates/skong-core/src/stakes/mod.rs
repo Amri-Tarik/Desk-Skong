@@ -27,7 +27,7 @@ pub use geo::{Coin, CoinSize, GeoField, Pickup};
 pub use save::{ShadeSave, StakesSave};
 pub use sources::{GeoDrop, GeoSourceConfig, GeoSources};
 pub use shade::{Shade, ShadePhase, ShadeTick};
-pub use spells::{Spell, SpellBook, SpellConfig, SpellSituation};
+pub use spells::{Spell, SpellBook, SpellConfig, SpellCues, SpellSituation};
 
 use crate::geom::{RectF, Vec2};
 use crate::terrain::{LedgeKind, Terrain};

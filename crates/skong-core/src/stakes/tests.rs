@@ -185,7 +185,25 @@ fn shade_goes_home_when_the_knight_leaves() {
 // --- Spells -------------------------------------------------------------------------
 
 fn situation(target: Option<Vec2>) -> SpellSituation {
-    SpellSituation { target, grounded: true, just_hit: false, fight_over: false, hurt: 0.0, rolls: [0.0, 0.0], scale: 1.0 }
+    SpellSituation { target, grounded: true, just_hit: false, fight_over: false, hurt: 0.0, rolls: [0.0, 0.0], scale: 1.0, cues: SpellCues::default() }
+}
+
+#[test]
+fn the_moment_calls_for_a_special_without_a_roll() {
+    let cfg = SpellConfig::default();
+    let mut book = SpellBook::new(&SpellConfig { start_soul: 1.0, ..cfg });
+    let unlucky = |off: Vec2, cues: SpellCues| SpellSituation { rolls: [0.99, 0.99], cues, ..situation(Some(off)) };
+    let flyer = SpellCues { flying: true, ..Default::default() };
+    assert_eq!(book.choose(&unlucky(Vec2::new(30.0, -200.0), flyer), 0.0, &cfg), Some(Spell::Scream), "wraiths at a flyer above");
+    let wind_up = SpellCues { winding_up: true, ..Default::default() };
+    assert_eq!(book.choose(&unlucky(Vec2::new(90.0, 0.0), wind_up), 10.0, &cfg), Some(Spell::GreatSlash), "great slash into a wind-up");
+    let crowd = SpellCues { crowd: 2, ..Default::default() };
+    assert_eq!(book.choose(&unlucky(Vec2::new(60.0, 0.0), crowd), 20.0, &cfg), Some(Spell::Cyclone), "cyclone between two foes");
+    // Cooldowns and the gap still hold.
+    assert_eq!(book.choose(&unlucky(Vec2::new(60.0, 0.0), crowd), 21.0, &cfg), None, "gap");
+    assert_eq!(book.choose(&unlucky(Vec2::new(60.0, 0.0), crowd), 24.0, &cfg), None, "cyclone cooling down");
+    // Nothing called for: the roll decides (plain slashes).
+    assert_eq!(book.choose(&unlucky(Vec2::new(500.0, 0.0), SpellCues::default()), 40.0, &cfg), None);
 }
 
 #[test]

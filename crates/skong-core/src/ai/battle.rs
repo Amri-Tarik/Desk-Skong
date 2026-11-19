@@ -1,13 +1,15 @@
 //! Battling the cursor: approach, issue a challenge, then chase / jump / dash at it and
-//! slash when in reach. Clicks on the knight are the cursor's hits: recoil, and two in
+//! slash when in reach (pogo off a low cursor, dive onto one far below: `super::combat`). Clicks on the knight are the cursor's hits: recoil, and two in
 //! quick succession stun it. First to the configured score wins; the knight gives up
 //! politely when the user starts typing, leaves, or the fight drags on.
 use crate::controller::{Gait, MoveInput, Side};
 use crate::geom::Vec2;
+use crate::stakes::SpellCues;
 use crate::nav::{NavGoal, TravelStyle};
 
 use super::behaviours::{ActWait, Ctx, Status, Travel, TravelStep};
 use super::percept::{CursorSense, Poke};
+use super::combat::{DIVE_RADIUS, Kit, KitMove, Mark, POGO_SWING_CD};
 use super::{Attack, AttackDir, Motion};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,6 +53,8 @@ pub(crate) struct Battle {
     goal_at: Vec2,
     /// Seconds the cursor has stayed out of slash reach while fighting.
     out_of_reach: f32,
+    /// Pogo off the cursor, dive onto it (see [`super::combat`]).
+    kit: Kit,
 }
 
 impl Battle {
@@ -67,6 +71,7 @@ impl Battle {
             travel: None,
             goal_at: Vec2::ZERO,
             out_of_reach: 0.0,
+            kit: Kit::new(_ctx.now),
         }
     }
 
@@ -193,17 +198,28 @@ impl Battle {
     }
 
     fn fight(&mut self, ctx: &mut Ctx, c: CursorSense) {
+        let b = ctx.cfg.battle;
+        let k = ctx.p.knight;
+        let ppu = k.params.px_per_unit;
+        if let Some(land) = self.kit.dive_landed(ctx) {
+            // The slam catches a cursor resting near where he lands.
+            let near = (c.pos.x - land.x).abs() <= DIVE_RADIUS * ppu && (c.pos.y - land.y).abs() <= 2.5 * ppu;
+            if near && c.speed() < b.dodge_speed {
+                self.score.knight += 1;
+                ctx.mind.excite(0.15);
+            }
+        }
         if !ctx.free_to_move() {
             return;
         }
-        let b = ctx.cfg.battle;
-        let k = ctx.p.knight;
         let grounded = k.is_grounded();
         let off = c.offset;
         let side = Side::of(off.x).unwrap_or(k.facing);
         self.out_of_reach = if c.dist() > b.attack_range * 1.6 { self.out_of_reach + ctx.dt() } else { 0.0 };
+        // A cursor above him calls for the wraiths.
+        let cues = SpellCues { flying: off.y < -1.4 * ppu, ..Default::default() };
         if self.attack_cd <= 0.0
-            && let Some((spell, w)) = super::stakes::try_spell(ctx, Some(off), false, false)
+            && let Some((spell, w)) = super::stakes::try_spell_cued(ctx, Some(off), false, false, cues)
         {
             // Spells and nail arts land like a slash would (a fast cursor dodges them).
             self.attack_cd = b.attack_cooldown;
@@ -212,6 +228,37 @@ impl Battle {
             return;
         }
         let mut input = MoveInput { gait: Gait::Sprint, ..Default::default() };
+
+        // Pogo off it, or dive onto it from above. A cursor down by his legs (below his
+        // chest, where a forward slash is awkward) is jumped over and pogoed.
+        let hit = c.speed() < b.dodge_speed;
+        let low = off.y > 0.0;
+        match self.kit.step(ctx, &Mark::point(off), self.attack_cd <= 0.0, false, low, &mut input) {
+            Some(KitMove::PogoSwing) => {
+                ctx.out.attack = Some(Attack { dir: AttackDir::Down, side, hit });
+                self.attack_cd = POGO_SWING_CD;
+                if hit {
+                    self.score.knight += 1;
+                    ctx.stakes.spells.gain(1);
+                    ctx.mind.excite(0.1);
+                    self.kit.bounce(ctx.now, &mut input);
+                }
+                return Self::direct(ctx, side, input);
+            }
+            Some(KitMove::PogoJump) => {
+                self.jump_hold = 0.35;
+                return Self::direct(ctx, side, input);
+            }
+            Some(KitMove::PogoSteer) => {
+                if self.jump_hold > 0.0 {
+                    input.jump_held = true;
+                    self.jump_hold -= ctx.dt();
+                }
+                return Self::direct(ctx, side, input);
+            }
+            Some(_) => return Self::direct(ctx, side, input),
+            None => {}
+        }
 
         if off.x.abs() > b.attack_range * 0.5 {
             input.x = side.sign();
@@ -236,7 +283,8 @@ impl Battle {
             self.dash_cd = 1.2;
         }
 
-        if c.dist() <= b.attack_range && self.attack_cd <= 0.0 {
+        let resting_down = !grounded && off.y > off.x.abs() && !self.kit.may_pogo(ctx.now);
+        if c.dist() <= b.attack_range && self.attack_cd <= 0.0 && !resting_down {
             let dir = if off.y < -off.x.abs() {
                 AttackDir::Up
             } else if !grounded && off.y > off.x.abs() {
@@ -244,15 +292,21 @@ impl Battle {
             } else {
                 AttackDir::Forward
             };
-            let hit = c.speed() < b.dodge_speed;
             ctx.out.attack = Some(Attack { dir, side, hit });
             self.attack_cd = b.attack_cooldown;
             if hit {
                 self.score.knight += 1;
                 ctx.stakes.spells.gain(1);
                 ctx.mind.excite(0.1);
+                if dir == AttackDir::Down && !grounded {
+                    self.kit.bounce(ctx.now, &mut input);
+                }
             }
         }
+        Self::direct(ctx, side, input);
+    }
+
+    fn direct(ctx: &mut Ctx, side: Side, input: MoveInput) {
         ctx.out.face = Some(side);
         ctx.out.motion = Motion::Direct(input);
     }

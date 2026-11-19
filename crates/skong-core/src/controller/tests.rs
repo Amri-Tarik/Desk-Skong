@@ -911,3 +911,75 @@ fn stepping_behind_passes_content_walls_only() {
     run(&mut c, &t, behind(1.0), secs(2.0));
     assert!(c.body().right <= t.bounds.right + 0.5);
 }
+
+// ------------------------------------------------------------------ pogo
+
+/// Mid-air at `y`, falling, with the double jump and air dash spent.
+fn falling_spent(t: &Terrain, y: f32) -> Character {
+    let mut c = standing(t, 960.0, FLOOR);
+    run(&mut c, t, press_jump(0.0), 1);
+    run(&mut c, t, hold_jump(0.0), secs(0.3));
+    run(&mut c, t, press_jump(0.0), 1);
+    run(&mut c, t, MoveInput { dash_pressed: true, ..idle() }, 1);
+    run(&mut c, t, idle(), secs(0.3));
+    assert!(!c.can_double_jump() && !c.can_dash(), "spent: {c:?}");
+    c.pos.y = y;
+    c.vel.y = 300.0;
+    c
+}
+
+#[test]
+fn pogo_bounces_up_at_the_pogo_speed_and_refills_air_moves() {
+    let t = world();
+    let mut c = falling_spent(&t, 600.0);
+    assert_eq!(c.state, MoveState::Airborne);
+    let ev = run(&mut c, &t, MoveInput { pogo: true, ..idle() }, 1);
+    assert_eq!(count(&ev, MoveEvent::Pogo), 1, "{ev:?}");
+    let p = c.params;
+    assert!((c.vel.y + p.px(p.pogo_speed)).abs() < 1e-3, "rising at the pogo speed: {}", c.vel.y);
+    assert!(c.can_double_jump(), "double jump back");
+    // The air dash is back too (once its cooldown is over).
+    run(&mut c, &t, idle(), secs(p.dash_cooldown));
+    assert!(c.can_dash(), "air dash back");
+}
+
+#[test]
+fn pogo_rise_matches_its_analytic_height_and_ignores_the_jump_button() {
+    let t = world();
+    let p = CharacterParams::hollow_knight(PPU);
+    for held in [false, true] {
+        let mut c = falling_spent(&t, 600.0);
+        let y0 = c.pos.y;
+        c.step(&MoveInput { pogo: true, ..idle() }, &t, DT, &mut vec![]);
+        let mut top = c.pos.y;
+        for _ in 0..secs(1.0) {
+            c.step(&MoveInput { jump_held: held, ..idle() }, &t, DT, &mut vec![]);
+            top = top.min(c.pos.y);
+        }
+        let rise = y0 - top;
+        assert!((rise - p.px(p.pogo_height())).abs() < 6.0, "rise {rise} vs {}", p.px(p.pogo_height()));
+    }
+}
+
+#[test]
+fn pogo_chains_and_does_nothing_on_the_ground() {
+    let t = world();
+    let mut c = falling_spent(&t, 600.0);
+    let mut ev = vec![];
+    for _ in 0..3 {
+        c.step(&MoveInput { pogo: true, ..idle() }, &t, DT, &mut ev);
+        // Back down to where he bounced.
+        for _ in 0..secs(2.0) {
+            c.step(&idle(), &t, DT, &mut ev);
+            if c.vel.y > 0.0 && c.pos.y >= 600.0 {
+                break;
+            }
+        }
+    }
+    assert_eq!(count(&ev, MoveEvent::Pogo), 3);
+    // Standing: no bounce.
+    let mut g = standing(&t, 960.0, FLOOR);
+    let ev = run(&mut g, &t, MoveInput { pogo: true, ..idle() }, 1);
+    assert!(!ev.contains(&MoveEvent::Pogo) && g.is_grounded());
+    assert!(!g.pogo(&mut vec![]));
+}

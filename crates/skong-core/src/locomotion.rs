@@ -242,6 +242,8 @@ impl Locomotion {
                     self.accent(Some(if dark { c.quake_land_2 } else { c.quake_land }));
                 }
                 MoveEvent::LostSupport | MoveEvent::DroppedThrough => self.jump_t = None,
+                // Rising again (the down slash that caused it keeps playing).
+                MoveEvent::Pogo => self.jump_t = Some(0.0),
                 _ => {}
             }
         }

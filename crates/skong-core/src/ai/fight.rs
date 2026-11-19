@@ -1,5 +1,6 @@
 //! Fighting enemies (and sparring with a visitor who challenged him): the knight's top
-//! engagement. He hurries over, closes in, slashes (up / down at flyers), throws a spell or
+//! engagement. He hurries over, closes in, slashes (up / down at flyers), uses his whole kit
+//! when the moment calls for it (pogo, dive, dodge, crystal dash: `super::combat`), throws a spell or
 //! a nail art now and then, takes the odd bump (recoil), and moves on to the next foe until
 //! none is left. Losing all his masks makes him back off sore (or die, if `lethal`).
 //!
@@ -13,10 +14,12 @@ use crate::controller::{Gait, MoveInput, Side};
 use crate::geom::Vec2;
 use crate::nav::{NavGoal, TravelStyle};
 use crate::props::ledge_below;
-use crate::stakes::{DeathKind, Spell};
+use crate::stakes::spells::SPELL_SOUL;
+use crate::stakes::{DeathKind, Spell, SpellCues};
 
 use super::behaviours::{ActWait, Ctx, Status, Travel, TravelStep};
-use super::stakes::{body_centre, try_spell};
+use super::combat::{DIVE_DAMAGE, DIVE_MAX_DROP, Kit, KitMove, Mark, POGO_SWING_CD, Stance, crowd, dive_hits};
+use super::stakes::{body_centre, try_spell, try_spell_cued};
 use super::{Attack, AttackDir, Brain, Motion, Percepts};
 
 /// Who the foe is.
@@ -45,6 +48,10 @@ pub struct Foe {
     pub vulnerable: bool,
     /// Coming at him (chasing, winding up, attacking).
     pub attacking: bool,
+    /// Winding up an attack (a Husk's anticipation, Zote's antic): a Great Slash cuts it short.
+    pub winding_up: bool,
+    /// Lunging / charging at him right now: a shadow dash through it dodges.
+    pub lunging: bool,
 }
 
 /// A blow that connects (nail or spell); the app applies it to the foe.
@@ -146,6 +153,10 @@ enum Phase {
     Engage,
     /// An act between exchanges: recoil, a spell, the challenge bow.
     Act(Option<ActWait>),
+    /// Every foe is gone: land (from a last pogo or dive), then maybe focus.
+    Landing(f32),
+    /// Focusing to heal after the fight.
+    Heal(Option<ActWait>),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -165,6 +176,8 @@ pub(crate) struct Fight {
     pub beaten: u32,
     /// Blows landed on the current target.
     landed: u32,
+    /// Pogo, dive, dodge, crystal dash opener, wall leap (see [`super::combat`]).
+    kit: Kit,
 }
 
 /// Where to stand under a foe (the ledge below its feet).
@@ -172,10 +185,26 @@ fn ground_under(ctx: &Ctx, f: &Foe) -> Vec2 {
     ledge_below(ctx.p.terrain, f.feet - Vec2::new(0.0, 1.0)).map_or(f.feet, |(y, _)| Vec2::new(f.feet.x, y))
 }
 
-/// Close (or on the ledge he stands on): no route needed, he just goes at it.
+/// He stands on a window top over a ground foe, with the soul for a dive: he can dive onto
+/// it from here (walk along the ledge until it is right below).
+fn dive_spot(ctx: &Ctx, f: &Foe) -> bool {
+    let k = ctx.p.knight;
+    let s = Stance::of(k);
+    let drop = f.pos.y - k.pos.y;
+    s.dive
+        && s.on_one_way
+        && !f.flying
+        && ctx.stakes.spells.soul + 1e-4 >= SPELL_SOUL
+        && drop > 2.0 * s.ppu
+        && drop < DIVE_MAX_DROP * s.ppu
+        && k.support.is_some_and(|l| l.x0 <= f.pos.x && f.pos.x <= l.x1)
+}
+
+/// Close (or on the ledge he stands on, or right above it): no route needed, he just goes
+/// at it.
 fn within_reach(ctx: &Ctx, f: &Foe) -> bool {
     let k = ctx.p.knight;
-    if f.pos.distance(body_centre(ctx)) < 5.0 * k.params.px_per_unit {
+    if f.pos.distance(body_centre(ctx)) < 5.0 * k.params.px_per_unit || dive_spot(ctx, f) {
         return true;
     }
     let under = ground_under(ctx, f);
@@ -200,6 +229,7 @@ impl Fight {
             out_of_reach: 0.0,
             beaten: 0,
             landed: 0,
+            kit: Kit::new(ctx.now),
         };
         ctx.stakes.fight.hits = 0;
         f.aim(ctx, &foe);
@@ -245,7 +275,56 @@ impl Fight {
                 self.aim(ctx, &f);
                 Status::Running
             }
-            None => Status::Done,
+            None => {
+                // Nobody left: come down, then focus if he got hurt.
+                self.landed = 0;
+                self.phase = Phase::Landing(0.0);
+                Status::Running
+            }
+        }
+    }
+
+    /// After the fight: land, then a Focus if he is hurt and has the soul for it.
+    fn wrap_up(&mut self, ctx: &mut Ctx) -> Status {
+        match &mut self.phase {
+            Phase::Landing(t) => {
+                *t += ctx.dt();
+                if !ctx.grounded() {
+                    return if *t > 3.0 { Status::Done } else { Status::Running };
+                }
+                match try_spell(ctx, None, false, true) {
+                    Some((_, w)) => {
+                        log::debug!("brain: focusing after the fight");
+                        self.phase = Phase::Heal(Some(w));
+                        Status::Running
+                    }
+                    None => Status::Done,
+                }
+            }
+            Phase::Heal(w) => {
+                if w.as_mut().is_none_or(|w| w.tick(ctx)) {
+                    ctx.mind.emotions.hurt *= 0.3;
+                    Status::Done
+                } else {
+                    Status::Running
+                }
+            }
+            _ => Status::Done,
+        }
+    }
+
+    /// The dive slammed down at `land`: it hits every foe near the impact.
+    fn dive_strikes(&mut self, ctx: &mut Ctx, land: Vec2) {
+        let k = ctx.p.knight;
+        let dark = matches!(k.state, crate::controller::MoveState::Dive { dark: true, .. });
+        let from = body_centre(ctx);
+        let ppu = k.params.px_per_unit;
+        let damage = DIVE_DAMAGE + u32::from(dark);
+        for f in ctx.senses.foes.iter().filter(|f| f.vulnerable && dive_hits(land, f, ppu)) {
+            if (f.kind, f.id) == self.target {
+                self.landed += 1;
+            }
+            ctx.out.strikes.push(FoeStrike { id: f.id, kind: f.kind, damage, from, at: f.pos });
         }
     }
 
@@ -261,8 +340,20 @@ impl Fight {
             return Status::Done;
         }
 
-        // Bumps from the foes.
-        let hits = std::mem::take(&mut ctx.stakes.fight.hits);
+        if matches!(self.phase, Phase::Landing(_) | Phase::Heal(_)) {
+            ctx.stakes.fight.hits = 0;
+            return self.wrap_up(ctx);
+        }
+        if let Some(land) = self.kit.dive_landed(ctx) {
+            self.dive_strikes(ctx, land);
+        }
+
+        // Bumps from the foes (none while shadow dashing through one).
+        let mut hits = std::mem::take(&mut ctx.stakes.fight.hits);
+        if hits > 0 && !self.kit.touchable(ctx.now) {
+            log::debug!("brain: dashed through it untouched");
+            hits = 0;
+        }
         if hits > 0 {
             self.masks = self.masks.saturating_sub(hits);
             ctx.mind.hurt(0.1 * hits as f32);
@@ -344,6 +435,7 @@ impl Fight {
                 self.engage(ctx, &foe);
                 Status::Running
             }
+            Phase::Landing(_) | Phase::Heal(_) => self.wrap_up(ctx),
         }
     }
 
@@ -351,27 +443,36 @@ impl Fight {
         ctx.senses.foes.iter().find(|f| (f.kind, f.id) == self.target).copied()
     }
 
-    /// A spell / nail art aimed at the target: it lands if it reaches.
+    /// A spell / nail art: it lands on every foe it reaches (the wraiths, a cyclone and a
+    /// fireball's flight catch more than one).
     fn strike_with(&mut self, ctx: &mut Ctx, spell: Spell) {
         let from = body_centre(ctx);
-        if let Some(f) = self.foe(ctx)
-            && f.vulnerable
-            && spell.damage() > 0
-            && spell.reaches(f.pos - from, ctx.stakes.sense.scale.max(0.1))
-        {
-            self.landed += 1;
+        let scale = ctx.stakes.sense.scale.max(0.1);
+        if spell.damage() == 0 {
+            return;
+        }
+        for f in ctx.senses.foes.iter().filter(|f| f.vulnerable && spell.reaches(f.pos - from, scale)) {
+            if (f.kind, f.id) == self.target {
+                self.landed += 1;
+            }
             ctx.out.strikes.push(FoeStrike { id: f.id, kind: f.kind, damage: spell.damage(), from, at: f.pos });
         }
     }
 
-    /// Close in and slash; jump at flyers; now and then a spell or a nail art.
+    /// The foe stands on the ledge he stands on (a crystal dash along it reaches it).
+    fn same_ledge(ctx: &Ctx, foe: &Foe) -> bool {
+        let k = ctx.p.knight;
+        !foe.flying && k.support.is_some_and(|s| (foe.feet.y - s.y).abs() < 4.0 && s.x0 <= foe.feet.x && foe.feet.x <= s.x1)
+    }
+
+    /// Close in and slash; jump at flyers; pogo, dive, dodge, crystal dash, a spell or a nail
+    /// art when the moment calls for one (see [`super::combat`]).
     fn engage(&mut self, ctx: &mut Ctx, foe: &Foe) {
         if !ctx.free_to_move() {
             return;
         }
         let k = ctx.p.knight;
         let ppu = k.params.px_per_unit;
-        let grounded = k.is_grounded();
         let centre = body_centre(ctx);
         let off = foe.pos - centre;
         let side = Side::of(off.x).unwrap_or(k.facing);
@@ -379,25 +480,78 @@ impl Fight {
         let reach_x = foe.half.x + 0.5 * k.body().width() + 1.3 * ppu;
         let reach_y = foe.half.y + 1.4 * ppu;
         let in_reach = off.x.abs() <= reach_x && off.y.abs() <= reach_y;
-        // Out of reach: too high / low to hit, or far and not getting any closer.
+        // Out of reach: too high / low to hit, or far and not getting any closer (a dive
+        // from a ledge above still reaches it).
         let stalled = off.x.abs() > 1.5 * reach_x && k.vel.x.abs() < 20.0;
-        if stalled || off.y.abs() > reach_y + 2.5 * ppu {
+        if (stalled || off.y.abs() > reach_y + 2.5 * ppu) && !self.dive_in_reach(ctx, foe) {
             self.out_of_reach += ctx.dt();
         } else {
             self.out_of_reach = 0.0;
         }
 
-        if self.attack_cd <= 0.0
-            && let Some((spell, w)) = try_spell(ctx, Some(off), false, false)
-        {
-            ctx.nav.stop();
-            self.strike_with(ctx, spell);
-            self.attack_cd = ctx.cfg.battle.attack_cooldown;
-            self.phase = Phase::Act(Some(w));
-            return;
+        // A spell or nail art (not into a lunge: that one gets dodged).
+        if self.attack_cd <= 0.0 && !foe.lunging {
+            let scale = ctx.stakes.sense.scale.max(0.1);
+            let cues = SpellCues { flying: foe.flying, winding_up: foe.winding_up, crowd: crowd(&ctx.senses.foes, centre, scale) };
+            if let Some((spell, w)) = try_spell_cued(ctx, Some(off), false, false, cues) {
+                ctx.nav.stop();
+                self.kit.pogo_run = false;
+                self.strike_with(ctx, spell);
+                self.attack_cd = ctx.cfg.battle.attack_cooldown;
+                self.phase = Phase::Act(Some(w));
+                return;
+            }
         }
 
         let mut input = MoveInput { gait: Gait::Run, ..Default::default() };
+        let mark = Mark::foe(foe, centre);
+        let same_ledge = Self::same_ledge(ctx, foe);
+        match self.kit.step(ctx, &mark, self.attack_cd <= 0.0, same_ledge, true, &mut input) {
+            Some(KitMove::PogoSwing) => {
+                ctx.out.attack = Some(Attack { dir: AttackDir::Down, side, hit: foe.vulnerable });
+                self.attack_cd = POGO_SWING_CD;
+                if foe.vulnerable {
+                    self.landed += 1;
+                    ctx.out.strikes.push(FoeStrike { id: foe.id, kind: foe.kind, damage: 1, from: centre, at: foe.pos });
+                    ctx.stakes.spells.gain(1);
+                    self.kit.bounce(ctx.now, &mut input);
+                }
+            }
+            Some(KitMove::PogoJump) => self.jump_hold = 0.35,
+            Some(KitMove::PogoSteer) => {
+                if self.jump_hold > 0.0 {
+                    input.jump_held = true;
+                    self.jump_hold -= ctx.dt();
+                }
+            }
+            Some(KitMove::Dive { .. } | KitMove::Dodge(_) | KitMove::Opening | KitMove::WallLeap) => {
+                self.jump_hold = 0.0;
+                self.double_jumped = false;
+            }
+            Some(KitMove::Busy) => {}
+            None => self.close_in(ctx, foe, off, side, reach_x, reach_y, in_reach, &mut input),
+        }
+        ctx.out.face = Some(side);
+        ctx.out.motion = Motion::Direct(input);
+    }
+
+    /// He could dive onto it from where he stands (a window top right above it).
+    fn dive_in_reach(&self, ctx: &Ctx, foe: &Foe) -> bool {
+        ctx.now >= self.kit.dive_ready_at && dive_spot(ctx, foe)
+    }
+
+    /// Plain fighting: walk up, jump (and double jump) at flyers, dash at far foes, slash.
+    #[allow(clippy::too_many_arguments)]
+    fn close_in(&mut self, ctx: &mut Ctx, foe: &Foe, off: Vec2, side: Side, reach_x: f32, reach_y: f32, in_reach: bool, input: &mut MoveInput) {
+        let k = ctx.p.knight;
+        let ppu = k.params.px_per_unit;
+        let grounded = k.is_grounded();
+        let centre = body_centre(ctx);
+        if self.dive_in_reach(ctx, foe) && off.y > reach_y {
+            // Right above it on a window top: line up for the dive.
+            input.x = (off.x / ppu).clamp(-1.0, 1.0);
+            return;
+        }
         if off.x.abs() > 0.8 * reach_x {
             input.x = side.sign();
         }
@@ -420,7 +574,9 @@ impl Fight {
             input.dash_pressed = true;
             self.dash_cd = 1.5;
         }
-        if in_reach && self.attack_cd <= 0.0 {
+        // Something under him while he may not bounce (resting after a pogo run): no swing.
+        let resting_down = !grounded && off.y > off.x.abs() && !self.kit.may_pogo(ctx.now);
+        if in_reach && self.attack_cd <= 0.0 && !resting_down {
             let dir = if off.y < -off.x.abs() {
                 AttackDir::Up
             } else if !grounded && off.y > off.x.abs() {
@@ -435,10 +591,12 @@ impl Fight {
                 self.landed += 1;
                 ctx.out.strikes.push(FoeStrike { id: foe.id, kind: foe.kind, damage: 1, from: centre, at: foe.pos });
                 ctx.stakes.spells.gain(1);
+                if dir == AttackDir::Down && !grounded {
+                    // Every mid-air down slash that connects bounces him, as in the game.
+                    self.kit.bounce(ctx.now, input);
+                }
             }
         }
-        ctx.out.face = Some(side);
-        ctx.out.motion = Motion::Direct(input);
     }
 
     pub fn reason(&self) -> String {
@@ -449,6 +607,8 @@ impl Fight {
         match self.phase {
             Phase::Approach(_) => format!("fight: going for the {who} #{}", self.target.1),
             Phase::Engage | Phase::Act(_) => format!("fight: {who} #{} ({} masks, {} beaten)", self.target.1, self.masks, self.beaten),
+            Phase::Landing(_) => format!("fight: over ({} beaten), landing", self.beaten),
+            Phase::Heal(_) => "fight: over, focusing to heal".into(),
         }
     }
 }
