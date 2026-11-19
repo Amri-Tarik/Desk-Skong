@@ -11,6 +11,7 @@ mod benches;
 mod bubble;
 mod npcs;
 mod discoveries;
+mod emotes;
 mod fx;
 mod gameguard;
 mod grab;
@@ -34,6 +35,7 @@ pub struct Args {
     pub vision: bool,
     pub sit_test: bool,
     pub fx_test: bool,
+    pub emote_test: bool,
     pub goto_test: bool,
     /// `--visit NAME|any`: invite a visitor right after start (debug).
     pub visit: Option<String>,
@@ -58,6 +60,7 @@ fn parse_args() -> Result<Args> {
         vision: true,
         sit_test: false,
         fx_test: false,
+        emote_test: false,
         goto_test: false,
         visit: None,
         dream_test: false,
@@ -80,6 +83,7 @@ fn parse_args() -> Result<Args> {
             "--capture-stats" => skong_win::capture::set_stats_logging(true),
             "--sit-test" => a.sit_test = true,
             "--fx-test" => a.fx_test = true,
+            "--emote-test" => a.emote_test = true,
             "--goto-test" => a.goto_test = true,
             "--visit" => a.visit = Some(v()?),
             "--dream-test" => a.dream_test = true,

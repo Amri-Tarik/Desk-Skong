@@ -34,6 +34,8 @@ use skong_win::vk;
 use crate::Args;
 use crate::keyboard::Keyboard;
 use crate::settings::{BOTHER, SCALES, Settings};
+use crate::emotes::{Emote, Emotes};
+use skong_core::ai::BehaviourKind;
 use crate::benches::{Benches, SEAT_BELOW_ORIGIN};
 use crate::discoveries::Discoveries;
 use crate::navbuild::NavBuilder;
@@ -137,6 +139,11 @@ struct Pet {
     /// Seat line (screen y) while a seated act plays.
     seat_y: Option<f32>,
     benches: Benches,
+    /// Silent knight: emote icons above his head.
+    emotes: Emotes,
+    /// Last brain switch / act already turned into an emote.
+    emote_seen: (f32, Option<ActId>),
+    emote_test: bool,
     /// Things found in windows (benches, hot springs, geo deposits).
     discoveries: Discoveries,
     /// Who stands where: props, NPCs, ... (nothing is placed inside something else).
@@ -240,6 +247,7 @@ pub fn run(args: &Args) -> Result<()> {
     win.set_click_through(settings.click_through);
     let tray = Tray::new("Desk-Skong", &tray_icon(&data, &look))?;
     let benches = Benches::load(&args.data.join("../props.json"), data.vanilla().map(|s| s.dir.as_path()), settings.scale)?;
+    let emotes = Emotes::new(&args.data, data.vanilla(), 64.0 * settings.scale, args.capturable)?;
     let discoveries = Discoveries::load(&args.data.join("../props.json"), data.vanilla().map(|s| s.dir.as_path()), settings.scale);
 
     let mut brain = Brain::new(BrainConfig::default(), ActCatalog::from_library(&data.acts), seed());
@@ -263,6 +271,9 @@ pub fn run(args: &Args) -> Result<()> {
         act,
         seat_y: None,
         benches,
+        emotes,
+        emote_seen: (-1.0, None),
+        emote_test: args.emote_test,
         discoveries,
         occupancy: Default::default(),
         fx,
@@ -356,6 +367,7 @@ pub fn run(args: &Args) -> Result<()> {
             pet.raise_visitors();
             pet.discoveries.raise_all();
             pet.win.raise();
+            pet.emotes.raise();
             log::debug!(
                 "knight at ({:.0},{:.0}) {:?} clip '{}' act {:?} | brain: {}",
                 pet.ch.pos.x,
@@ -516,7 +528,42 @@ impl Pet {
         self.discoveries_tick(dt);
         let origin = self.knight_origin();
         self.tick_visitors(dt);
+        self.emote_tick(dt, origin)?;
         self.fx.update(dt, origin, self.ch.facing == Side::Right, self.ch.params.px_per_unit)
+    }
+
+    /// Turn what he does into silent emotes: zzz while asleep, Geo when he goes for loot,
+    /// "!" when startled or excited, "?" when something catches his curiosity.
+    fn emote_tick(&mut self, dt: f32, origin: Vec2) -> Result<()> {
+        if let Some(sw) = self.brain.last_switch()
+            && sw.at != self.emote_seen.0
+        {
+            self.emote_seen.0 = sw.at;
+            match sw.to {
+                BehaviourKind::Loot => self.emotes.show(Emote::Geo),
+                BehaviourKind::Flee | BehaviourKind::Greet | BehaviourKind::ShadeHunt => self.emotes.show(Emote::Bang),
+                BehaviourKind::Explore | BehaviourKind::Watch => self.emotes.show(Emote::Question),
+                _ => {}
+            }
+        }
+        let act = self.act.as_ref().map(|p| p.act());
+        if act != self.emote_seen.1 {
+            self.emote_seen.1 = act;
+            if act.is_some_and(|id| self.data.acts.get(id).name == "startled") {
+                self.emotes.show(Emote::Bang);
+            }
+        }
+        if self.emote_test {
+            // Debug (`--emote-test`): cycle every emote.
+            let n = (self.emotes.clock() / 2.5) as usize % 4;
+            self.emotes.show([Emote::Zzz, Emote::Geo, Emote::Bang, Emote::Question][n]);
+        }
+        let clip = self.data.lib.get(self.anim.clip()).name.as_str();
+        self.emotes.sleeping(matches!(clip, "Sitting Asleep" | "Sitting Asleep Breathe" | "Prostrate" | "Prostrate Breathe"));
+        // Just above his head: the top of the frame being drawn (works lying, sitting, standing).
+        let top = self.anim.current(&self.data.lib).and_then(|k| self.look.bank.frame(k)).map_or(origin.y - 0.85 * self.ch.params.px_per_unit, |f| origin.y - f.anchor[1]);
+        let head = Vec2::new(origin.x, top - 0.1 * self.ch.params.px_per_unit);
+        self.emotes.update(dt, head)
     }
 
     /// Screen position of the knight sprite's origin (seated acts put the sitting pose's
@@ -614,6 +661,7 @@ impl Pet {
             self.forced_nav = false;
             self.nav.stop();
             self.leaving_for = None;
+            self.emotes.hide();
             self.win.set_visible(false);
             self.vision_before_game = self.content.is_enabled();
             let desk = desk.clone();
@@ -881,6 +929,7 @@ impl Pet {
                 self.loco = Locomotion::new(&self.data.lib, &params)?;
                 self.benches.rescale(s);
                 self.discoveries.rescale(s);
+                self.emotes.rescale(&self.data.args_data, self.data.vanilla(), 64.0 * s);
                 self.navb.reset(&self.terrain, &self.ch);
                 self.settings.save();
             }
@@ -897,6 +946,7 @@ impl Pet {
             Command::TogglePause => {
                 self.paused = !self.paused;
                 self.win.set_visible(!self.paused);
+                self.emotes.hide();
             }
             Command::GoToCursor { hurry } => self.go_to_cursor(hurry),
             Command::PlaceBenchAtCursor(style) => {
