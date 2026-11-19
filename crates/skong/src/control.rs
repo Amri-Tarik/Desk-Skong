@@ -7,7 +7,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use skong_ipc::{ClientId, Command, Hello, ManualKeys, PanelMsg, PetMsg, Server, ServerEvent, Status, decode, encode};
+use skong_ipc::{AchievementsInfo, ClientId, Command, Hello, ManualKeys, PanelMsg, PetMsg, Server, ServerEvent, Status, decode, encode};
 use skong_win::process::UsageSampler;
 
 use crate::logring::{self, LogRing};
@@ -27,6 +27,8 @@ pub struct ControlServer {
     /// Manual mode was switched on because a panel started driving.
     last_status: Instant,
     usage: UsageSampler,
+    /// The last achievements message (sent to each new panel; broadcast only on change).
+    achievements: Option<Arc<str>>,
 }
 
 impl ControlServer {
@@ -48,6 +50,7 @@ impl ControlServer {
             keys: None,
             last_status: Instant::now(),
             usage: UsageSampler::new(),
+            achievements: None,
         }
     }
 
@@ -76,6 +79,9 @@ impl ControlServer {
                     log::info!("control panel #{id} connected");
                     self.hello.log_level = Some(logring::panel_level());
                     server.send(id, encode(&PetMsg::Hello(self.hello.clone())).into());
+                    if let Some(a) = &self.achievements {
+                        server.send(id, a.clone());
+                    }
                     if let Some(ring) = self.ring {
                         if server.client_count() == 1 {
                             self.sent_seq = ring.next_seq(); // nothing was streamed while alone
@@ -132,6 +138,18 @@ impl ControlServer {
     /// Time to publish a status? (Only with panels connected.)
     pub fn status_due(&self) -> bool {
         self.panels() > 0 && self.last_status.elapsed() >= STATUS_EVERY
+    }
+
+    /// The achievements changed (or are known for the first time): keep them for panels
+    /// that connect later and tell the connected ones now.
+    pub fn publish_achievements(&mut self, info: AchievementsInfo) {
+        let line: Arc<str> = encode(&PetMsg::Achievements(info)).into();
+        if let Some(s) = self.server.as_mut()
+            && s.client_count() > 0
+        {
+            s.broadcast(&line);
+        }
+        self.achievements = Some(line);
     }
 
     /// Send `status` to every panel, adding process usage and connection info.

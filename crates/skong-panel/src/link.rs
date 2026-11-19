@@ -10,7 +10,7 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
-use skong_ipc::{Hello, LogLine, PanelMsg, PetMsg, Status, decode, encode};
+use skong_ipc::{AchievementsInfo, Hello, LogLine, PanelMsg, PetMsg, Status, decode, encode};
 
 /// Log lines kept by the panel.
 pub const MAX_LOGS: usize = 5000;
@@ -22,6 +22,8 @@ pub struct Shared {
     pub connected: bool,
     pub hello: Option<Hello>,
     pub status: Option<Status>,
+    /// Hidden achievements (sent on connect and on change; `None` from older pets).
+    pub achievements: Option<AchievementsInfo>,
     pub logs: VecDeque<LogLine>,
     /// Highest log sequence number seen in this connection (dedups backlog vs stream).
     pub last_seq: Option<u64>,
@@ -49,6 +51,7 @@ impl Shared {
                 self.status = Some(*s);
                 self.statuses += 1;
             }
+            PetMsg::Achievements(a) => self.achievements = Some(a),
             PetMsg::Logs(lines) => {
                 for l in lines {
                     if self.last_seq.is_some_and(|s| l.seq <= s) {
@@ -179,5 +182,17 @@ mod tests {
         assert_eq!(s.logs.iter().map(|l| l.seq).collect::<Vec<_>>(), [0, 1, 2, 3]);
         s.ingest(PetMsg::Status(Box::default()));
         assert_eq!(s.statuses, 1);
+    }
+
+    #[test]
+    fn achievements_replace_the_previous_copy() {
+        use skong_ipc::AchievementEntry;
+        let mut s = Shared::default();
+        assert!(s.achievements.is_none());
+        let mut a = AchievementsInfo { entries: vec![AchievementEntry::default(); 3] };
+        s.ingest(PetMsg::Achievements(a.clone()));
+        a.entries.pop();
+        s.ingest(PetMsg::Achievements(a));
+        assert_eq!(s.achievements.as_ref().map(|a| a.total()), Some(2));
     }
 }

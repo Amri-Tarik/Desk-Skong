@@ -22,6 +22,8 @@ pub enum Emote {
     Geo,
     Bang,
     Question,
+    /// A small, quiet sparkle: something was achieved (see `app/achievements.rs`).
+    Spark,
 }
 
 impl Emote {
@@ -31,6 +33,7 @@ impl Emote {
             Emote::Geo => 1.6,
             Emote::Bang => 1.2,
             Emote::Question => 1.8,
+            Emote::Spark => 1.4,
         }
     }
 
@@ -39,9 +42,10 @@ impl Emote {
         matches!(self, Emote::Geo | Emote::Question)
     }
 
-    /// Reactions (startle, sleep) always show; curiosity/greed respect a cooldown.
+    /// Reactions (startle, sleep) and the rare achievement sparkle always show;
+    /// curiosity/greed respect a cooldown.
     fn urgent(self) -> bool {
-        matches!(self, Emote::Bang | Emote::Zzz)
+        matches!(self, Emote::Bang | Emote::Zzz | Emote::Spark)
     }
 }
 
@@ -178,6 +182,7 @@ impl Emotes {
             Emote::Bang => self.glyphs("!"),
             Emote::Question => self.glyphs("?"),
             Emote::Zzz => self.glyphs(["z", "z Z", "z Z z"][phase as usize]),
+            Emote::Spark => Some(sparkle((0.3 * self.ppu).round().max(7.0) as u32)),
         }
     }
 
@@ -211,6 +216,31 @@ impl Emotes {
         p.draw(&mut img, pad, pad, text, [245, 245, 250], 1.0).ok()?;
         Some(img)
     }
+}
+
+/// A four-pointed sparkle `r` px in radius: pale gold with a soft dark rim (readable on any
+/// background), concave arms like a glint.
+fn sparkle(r: u32) -> Image {
+    let size = 2 * r + 3;
+    let c = (size / 2) as f32;
+    let mut img = Image::new(size, size);
+    // Inside the star when |x|^p + |y|^p <= r^p with p < 1 (concave arms).
+    let star = |x: f32, y: f32, r: f32| (x.abs() / r).powf(0.5) + (y.abs() / r).powf(0.5) <= 1.0;
+    for y in 0..size {
+        for x in 0..size {
+            let (dx, dy) = (x as f32 - c, y as f32 - c);
+            let (a, rgb) = if star(dx, dy, r as f32 - 1.0) {
+                (255u32, [255u32, 236, 170])
+            } else if star(dx, dy, r as f32 + 0.5) {
+                (150, [30, 26, 20])
+            } else {
+                continue;
+            };
+            // Premultiplied BGRA.
+            img.px[(y * size + x) as usize] = (a << 24) | ((rgb[0] * a / 255) << 16) | ((rgb[1] * a / 255) << 8) | (rgb[2] * a / 255);
+        }
+    }
+    img
 }
 
 /// The small Geo coin (first frame of "Small Idle"), slightly enlarged for legibility.

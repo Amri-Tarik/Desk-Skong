@@ -1,4 +1,5 @@
-//! The panel window (egui). Left: controls mirroring the tray + live status. Right: logs.
+//! The panel window (egui). Left: controls mirroring the tray + live status. Right: logs, and
+//! the Achievements tab (hidden ones show as "???" with a vague hint; only the count shows).
 //!
 //! While the window is focused (and no text field has focus): arrows / Up jump / Shift dash /
 //! Ctrl superdash / Z walk / X sprint drive the knight while the pet is in manual mode (a toggle,
@@ -6,7 +7,7 @@
 use std::time::Duration;
 
 use eframe::egui::{self, Color32, Key, RichText, TextWrapMode};
-use skong_ipc::{SPELLS, StakesCommand, Command, LogLevel, LogLine, ManualKeys, OverlayLayers, PanelMsg, Status};
+use skong_ipc::{AchievementsInfo, SPELLS, StakesCommand, Command, LogLevel, LogLine, ManualKeys, OverlayLayers, PanelMsg, Status};
 
 use crate::link::Link;
 
@@ -54,11 +55,25 @@ struct Panel {
     /// Last ManualInput sent: (active, keys).
     sent_keys: (bool, ManualKeys),
     session: u64,
+    tab: Tab,
+    /// "Reset achievements" armed (a second click resets).
+    reset_armed: bool,
 }
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Tab {
+    Logs,
+    Achievements,
+}
+
+/// Unlocks this recent are marked new (s).
+const NEW_SECS: u64 = 15 * 60;
 
 impl Panel {
     fn new(link: Link) -> Self {
         Self {
+            tab: Tab::Logs,
+            reset_armed: false,
             link,
             skin_filter: String::new(),
             log_text: String::new(),
@@ -339,6 +354,63 @@ impl Panel {
         });
     }
 
+    /// Found ones (newest first) with what and when; the rest as "???" with their hint.
+    fn achievements(&mut self, ui: &mut egui::Ui, info: Option<&AchievementsInfo>, connected: bool) {
+        let Some(info) = info else {
+            ui.weak(if connected { "this pet doesn't keep achievements" } else { "waiting for the pet…" });
+            return;
+        };
+        let (got, total) = (info.unlocked(), info.total());
+        ui.horizontal(|ui| {
+            ui.heading(format!("{got} / {total}"));
+            ui.add(egui::ProgressBar::new(if total == 0 { 0.0 } else { got as f32 / total as f32 }).desired_width(220.0));
+        });
+        ui.weak("Each one stays hidden until the knight does it. Play with him, and see what he can do.");
+        ui.separator();
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        let mut found: Vec<_> = info.entries.iter().filter_map(|e| e.unlocked.as_ref()).collect();
+        found.sort_by_key(|u| std::cmp::Reverse(u.at));
+        let gold = Color32::from_rgb(230, 200, 120);
+        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            for u in found {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("★").color(gold));
+                    ui.label(RichText::new(&u.title).strong().color(gold));
+                    if now.saturating_sub(u.at) < NEW_SECS {
+                        ui.label(RichText::new("new").small().color(Color32::from_rgb(90, 200, 110)));
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.weak(ago(now, u.at)));
+                });
+                ui.indent(&u.id, |ui| ui.label(&u.description));
+                ui.add_space(4.0);
+            }
+            for e in info.entries.iter().filter(|e| e.unlocked.is_none()) {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("·").weak());
+                    ui.label(RichText::new("???").weak());
+                    if let Some(h) = &e.hint {
+                        ui.label(RichText::new(h).small().italics().weak());
+                    }
+                });
+            }
+            ui.add_space(12.0);
+            ui.collapsing("Debug", |ui| {
+                ui.horizontal(|ui| {
+                    let label = if self.reset_armed { "Really forget them all?" } else { "Reset achievements" };
+                    if ui.add_enabled(connected, egui::Button::new(RichText::new(label).color(Color32::from_rgb(230, 90, 90)))).clicked() {
+                        if self.reset_armed {
+                            self.cmd(Command::ResetAchievements);
+                        }
+                        self.reset_armed = !self.reset_armed;
+                    }
+                    if self.reset_armed && ui.button("Keep them").clicked() {
+                        self.reset_armed = false;
+                    }
+                });
+            });
+        });
+    }
+
     fn filtered(&self) -> Vec<LogLine> {
         let text = self.log_text.to_lowercase();
         self.link
@@ -354,9 +426,9 @@ impl Panel {
 impl eframe::App for Panel {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        let (connected, hello, status, session) = {
+        let (connected, hello, status, session, achievements) = {
             let s = self.link.shared();
-            (s.connected, s.hello.clone(), s.status.clone(), s.session)
+            (s.connected, s.hello.clone(), s.status.clone(), s.session, s.achievements.clone())
         };
         if connected && session != self.session {
             // New connection: re-apply our preferences.
@@ -396,7 +468,18 @@ impl eframe::App for Panel {
                 });
             });
         });
-        egui::CentralPanel::default().show(ui, |ui| self.logs(ui, connected));
+        egui::CentralPanel::default().show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.tab, Tab::Logs, "Logs");
+                let count = achievements.as_ref().map_or_else(String::new, |a| format!("  {} / {}", a.unlocked(), a.total()));
+                ui.selectable_value(&mut self.tab, Tab::Achievements, format!("Achievements{count}"));
+            });
+            ui.separator();
+            match self.tab {
+                Tab::Logs => self.logs(ui, connected),
+                Tab::Achievements => self.achievements(ui, achievements.as_ref(), connected),
+            }
+        });
 
         // Idle: a slow tick keeps the connection state fresh; data arrival wakes us anyway.
         ctx.request_repaint_after(Duration::from_millis(250));
@@ -414,6 +497,18 @@ fn level_color(l: LogLevel) -> Color32 {
         LogLevel::Info => Color32::from_rgb(210, 210, 210),
         LogLevel::Debug => Color32::from_rgb(130, 170, 220),
         LogLevel::Trace => Color32::from_rgb(140, 140, 140),
+    }
+}
+
+/// "just now", "5 min ago", "3 h ago", "2 days ago".
+fn ago(now: u64, at: u64) -> String {
+    let s = now.saturating_sub(at);
+    match s {
+        0..60 => "just now".into(),
+        60..3600 => format!("{} min ago", s / 60),
+        3600..86_400 => format!("{} h ago", s / 3600),
+        86_400..172_800 => "yesterday".into(),
+        _ => format!("{} days ago", s / 86_400),
     }
 }
 

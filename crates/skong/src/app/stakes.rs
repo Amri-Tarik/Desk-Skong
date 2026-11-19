@@ -69,6 +69,8 @@ pub struct Stakes {
     dirty: bool,
     since_save: f32,
     since_raise: f32,
+    /// Windows shattered into Geo since start (achievements watch it).
+    pub shattered: u32,
 }
 
 impl Stakes {
@@ -103,6 +105,7 @@ impl Stakes {
             dirty: false,
             since_save: 0.0,
             since_raise: 0.0,
+            shattered: 0,
         }
     }
 
@@ -269,6 +272,7 @@ impl Pet {
                 if let Some((d, how)) = drop {
                     log::info!("a {how} window shatters into {} geo", d.amount);
                     st.geo.spill(&d);
+                    st.shattered += 1;
                 }
             }
             st.windows = now;
@@ -338,6 +342,7 @@ impl Pet {
             Some(s) => format!("Desk-Skong — {} geo (shade holds {})", st.save.geo, s.geo),
             None => format!("Desk-Skong — {} geo", st.save.geo),
         };
+        let tip = self.achievements.tray_tip(tip);
         self.tray.set_tip(&tip);
         Ok(())
     }

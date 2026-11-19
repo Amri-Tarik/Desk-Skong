@@ -49,6 +49,19 @@ struct OpenPortal {
     guest: Option<(usize, Placement)>,
 }
 
+/// What happened with visitors, for the pet (achievements). `who` = definition name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum VisitorNews {
+    /// A conversation with the knight started.
+    Talked { who: String },
+    /// A lesson ended (`finished`: with the final bow, not cut short).
+    LessonOver { who: String, finished: bool },
+    /// A spar ended (`lost`: the visitor went down).
+    SparOver { who: String, lost: bool },
+    /// The dream nail showed a thought: a visitor's (`Some`) or a window's (`None`).
+    Dreamed { who: Option<String> },
+}
+
 /// What the visitors need to know about the world this tick.
 pub struct World<'a> {
     pub terrain: &'a Terrain,
@@ -111,6 +124,8 @@ pub struct Visitors {
     dream_wanted: bool,
     /// Sparring charges that caught the knight since the brain last looked.
     knight_hits: u32,
+    /// Since the pet last looked (see [`Visitors::take_news`]).
+    news: Vec<VisitorNews>,
 }
 
 const SLASH_CLIP: &str = "DN Slash";
@@ -151,6 +166,7 @@ impl Visitors {
             dream_test: None,
             dream_wanted: false,
             knight_hits: 0,
+            news: Vec::new(),
         };
         v.rescale(vanilla, scale)?;
         Ok(v)
@@ -203,6 +219,16 @@ impl Visitors {
         self.live.iter().filter(|l| l.npc.phase() != NpcPhase::Gone).map(|l| l.npc.percept(&self.set, self.ppu)).collect()
     }
 
+    /// What happened since the last call.
+    pub fn take_news(&mut self) -> Vec<VisitorNews> {
+        std::mem::take(&mut self.news)
+    }
+
+    /// Every visitor that may drop by (definition names).
+    pub fn kinds(&self) -> Vec<String> {
+        self.set.defs.iter().map(|d| d.name.clone()).collect()
+    }
+
     pub fn present(&self) -> bool {
         !self.live.is_empty() || self.portals.iter().any(|p| p.guest.is_some())
     }
@@ -229,6 +255,7 @@ impl Visitors {
         let mut events = Vec::new();
         if self.live[i].npc.begin_talk(lines, w.knight.pos.x, &self.set, &mut events) {
             log::info!("visitor: {} talks with the knight", self.set.defs[def].display);
+            self.news.push(VisitorNews::Talked { who: self.set.defs[def].name.clone() });
             self.handle_events(i, events, w);
         }
     }
@@ -526,11 +553,13 @@ impl Visitors {
                 NpcEvent::LessonOver { finished } => {
                     let who = &self.set.defs[self.live[i].npc.def].display;
                     log::info!("visitor: {who}'s lesson {}", if finished { "is over" } else { "was cut short" });
+                    self.news.push(VisitorNews::LessonOver { who: self.set.defs[self.live[i].npc.def].name.clone(), finished });
                 }
                 NpcEvent::HitKnight => self.knight_hits += 1,
                 NpcEvent::SparOver { lost } => {
                     let who = &self.set.defs[self.live[i].npc.def].display;
                     log::info!("visitor: the spar with {who} is over ({})", if lost { "he lost" } else { "it fizzled out" });
+                    self.news.push(VisitorNews::SparOver { who: self.set.defs[self.live[i].npc.def].name.clone(), lost });
                 }
                 NpcEvent::OpenPortal(at) => {
                     self.portals.push(OpenPortal { portal: Portal::open(PortalSpot { at, owner: None }, self.set.portal_style), guest: None });
@@ -618,6 +647,7 @@ impl Visitors {
         let area = self.work_at(k.pos, w.desk);
         let secs = skong_core::bubble::read_secs(&text) + 1.0;
         self.bubbles.say(head, &text, BubbleStyle::Thought, secs, area);
+        self.news.push(VisitorNews::Dreamed { who: None });
     }
 }
 
@@ -665,5 +695,6 @@ impl Visitors {
         let secs = skong_core::bubble::read_secs(&text) + 1.0;
         let id = self.bubbles.say(anchor, &text, BubbleStyle::Thought, secs, area);
         self.live[i].bubble = id;
+        self.news.push(VisitorNews::Dreamed { who: Some(d.name.clone()) });
     }
 }
