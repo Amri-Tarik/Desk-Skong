@@ -1,0 +1,1433 @@
+{
+  "name": "Sly Boss Anim",
+  "clips": [
+    {
+      "name": "Antic",
+      "fps": 14.285714,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 1,
+          "sprite": "antic0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 0,
+          "sprite": "antic0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 4,
+          "sprite": "antic0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 2,
+          "sprite": "antic0003"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 3,
+          "sprite": "antic0004"
+        }
+      ]
+    },
+    {
+      "name": "Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 7,
+          "sprite": "battle_idle0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 6,
+          "sprite": "battle_idle0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 5,
+          "sprite": "battle_idle0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 8,
+          "sprite": "battle_idle0003"
+        }
+      ]
+    },
+    {
+      "name": "Cyclone",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 12,
+          "sprite": "cyclone_spin0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 10,
+          "sprite": "cyclone_spin0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 9,
+          "sprite": "cyclone_spin0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 11,
+          "sprite": "cyclone_spin0003"
+        }
+      ]
+    },
+    {
+      "name": "Evade",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 15,
+          "sprite": "evade0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 14,
+          "sprite": "evade0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 13,
+          "sprite": "evade0002"
+        }
+      ]
+    },
+    {
+      "name": "Jump",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 18,
+          "sprite": "jump_attack0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 29,
+          "sprite": "jump_attack0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 19,
+          "sprite": "jump_attack0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 22,
+          "sprite": "jump_attack0003"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 25,
+          "sprite": "jump_attack0004"
+        }
+      ]
+    },
+    {
+      "name": "Stomp Antic",
+      "fps": 18,
+      "loop_start": 5,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 16,
+          "sprite": "jump_attack0005"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 20,
+          "sprite": "jump_attack0006"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 24,
+          "sprite": "jump_attack0007"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 28,
+          "sprite": "jump_attack0008"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 21,
+          "sprite": "jump_attack0009"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 26,
+          "sprite": "jump_attack0010"
+        }
+      ]
+    },
+    {
+      "name": "Stomp",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 23,
+          "sprite": "jump_attack0013"
+        }
+      ]
+    },
+    {
+      "name": "Slash Recover",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 63,
+          "sprite": "slash_recover0004"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 64,
+          "sprite": "slash_recover0005"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 62,
+          "sprite": "slash_recover0006"
+        }
+      ]
+    },
+    {
+      "name": "Stun Air",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 70,
+          "sprite": "stun0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 75,
+          "sprite": "stun0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 76,
+          "sprite": "stun0002"
+        }
+      ]
+    },
+    {
+      "name": "Stun",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 71,
+          "sprite": "stun0003"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 72,
+          "sprite": "stun0004"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 68,
+          "sprite": "stun0005"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 77,
+          "sprite": "stun0006"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 73,
+          "sprite": "stun0007"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 78,
+          "sprite": "stun0008"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 67,
+          "sprite": "stun0009"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 69,
+          "sprite": "stun0010"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 74,
+          "sprite": "stun0011"
+        }
+      ]
+    },
+    {
+      "name": "Docile",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 80,
+          "sprite": "talk_idle0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 84,
+          "sprite": "talk_idle0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 81,
+          "sprite": "talk_idle0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 83,
+          "sprite": "talk_idle0003"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 79,
+          "sprite": "talk_idle0004"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 82,
+          "sprite": "talk_idle0005"
+        }
+      ]
+    },
+    {
+      "name": "Bow",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 67,
+          "sprite": "stun0009"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 78,
+          "sprite": "stun0008"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 80,
+          "sprite": "talk_idle0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 84,
+          "sprite": "talk_idle0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 81,
+          "sprite": "talk_idle0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 83,
+          "sprite": "talk_idle0003"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 79,
+          "sprite": "talk_idle0004"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 82,
+          "sprite": "talk_idle0005"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 80,
+          "sprite": "talk_idle0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 84,
+          "sprite": "talk_idle0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 81,
+          "sprite": "talk_idle0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 83,
+          "sprite": "talk_idle0003"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 79,
+          "sprite": "talk_idle0004"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 82,
+          "sprite": "talk_idle0005"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 88,
+          "sprite": "talk_idle_to_bow0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 85,
+          "sprite": "talk_idle_to_bow0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 86,
+          "sprite": "talk_idle_to_bow0003"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 87,
+          "sprite": "talk_idle_to_bow0004"
+        }
+      ]
+    },
+    {
+      "name": "Bow Return",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 88,
+          "sprite": "talk_idle_to_bow0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 89,
+          "sprite": "talk_idle_to_bow0000"
+        }
+      ]
+    },
+    {
+      "name": "Nail Call",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 95,
+          "sprite": "talk_idle_to_nail0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 90,
+          "sprite": "talk_idle_to_nail0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 91,
+          "sprite": "talk_idle_to_nail0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 92,
+          "sprite": "talk_idle_to_nail0003"
+        }
+      ]
+    },
+    {
+      "name": "Nail Catch",
+      "fps": 12,
+      "loop_start": 6,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 94,
+          "sprite": "talk_idle_to_nail0004"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 94,
+          "sprite": "talk_idle_to_nail0004"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 94,
+          "sprite": "talk_idle_to_nail0004"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 94,
+          "sprite": "talk_idle_to_nail0004"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 94,
+          "sprite": "talk_idle_to_nail0004"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 94,
+          "sprite": "talk_idle_to_nail0004"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 93,
+          "sprite": "talk_idle_to_nail0005"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 142,
+          "sprite": "talk_idle_to_nail0006"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 141,
+          "sprite": "talk_idle_to_nail0007"
+        }
+      ]
+    },
+    {
+      "name": "TurnToIdle",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 96,
+          "sprite": "turn0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 97,
+          "sprite": "turn0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 7,
+          "sprite": "battle_idle0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 6,
+          "sprite": "battle_idle0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 5,
+          "sprite": "battle_idle0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 8,
+          "sprite": "battle_idle0003"
+        }
+      ]
+    },
+    {
+      "name": "Run",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 30,
+          "sprite": "run0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 32,
+          "sprite": "run0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 35,
+          "sprite": "run0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 31,
+          "sprite": "run0003"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 34,
+          "sprite": "run0004"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 33,
+          "sprite": "run0005"
+        }
+      ]
+    },
+    {
+      "name": "Attack1 S1",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 59,
+          "sprite": "3_slash_attack0000"
+        }
+      ]
+    },
+    {
+      "name": "Attack1 S2",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 49,
+          "sprite": "3_slash_attack0001"
+        }
+      ]
+    },
+    {
+      "name": "Attack1 S3",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 51,
+          "sprite": "3_slash_attack0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 54,
+          "sprite": "3_slash_attack0003"
+        }
+      ]
+    },
+    {
+      "name": "Attack2 Antic",
+      "fps": 14,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 55,
+          "sprite": "3_slash_attack0004"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 42,
+          "sprite": "3_slash_attack0005"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 43,
+          "sprite": "3_slash_attack0006"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 36,
+          "sprite": "3_slash_attack0007"
+        }
+      ]
+    },
+    {
+      "name": "Attack2 S1",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 37,
+          "sprite": "3_slash_attack0008"
+        }
+      ]
+    },
+    {
+      "name": "Attack2 S2",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 52,
+          "sprite": "3_slash_attack0009"
+        }
+      ]
+    },
+    {
+      "name": "Attack2 S3",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 53,
+          "sprite": "3_slash_attack0010"
+        }
+      ]
+    },
+    {
+      "name": "Attack2 S4",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 46,
+          "sprite": "3_slash_attack0011"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 46,
+          "sprite": "3_slash_attack0011"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 46,
+          "sprite": "3_slash_attack0011"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 47,
+          "sprite": "3_slash_attack0014"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 48,
+          "sprite": "3_slash_attack0015"
+        }
+      ]
+    },
+    {
+      "name": "Spin Slash",
+      "fps": 15,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 40,
+          "sprite": "3_slash_attack0016"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 41,
+          "sprite": "3_slash_attack0017"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 44,
+          "sprite": "3_slash_attack0018"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 45,
+          "sprite": "3_slash_attack0019"
+        }
+      ]
+    },
+    {
+      "name": "Spin Slash Recover",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 38,
+          "sprite": "3_slash_attack0020"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 39,
+          "sprite": "3_slash_attack0021"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 58,
+          "sprite": "3_slash_attack0022"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 50,
+          "sprite": "3_slash_attack0023"
+        }
+      ]
+    },
+    {
+      "name": "SpinStomp Antic",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 16,
+          "sprite": "jump_attack0005"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 20,
+          "sprite": "jump_attack0006"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 24,
+          "sprite": "jump_attack0007"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 28,
+          "sprite": "jump_attack0008"
+        }
+      ]
+    },
+    {
+      "name": "Evade Recover",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 1,
+          "sprite": "antic0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 0,
+          "sprite": "antic0001"
+        }
+      ]
+    },
+    {
+      "name": "Charge Ground",
+      "fps": 15,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 1,
+          "sprite": "antic0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 0,
+          "sprite": "antic0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 114,
+          "sprite": "nail_attack_charge0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 117,
+          "sprite": "nail_attack_charge0003"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 116,
+          "sprite": "nail_attack_charge0004"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 115,
+          "sprite": "nail_attack_charge0005"
+        }
+      ]
+    },
+    {
+      "name": "GSlash Effect",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 104,
+          "sprite": "attack_great_slash_blade0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 105,
+          "sprite": "attack_great_slash_blade0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 106,
+          "sprite": "attack_great_slash_blade0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 107,
+          "sprite": "attack_great_slash_blade0003"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 108,
+          "sprite": "attack_great_slash_blade0004"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 109,
+          "sprite": "attack_great_slash_blade0005"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 110,
+          "sprite": "attack_great_slash_blade0006"
+        }
+      ]
+    },
+    {
+      "name": "Shockwave",
+      "fps": 15,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 111,
+          "sprite": "attack_great_slash_shockwave0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 112,
+          "sprite": "attack_great_slash_shockwave0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 113,
+          "sprite": "attack_great_slash_shockwave0002"
+        }
+      ]
+    },
+    {
+      "name": "Jump Antic",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 1,
+          "sprite": "antic0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 0,
+          "sprite": "antic0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 4,
+          "sprite": "antic0002"
+        }
+      ]
+    },
+    {
+      "name": "Wall Land",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 132,
+          "sprite": "sly_wall_grab0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 134,
+          "sprite": "sly_wall_grab0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 136,
+          "sprite": "sly_wall_grab0004"
+        }
+      ]
+    },
+    {
+      "name": "Wall Charge",
+      "fps": 15,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 132,
+          "sprite": "sly_wall_grab0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 134,
+          "sprite": "sly_wall_grab0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 133,
+          "sprite": "sly_wall_grab0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 135,
+          "sprite": "sly_wall_grab0003"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 136,
+          "sprite": "sly_wall_grab0004"
+        }
+      ]
+    },
+    {
+      "name": "Dash",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 101,
+          "sprite": "attack_dash_slash_dash0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 102,
+          "sprite": "attack_dash_slash_dash0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 103,
+          "sprite": "attack_dash_slash_dash0002"
+        }
+      ]
+    },
+    {
+      "name": "DSlash Effect",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 98,
+          "sprite": "attack_dash_slash_blade0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 99,
+          "sprite": "attack_dash_slash_blade0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 100,
+          "sprite": "attack_dash_slash_blade0002"
+        }
+      ]
+    },
+    {
+      "name": "Fall",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 19,
+          "sprite": "jump_attack0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 22,
+          "sprite": "jump_attack0003"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 25,
+          "sprite": "jump_attack0004"
+        }
+      ]
+    },
+    {
+      "name": "Nail Spin",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 137,
+          "sprite": "stun_nail_spin0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 140,
+          "sprite": "stun_nail_spin0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 138,
+          "sprite": "stun_nail_spin0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 139,
+          "sprite": "stun_nail_spin0003"
+        }
+      ]
+    },
+    {
+      "name": "Nail Ground",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 127,
+          "sprite": "stun_recover_nail_grab0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 123,
+          "sprite": "stun_recover_nail_grab0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 122,
+          "sprite": "stun_recover_nail_grab0003"
+        }
+      ]
+    },
+    {
+      "name": "Nail Grab",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 125,
+          "sprite": "stun_recover_nail_grab0004"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 129,
+          "sprite": "stun_recover_nail_grab0005"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 130,
+          "sprite": "stun_recover_nail_grab0006"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 124,
+          "sprite": "stun_recover_nail_grab0007"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 128,
+          "sprite": "stun_recover_nail_grab0008"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 131,
+          "sprite": "stun_recover_nail_grab0009"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 121,
+          "sprite": "stun_recover_nail_grab0010"
+        }
+      ]
+    },
+    {
+      "name": "Stun Leave",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 118,
+          "sprite": "stun_leave0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 119,
+          "sprite": "stun_leave0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 120,
+          "sprite": "stun_leave0002"
+        }
+      ]
+    },
+    {
+      "name": "Land",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 2,
+          "sprite": "antic0003"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 0,
+          "sprite": "antic0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 1,
+          "sprite": "antic0000"
+        }
+      ]
+    },
+    {
+      "name": "Roar Recover",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 64,
+          "sprite": "slash_recover0005"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 62,
+          "sprite": "slash_recover0006"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 1,
+          "sprite": "antic0000"
+        }
+      ]
+    },
+    {
+      "name": "Thunk",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 143,
+          "sprite": "thunk_effect0005"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 144,
+          "sprite": "thunk_effect0006"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 145,
+          "sprite": "thunk_effect0007"
+        }
+      ]
+    },
+    {
+      "name": "Rest",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 149,
+          "sprite": "Sly_battle_rest_to_idle0000"
+        }
+      ]
+    },
+    {
+      "name": "Wake",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 147,
+          "sprite": "Sly_battle_rest_to_idle0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 148,
+          "sprite": "Sly_battle_rest_to_idle0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 150,
+          "sprite": "Sly_battle_rest_to_idle0003"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 146,
+          "sprite": "Sly_battle_rest_to_idle0004"
+        }
+      ]
+    },
+    {
+      "name": "Air Roar 1",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 158,
+          "sprite": "Sly_mid_air_roar0000"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 155,
+          "sprite": "Sly_mid_air_roar0001"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 152,
+          "sprite": "Sly_mid_air_roar0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 153,
+          "sprite": "Sly_mid_air_roar0003"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 156,
+          "sprite": "Sly_mid_air_roar0004"
+        }
+      ]
+    },
+    {
+      "name": "Air Roar 2",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 151,
+          "sprite": "Sly_mid_air_roar0005"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 157,
+          "sprite": "Sly_mid_air_roar0006"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 154,
+          "sprite": "Sly_mid_air_roar0007"
+        }
+      ]
+    },
+    {
+      "name": "Roof Land",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 19,
+          "sprite": "jump_attack0002"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 22,
+          "sprite": "jump_attack0003"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 25,
+          "sprite": "jump_attack0004"
+        }
+      ]
+    },
+    {
+      "name": "GSlash End",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 53,
+          "sprite": "3_slash_attack0010"
+        },
+        {
+          "collection": "Sly Boss Cln",
+          "sprite_id": 46,
+          "sprite": "3_slash_attack0011"
+        }
+      ]
+    }
+  ]
+}

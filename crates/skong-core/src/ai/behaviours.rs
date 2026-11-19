@@ -84,6 +84,8 @@ pub enum BehaviourKind {
     Recover,
     /// A visitor (NPC) showed up: hurry over and talk.
     Greet,
+    /// A teaching visitor (Sly) runs a lesson: watch, practise the drills, take the notes.
+    Train,
     /// Died: death act, gone, respawn at a bench / safe ledge.
     Dead,
     /// Show off around the cursor (hops, loops, dash-bys): mischief without a fight.
@@ -97,7 +99,7 @@ pub enum BehaviourKind {
 }
 
 impl BehaviourKind {
-    pub const ALL: [BehaviourKind; 18] = [
+    pub const ALL: [BehaviourKind; 19] = [
         BehaviourKind::Idle,
         BehaviourKind::Companion,
         BehaviourKind::Watch,
@@ -116,6 +118,7 @@ impl BehaviourKind {
         BehaviourKind::Loot,
         BehaviourKind::Visit,
         BehaviourKind::Pester,
+        BehaviourKind::Train,
     ];
 
     pub fn label(self) -> &'static str {
@@ -138,6 +141,7 @@ impl BehaviourKind {
             BehaviourKind::Loot => "loot",
             BehaviourKind::Visit => "visit",
             BehaviourKind::Pester => "pester",
+            BehaviourKind::Train => "train",
         }
     }
 
@@ -149,7 +153,7 @@ impl BehaviourKind {
     pub fn tier(self) -> Tier {
         match self {
             BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead => Tier::Urgent,
-            BehaviourKind::Battle | BehaviourKind::Pester | BehaviourKind::ShadeHunt | BehaviourKind::Loot | BehaviourKind::Greet => Tier::Engagement,
+            BehaviourKind::Battle | BehaviourKind::Pester | BehaviourKind::ShadeHunt | BehaviourKind::Loot | BehaviourKind::Greet | BehaviourKind::Train => Tier::Engagement,
             BehaviourKind::Nap | BehaviourKind::Rest | BehaviourKind::Recover => Tier::Needs,
             BehaviourKind::Idle | BehaviourKind::Companion | BehaviourKind::Watch | BehaviourKind::Explore | BehaviourKind::Ride | BehaviourKind::Visit => {
                 Tier::Ambient
@@ -159,7 +163,7 @@ impl BehaviourKind {
 
     /// Exclusive behaviours end themselves; only urgent challengers may interrupt.
     pub fn exclusive(self) -> bool {
-        matches!(self, BehaviourKind::Nap | BehaviourKind::Battle | BehaviourKind::Pester | BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead | BehaviourKind::ShadeHunt | BehaviourKind::Loot)
+        matches!(self, BehaviourKind::Nap | BehaviourKind::Battle | BehaviourKind::Pester | BehaviourKind::Train | BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead | BehaviourKind::ShadeHunt | BehaviourKind::Loot)
     }
 }
 
@@ -271,6 +275,11 @@ impl ActWait {
 
     pub fn named(ctx: &Ctx, name: &str) -> Option<Self> {
         ctx.act_id(name).map(Self::new)
+    }
+
+    /// The act actually got going (it may also end without ever starting).
+    pub fn started(&self) -> bool {
+        self.started
     }
 
     /// `true` once the act has finished (or could not start).
@@ -972,6 +981,7 @@ pub(crate) enum Active {
     KnockedOut(KnockedOut),
     Recover(Recover),
     Greet(Box<super::greet::Greet>),
+    Train(Box<super::train::Train>),
     Dead(Dead),
     ShadeHunt(Box<ShadeHunt>),
     Loot(Loot),
@@ -995,6 +1005,7 @@ impl Active {
             Active::KnockedOut(_) => BehaviourKind::KnockedOut,
             Active::Recover(_) => BehaviourKind::Recover,
             Active::Greet(_) => BehaviourKind::Greet,
+            Active::Train(_) => BehaviourKind::Train,
             Active::Dead(_) => BehaviourKind::Dead,
             Active::ShadeHunt(_) => BehaviourKind::ShadeHunt,
             Active::Loot(_) => BehaviourKind::Loot,
@@ -1018,6 +1029,7 @@ impl Active {
             Active::KnockedOut(b) => b.tick(ctx),
             Active::Recover(b) => b.tick(ctx),
             Active::Greet(b) => b.tick(ctx),
+            Active::Train(b) => b.tick(ctx),
             Active::Dead(b) => b.tick(ctx),
             Active::ShadeHunt(b) => b.tick(ctx),
             Active::Loot(b) => b.tick(ctx),
@@ -1042,6 +1054,7 @@ impl Active {
             Active::KnockedOut(_) => "knocked out: huge fall".into(),
             Active::Recover(b) => b.reason(),
             Active::Greet(b) => b.reason(ctx),
+            Active::Train(b) => b.reason(),
             Active::Dead(b) => b.reason(),
             Active::ShadeHunt(b) => b.reason(),
             Active::Loot(b) => b.reason(),

@@ -14,6 +14,7 @@ use crate::geom::RectI;
 use crate::terrain::{LedgeKind, Terrain, TerrainOptions};
 
 mod greet;
+mod train;
 
 const DT: f32 = 1.0 / 30.0;
 const FLOOR: f32 = 1040.0;

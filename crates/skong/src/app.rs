@@ -782,6 +782,9 @@ impl Pet {
         if let Some(id) = intent.dream_visitor {
             self.aim_dream_at_visitor(id);
         }
+        if let Some(r) = intent.lesson {
+            self.lesson_signal(r);
+        }
         if let Some(ev) = intent.discovery {
             self.on_discovery(ev);
         }
@@ -859,6 +862,22 @@ impl Pet {
             self.fx.spawn(slash, origin, a.side == Side::Right);
             self.seat_y = None;
             self.act = Some(ActPlayer::start(&d.acts, &d.lib, &mut self.anim, id, seed()));
+        }
+        if let Some(a) = intent.attack
+            && self.act.is_none()
+            && matches!(self.ch.state, MoveState::Airborne)
+        {
+            // Mid-air: the slash plays over the jump (down slashes in drills, flicks).
+            if a.dir == AttackDir::Forward {
+                self.ch.facing = a.side;
+            }
+            self.loco.air_slash(a.dir);
+            let slash = match a.dir {
+                AttackDir::Forward => "slash",
+                AttackDir::Up => "up_slash",
+                AttackDir::Down => "down_slash",
+            };
+            self.fx.spawn(slash, self.knight_origin(), self.ch.facing == Side::Right);
         }
         if intent.attack.is_some() && self.act.is_none() && matches!(self.ch.state, MoveState::WallSlide { .. }) {
             // Slashing off a wall: away from it (the knight faces away while sliding).

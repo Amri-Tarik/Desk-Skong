@@ -11,16 +11,19 @@
 //!   apps or fast typing).
 //! * [`talk`] — conversation lines with desktop-aware templates; [`dream`] — the knight's
 //!   dream-nail thoughts about windows.
+//! * [`lesson`] — teachers (Sly) follow the talk with a training session: drills,
+//!   demonstrations with their own clips, praise and corrections.
 //!
 //! The brain sees visitors as [`crate::ai::Visitor`] percepts (see [`Npc::percept`]).
 mod actor;
 pub mod dream;
+pub mod lesson;
 pub mod talk;
 mod visits;
 #[cfg(test)]
 mod tests;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
@@ -32,6 +35,7 @@ use crate::assets::{SpriteBank, read_json};
 
 pub use actor::{Npc, NpcEnv, NpcEvent, NpcPhase, Placement, once_secs};
 pub use dream::DreamRules;
+pub use lesson::{DemoStep, DrillDef, Lesson, LessonDef, PlannedDrill};
 pub use talk::{Line, TalkContext};
 pub use visits::{VisitConditions, VisitConfig, VisitScheduler};
 
@@ -94,6 +98,9 @@ pub struct ClipNames {
     pub fall: Option<String>,
     #[serde(default)]
     pub land: Vec<String>,
+    /// Played once as they start to leave (a bow...), before fading / walking off.
+    #[serde(default)]
+    pub leave: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -147,6 +154,16 @@ pub struct NpcDef {
     pub greet_react: Option<String>,
     /// Conversations: one is picked per visit. Lines may use `{title}`, `{app}`, `{daypart}`.
     pub conversations: Vec<Vec<Line>>,
+    /// Named clip sequences the visitor can perform (demonstrations during a lesson).
+    #[serde(default)]
+    pub demos: BTreeMap<String, Vec<DemoStep>>,
+    /// A teacher: after the conversation, a short training session (see [`lesson`]).
+    #[serde(default)]
+    pub lesson: Option<LessonDef>,
+    /// Only visits within this many seconds after the knight fought (the cursor, the
+    /// Shade, spells and nail arts). Invitations by name ignore it.
+    #[serde(default)]
+    pub after_fight: Option<f32>,
 }
 
 fn one() -> f32 {
@@ -187,6 +204,11 @@ pub struct NpcClips {
     pub walk: Option<ClipId>,
     pub fall: Option<ClipId>,
     pub land: Vec<ClipId>,
+    pub leave: Option<ClipId>,
+    /// `demos` resolved: (clip, seconds; `None` = play it once).
+    pub demos: BTreeMap<String, Vec<(ClipId, Option<f32>)>>,
+    /// The lesson stance (idle when unset).
+    pub stance: Option<ClipId>,
 }
 
 /// Every visitor definition with its clip library.
@@ -253,6 +275,13 @@ fn resolve(d: &NpcDef, lib: &ClipLibrary) -> Result<NpcClips> {
         walk: opt(&c.walk)?,
         fall: opt(&c.fall)?,
         land: c.land.iter().map(|n| get(n)).collect::<Result<_>>()?,
+        leave: opt(&c.leave)?,
+        demos: d
+            .demos
+            .iter()
+            .map(|(k, steps)| Ok((k.clone(), steps.iter().map(|s| Ok((get(s.clip())?, s.secs()))).collect::<Result<Vec<_>>>()?)))
+            .collect::<Result<_>>()?,
+        stance: d.lesson.as_ref().and_then(|l| l.stance.as_deref()).map(get).transpose()?,
     })
 }
 
@@ -275,6 +304,15 @@ fn validate(d: &NpcDef) -> Result<()> {
     }
     for t in &d.dream_thoughts {
         talk::check_template(t).with_context(|| format!("npc '{}' dream thought", d.name))?;
+    }
+    if let Some(l) = &d.lesson {
+        l.validate(&|n| d.demos.contains_key(n)).with_context(|| format!("npc '{}'", d.name))?;
+    }
+    if d.demos.values().flatten().any(|s| s.secs().is_some_and(|t| t.is_nan() || t <= 0.0)) {
+        bail!("npc '{}': demo step seconds must be positive", d.name);
+    }
+    if d.after_fight.is_some_and(|s| s.is_nan() || s <= 0.0) {
+        bail!("npc '{}': after_fight must be positive", d.name);
     }
     Ok(())
 }
