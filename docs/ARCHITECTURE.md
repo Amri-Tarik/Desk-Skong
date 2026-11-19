@@ -34,6 +34,7 @@ default scale 0.6).
 | `effects` | Hero effect definitions (`data/effects.json`, offsets/scales/rotations from the Knight prefab) + placement/mirroring. |
 | `props` | Benches: placement on ledges, riding windows, dropping when the window goes. |
 | `discovery` | Things found inside windows (benches, geo deposits) per app, deterministic rolls, window-relative placement, persistence. |
+| `particles` | The game's Unity particle bits recreated procedurally (run / land / jump / dash / wall dust, crystal dash shards, Geo sparkles): seeded bursts and streams with velocity, gravity, drag and fade, drawn into their bounding box (one small click-through window per burst in `fx.rs`, ≤ 8 bursts, 60 fps). |
 | `shiny` | Shinies: short-lived glints on lasting ledges / the floor (shared occupancy, never on game monitors, reachable), spawn timer and rewards, the procedural twinkle (`glint`). Not persisted. |
 | `stakes` | Shade simulation, Geo coins/physics/wallet, spellbook (soul, spells, nail arts), sources (battles, shattered windows, showers). |
 | `canvas`, `geom`, `desktop` | Premultiplied BGRA images, rects/vectors, desktop snapshot types. |
@@ -89,7 +90,7 @@ under `skins/`, `%APPDATA%\Desk-Skong\{settings,world}.json`.
 `skong.exe` flags: `--skin`, `--scale`, `--data`, `--skins`, `--no-vision`, `--panel` /
 `--no-panel`, `--capturable` (let screenshots see our windows), `--capture-stats`,
 `--browse` (clip/act/skin browser), `--sit-test`, `--fx-test`, `--goto-test`, `--move-test`.
-Examples: `skong-core`: `contact_sheet`, `fx_sheet`, `nav_bench`, `vision_bench`, `vision_png`;
+Examples: `skong-core`: `contact_sheet`, `fx_sheet`, `particles_bench`, `nav_bench`, `vision_bench`, `vision_png`;
 `skong-win`: `terrain_debug`, `capture_probe`. `skong-panel --self-test` inspects a running pet.
 
 ## Performance (release, 2560×1440 + 1920×1080)
