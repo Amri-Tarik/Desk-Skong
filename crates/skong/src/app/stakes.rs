@@ -160,6 +160,9 @@ impl Pet {
                     let [lo, hi] = self.brain.config().stakes.victory_geo;
                     let amount = lo + seed() % (hi.saturating_sub(lo) + 1);
                     self.stakes.geo.scale = self.settings.scale;
+                    // The beaten cursor bursts: a big slam and impact lines, then the Geo.
+                    self.fx.spawn("cursor_defeat", at, true);
+                    self.fx.spawn("cursor_defeat_lines", at, seed().is_multiple_of(2));
                     self.stakes.geo.burst(at, amount);
                     log::info!("the cursor drops {amount} geo");
                 }
