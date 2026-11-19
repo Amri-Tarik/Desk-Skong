@@ -632,7 +632,10 @@ impl Brain {
                     self.recent_goals.clear();
                 }
             }
-            if k.vel.x.abs() > 20.0 {
+            // Only walking back and forth on the ground is dithering: airborne reversals are
+            // the route itself (a wall climb kicks left, right, left...) and must not count, or
+            // every climb gets cancelled a second in.
+            if k.is_grounded() && k.vel.x.abs() > 20.0 {
                 let dir = k.vel.x.signum();
                 if self.travel_dir != 0.0 && dir != self.travel_dir {
                     self.reversals.push(self.now);
@@ -644,7 +647,7 @@ impl Brain {
         if self.reversals.len() < OSC_REVERSALS {
             return;
         }
-        log::debug!(
+        log::info!(
             "brain: dithering ({} reversals in {OSC_WINDOW} s, {} behaviour); calming down, blocking {} recent targets",
             self.reversals.len(),
             self.active.kind().label(),
@@ -792,6 +795,7 @@ impl Brain {
         if let Active::Greet(g) = &self.active
             && g.failed
         {
+            log::info!("brain: gave up on visitor {} (no route or no answer); leaving them be for 90 s", g.id);
             self.visitors.snub(g.id, self.now + 90.0);
         }
         if let Active::Train(t) = &self.active
