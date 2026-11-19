@@ -211,7 +211,9 @@ impl Brain {
         let near_coin = st.sense.coins.iter().any(|c| c.distance(k) < cfg.loot_range);
         let pile = if st.sense.coins.len() >= 8 { 0.1 } else { 0.0 };
         let cheering = matches!(&self.active, Active::Loot(l) if l.cheering());
-        let loot = if near_coin && self.now >= st.loot_ready_at && !s.fullscreen && p.knight.is_grounded() { (0.6 + 0.2 * e.excitement + pile).min(0.85) } else if cheering { 0.7 } else { 0.0 };
+        // Strict: loose Geo is always wanted (mid-jump included — a jump used to zero it and
+        // let something else take over mid-gathering), just below fights and visitors.
+        let loot = if near_coin && self.now >= st.loot_ready_at && !s.fullscreen { (0.6 + 0.2 * e.excitement + pile).min(0.85) } else if cheering { 0.7 } else { 0.0 };
         [(BehaviourKind::Dead, dead), (BehaviourKind::ShadeHunt, hunt), (BehaviourKind::Loot, loot)]
     }
 }

@@ -172,20 +172,17 @@ fn not_while_asleep() {
 }
 
 #[test]
-fn not_while_the_user_types_hard() {
+fn enemies_are_fought_even_while_the_user_types() {
+    // Strict priorities (the user's call): an enemy on screen is always dealt with. Typing
+    // only holds back cursor games; he fights on his ledges, away from your cursor.
     let mut sim = calm(BrainConfig::default());
     sim.user.keys_per_sec = 4.0;
     let mut a = Arena::new(sim);
     a.run(1.0);
     a.add("crawlid", 1500.0);
-    let kinds = a.run(5.0);
-    assert!(!kinds.contains(&BehaviourKind::Fight));
-    a.sim.user.keys_per_sec = 0.0;
-    assert!(a.run_until(3.0, BehaviourKind::Fight), "once the typing stops: {}", a.sim.last_reason());
-    // Typing again mid-fight: he leaves it.
-    a.run(1.0);
-    a.sim.user.keys_per_sec = 4.0;
-    assert!(a.run_while(3.0, |a| a.sim.brain.behaviour() == BehaviourKind::Fight), "{}", a.sim.last_reason());
+    assert!(a.run_until(3.0, BehaviourKind::Fight), "fights while you type: {}", a.sim.last_reason());
+    // And sees it through to the Geo (still typing).
+    assert!(a.run_until(8.0, BehaviourKind::Loot), "then gathers the drop: {}", a.sim.last_reason());
 }
 
 #[test]

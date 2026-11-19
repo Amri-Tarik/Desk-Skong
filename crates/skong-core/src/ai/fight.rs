@@ -123,7 +123,10 @@ impl Brain {
     pub(super) fn fight_utility(&self, p: &Percepts) -> f32 {
         let s = &self.senses;
         let Some(f) = pick(&s.foes, &self.stakes.fight.snubbed, p.knight.pos, self.now) else { return 0.0 };
-        if self.asleep(p) || s.fullscreen || s.user_busy || self.stakes.pending_death.is_some() {
+        // Strict: enemies on screen are always fought (typing doesn't matter: he fights on
+        // his ledges, not on your cursor). Only a fullscreen app, a pending death, or a nap
+        // while nobody's around (a bump wakes him anyway) hold it back.
+        if (self.asleep(p) && s.user_away) || s.fullscreen || self.stakes.pending_death.is_some() {
             return 0.0;
         }
         if f.kind == FoeKind::Sparring {
@@ -252,7 +255,7 @@ impl Fight {
         self.attack_cd -= dt;
         self.dash_cd -= dt;
         let cfg = ctx.cfg.fight;
-        if ctx.senses.user_busy || ctx.senses.fullscreen {
+        if ctx.senses.fullscreen {
             // The user needs the screen: leave it.
             ctx.nav.stop();
             return Status::Done;

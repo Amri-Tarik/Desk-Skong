@@ -701,6 +701,14 @@ impl Brain {
     /// brain is ping-ponging between targets. Stop, mark the recent targets bad and calm
     /// down (idle only) for [`CALM_SECS`].
     fn guard_oscillation(&mut self, p: &Percepts, nav: &mut dyn Navigator, out: &mut Intent) {
+        // Fights, Geo and visitors move between several targets by design (coins on both
+        // sides, foes moving): that isn't indecision, and they must never be calmed away.
+        if matches!(self.active.kind().tier(), Tier::Engagement | Tier::Urgent) {
+            self.reversals.clear();
+            self.travel_dir = 0.0;
+            self.reversal_goal = None;
+            return;
+        }
         let k = p.knight;
         if let Motion::Navigate { goal, .. } = self.last_motion {
             if self.recent_goals.last() != Some(&goal) {
@@ -1272,7 +1280,10 @@ impl Brain {
         let calm = self.now < self.calm_until;
         for (kind, v) in &mut u {
             let cooling = self.cooldown.get(kind).is_some_and(|t| self.now < *t);
-            if *v < cfg.urgent && (cooling || (calm && *kind != BehaviourKind::Idle)) {
+            // A calm-down (after dithering) only quiets pastimes: fights, Geo and visitors
+            // are never put on hold by it (strict priorities: he never ignores them).
+            let pastime = !matches!(kind.tier(), Tier::Engagement | Tier::Urgent);
+            if *v < cfg.urgent && (cooling || (calm && pastime && *kind != BehaviourKind::Idle)) {
                 *v = 0.0;
             }
         }
