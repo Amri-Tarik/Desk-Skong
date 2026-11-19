@@ -9,7 +9,7 @@ use std::path::Path;
 
 use anyhow::Result;
 use skong_core::acts::ActId;
-use skong_core::ai::{BehaviourKind, ShadeSense, StakeEvent, StakesSense};
+use skong_core::ai::{BehaviourKind, ShadeSense, StakeEvent, StakesSense, WorldEvent};
 use skong_core::controller::{Character, Side};
 use skong_core::geom::Vec2;
 use std::collections::HashMap;
@@ -350,6 +350,19 @@ impl Pet {
         };
         for fx in spawn {
             self.fx.spawn(fx, origin, right);
+        }
+    }
+
+    /// The bored brain asks the world for something to happen.
+    pub(super) fn on_world_request(&mut self, ev: WorldEvent) {
+        match ev {
+            WorldEvent::GeoShower => self.apply_stakes(StakesCommand::SpillGeo),
+            WorldEvent::Visitor => match self.visitors.as_mut() {
+                Some(v) => v.invite(None),
+                None => log::debug!("bored knight wanted a visitor, but visitors are unavailable"),
+            },
+            // The brain invites the cursor to a battle itself.
+            WorldEvent::CursorChase => {}
         }
     }
 

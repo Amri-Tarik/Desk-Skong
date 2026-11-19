@@ -230,6 +230,11 @@ impl Ctx<'_, '_> {
         ActWait::named(self, name)
     }
 
+    /// Sitting down again is fine: tired, or the last seat was a while ago.
+    pub fn may_sit(&self) -> bool {
+        self.mind.tiredness() > 0.5 || self.rep.since_seated(self.now) >= self.cfg.boredom.seat_cooldown
+    }
+
     pub fn face_toward(&mut self, x: f32) {
         self.out.face = Side::of(x - self.p.knight.pos.x).or(self.out.face);
     }
@@ -504,7 +509,7 @@ impl Idle {
     pub fn tick(&mut self, ctx: &mut Ctx) -> Status {
         let gap = ctx.cfg.idle_gap;
         if self.beat.tick(ctx, gap) {
-            let act = if ctx.senses.can_sit() {
+            let act = if ctx.senses.can_sit() && ctx.may_sit() {
                 ctx.seated_act()
             } else if ctx.senses.dark && ctx.rng.chance(0.3) {
                 ActWait::named(ctx, "lantern_patrol")

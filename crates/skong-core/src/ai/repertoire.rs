@@ -73,18 +73,37 @@ pub(crate) struct Repertoire {
     pub catalog: ActCatalog,
     /// Keyed by `ActId.0` (ActId is not `Ord`).
     ready_at: BTreeMap<u16, f32>,
+    /// When each act was last started (keyed by `ActId.0`).
+    last_used: BTreeMap<u16, f32>,
+    /// Acts started within this many seconds are penalised when picking (variety).
+    pub repeat_window: f32,
 }
 
 impl Repertoire {
     pub fn new(catalog: ActCatalog) -> Self {
-        Self { catalog, ready_at: BTreeMap::new() }
+        Self { catalog, ready_at: BTreeMap::new(), last_used: BTreeMap::new(), repeat_window: 180.0 }
+    }
+
+    pub fn with_repeat_window(catalog: ActCatalog, repeat_window: f32) -> Self {
+        Self { repeat_window, ..Self::new(catalog) }
     }
 
     pub fn ready(&self, id: ActId, now: f32) -> bool {
         self.ready_at.get(&id.0).is_none_or(|&t| t <= now)
     }
 
+    /// Seconds since `id` was last started (infinite if never).
+    pub fn since_used(&self, id: ActId, now: f32) -> f32 {
+        self.last_used.get(&id.0).map_or(f32::INFINITY, |t| now - t)
+    }
+
+    /// Seconds since any seated act was last started.
+    pub fn since_seated(&self, now: f32) -> f32 {
+        self.catalog.iter().filter(|a| a.requires == Requirement::Seat).map(|a| self.since_used(a.id, now)).fold(f32::INFINITY, f32::min)
+    }
+
     pub fn used(&mut self, id: ActId, now: f32) {
+        self.last_used.insert(id.0, now);
         let cd = self.catalog.get(id).map_or(0.0, |a| a.cooldown);
         self.ready_at.insert(id.0, now + cd);
     }
@@ -107,7 +126,8 @@ impl Repertoire {
                     Some(tag) if a.has_tag(tag) => 3.0,
                     _ => 1.0,
                 };
-                (a.id, a.weight * fit * fit * bonus)
+                let fresh = if self.since_used(a.id, now) < self.repeat_window { 0.2 } else { 1.0 };
+                (a.id, a.weight * fit * fit * bonus * fresh)
             })
             .collect();
         rng.pick_weighted(&candidates)

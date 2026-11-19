@@ -167,7 +167,7 @@ impl Default for CompanionConfig {
             polite_beside: 220.0,
             drift_secs: 0.6,
             hurry_beyond: 900.0,
-            gap: [1.0, 3.0],
+            gap: [0.8, 2.2],
             settle_secs: 5.0,
             seat_range: 500.0,
             stare_cooldown: 25.0,
@@ -226,6 +226,29 @@ impl Default for TierConfig {
     }
 }
 
+/// Boredom and variety tuning.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct BoredomConfig {
+    /// Boredom above this counts as "bored": pastimes near the cursor lose to anything new.
+    pub bored: f32,
+    /// Bored this long with nothing interesting around → ask the world for an event (s).
+    pub event_after: f32,
+    /// Minimum seconds between two requested world events.
+    pub event_gap: f32,
+    /// A settling seat (lean back / rest near the user) isn't re-taken this soon after the
+    /// last one (s), unless he's tired.
+    pub seat_cooldown: f32,
+    /// Picking an act used within this many seconds is penalised (repeats look robotic).
+    pub repeat_window: f32,
+}
+
+impl Default for BoredomConfig {
+    fn default() -> Self {
+        Self { bored: 0.7, event_after: 30.0, event_gap: 150.0, seat_cooldown: 75.0, repeat_window: 180.0 }
+    }
+}
+
 /// All brain tunables.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(default)]
@@ -247,6 +270,8 @@ pub struct BrainConfig {
     pub urgent: f32,
     /// Priority tiers.
     pub tiers: TierConfig,
+    /// Boredom, world events and act variety.
+    pub boredom: BoredomConfig,
     pub needs: NeedRates,
     pub battle: BattleConfig,
     /// Death, the Shade, Geo and spells.
@@ -280,6 +305,7 @@ impl Default for BrainConfig {
             hysteresis: 0.12,
             urgent: 1.0,
             tiers: TierConfig::default(),
+            boredom: BoredomConfig::default(),
             needs: NeedRates::default(),
             battle: BattleConfig::default(),
             stakes: super::stakes::StakesConfig::default(),

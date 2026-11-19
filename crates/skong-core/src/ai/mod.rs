@@ -57,7 +57,7 @@ use std::fmt::Write as _;
 pub use activity::{Activity, ActivitySpot, ActivityTracker, QUIET, TrackedSpot};
 pub use battle::{BattleScore, Outcome};
 pub use behaviours::{BehaviourKind, Tier};
-pub use config::{BattleConfig, BrainConfig, CompanionConfig, NeedRates, Personality, TierConfig, WatchConfig};
+pub use config::{BattleConfig, BoredomConfig, BrainConfig, CompanionConfig, NeedRates, Personality, TierConfig, WatchConfig};
 pub use greet::{STAND_OFF_UNITS, Visitor, VisitorState};
 pub use interest::{InterestMap, Poi, PoiKey, PoiKind, PoiTarget, ScoredPoi};
 pub use navigator::{GraphNavigator, NavStatus, Navigator, Reach};
@@ -156,6 +156,22 @@ pub struct Intent {
     pub debug: String,
     /// Discovery traffic for the app (explored a new window, used / struck a found place).
     pub discovery: Option<DiscoveryEvent>,
+    /// Bored for a while with nothing interesting around: please make something happen.
+    /// Rate-limited (`BoredomConfig::event_gap`); never while the user types, is away, or a
+    /// fullscreen app is up.
+    pub request: Option<WorldEvent>,
+}
+
+/// Something the bored knight asks the world for (see [`Intent::request`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorldEvent {
+    /// Rain some Geo for him to collect.
+    GeoShower,
+    /// Invite an NPC visitor.
+    Visitor,
+    /// A playful chase of the cursor. The brain handles this one itself (it invites a
+    /// battle); the app may show a cue.
+    CursorChase,
 }
 
 /// Why the last behaviour switch happened.
@@ -237,6 +253,12 @@ pub struct Brain {
     travel_dir: f32,
     recent_goals: Vec<NavGoal>,
     calm_until: f32,
+    /// Seconds bored (above `BoredomConfig::bored`) in a row.
+    bored_for: f32,
+    /// Earliest time for the next requested world event.
+    next_event_at: f32,
+    /// A requested cursor chase invites a battle until then.
+    chase_until: f32,
     /// Highest tier with an eligible behaviour at the last evaluation.
     top_tier: Tier,
     oscillations: u32,
@@ -248,7 +270,7 @@ impl Brain {
         Self {
             mind: Mind::new(personality),
             rng: Rng::new(seed),
-            rep: Repertoire::new(catalog),
+            rep: Repertoire::with_repeat_window(catalog, cfg.boredom.repeat_window),
             interest: InterestMap::default(),
             spots: ActivityTracker::default(),
             senses: Senses::default(),
@@ -275,6 +297,9 @@ impl Brain {
             travel_dir: 0.0,
             recent_goals: Vec::new(),
             calm_until: f32::NEG_INFINITY,
+            bored_for: 0.0,
+            next_event_at: 0.0,
+            chase_until: f32::NEG_INFINITY,
             top_tier: Tier::Ambient,
             oscillations: 0,
             cfg,
@@ -427,6 +452,7 @@ impl Brain {
             Motion::Navigate { style: TravelStyle::Normal, .. } => 0.3,
             Motion::Navigate { style: TravelStyle::Stroll, .. } => 0.1,
         };
+        self.maybe_request_event(p, &mut out);
         self.last_motion = out.motion;
         out.behaviour = Some(self.active.kind());
         out.reason = self.reason(p, nav);
@@ -435,6 +461,33 @@ impl Brain {
         }
         out.debug = self.debug_line(&out.reason);
         out
+    }
+
+    /// Bored for a while with nothing interesting around: ask the world for an event
+    /// (rate-limited, never while the user types, is away, or a fullscreen app is up).
+    fn maybe_request_event(&mut self, p: &Percepts, out: &mut Intent) {
+        let b = self.cfg.boredom;
+        let s = &self.senses;
+        self.bored_for = if self.mind.needs.boredom >= b.bored { self.bored_for + p.dt.max(0.0) } else { 0.0 };
+        let interesting = self.best_poi.is_some_and(|sp| sp.score > 0.2)
+            || self.best_spot.is_some()
+            || self.visit_utility() > 0.2
+            || !self.stakes.sense.coins.is_empty()
+            || matches!(self.active.kind().tier(), Tier::Engagement | Tier::Urgent);
+        if interesting || self.bored_for < b.event_after || self.now < self.next_event_at || s.user_busy || s.user_away || s.fullscreen {
+            return;
+        }
+        let chase_ok = self.cfg.bother_level > 0.0 && self.mind.needs.mischief > 0.3 && s.cursor.is_some();
+        let options = [(WorldEvent::GeoShower, 1.0), (WorldEvent::Visitor, 1.0), (WorldEvent::CursorChase, if chase_ok { 1.0 } else { 0.0 })];
+        let Some(ev) = self.rng.pick_weighted(&options) else { return };
+        log::info!("brain: bored stiff with nothing going on; asking the world for {ev:?}");
+        if ev == WorldEvent::CursorChase {
+            self.chase_until = self.now + 20.0;
+            self.mind.excite(0.3);
+        }
+        out.request = Some(ev);
+        self.next_event_at = self.now + b.event_gap;
+        self.bored_for = 0.0;
     }
 
     /// Sleeping: the seated "nap" act, or deep sleep ("bow_down") during a nap.
@@ -885,18 +938,21 @@ impl Brain {
         };
 
         let idle = 0.2;
+        // 0 = content, 1 = bored stiff: pastimes near the user lose to anything new.
+        let bored = smooth(cfg.boredom.bored, 1.0, n.boredom);
         let companion = match s.cursor {
-            Some(_) if !s.user_away && !s.fullscreen => 0.42 + 0.15 * n.loneliness + 0.1 * (pers.sociability - 0.5),
+            Some(_) if !s.user_away && !s.fullscreen => ((0.42 + 0.15 * n.loneliness + 0.1 * (pers.sociability - 0.5)) * (1.0 - 0.7 * bored)).max(0.25),
             _ => 0.0,
         };
-        let watch = self.best_spot.map_or(0.0, |c| c.score.clamp(0.0, 0.95) * (0.7 + 0.3 * n.energy));
-        let explore = self.best_poi.map_or(0.0, |sp| sp.score.clamp(0.0, 0.9) * (0.6 + 0.4 * n.energy));
+        let watch = self.best_spot.map_or(0.0, |c| (c.score.clamp(0.0, 0.95) * (0.7 + 0.3 * n.energy) + 0.3 * bored).min(0.95));
+        let explore = self.best_poi.map_or(0.0, |sp| (sp.score.clamp(0.0, 0.9) * (0.6 + 0.4 * n.energy) + 0.35 * bored).min(0.9));
 
         let rest = if s.fullscreen {
             0.0
         } else {
             let settle = if s.user_busy { 0.12 } else { 0.0 } + if s.user_away { 0.25 } else { 0.0 };
-            ((0.75 * smooth(0.35, 0.7, tired) + settle) * (1.0 - 0.7 * arousal)).min(0.85)
+            let restless = if n.energy < cfg.tiers.critical_energy { 1.0 } else { 1.0 - 0.8 * bored };
+            ((0.75 * smooth(0.35, 0.7, tired) + settle) * (1.0 - 0.7 * arousal) * restless).min(0.85)
         };
         let nap = if self.now < self.nap_ready_at || s.fullscreen {
             0.0
@@ -917,7 +973,7 @@ impl Brain {
                     && e.startle < 0.5
                     && e.hurt < 0.35 =>
             {
-                let invite = if c.near_for >= b.park_secs && c.still_for >= b.park_secs {
+                let invite = if self.now < self.chase_until || (c.near_for >= b.park_secs && c.still_for >= b.park_secs) {
                     1.0
                 } else if c.near_for > 0.3 && c.speed() > 600.0 {
                     0.8 // waving it in the knight's face
@@ -943,6 +999,7 @@ impl Brain {
             _ => 0.0,
         };
         let visit = self.visit_utility();
+        let visit = if visit > 0.0 { (visit + 0.25 * bored).min(1.1) } else { 0.0 };
 
         let mut u = vec![
             (BehaviourKind::Idle, idle),
