@@ -125,11 +125,13 @@ pub(crate) struct StakesMind {
     pub loot_ready_at: f32,
     /// Debug: go after the Shade right away.
     pub force_hunt: bool,
+    /// A death is playing out.
+    pub dying: bool,
 }
 
 impl StakesMind {
     pub fn new(cfg: &StakesConfig) -> Self {
-        Self { sense: StakesSense::default(), spells: SpellBook::new(&cfg.spells), pending_death: None, shade_ready_at: 0.0, loot_ready_at: 0.0, force_hunt: false }
+        Self { sense: StakesSense::default(), spells: SpellBook::new(&cfg.spells), pending_death: None, shade_ready_at: 0.0, loot_ready_at: 0.0, force_hunt: false, dying: false }
     }
 }
 
@@ -164,7 +166,8 @@ impl Brain {
         let e = m.emotions;
         let s = &self.senses;
         let cfg = &self.cfg.stakes;
-        let dead = if st.pending_death.is_some() || matches!(self.active, Active::Dead(_)) { 2.0 } else { 0.0 };
+        // Nothing interrupts dying (`dying` is cleared when the respawn is over).
+        let dead = if st.pending_death.is_some() || (st.dying && matches!(self.active, Active::Dead(_))) { 2.0 } else { 0.0 };
 
         let hunting = matches!(self.active, Active::ShadeHunt(_));
         let hunt = match st.sense.shade {

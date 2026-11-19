@@ -29,6 +29,7 @@ impl Dead {
     pub fn start(ctx: &mut Ctx, kind: DeathKind, cracked: bool) -> Self {
         ctx.nav.stop();
         ctx.mind.emotions.excitement = 0.0;
+        ctx.stakes.dying = true;
         Self { kind, cracked, phase: DeadPhase::Falling { waited: 0.0 } }
     }
 
@@ -84,6 +85,7 @@ impl Dead {
         ctx.mind.adjust(|n| &mut n.energy, -0.15);
         ctx.mind.adjust(|n| &mut n.mischief, -0.6);
         ctx.stakes.shade_ready_at = ctx.now + ctx.cfg.stakes.shade_delay;
+        ctx.stakes.dying = false;
         Status::Done
     }
 

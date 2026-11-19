@@ -146,10 +146,10 @@ impl Shade {
         let s = self.scale.max(0.1);
         let mut out = ShadeTick::default();
         let near = knight.filter(|k| k.distance(self.pos) < 320.0 * s);
-        if let Some(k) = knight.filter(|_| !matches!(self.phase, ShadePhase::Slash | ShadePhase::Dying | ShadePhase::Gone)) {
-            if self.phase != ShadePhase::Retreat || near.is_none() {
-                self.facing_right = k.x > self.pos.x;
-            }
+        if let Some(k) = knight.filter(|_| !matches!(self.phase, ShadePhase::Slash | ShadePhase::Dying | ShadePhase::Gone))
+            && (self.phase != ShadePhase::Retreat || near.is_none())
+        {
+            self.facing_right = k.x > self.pos.x;
         }
         let leashed = knight.is_none_or(|k| k.distance(self.home) > 1100.0 * s);
         let calm_down = !hunted || leashed;

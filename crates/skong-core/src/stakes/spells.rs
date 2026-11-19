@@ -193,9 +193,9 @@ impl SpellBook {
         }
         // Most specific first: the situation decides, the roll only breaks ties.
         let order: &[Spell] = if s.rolls[1] < 0.5 {
-            &[Spell::Scream, Spell::Fireball, Spell::DashSlash, Spell::GreatSlash, Spell::Cyclone]
+            &[Spell::Scream, Spell::DashSlash, Spell::Fireball, Spell::GreatSlash, Spell::Cyclone]
         } else {
-            &[Spell::Scream, Spell::Fireball, Spell::DashSlash, Spell::Cyclone, Spell::GreatSlash]
+            &[Spell::Scream, Spell::DashSlash, Spell::Fireball, Spell::Cyclone, Spell::GreatSlash]
         };
         order.iter().copied().find(|sp| sp.reaches(off, s.scale) && self.ready(*sp, now))
     }
