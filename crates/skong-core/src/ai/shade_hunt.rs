@@ -307,10 +307,39 @@ pub(crate) struct Loot {
     /// Coins in sight when the gathering began.
     pile: usize,
     cheer: Option<ActWait>,
+    /// Seconds to the next look for a quicker coin than the current target.
+    recheck: f32,
 }
 
 /// Coins picked up in one go that earn a happy act.
 const BIG_HAUL: u32 = 6;
+/// Coins (nearest by straight-line effort) whose routes are actually timed per choice.
+const ROUTE_CANDIDATES: usize = 5;
+/// How often the current target is compared with the other coins (s).
+const RECHECK_SECS: f32 = 0.5;
+/// Switch targets only when another coin is this much quicker (s): no dithering.
+const SWITCH_GAIN: f32 = 0.6;
+
+/// The quickest coin to get to: the few nearest by straight-line effort, ranked by their
+/// actual route time (a coin "near" across a wall loses to an easy walk). Returns the coin
+/// and its route time (`None` time when no planner estimate was available).
+fn quickest_coin(ctx: &mut Ctx, style: TravelStyle) -> Option<(Vec2, Option<f32>)> {
+    let k = ctx.p.knight.pos;
+    let range = ctx.cfg.stakes.loot_range;
+    let interest = &*ctx.interest;
+    let mut near: Vec<Vec2> = ctx.stakes.sense.coins.iter().copied().filter(|c| c.distance(k) < range && !interest.is_blocked(PoiTarget::Spot(*c))).collect();
+    near.sort_by(|a, b| effort(k, *a).total_cmp(&effort(k, *b)));
+    near.truncate(ROUTE_CANDIDATES);
+    let knight = ctx.p.knight;
+    let timed: Vec<(Vec2, Option<f32>)> = near.iter().map(|c| (*c, ctx.nav.estimate(knight, NavGoal::Point(*c), style))).collect();
+    // Routed coins by time; without any route estimate fall back to the nearest.
+    timed
+        .iter()
+        .filter_map(|&(c, t)| t.map(|t| (c, t)))
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(c, t)| (c, Some(t)))
+        .or_else(|| timed.first().copied())
+}
 
 /// Effort to walk from `from` to `to`: vertical moves (jumps, drops) cost extra.
 pub(crate) fn effort(from: Vec2, to: Vec2) -> f32 {
@@ -330,16 +359,18 @@ impl Loot {
         if pile >= 8 {
             ctx.mind.excite(0.3);
         }
-        Self { travel: None, target: Vec2::ZERO, elapsed: 0.0, picked: 0, pile, cheer: None }
+        Self { travel: None, target: Vec2::ZERO, elapsed: 0.0, picked: 0, pile, cheer: None, recheck: RECHECK_SECS }
     }
 
-    fn style(&self, ctx: &Ctx) -> TravelStyle {
+    /// Geo is worth running for: hurry to a pile or a far coin, run otherwise; stroll only
+    /// when exhausted.
+    fn style(&self, ctx: &Ctx, to: Option<Vec2>) -> TravelStyle {
         let left = ctx.stakes.sense.coins.len();
-        let bother = ctx.cfg.bother_level;
-        if left >= 8 && bother > 0.0 && ctx.mind.needs.energy > 0.25 {
-            TravelStyle::Hurry
-        } else if left <= 2 || bother <= 0.0 {
+        let far = to.is_some_and(|c| c.distance(ctx.p.knight.pos) > 600.0);
+        if ctx.mind.needs.energy < 0.25 {
             TravelStyle::Stroll
+        } else if left >= 4 || far {
+            TravelStyle::Hurry
         } else {
             TravelStyle::Normal
         }
@@ -357,19 +388,40 @@ impl Loot {
         let k = ctx.p.knight.pos;
         let range = ctx.cfg.stakes.loot_range;
         let still_there = ctx.stakes.sense.coins.iter().any(|c| c.distance(self.target) < 12.0);
+        let _ = range;
         if self.travel.is_none() || !still_there {
             if self.travel.is_some() && !still_there {
                 self.picked += 1;
             }
-            let interest = &*ctx.interest;
-            let next = next_coin(&ctx.stakes.sense.coins, k, range, |c| interest.is_blocked(PoiTarget::Spot(c)));
-            let Some(coin) = next else {
+            let style = self.style(ctx, None);
+            let Some((coin, _)) = quickest_coin(ctx, style) else {
                 ctx.nav.stop();
                 return self.wrap_up(ctx);
             };
             self.target = coin;
-            let style = self.style(ctx);
+            let style = self.style(ctx, Some(coin));
             self.travel = Some(Travel::to(ctx, coin, style));
+            self.recheck = RECHECK_SECS;
+        } else {
+            // On the way: a coin that is now clearly quicker (one landed closer, or he is
+            // passing right by one) takes over.
+            self.recheck -= ctx.dt();
+            if self.recheck <= 0.0 {
+                self.recheck = RECHECK_SECS;
+                let style = self.style(ctx, Some(self.target));
+                let knight = ctx.p.knight;
+                let current = ctx.nav.estimate(knight, NavGoal::Point(self.target), style);
+                if let Some((coin, Some(t))) = quickest_coin(ctx, style)
+                    && coin.distance(self.target) > 12.0
+                    && current.is_none_or(|c| t + SWITCH_GAIN < c)
+                {
+                    log::debug!("loot: switching to a quicker coin at ({:.0},{:.0})", coin.x, coin.y);
+                    self.target = coin;
+                    if let Some(tr) = &mut self.travel {
+                        tr.retarget(NavGoal::Point(coin));
+                    }
+                }
+            }
         }
         if let Some(t) = &mut self.travel {
             match t.tick(ctx) {
