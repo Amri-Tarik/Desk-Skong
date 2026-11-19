@@ -41,6 +41,8 @@ pub enum Command {
     SetOverlayLayers(OverlayLayers),
     /// Launch `skong-panel.exe` next to the pet executable.
     OpenPanel,
+    /// Path-find to the cursor (Stroll, or Hurry with the full movement kit).
+    GoToCursor { hurry: bool },
     /// Death / Shade / Geo / spell triggers.
     Stakes(StakesCommand),
     Quit,

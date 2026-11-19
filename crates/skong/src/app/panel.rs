@@ -14,7 +14,7 @@ impl Pet {
     /// Once per tick, paused or not: panel traffic (returns its commands), overlay redraw
     /// when something changed, ~4 Hz status while a panel is connected.
     pub(super) fn service_panel(&mut self) -> Vec<Command> {
-        let cmds = self.control.poll(self.manual);
+        let cmds = self.control.poll();
         self.overlay.sync(&self.terrain, self.nav.graph(), self.nav.follower().map(|f| f.route()));
         if self.control.status_due() {
             let s = self.status();
