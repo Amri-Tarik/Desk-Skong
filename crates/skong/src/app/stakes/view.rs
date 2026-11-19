@@ -5,7 +5,7 @@ use std::path::Path;
 
 use anyhow::Result;
 use skong_core::anim::{AnimEvent, Animator, ClipId, ClipLibrary};
-use skong_core::assets::{Frame, Skin, SpriteBank, SpriteKey};
+use skong_core::assets::{Frame, FrameStore, Skin, SpriteBank, SpriteKey};
 use skong_core::geom::{RectF, Vec2};
 use skong_core::stakes::{GeoField, Shade, ShadeTick};
 use skong_core::terrain::Terrain;
@@ -27,7 +27,7 @@ struct Sprite {
 }
 
 impl Sprite {
-    fn draw(&mut self, lib: &ClipLibrary, frames: &HashMap<SpriteKey, Frame>, at: Vec2, flip: bool, feet: bool, blocked: &[RectF]) -> Result<()> {
+    fn draw(&mut self, lib: &ClipLibrary, frames: &FrameStore, at: Vec2, flip: bool, feet: bool, blocked: &[RectF]) -> Result<()> {
         let Some(key) = self.anim.current(lib) else { return Ok(()) };
         let Some(frame) = frames.get(&key) else { return Ok(()) };
         draw_frame(&mut self.win, &mut self.drawn, &mut self.shown, key, frame, at, flip, feet, blocked)
@@ -94,7 +94,8 @@ pub struct View {
     shade_lib: ClipLibrary,
     geo_lib: ClipLibrary,
     spells_lib: ClipLibrary,
-    frames: HashMap<SpriteKey, Frame>,
+    /// Packed until drawn (see `FrameStore`).
+    frames: FrameStore,
     /// (skin, scale) the frames were rasterized for.
     look: Option<(usize, f32)>,
     shade: Option<Sprite>,
@@ -123,7 +124,7 @@ impl View {
             geo_lib: anim("Geo.json")?,
             spells_lib: anim("Spells_Anim.json")?,
             bank,
-            frames: HashMap::new(),
+            frames: FrameStore::default(),
             look: None,
             shade: None,
             shade_fx: None,
@@ -161,8 +162,9 @@ impl View {
         }
         keys.sort_by_key(|k| (k.collection, k.sprite));
         keys.dedup();
-        let mut sets = self.bank.rasterize_sets(skin, vanilla, &[(&keys, 64.0 * scale)])?;
-        self.frames = sets.pop().unwrap_or_default();
+        let mut frames = FrameStore::default();
+        self.bank.rasterize_each(skin, vanilla, &[(&keys, 64.0 * scale)], |_, k, f| frames.insert(k, &f))?;
+        self.frames = frames;
         self.look = Some((skin_idx, scale));
         for s in self.shade.iter_mut().chain(self.shade_fx.iter_mut()).chain(self.coins.values_mut()) {
             s.drawn = None;

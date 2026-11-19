@@ -49,7 +49,23 @@ pub fn cpu_seconds() -> f64 {
 }
 
 fn working_set() -> u64 {
+    memory().working_set
+}
+
+/// Own-process memory counters, in bytes.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Memory {
+    pub working_set: u64,
+    pub peak_working_set: u64,
+    /// Committed private bytes.
+    pub private: u64,
+}
+
+pub fn memory() -> Memory {
     let mut m = PROCESS_MEMORY_COUNTERS { cb: size_of::<PROCESS_MEMORY_COUNTERS>() as u32, ..Default::default() };
     // SAFETY: our own process; `m` is properly sized.
-    if unsafe { K32GetProcessMemoryInfo(GetCurrentProcess(), &mut m, m.cb) }.as_bool() { m.WorkingSetSize as u64 } else { 0 }
+    if !unsafe { K32GetProcessMemoryInfo(GetCurrentProcess(), &mut m, m.cb) }.as_bool() {
+        return Memory::default();
+    }
+    Memory { working_set: m.WorkingSetSize as u64, peak_working_set: m.PeakWorkingSetSize as u64, private: m.PagefileUsage as u64 }
 }

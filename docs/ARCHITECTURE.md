@@ -22,7 +22,7 @@ default scale 0.6).
 
 | Module | What it does |
 |---|---|
-| `assets` | Loads exported tk2d collections; rasterizes each sprite's quad from its UVs (trim, pivot and atlas rotation exact), supersampled + alpha-trimmed. `SpriteBank::rasterize_sets` decodes each atlas once for many scaled key sets. Skin discovery + Custom Knight file mapping, vanilla fallback. |
+| `assets` | Loads exported tk2d collections; rasterizes each sprite's quad from its UVs (trim, pivot and atlas rotation exact), supersampled + alpha-trimmed. `SpriteBank::rasterize_sets` / `rasterize_each` decode each atlas once for many scaled key sets. `FrameStore` keeps frames PNG-packed (lossless, ~1/4–1/6 the size) and unpacks each on first draw (≤ 1.3 ms, usually µs), evicting frames idle for a minute: knight, effects and stakes use it. Skin discovery + Custom Knight file mapping, vanilla fallback. |
 | `anim` | `ClipLibrary` + deterministic `Animator` (all tk2d wrap modes, frame events). |
 | `acts` | Data-driven choreographies (`data/acts.json` + `data/acts/*.json`): steps with hold/repeat/until-signal/move-gait/turn; `Requirement::{Grounded, Any, Seat}`. |
 | `locomotion` | Controller state + events → Knight clip (accent one-shots, gait cycles, `…ToIdle` hand-overs after acts). |

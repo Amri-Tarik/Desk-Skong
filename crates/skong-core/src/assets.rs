@@ -7,6 +7,8 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
@@ -312,7 +314,7 @@ fn trim(f: Frame) -> Frame {
     Frame { image: out, anchor: [f.anchor[0] - x0 as f32, f.anchor[1] - y0 as f32] }
 }
 
-// ---------------------------------------------------------------- sprite bank
+// ---------------------------------------------------------------- frame store
 
 /// Index of a frame: (collection slot, sprite id).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -321,11 +323,153 @@ pub struct SpriteKey {
     pub sprite: u32,
 }
 
+/// A rasterized frame kept losslessly compressed (PNG bytes of its premultiplied pixels)
+/// until it is first drawn.
+struct Packed {
+    width: u32,
+    height: u32,
+    anchor: [f32; 2],
+    /// Empty for fully transparent (or empty) frames.
+    png: Box<[u8]>,
+}
+
+impl Packed {
+    fn pack(f: &Frame) -> Packed {
+        let (width, height) = (f.image.width, f.image.height);
+        let png = if f.image.px.iter().all(|p| p >> 24 == 0) { Box::default() } else { encode_px(&f.image) };
+        Packed { width, height, anchor: f.anchor, png }
+    }
+
+    fn unpack(&self) -> Frame {
+        let mut image = Image::new(self.width, self.height);
+        if !self.png.is_empty() {
+            match decode_px(&self.png, &mut image.px) {
+                Ok(()) => {}
+                Err(e) => log::warn!("packed frame {}x{}: {e:#}", self.width, self.height),
+            }
+        }
+        Frame { image, anchor: self.anchor }
+    }
+}
+
+fn encode_px(img: &Image) -> Box<[u8]> {
+    let bytes: Vec<u8> = img.px.iter().flat_map(|p| p.to_le_bytes()).collect();
+    let mut out = Vec::new();
+    let mut enc = png::Encoder::new(&mut out, img.width, img.height);
+    enc.set_color(png::ColorType::Rgba);
+    enc.set_depth(png::BitDepth::Eight);
+    // Fast: ~25 ms for every Knight frame at x0.6 and ~4x smaller than raw pixels.
+    enc.set_compression(png::Compression::Fast);
+    let written = enc.write_header().and_then(|mut w| w.write_image_data(&bytes));
+    match written {
+        Ok(()) => out.into_boxed_slice(),
+        Err(e) => {
+            // Not expected for in-memory output of a non-empty image.
+            log::warn!("pack frame {}x{}: {e}", img.width, img.height);
+            Box::default()
+        }
+    }
+}
+
+fn decode_px(data: &[u8], px: &mut [u32]) -> Result<()> {
+    let mut reader = png::Decoder::new(std::io::Cursor::new(data)).read_info()?;
+    let mut buf = vec![0; reader.output_buffer_size().context("frame too large")?];
+    let info = reader.next_frame(&mut buf)?;
+    if info.buffer_size() != px.len() * 4 {
+        bail!("size mismatch: {} bytes for {} pixels", info.buffer_size(), px.len());
+    }
+    for (p, b) in px.iter_mut().zip(buf.chunks_exact(4)) {
+        *p = u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
+    }
+    Ok(())
+}
+
+struct Slot {
+    packed: Packed,
+    frame: OnceLock<Frame>,
+    /// Requested since the last [`FrameStore::evict_unused`].
+    used: AtomicBool,
+}
+
+/// Rasterized frames kept compressed and unpacked lazily, the first time each is asked
+/// for (about 30–70 µs per frame), then cached until [`Self::evict_unused`]. Rarely played
+/// clips cost only their compressed bytes (~1/4 of the pixels).
+#[derive(Default)]
+pub struct FrameStore {
+    slots: HashMap<SpriteKey, Slot>,
+}
+
+impl FrameStore {
+    pub fn pack(frames: HashMap<SpriteKey, Frame>) -> FrameStore {
+        let mut s = FrameStore::default();
+        for (k, f) in frames {
+            s.insert(k, &f);
+        }
+        s
+    }
+
+    /// Compress and store `frame` (replacing any previous one for `key`).
+    pub fn insert(&mut self, key: SpriteKey, frame: &Frame) {
+        self.slots.insert(key, Slot { packed: Packed::pack(frame), frame: OnceLock::new(), used: AtomicBool::new(false) });
+    }
+
+    /// The frame for `key`, unpacked on first use.
+    pub fn get(&self, key: &SpriteKey) -> Option<&Frame> {
+        let slot = self.slots.get(key)?;
+        if !slot.used.load(Ordering::Relaxed) {
+            slot.used.store(true, Ordering::Relaxed);
+        }
+        Some(slot.frame.get_or_init(|| slot.packed.unpack()))
+    }
+
+    pub fn contains(&self, key: &SpriteKey) -> bool {
+        self.slots.contains_key(key)
+    }
+
+    pub fn len(&self) -> usize {
+        self.slots.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.slots.is_empty()
+    }
+
+    /// Frames currently unpacked.
+    pub fn unpacked(&self) -> usize {
+        self.slots.values().filter(|s| s.frame.get().is_some()).count()
+    }
+
+    /// Drop the unpacked pixels of frames not asked for since the previous call (they
+    /// stay packed and unpack again when next needed). Returns how many were dropped.
+    pub fn evict_unused(&mut self) -> usize {
+        let mut n = 0;
+        for s in self.slots.values_mut() {
+            if !*s.used.get_mut() && s.frame.take().is_some() {
+                n += 1;
+            }
+            *s.used.get_mut() = false;
+        }
+        n
+    }
+
+    /// Bytes held: compressed frames plus unpacked pixels.
+    pub fn bytes(&self) -> usize {
+        self.slots.values().map(|s| s.packed.png.len() + s.frame.get().map_or(0, |f| f.image.px.len() * 4)).sum()
+    }
+
+    /// Bytes the frames would take fully unpacked (what an eager bank holds).
+    pub fn unpacked_bytes(&self) -> usize {
+        self.slots.values().map(|s| s.packed.width as usize * s.packed.height as usize * 4).sum()
+    }
+}
+
+// ---------------------------------------------------------------- sprite bank
+
 /// All collections' metadata plus the rasterized frames for one skin at one scale.
 pub struct SpriteBank {
     collections: Vec<CollectionJson>,
     by_name: HashMap<String, u16>,
-    frames: HashMap<SpriteKey, Frame>,
+    frames: FrameStore,
     pub px_per_unit: f32,
 }
 
@@ -347,7 +491,7 @@ impl SpriteBank {
             by_name.insert(c.name.clone(), collections.len() as u16);
             collections.push(c);
         }
-        Ok(SpriteBank { collections, by_name, frames: HashMap::new(), px_per_unit: 64.0 })
+        Ok(SpriteBank { collections, by_name, frames: FrameStore::default(), px_per_unit: 64.0 })
     }
 
     pub fn collection_index(&self, name: &str) -> Option<u16> {
@@ -366,14 +510,14 @@ impl SpriteBank {
         c.sprites.get(key.sprite as usize).map(|s| s.name.as_str())
     }
 
-    /// Rasterize `keys` from `skin` at `px_per_unit`, replacing any previous frames.
-    /// Atlases are decoded one at a time and dropped right after, so peak memory is one
-    /// atlas plus the (small) rasterized frames. Collections the skin lacks come from
-    /// `fallback` (normally the vanilla export) or are skipped.
+    /// Rasterize `keys` from `skin` at `px_per_unit`, replacing any previous frames (they
+    /// are stored packed, see [`FrameStore`]). Atlases are decoded one at a time and
+    /// dropped right after, so peak memory is one atlas plus the packed frames. Collections
+    /// the skin lacks come from `fallback` (normally the vanilla export) or are skipped.
     pub fn rasterize_skin(&mut self, skin: &Skin, fallback: Option<&Skin>, keys: &[SpriteKey], px_per_unit: f32) -> Result<()> {
-        let mut sets = self.rasterize_sets(skin, fallback, &[(keys, px_per_unit)])?;
-        self.frames = sets.pop().unwrap_or_default();
-        self.px_per_unit = px_per_unit;
+        let mut store = FrameStore::default();
+        self.rasterize_each(skin, fallback, &[(keys, px_per_unit)], |_, k, f| store.insert(k, &f))?;
+        self.install_store(store, px_per_unit);
         Ok(())
     }
 
@@ -381,6 +525,15 @@ impl SpriteBank {
     /// Returns one frame map per set (this bank's own frames are untouched).
     pub fn rasterize_sets(&self, skin: &Skin, fallback: Option<&Skin>, sets: &[(&[SpriteKey], f32)]) -> Result<Vec<HashMap<SpriteKey, Frame>>> {
         let mut out: Vec<HashMap<SpriteKey, Frame>> = vec![HashMap::new(); sets.len()];
+        self.rasterize_each(skin, fallback, sets, |set, k, f| {
+            out[set].insert(k, f);
+        })?;
+        Ok(out)
+    }
+
+    /// Like [`Self::rasterize_sets`], but hands each frame (with its set index) to `sink`
+    /// as soon as it is rasterized, so callers can pack frames without holding them all.
+    pub fn rasterize_each(&self, skin: &Skin, fallback: Option<&Skin>, sets: &[(&[SpriteKey], f32)], mut sink: impl FnMut(usize, SpriteKey, Frame)) -> Result<()> {
         // collection -> [(set index, sprite id)]
         let mut by_col: HashMap<u16, Vec<(usize, u32)>> = HashMap::new();
         for (i, (keys, _)) in sets.iter().enumerate() {
@@ -409,25 +562,41 @@ impl SpriteBank {
             }
             for (set, id) in wanted {
                 if let Some(s) = meta.sprites.get(id as usize) {
-                    out[set].insert(SpriteKey { collection: col, sprite: id }, rasterize(s, &atlas, sets[set].1));
+                    sink(set, SpriteKey { collection: col, sprite: id }, rasterize(s, &atlas, sets[set].1));
                 }
             }
         }
-        Ok(out)
+        Ok(())
     }
 
     /// Replace this bank's frames (e.g. from [`Self::rasterize_sets`]).
     pub fn install_frames(&mut self, frames: HashMap<SpriteKey, Frame>, px_per_unit: f32) {
+        self.install_store(FrameStore::pack(frames), px_per_unit);
+    }
+
+    /// Replace this bank's frames with already packed ones (the unpacked cache starts empty).
+    pub fn install_store(&mut self, frames: FrameStore, px_per_unit: f32) {
         self.frames = frames;
         self.px_per_unit = px_per_unit;
     }
 
+    /// The frame for `key`, unpacked on first use (see [`FrameStore`]).
     pub fn frame(&self, key: SpriteKey) -> Option<&Frame> {
         self.frames.get(&key)
     }
 
+    pub fn frames(&self) -> &FrameStore {
+        &self.frames
+    }
+
+    /// See [`FrameStore::evict_unused`].
+    pub fn evict_unused(&mut self) -> usize {
+        self.frames.evict_unused()
+    }
+
+    /// Bytes of frame memory held now (packed frames plus unpacked ones).
     pub fn frame_bytes(&self) -> usize {
-        self.frames.values().map(|f| f.image.px.len() * 4).sum()
+        self.frames.bytes()
     }
 }
 
@@ -476,6 +645,116 @@ mod tests {
         let rgb = |p: u32| p & 0x00ff_ffff;
         assert_eq!(rgb(f.image.px[0]), 0x0000ff); // TL <- atlas BL (blue)
         assert_eq!(rgb(f.image.px[1]), 0xff0000); // TR <- atlas TL (red)
+    }
+
+    /// Pseudo-random atlas with varied alpha (including fully transparent texels).
+    fn noise_atlas(w: u32, h: u32) -> Atlas {
+        let mut s = 0x2545_f491u32;
+        let rgba = (0..w * h * 4)
+            .map(|_| {
+                s ^= s << 13;
+                s ^= s >> 17;
+                s ^= s << 5;
+                if s.is_multiple_of(7) { 0 } else { (s >> 8) as u8 }
+            })
+            .collect();
+        Atlas { width: w, height: h, rgba }
+    }
+
+    #[test]
+    fn packed_frames_equal_eager_ones() {
+        let atlas = noise_atlas(64, 64);
+        let mut eager = HashMap::new();
+        for (i, ppu) in [0.7f32, 1.0, 3.3, 9.0].into_iter().enumerate() {
+            let f = rasterize(&quad([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]]), &atlas, ppu * 16.0);
+            eager.insert(SpriteKey { collection: 0, sprite: i as u32 }, f);
+        }
+        // Empty and fully transparent frames too.
+        eager.insert(SpriteKey { collection: 1, sprite: 0 }, Frame::default());
+        eager.insert(SpriteKey { collection: 1, sprite: 1 }, Frame { image: Image::new(3, 2), anchor: [1.5, 2.0] });
+        let store = FrameStore::pack(eager.clone());
+        assert_eq!(store.len(), eager.len());
+        assert!(store.bytes() < store.unpacked_bytes(), "packing saves memory");
+        for (k, f) in &eager {
+            let g = store.get(k).expect("frame");
+            assert_eq!((g.image.width, g.image.height, g.anchor), (f.image.width, f.image.height, f.anchor));
+            assert_eq!(g.image.px, f.image.px, "{k:?}");
+        }
+        assert!(store.get(&SpriteKey { collection: 9, sprite: 0 }).is_none());
+    }
+
+    #[test]
+    fn frames_unpack_once_and_evict_when_idle() {
+        let atlas = noise_atlas(32, 32);
+        let (a, b) = (SpriteKey { collection: 0, sprite: 0 }, SpriteKey { collection: 0, sprite: 1 });
+        let mut store = FrameStore::default();
+        store.insert(a, &rasterize(&quad([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]]), &atlas, 20.0));
+        store.insert(b, &rasterize(&quad([[1.0, 0.0], [1.0, 1.0], [0.0, 0.0], [0.0, 1.0]]), &atlas, 20.0));
+        let packed = store.bytes();
+        assert_eq!(store.unpacked(), 0, "nothing unpacked up front");
+
+        let p1 = store.get(&a).unwrap() as *const Frame;
+        let p2 = store.get(&a).unwrap() as *const Frame;
+        assert_eq!(p1, p2, "second request is a cache hit");
+        assert_eq!(store.unpacked(), 1);
+        assert!(store.bytes() > packed);
+
+        // `a` was used since the last check: kept; then idle for a whole period: dropped.
+        assert_eq!(store.evict_unused(), 0);
+        assert_eq!(store.unpacked(), 1);
+        store.get(&b);
+        assert_eq!(store.evict_unused(), 1, "a idle for a period");
+        assert_eq!(store.unpacked(), 1);
+        assert_eq!(store.evict_unused(), 1, "b idle too");
+        assert_eq!((store.unpacked(), store.bytes()), (0, packed));
+        let eager = rasterize(&quad([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]]), &atlas, 20.0);
+        assert_eq!(store.get(&a).unwrap().image.px, eager.image.px, "unpacks again after eviction");
+    }
+
+    #[test]
+    fn rescale_and_skin_change_reset_the_cache() {
+        let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/hk");
+        let mut bank = SpriteBank::load_metadata(&data).expect("load");
+        // A tiny stand-in Knight atlas (UVs are normalized, so any size works).
+        let dir = std::env::temp_dir().join(format!("skong-lazy-frames-{}", std::process::id()));
+        let write_skin = |name: &str, seed_x: u32| -> Skin {
+            let d = dir.join(name);
+            std::fs::create_dir_all(&d).unwrap();
+            let atlas = noise_atlas(128 + seed_x, 128);
+            let mut out = Vec::new();
+            let mut e = png::Encoder::new(&mut out, atlas.width, atlas.height);
+            e.set_color(png::ColorType::Rgba);
+            e.write_header().unwrap().write_image_data(&atlas.rgba).unwrap();
+            std::fs::write(d.join("Knight.png"), out).unwrap();
+            Skin::from_dir(&d).unwrap()
+        };
+        let (s1, s2) = (write_skin("One", 0), write_skin("Two", 1));
+        let ki = bank.collection_index("Knight").unwrap();
+        let keys: Vec<SpriteKey> = (0..40).map(|i| SpriteKey { collection: ki, sprite: i }).collect();
+
+        let eager = |skin: &Skin, ppu: f32| bank.rasterize_sets(skin, None, &[(&keys, ppu)]).unwrap().pop().unwrap();
+        let (e1_small, e1_big, e2_big) = (eager(&s1, 38.4), eager(&s1, 64.0), eager(&s2, 64.0));
+
+        bank.rasterize_skin(&s1, None, &keys, 38.4).unwrap();
+        for k in &keys {
+            assert_eq!(bank.frame(*k).unwrap().image.px, e1_small[k].image.px);
+        }
+        assert_eq!(bank.frames().unpacked(), keys.len());
+
+        bank.rasterize_skin(&s1, None, &keys, 64.0).unwrap();
+        assert_eq!((bank.frames().unpacked(), bank.px_per_unit), (0, 64.0), "rescale starts a fresh cache");
+        for k in &keys {
+            let f = bank.frame(*k).unwrap();
+            assert_eq!((f.image.width, f.image.height), (e1_big[k].image.width, e1_big[k].image.height));
+            assert_eq!(f.image.px, e1_big[k].image.px);
+        }
+
+        bank.rasterize_skin(&s2, None, &keys, 64.0).unwrap();
+        assert_eq!(bank.frames().unpacked(), 0, "skin change starts a fresh cache");
+        for k in &keys {
+            assert_eq!(bank.frame(*k).unwrap().image.px, e2_big[k].image.px);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
