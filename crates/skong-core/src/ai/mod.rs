@@ -241,6 +241,8 @@ pub struct Brain {
     best_poi: Option<ScoredPoi>,
     best_spot: Option<SpotChoice>,
     battle_ready_at: f32,
+    /// The user asked him to fight the cursor (round after round).
+    fight_mode: bool,
     nap_ready_at: f32,
     /// Something scary happened here; flee from it.
     flee_from: Option<Vec2>,
@@ -299,6 +301,7 @@ impl Brain {
             best_poi: None,
             best_spot: None,
             battle_ready_at: 0.0,
+            fight_mode: false,
             nap_ready_at: 0.0,
             flee_from: None,
             knocked_out: false,
@@ -352,6 +355,18 @@ impl Brain {
 
     pub fn set_bother_level(&mut self, level: f32) {
         self.cfg.bother_level = level.clamp(0.0, 1.0);
+    }
+
+    /// Fight mode: battle the cursor continuously (see `score_behaviours`).
+    pub fn set_fight_mode(&mut self, on: bool) {
+        self.fight_mode = on;
+        if on {
+            self.battle_ready_at = self.now;
+        }
+    }
+
+    pub fn fight_mode(&self) -> bool {
+        self.fight_mode
     }
 
     pub fn senses(&self) -> &Senses {
@@ -797,6 +812,8 @@ impl Brain {
         let t = &self.cfg.tiers;
         let critical = self.mind.needs.energy < t.critical_energy;
         match kind {
+            // Asked to fight: the cursor battle is an engagement, not a pastime.
+            BehaviourKind::Battle if self.fight_mode => Tier::Engagement,
             // A geo deposit is Geo: an engagement like loot (other found places, benches, are
             // pastimes). Exhausted, it waits like far loot does.
             BehaviourKind::Visit => {
@@ -828,6 +845,8 @@ impl Brain {
         if let Active::Battle(b) = &self.active {
             let base = self.cfg.battle.cooldown / self.cfg.bother_level.max(0.05);
             let after = if b.outcome() == Some(Outcome::GaveUp) { base * 0.5 } else { base };
+            // Fight mode: a short breather (pick up the spilled Geo), then the next round.
+            let after = if self.fight_mode { 6.0 } else { after };
             self.battle_ready_at = self.now + after;
         }
         if from == BehaviourKind::Pester {
@@ -1077,6 +1096,9 @@ impl Brain {
 
         let b = &cfg.battle;
         let battle = match s.cursor {
+            // Fight mode (the user asked for it): fight the cursor, round after round, ahead
+            // of everything but emergencies; not while typing, away or in a fullscreen app.
+            Some(_) if self.fight_mode && self.now >= self.battle_ready_at && !s.user_busy && !s.user_away && !s.fullscreen && e.hurt < 0.6 => 0.97,
             Some(c)
                 if cfg.bother_level > 0.0
                     && self.now >= self.battle_ready_at

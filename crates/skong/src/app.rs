@@ -80,6 +80,7 @@ const ID_PANEL: u32 = 10;
 const ID_INVITE: u32 = 11;
 const ID_DREAM: u32 = 12;
 const ID_SHARE: u32 = 14;
+const ID_FIGHT: u32 = 15;
 const ID_QUIT: u32 = 9;
 const ID_SKIN0: u32 = 1000;
 const ID_SCALE0: u32 = 2000;
@@ -1088,6 +1089,11 @@ impl Pet {
                 self.win.set_click_through(self.settings.click_through);
                 self.settings.save();
             }
+            Command::ToggleFightMode => {
+                let on = !self.brain.fight_mode();
+                self.brain.set_fight_mode(on);
+                log::info!("fight mode: {on}");
+            }
             Command::ToggleShareVisible => {
                 self.settings.share_visible = !self.settings.share_visible;
                 self.apply_share_visible();
@@ -1170,6 +1176,7 @@ impl Pet {
             discover::menu(),
             MenuItem::Separator,
             MenuItem::action(ID_ACT, "Do something!"),
+            MenuItem::check(ID_FIGHT, "Fight the cursor", self.brain.fight_mode()),
             MenuItem::action(ID_INVITE, "Invite a visitor"),
             MenuItem::action(ID_DREAM, "Dream-nail a window"),
             MenuItem::action(ID_RESPAWN, "Come here (respawn at cursor)"),
@@ -1191,6 +1198,7 @@ impl Pet {
             ID_MANUAL => Command::ToggleManual,
             ID_CLICK => Command::ToggleClickThrough,
             ID_SHARE => Command::ToggleShareVisible,
+            ID_FIGHT => Command::ToggleFightMode,
             ID_PAUSE => Command::TogglePause,
             ID_ACT => Command::RandomAct,
             ID_RESPAWN => Command::RespawnAtCursor,

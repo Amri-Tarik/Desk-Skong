@@ -65,6 +65,8 @@ impl Pet {
             paused: self.paused,
             manual: self.manual,
             click_through: self.settings.click_through,
+            fight_mode: self.brain.fight_mode(),
+            share_visible: self.settings.share_visible,
             vision: self.content.is_enabled(),
             overlay: self.overlay.is_on(),
             overlay_layers: self.overlay.layers,

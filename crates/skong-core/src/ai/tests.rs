@@ -1318,3 +1318,21 @@ fn idling_he_now_and_then_checks_his_map() {
     assert!(maps >= 1, "acts: {:?}", sim.started);
     assert!(maps <= 3, "a treat, not a habit: {maps}");
 }
+
+#[test]
+fn fight_mode_fights_the_cursor_round_after_round_until_switched_off() {
+    // Even a calm knight with mischief turned off fights when the user asks for it.
+    let mut sim = calm(BrainConfig { bother_level: 0.0, ..Default::default() });
+    sim.brain.mind_mut().needs.mischief = 0.0;
+    sim.park_cursor(Vec2::new(80.0, -20.0));
+    sim.brain.set_fight_mode(true);
+    assert!(sim.run_until(2.0, BehaviourKind::Battle), "{}", sim.last_reason());
+    // Rounds keep coming (a short breather between them).
+    let kinds = sim.run(240.0);
+    let rounds = kinds.windows(2).filter(|w| w[0] != BehaviourKind::Battle && w[1] == BehaviourKind::Battle).count();
+    assert!(rounds >= 2, "fought again: {rounds} new rounds");
+    sim.brain.set_fight_mode(false);
+    sim.run(100.0);
+    let kinds = sim.run(30.0);
+    assert!(!kinds.contains(&BehaviourKind::Battle), "off again");
+}

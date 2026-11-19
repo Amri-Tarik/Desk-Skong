@@ -31,6 +31,8 @@ pub enum Command {
     ToggleClickThrough,
     /// Show the pet in screen shares and screenshots (Discord, OBS...); off by default.
     ToggleShareVisible,
+    /// Fight the cursor, round after round (until toggled off).
+    ToggleFightMode,
     PlaceBenchAtCursor(usize),
     PlaceBenchNearKnight(usize),
     ClearBenches,
@@ -180,6 +182,10 @@ pub struct Status {
     /// A panel is currently driving the knight.
     pub driven: bool,
     pub click_through: bool,
+    /// Fighting the cursor on request (round after round).
+    pub fight_mode: bool,
+    /// Visible in screen shares and screenshots.
+    pub share_visible: bool,
     pub vision: bool,
     pub overlay: bool,
     pub overlay_layers: OverlayLayers,
