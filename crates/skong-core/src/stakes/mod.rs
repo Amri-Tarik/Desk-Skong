@@ -42,21 +42,24 @@ pub enum DeathKind {
     Spikes,
     /// Fell into acid: `Acid Death`.
     Acid,
+    /// A long fall without a dive or down-dash to break it: `Death`, and a Shade to win
+    /// the Geo back from.
+    Fall,
 }
 
 impl DeathKind {
     /// Act in `data/acts/stakes.json`.
     pub fn act_name(self) -> &'static str {
         match self {
-            DeathKind::Fight => "death",
+            DeathKind::Fight | DeathKind::Fall => "death",
             DeathKind::Spikes => "spike_death",
             DeathKind::Acid => "acid_death",
         }
     }
 
-    /// Hazard deaths leave no Shade in the game (hazard respawn), only fights do.
+    /// Hazard deaths leave no Shade in the game (hazard respawn); fights and fatal falls do.
     pub fn leaves_shade(self) -> bool {
-        self == DeathKind::Fight
+        matches!(self, DeathKind::Fight | DeathKind::Fall)
     }
 }
 

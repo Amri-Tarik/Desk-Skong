@@ -485,6 +485,11 @@ impl Pet {
             // Far straight drops: Desolate Dive (Descending Dark when excited / very deep).
             input.dive_pressed = true;
             input.dive_dark = dark;
+        } else if manual_input.is_none() && self.move_test.is_none() && self.ch.hard_landing_ahead(&self.terrain) {
+            // A fatal landing coming: dive, even off the planned line (the follower
+            // re-plans from wherever he lands; alive beats precise).
+            input.dive_pressed = true;
+            input.dive_dark = true;
         }
         let d = &self.data;
         if let Some(p) = &self.act {

@@ -34,6 +34,24 @@ impl Character {
         q.find_ledge(body, 0.0, f32::MAX, |_| true).map(|l| l.y - self.pos.y)
     }
 
+    /// Falling, with a hard landing (fatal) coming at this rate: the time fallen so far plus
+    /// the time to the ledge below (at max fall speed, an optimistic bound) passes
+    /// `big_fall_time`. A dive (or down-dash) lands softly, so this is when to dive anyway.
+    pub fn hard_landing_ahead(&self, terrain: &Terrain) -> bool {
+        if self.state != MoveState::Airborne || self.vel.y <= 0.0 || !self.abilities.dive {
+            return false;
+        }
+        // Only a fall that is already well under way: high up a wall mid-climb the floor is
+        // far below too, but the next kick comes long before.
+        if self.timers.fall < 0.45 {
+            return false;
+        }
+        let Some(drop) = self.drop_below(terrain) else { return false };
+        let p = &self.params;
+        let to_go = drop / self.vel.y.max(p.px(p.max_fall_speed));
+        self.timers.fall + to_go > p.big_fall_time - 0.05
+    }
+
     /// Planner-less dive decision for this tick's `input`: dive when already falling
     /// straight (no real sideways steering, so the dive lands where the fall would) with at
     /// least [`AUTO_DIVE_UNITS`] of air below ([`AUTO_DIVE_EXCITED_UNITS`] when `excited`).

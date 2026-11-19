@@ -87,6 +87,8 @@ struct Sim {
     activity: Activity,
     /// A Shade that never moves (overrides `shade`).
     fixed_shade: Option<ShadeSense>,
+    /// Controller events for the next tick (e.g. a hard landing).
+    moves: Vec<crate::controller::MoveEvent>,
 }
 
 impl Sim {
@@ -120,6 +122,7 @@ impl Sim {
             hits_from_shade: 0,
             activity: Activity::default(),
             fixed_shade: None,
+            moves: vec![],
         }
     }
 
@@ -146,6 +149,7 @@ impl Sim {
         self.brain.sense_stakes(StakesSense { shade, coins: self.coins.clone(), shade_hits, scale: 1.0 });
 
         let at_bench = self.benches.iter().any(|b| b.distance(self.knight.pos) < 6.0);
+        let moves = std::mem::take(&mut self.moves);
         let p = Percepts {
             dt: DT,
             knight: &self.knight,
@@ -158,7 +162,7 @@ impl Sim {
             act: self.act.map(|a| a.0),
             benches: &self.benches,
             perch: at_bench,
-            move_events: &[],
+            move_events: &moves,
             activity: &self.activity,
             last_input: MoveInput::default(),
             local_hour: None,
@@ -498,4 +502,16 @@ fn geo_ends_a_cursor_battle_and_the_cursor_never_interrupts_looting() {
         }
         assert!(!matches!(sim.brain.behaviour(), BehaviourKind::Battle | BehaviourKind::Pester), "cursor interrupted looting");
     }
+}
+
+#[test]
+fn an_unbroken_fall_kills_and_leaves_a_shade_to_hunt() {
+    let mut sim = Sim::new();
+    sim.run_until(2.0, |_| false);
+    sim.moves = vec![crate::controller::MoveEvent::Landed { hard: true }];
+    assert!(sim.run_until(5.0, |s| s.brain.behaviour() == BehaviourKind::Dead), "a hard landing is fatal");
+    assert!(sim.run_until(10.0, |s| s.respawned_at().is_some()));
+    assert_eq!(sim.died(), Some((DeathKind::Fall, false)));
+    assert!(sim.started.iter().any(|a| a == "death"));
+    assert!(DeathKind::Fall.leaves_shade(), "a Shade with his Geo: something to go and do");
 }

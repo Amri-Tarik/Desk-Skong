@@ -743,13 +743,13 @@ fn losing_a_battle_knocks_out_then_heals_with_focus() {
 }
 
 #[test]
-fn huge_fall_knocks_the_knight_out() {
+fn an_unbroken_fall_is_fatal() {
+    // Fall damage kills (a dive or down-dash lands softly and never reports a hard landing):
+    // he dies, and leaves a Shade to go and fight.
     let mut sim = calm(BrainConfig::default());
     sim.run(1.0);
     sim.events.push(MoveEvent::Landed { hard: true });
-    assert!(sim.run_until(0.5, BehaviourKind::KnockedOut));
-    sim.run(1.0);
-    assert_eq!(sim.started.last().map(String::as_str), Some("bow_down"));
+    assert!(sim.run_until(0.5, BehaviourKind::Dead), "{}", sim.last_reason());
 }
 
 #[test]
