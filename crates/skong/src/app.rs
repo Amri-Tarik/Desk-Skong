@@ -873,6 +873,13 @@ impl Pet {
                 self.act = Some(ActPlayer::start(&d.acts, &d.lib, &mut self.anim, id, seed()).allow_linger(LINGER_SECS));
             }
         }
+        // A slash that connects with the cursor: a hit marker right on it (the game's slash
+        // impact, along the swing), so every landed blow shows before any Geo spills.
+        if let Some(a) = intent.attack.filter(|a| a.hit)
+            && let Some((x, y)) = monitor::cursor_pos()
+        {
+            self.fx.spawn("cursor_hit", Vec2::new(x as f32, y as f32), a.side == Side::Right);
+        }
         if let Some(a) = intent.attack
             && self.act.is_none()
             && self.ch.is_grounded()
