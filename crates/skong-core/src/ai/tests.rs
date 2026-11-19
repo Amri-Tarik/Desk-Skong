@@ -1227,7 +1227,7 @@ fn asked_to_pester_he_shows_off_around_the_cursor_then_stops() {
     sim.brain.pester_until = 1e9;
     sim.brain.battle_ready_at = 1e9;
     assert!(sim.run_until(4.0, BehaviourKind::Pester), "{}", sim.last_reason());
-    let kinds = sim.run(30.0);
+    let kinds = sim.run(100.0); // persistent: 45-90 s of play
     let jumps = sim.intents.iter().filter(|i| matches!(i.motion, Motion::Direct(m) if m.jump_pressed)).count();
     assert!(jumps >= 3, "jumps {jumps}");
     assert!(sim.intents.iter().all(|i| i.attack.is_none_or(|a| !a.hit)), "never lands a hit");
