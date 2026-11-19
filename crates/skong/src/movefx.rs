@@ -54,11 +54,12 @@ fn stop_trails(fx: &mut Fx) {
 pub struct MoveTest {
     t: f32,
     cycle: u32,
+    started: bool,
 }
 
 impl MoveTest {
     pub fn new() -> Self {
-        Self { t: -1.0, cycle: 0 }
+        Self { t: -1.0, cycle: 0, started: false }
     }
 
     pub fn input(&mut self, dt: f32, ch: &mut Character, spawn: Vec2) -> MoveInput {
@@ -66,13 +67,15 @@ impl MoveTest {
         if self.t < 0.0 {
             return MoveInput::default();
         }
+        let fresh = !self.started || self.t >= 8.0;
         if self.t >= 8.0 {
             self.t = 0.0;
             self.cycle += 1;
         }
+        self.started = true;
         let t = self.t;
         let mut i = MoveInput::default();
-        if t < dt * 1.5 {
+        if fresh {
             *ch = Character::new(ch.params, ch.abilities, spawn);
             log::info!("move-test: cycle {} at ({:.0},{:.0})", self.cycle, spawn.x, spawn.y);
         } else if (0.6..0.6 + dt * 1.5).contains(&t) {
