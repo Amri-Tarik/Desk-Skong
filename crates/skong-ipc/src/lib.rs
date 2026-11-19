@@ -45,6 +45,10 @@ pub enum Command {
     SetOverlayLayers(OverlayLayers),
     /// Launch `skong-panel.exe` next to the pet executable.
     OpenPanel,
+    /// Bring an NPC visitor now (debug; visits also happen on their own).
+    InviteVisitor,
+    /// The knight dream-nails the window he stands on (thought bubble).
+    DreamNail,
     /// Path-find to the cursor (Stroll, or Hurry with the full movement kit).
     GoToCursor { hurry: bool },
     /// Death / Shade / Geo / spell triggers.

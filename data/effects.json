@@ -40,6 +40,11 @@
     { "name": "q_slam_lines",    "library": "Spells Anim", "clip": "Quake 2 Blast", "pos": [0.0, 1.38],    "scale": [4.527, 4.527], "attached": false },
     { "name": "q_pillar_2",      "library": "Spells Anim", "clip": "Quake 2 Pillar", "pos": [-0.14, 2.61], "scale": [2.04, 3.865], "attached": false },
     { "name": "q_mega",          "library": "Spells Anim", "clip": "Quake 2 Mega",  "pos": [0.156, 6.22],  "scale": [1.935, 1.935], "attached": false },
+    { "name": "dn_slash",        "library": "Spells Anim", "clip": "DN Slash", "pos": [-0.98, -0.7], "scale": [1.0, 1.0] },
+    { "name": "portal_glow",     "library": "Spells Anim", "clip": "DG Warp Charge", "pos": [0.0, 1.1], "scale": [1.955, 1.955], "attached": false },
+    { "name": "portal_ripple",   "library": "Spells Anim", "clip": "White Wave Default", "pos": [0.0, 1.1], "scale": [1.0, 1.0], "attached": false },
+    { "name": "arrive_puff",     "library": "Dust", "clip": "Jump Puff", "pos": [0.0, -0.73], "scale": [0.9, 0.9], "attached": false },
+    { "name": "arrive_puff_side", "library": "Dust", "clip": "Dash Puff", "pos": [-1.25, 0.0], "scale": [-0.8, 0.8], "attached": false },
     { "name": "reveal_dust",     "library": "Dust", "clip": "Jump Puff", "pos": [0.0, 0.3], "scale": [2.6, 2.6], "attached": false }
   ]
 }

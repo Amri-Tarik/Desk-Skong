@@ -1,0 +1,2797 @@
+{
+  "name": "Quirrel",
+  "clips": [
+    {
+      "name": "Talk",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 44,
+          "sprite": "idle_to_talk_v020053"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 53,
+          "sprite": "idle_to_talk_v020054"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 18,
+          "sprite": "idle_to_talk_v020055"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 29,
+          "sprite": "idle_to_talk_v020056"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 27,
+          "sprite": "idle_to_talk_v020057"
+        }
+      ]
+    },
+    {
+      "name": "Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 0,
+          "sprite": "idle_to_talk_v020000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 40,
+          "sprite": "idle_to_talk_v020001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 9,
+          "sprite": "idle_to_talk_v020002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 1,
+          "sprite": "idle_to_talk_v020003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 56,
+          "sprite": "idle_to_talk_v020004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 33,
+          "sprite": "idle_to_talk_v020005"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 19,
+          "sprite": "idle_to_talk_v020006"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 49,
+          "sprite": "idle_to_talk_v020007"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 38,
+          "sprite": "idle_to_talk_v020008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 7,
+          "sprite": "idle_to_talk_v020009"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 31,
+          "sprite": "idle_to_talk_v020010"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 39,
+          "sprite": "idle_to_talk_v020011"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 48,
+          "sprite": "idle_to_talk_v020012"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 3,
+          "sprite": "idle_to_talk_v020013"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 12,
+          "sprite": "idle_to_talk_v020014"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 13,
+          "sprite": "idle_to_talk_v020015"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 35,
+          "sprite": "idle_to_talk_v020016"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 8,
+          "sprite": "idle_to_talk_v020017"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 28,
+          "sprite": "idle_to_talk_v020018"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 4,
+          "sprite": "idle_to_talk_v020019"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 54,
+          "sprite": "idle_to_talk_v020020"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 52,
+          "sprite": "idle_to_talk_v020021"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 34,
+          "sprite": "idle_to_talk_v020022"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 57,
+          "sprite": "idle_to_talk_v020023"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 43,
+          "sprite": "idle_to_talk_v020024"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 30,
+          "sprite": "idle_to_talk_v020025"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 32,
+          "sprite": "idle_to_talk_v020026"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 36,
+          "sprite": "idle_to_talk_v020027"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 41,
+          "sprite": "idle_to_talk_v020028"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 51,
+          "sprite": "idle_to_talk_v020029"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 46,
+          "sprite": "idle_to_talk_v020030"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 5,
+          "sprite": "idle_to_talk_v020031"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 23,
+          "sprite": "idle_to_talk_v020032"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 50,
+          "sprite": "idle_to_talk_v020033"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 20,
+          "sprite": "idle_to_talk_v020034"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 17,
+          "sprite": "idle_to_talk_v020035"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 25,
+          "sprite": "idle_to_talk_v020036"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 2,
+          "sprite": "idle_to_talk_v020037"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 47,
+          "sprite": "idle_to_talk_v020038"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 16,
+          "sprite": "idle_to_talk_v020039"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 26,
+          "sprite": "idle_to_talk_v020040"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 55,
+          "sprite": "idle_to_talk_v020041"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 42,
+          "sprite": "idle_to_talk_v020042"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 15,
+          "sprite": "idle_to_talk_v020043"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 21,
+          "sprite": "idle_to_talk_v020044"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 45,
+          "sprite": "idle_to_talk_v020045"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 24,
+          "sprite": "idle_to_talk_v020046"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 11,
+          "sprite": "idle_to_talk_v020047"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 37,
+          "sprite": "idle_to_talk_v020048"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 6,
+          "sprite": "idle_to_talk_v020049"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 10,
+          "sprite": "idle_to_talk_v020050"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 22,
+          "sprite": "idle_to_talk_v020051"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 14,
+          "sprite": "idle_to_talk_v020052"
+        }
+      ]
+    },
+    {
+      "name": "Shine Bod",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 58,
+          "sprite": "body_idle0000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 59,
+          "sprite": "body_idle0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 60,
+          "sprite": "body_idle0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 61,
+          "sprite": "body_idle0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 62,
+          "sprite": "body_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 63,
+          "sprite": "body_idle0005"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 64,
+          "sprite": "body_idle0006"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 65,
+          "sprite": "body_idle0007"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 58,
+          "sprite": "body_idle0000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 59,
+          "sprite": "body_idle0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 60,
+          "sprite": "body_idle0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 61,
+          "sprite": "body_idle0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 62,
+          "sprite": "body_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 63,
+          "sprite": "body_idle0005"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 64,
+          "sprite": "body_idle0006"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 65,
+          "sprite": "body_idle0007"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 66,
+          "sprite": "body_idle0008"
+        }
+      ]
+    },
+    {
+      "name": "Talk End",
+      "fps": 12,
+      "loop_start": 5,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 27,
+          "sprite": "idle_to_talk_v020057"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 29,
+          "sprite": "idle_to_talk_v020056"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 18,
+          "sprite": "idle_to_talk_v020055"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 53,
+          "sprite": "idle_to_talk_v020054"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 44,
+          "sprite": "idle_to_talk_v020053"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 0,
+          "sprite": "idle_to_talk_v020000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 40,
+          "sprite": "idle_to_talk_v020001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 9,
+          "sprite": "idle_to_talk_v020002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 1,
+          "sprite": "idle_to_talk_v020003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 56,
+          "sprite": "idle_to_talk_v020004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 33,
+          "sprite": "idle_to_talk_v020005"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 19,
+          "sprite": "idle_to_talk_v020006"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 49,
+          "sprite": "idle_to_talk_v020007"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 38,
+          "sprite": "idle_to_talk_v020008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 7,
+          "sprite": "idle_to_talk_v020009"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 31,
+          "sprite": "idle_to_talk_v020010"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 39,
+          "sprite": "idle_to_talk_v020011"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 48,
+          "sprite": "idle_to_talk_v020012"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 3,
+          "sprite": "idle_to_talk_v020013"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 12,
+          "sprite": "idle_to_talk_v020014"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 13,
+          "sprite": "idle_to_talk_v020015"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 35,
+          "sprite": "idle_to_talk_v020016"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 8,
+          "sprite": "idle_to_talk_v020017"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 28,
+          "sprite": "idle_to_talk_v020018"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 4,
+          "sprite": "idle_to_talk_v020019"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 54,
+          "sprite": "idle_to_talk_v020020"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 52,
+          "sprite": "idle_to_talk_v020021"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 34,
+          "sprite": "idle_to_talk_v020022"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 57,
+          "sprite": "idle_to_talk_v020023"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 43,
+          "sprite": "idle_to_talk_v020024"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 30,
+          "sprite": "idle_to_talk_v020025"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 32,
+          "sprite": "idle_to_talk_v020026"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 36,
+          "sprite": "idle_to_talk_v020027"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 41,
+          "sprite": "idle_to_talk_v020028"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 51,
+          "sprite": "idle_to_talk_v020029"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 46,
+          "sprite": "idle_to_talk_v020030"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 5,
+          "sprite": "idle_to_talk_v020031"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 23,
+          "sprite": "idle_to_talk_v020032"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 50,
+          "sprite": "idle_to_talk_v020033"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 20,
+          "sprite": "idle_to_talk_v020034"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 17,
+          "sprite": "idle_to_talk_v020035"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 25,
+          "sprite": "idle_to_talk_v020036"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 2,
+          "sprite": "idle_to_talk_v020037"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 47,
+          "sprite": "idle_to_talk_v020038"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 16,
+          "sprite": "idle_to_talk_v020039"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 26,
+          "sprite": "idle_to_talk_v020040"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 55,
+          "sprite": "idle_to_talk_v020041"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 42,
+          "sprite": "idle_to_talk_v020042"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 15,
+          "sprite": "idle_to_talk_v020043"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 21,
+          "sprite": "idle_to_talk_v020044"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 45,
+          "sprite": "idle_to_talk_v020045"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 24,
+          "sprite": "idle_to_talk_v020046"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 11,
+          "sprite": "idle_to_talk_v020047"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 37,
+          "sprite": "idle_to_talk_v020048"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 6,
+          "sprite": "idle_to_talk_v020049"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 10,
+          "sprite": "idle_to_talk_v020050"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 22,
+          "sprite": "idle_to_talk_v020051"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 14,
+          "sprite": "idle_to_talk_v020052"
+        }
+      ]
+    },
+    {
+      "name": "Shine Head Idle",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 67,
+          "sprite": "head0000"
+        }
+      ]
+    },
+    {
+      "name": "Shine Head Talk Start",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 68,
+          "sprite": "head0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 69,
+          "sprite": "head0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 70,
+          "sprite": "head0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 71,
+          "sprite": "head0004"
+        }
+      ]
+    },
+    {
+      "name": "Shine Head Talk End",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 70,
+          "sprite": "head0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 69,
+          "sprite": "head0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 68,
+          "sprite": "head0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 67,
+          "sprite": "head0000"
+        }
+      ]
+    },
+    {
+      "name": "Bench Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 72,
+          "sprite": "bench_idle0000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 73,
+          "sprite": "bench_idle0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 74,
+          "sprite": "bench_idle0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 75,
+          "sprite": "bench_idle0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 72,
+          "sprite": "bench_idle0000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 73,
+          "sprite": "bench_idle0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 74,
+          "sprite": "bench_idle0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 75,
+          "sprite": "bench_idle0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        }
+      ]
+    },
+    {
+      "name": "Bench Talk",
+      "fps": 12,
+      "loop_start": 4,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 84,
+          "sprite": "bench_look_to_talk0000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 77,
+          "sprite": "bench_look_to_talk0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 86,
+          "sprite": "bench_look_to_talk0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 81,
+          "sprite": "bench_look_to_talk0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 83,
+          "sprite": "bench_look_to_talk0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 82,
+          "sprite": "bench_look_to_talk0005"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 88,
+          "sprite": "bench_look_to_talk0006"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 79,
+          "sprite": "bench_look_to_talk0007"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 80,
+          "sprite": "bench_look_to_talk0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 77,
+          "sprite": "bench_look_to_talk0001"
+        }
+      ]
+    },
+    {
+      "name": "Bench Look",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 85,
+          "sprite": "bench_turn_to_look0000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 78,
+          "sprite": "bench_turn_to_look0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        }
+      ]
+    },
+    {
+      "name": "Bench HeroSit",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 72,
+          "sprite": "bench_idle0000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 73,
+          "sprite": "bench_idle0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 74,
+          "sprite": "bench_idle0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 75,
+          "sprite": "bench_idle0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 85,
+          "sprite": "bench_turn_to_look0000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 78,
+          "sprite": "bench_turn_to_look0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 87,
+          "sprite": "bench_turn_to_look0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 78,
+          "sprite": "bench_turn_to_look0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 85,
+          "sprite": "bench_turn_to_look0000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 72,
+          "sprite": "bench_idle0000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 73,
+          "sprite": "bench_idle0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 74,
+          "sprite": "bench_idle0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 75,
+          "sprite": "bench_idle0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        }
+      ]
+    },
+    {
+      "name": "Bench Look End",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 78,
+          "sprite": "bench_turn_to_look0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 85,
+          "sprite": "bench_turn_to_look0000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 72,
+          "sprite": "bench_idle0000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 73,
+          "sprite": "bench_idle0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 74,
+          "sprite": "bench_idle0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 75,
+          "sprite": "bench_idle0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 72,
+          "sprite": "bench_idle0000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 73,
+          "sprite": "bench_idle0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 74,
+          "sprite": "bench_idle0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 75,
+          "sprite": "bench_idle0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        }
+      ]
+    },
+    {
+      "name": "Bench Talk End",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 84,
+          "sprite": "bench_look_to_talk0000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 72,
+          "sprite": "bench_idle0000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 73,
+          "sprite": "bench_idle0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 74,
+          "sprite": "bench_idle0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 75,
+          "sprite": "bench_idle0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 72,
+          "sprite": "bench_idle0000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 73,
+          "sprite": "bench_idle0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 74,
+          "sprite": "bench_idle0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 75,
+          "sprite": "bench_idle0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 76,
+          "sprite": "bench_idle0004"
+        }
+      ]
+    },
+    {
+      "name": "Spa Idle",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 93,
+          "sprite": "quirrel_spa0007"
+        }
+      ]
+    },
+    {
+      "name": "Spa TalkL",
+      "fps": 12,
+      "loop_start": 3,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 96,
+          "sprite": "quirrel_spa0006"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 103,
+          "sprite": "quirrel_spa0005"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 104,
+          "sprite": "quirrel_spa0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 95,
+          "sprite": "quirrel_spa0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 101,
+          "sprite": "quirrel_spa0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 97,
+          "sprite": "quirrel_spa0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 102,
+          "sprite": "quirrel_spa0000"
+        }
+      ]
+    },
+    {
+      "name": "Spa TalkL End",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 104,
+          "sprite": "quirrel_spa0004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 103,
+          "sprite": "quirrel_spa0005"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 96,
+          "sprite": "quirrel_spa0006"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 93,
+          "sprite": "quirrel_spa0007"
+        }
+      ]
+    },
+    {
+      "name": "Spa TalkR",
+      "fps": 12,
+      "loop_start": 3,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 98,
+          "sprite": "quirrel_spa0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 100,
+          "sprite": "quirrel_spa0009"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 90,
+          "sprite": "quirrel_spa0010"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 99,
+          "sprite": "quirrel_spa0011"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 105,
+          "sprite": "quirrel_spa0012"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 94,
+          "sprite": "quirrel_spa0013"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 89,
+          "sprite": "quirrel_spa0014"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 91,
+          "sprite": "quirrel_spa0015"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 92,
+          "sprite": "quirrel_spa0016"
+        }
+      ]
+    },
+    {
+      "name": "Spa TalkR End",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 100,
+          "sprite": "quirrel_spa0009"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 98,
+          "sprite": "quirrel_spa0008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 93,
+          "sprite": "quirrel_spa0007"
+        }
+      ]
+    },
+    {
+      "name": "Lake Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 131,
+          "sprite": "lakeside_sit000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 134,
+          "sprite": "lakeside_sit001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 124,
+          "sprite": "lakeside_sit002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 126,
+          "sprite": "lakeside_sit003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 116,
+          "sprite": "lakeside_sit004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 114,
+          "sprite": "lakeside_sit005"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 136,
+          "sprite": "lakeside_sit006"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 127,
+          "sprite": "lakeside_sit007"
+        }
+      ]
+    },
+    {
+      "name": "Lake Talk",
+      "fps": 12,
+      "loop_start": 3,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 122,
+          "sprite": "lakeside_sit008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 132,
+          "sprite": "lakeside_sit009"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 123,
+          "sprite": "lakeside_sit010"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 121,
+          "sprite": "lakeside_sit011"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 129,
+          "sprite": "lakeside_sit012"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 133,
+          "sprite": "lakeside_sit013"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 118,
+          "sprite": "lakeside_sit014"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 117,
+          "sprite": "lakeside_sit015"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 109,
+          "sprite": "lakeside_sit016"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 119,
+          "sprite": "lakeside_sit017"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 117,
+          "sprite": "lakeside_sit015"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 133,
+          "sprite": "lakeside_sit013"
+        }
+      ]
+    },
+    {
+      "name": "Lake Talk End",
+      "fps": 12,
+      "loop_start": 3,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 123,
+          "sprite": "lakeside_sit010"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 132,
+          "sprite": "lakeside_sit009"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 122,
+          "sprite": "lakeside_sit008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 127,
+          "sprite": "lakeside_sit007"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 131,
+          "sprite": "lakeside_sit000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 134,
+          "sprite": "lakeside_sit001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 124,
+          "sprite": "lakeside_sit002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 126,
+          "sprite": "lakeside_sit003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 116,
+          "sprite": "lakeside_sit004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 114,
+          "sprite": "lakeside_sit005"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 136,
+          "sprite": "lakeside_sit006"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 127,
+          "sprite": "lakeside_sit007"
+        }
+      ]
+    },
+    {
+      "name": "Knight Sit",
+      "fps": 12,
+      "loop_start": 3,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 137,
+          "sprite": "knight_sit000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 107,
+          "sprite": "knight_sit001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 125,
+          "sprite": "knight_sit002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 135,
+          "sprite": "knight_sit003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 110,
+          "sprite": "knight_sit004"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 115,
+          "sprite": "knight_sit005"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 112,
+          "sprite": "knight_sit006"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 130,
+          "sprite": "knight_sit007"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 111,
+          "sprite": "knight_sit008"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 128,
+          "sprite": "knight_sit009"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 120,
+          "sprite": "knight_sit010"
+        }
+      ]
+    },
+    {
+      "name": "Knight Sit End",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 113,
+          "sprite": "knight_sit011"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 106,
+          "sprite": "knight_sit012"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 108,
+          "sprite": "knight_sit013"
+        }
+      ]
+    },
+    {
+      "name": "Spa Splash",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Quirrel",
+          "sprite_id": 138,
+          "sprite": "quirrel_spa_splash0000"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 140,
+          "sprite": "quirrel_spa_splash0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 141,
+          "sprite": "quirrel_spa_splash0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 139,
+          "sprite": "quirrel_spa_splash0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 139,
+          "sprite": "quirrel_spa_splash0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 139,
+          "sprite": "quirrel_spa_splash0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 139,
+          "sprite": "quirrel_spa_splash0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 139,
+          "sprite": "quirrel_spa_splash0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 139,
+          "sprite": "quirrel_spa_splash0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 139,
+          "sprite": "quirrel_spa_splash0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 139,
+          "sprite": "quirrel_spa_splash0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 139,
+          "sprite": "quirrel_spa_splash0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 139,
+          "sprite": "quirrel_spa_splash0003"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 141,
+          "sprite": "quirrel_spa_splash0002"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 140,
+          "sprite": "quirrel_spa_splash0001"
+        },
+        {
+          "collection": "Quirrel",
+          "sprite_id": 138,
+          "sprite": "quirrel_spa_splash0000"
+        }
+      ]
+    }
+  ]
+}

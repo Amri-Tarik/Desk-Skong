@@ -191,6 +191,12 @@ impl Panel {
                 if ui.button("Next skin  [S]").clicked() {
                     self.cmd(Command::NextSkin);
                 }
+                if ui.button("Invite a visitor").on_hover_text("an NPC drops by; the knight runs over to talk").clicked() {
+                    self.cmd(Command::InviteVisitor);
+                }
+                if ui.button("Dream nail").on_hover_text("dream-nail the window he stands on").clicked() {
+                    self.cmd(Command::DreamNail);
+                }
             });
             ui.horizontal_wrapped(|ui| {
                 ui.label("Stakes");

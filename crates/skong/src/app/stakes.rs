@@ -254,8 +254,13 @@ impl Pet {
         let s = self.brain.senses();
         // Showers fall on one (game-free) monitor.
         let sky = if st.areas.is_empty() { self.terrain.bounds } else { st.areas[seed() as usize % st.areas.len()] };
-        if let Some(d) = st.sources.tick(dt, !s.user_away, s.fullscreen || s.user_busy, loose, sky) {
+        if let Some(mut d) = st.sources.tick(dt, !s.user_away, s.fullscreen || s.user_busy, loose, sky) {
             log::info!("a geo shower: {} geo", d.amount);
+            // Through a portal at a reachable spot (see `npcs::Visitors::arrival_spot`).
+            let graph = self.nav.graph().map(|g| g.as_ref());
+            if let Some(p) = self.visitors.as_mut().and_then(|v| v.arrival_spot((&self.terrain, desk, &self.games.game_monitors, &self.occupancy), &self.ch, graph, &mut self.fx)) {
+                d.rect = crate::npcs::shower_rect(p, d.rect.width(), scale);
+            }
             st.geo.spill(&d);
         }
         st.geo.step(dt, &self.terrain, &st.areas);
@@ -357,7 +362,12 @@ impl Pet {
                 let st = &mut self.stakes;
                 st.geo.scale = self.settings.scale;
                 let sky = if st.areas.is_empty() { self.terrain.bounds } else { st.areas[seed() as usize % st.areas.len()] };
-                let d: GeoDrop = st.sources.shower(sky);
+                let mut d: GeoDrop = st.sources.shower(sky);
+                let graph = self.nav.graph().map(|g| g.as_ref());
+                let desk = self.watcher.snapshot();
+                if let Some(p) = self.visitors.as_mut().and_then(|v| v.arrival_spot((&self.terrain, desk, &self.games.game_monitors, &self.occupancy), &self.ch, graph, &mut self.fx)) {
+                    d.rect = crate::npcs::shower_rect(p, d.rect.width(), self.settings.scale);
+                }
                 st.geo.spill(&d);
             }
             StakesCommand::DropGeo => {
