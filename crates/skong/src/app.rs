@@ -376,6 +376,7 @@ impl Pet {
             self.navb.request(&self.terrain, &self.ch);
         }
         if self.game_step() {
+            self.hide_visitors();
             return Ok(()); // hidden while games cover every monitor
         }
         // Screen activity for the brain (the feed updates it at <= 10 Hz).

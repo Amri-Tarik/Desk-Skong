@@ -59,6 +59,8 @@ pub(crate) struct VisitorMemory {
     seen: BTreeSet<u32>,
     /// Visitors the knight couldn't reach: ignored until the given brain time.
     snubbed: BTreeMap<u32, f32>,
+    /// Someone new arrived since the last tick (wakes a napping knight).
+    pub knock: bool,
 }
 
 impl VisitorMemory {
@@ -68,6 +70,7 @@ impl VisitorMemory {
         for v in &new {
             self.seen.insert(v.id);
         }
+        self.knock |= !new.is_empty();
         new
     }
 

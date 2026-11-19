@@ -40,9 +40,11 @@ impl Pet {
             graph: self.nav.graph().map(|g| g.as_ref()),
             user_idle_secs: input::idle_secs(),
             keys_per_sec: self.user_input.keys_per_sec(),
-            fullscreen: self.brain.senses().fullscreen,
+            // Any fullscreen app in front (video, slides, games) postpones visits.
+            fullscreen: self.brain.senses().fullscreen || self.watcher.snapshot().windows.iter().any(|w| w.fullscreen && w.foreground) || !self.games.game_monitors.is_empty(),
             knight_busy: busy,
             hour: monitor::local_hour(),
+            game_monitors: &self.games.game_monitors,
         };
         f(v, &world, &mut self.fx);
     }
@@ -61,6 +63,13 @@ impl Pet {
             v.knight_clip(&clip, origin, right, fx);
             v.tick(dt, w, fx);
         });
+    }
+
+    /// Games cover every monitor: hide visitors and bubbles until the next tick.
+    pub(super) fn hide_visitors(&mut self) {
+        if let Some(v) = self.visitors.as_mut() {
+            v.hide_all();
+        }
     }
 
     pub(super) fn raise_visitors(&self) {

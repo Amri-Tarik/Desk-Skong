@@ -86,7 +86,7 @@ fn ignores_visitors_during_fullscreen_and_when_leaving() {
     sim.brain.see_visitors(vec![v]);
     assert!(!sim.run(3.0).contains(&BehaviourKind::Greet));
 
-    let mut sim = calm(BrainConfig::default());
+    let mut sim = calm(BrainConfig { hide_for_fullscreen: true, ..BrainConfig::default() });
     let mut game = window(9, RectI::new(0, 0, 1920, 1080), "game.exe");
     game.fullscreen = true;
     game.foreground = true;

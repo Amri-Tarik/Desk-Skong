@@ -138,6 +138,26 @@ impl Bubbles {
         }
     }
 
+    /// Show / hide every bubble window (games).
+    pub fn set_visible(&self, on: bool) {
+        for l in self.live.iter().filter(|l| l.shown_at.is_some()) {
+            l.win.set_visible(on);
+        }
+    }
+
+    /// Remove bubbles over these screen areas at once (game monitors).
+    pub fn drop_on(&mut self, areas: &[RectI]) {
+        if areas.is_empty() {
+            return;
+        }
+        let (gone, keep): (Vec<Live>, Vec<Live>) = std::mem::take(&mut self.live).into_iter().partition(|l| areas.iter().any(|r| r.contains(l.anchor.x as i32, l.anchor.y as i32)));
+        self.live = keep;
+        for l in gone {
+            l.win.set_visible(false);
+            self.pool.push(l.win);
+        }
+    }
+
     pub fn raise_all(&self) {
         for l in &self.live {
             l.win.raise();

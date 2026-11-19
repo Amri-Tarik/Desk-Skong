@@ -59,6 +59,8 @@ pub struct World<'a> {
     /// Asleep, hiding, held...: no visitors now.
     pub knight_busy: bool,
     pub hour: f32,
+    /// Monitors with a fullscreen game: nothing of ours shows or arrives there.
+    pub game_monitors: &'a [RectI],
 }
 
 pub struct Visitors {
@@ -82,6 +84,8 @@ pub struct Visitors {
     knight_clip_was_slash: bool,
     /// Departure portals to draw (opened while handling visitor events).
     pending_fx: Vec<Vec2>,
+    /// Every window hidden (games cover every monitor).
+    hidden: bool,
 }
 
 const SLASH_CLIP: &str = "DN Slash";
@@ -117,6 +121,7 @@ impl Visitors {
             thought_in: None,
             knight_clip_was_slash: false,
             pending_fx: Vec::new(),
+            hidden: false,
         };
         v.rescale(vanilla, scale)?;
         Ok(v)
@@ -189,6 +194,17 @@ impl Visitors {
         }
     }
 
+    /// Hide everything (games on every monitor); the next tick shows it again.
+    pub fn hide_all(&mut self) {
+        if !self.hidden {
+            self.hidden = true;
+            for l in &self.live {
+                l.win.set_visible(false);
+            }
+            self.bubbles.set_visible(false);
+        }
+    }
+
     pub fn raise_all(&self) {
         for l in &self.live {
             l.win.raise();
@@ -197,6 +213,28 @@ impl Visitors {
     }
 
     pub fn tick(&mut self, dt: f32, w: &World, fx: &mut Fx) {
+        if self.hidden {
+            self.hidden = false;
+            for l in &self.live {
+                l.win.set_visible(true);
+            }
+            self.bubbles.set_visible(true);
+        }
+        // Games: nothing of ours on their monitors.
+        let on_game = |p: Vec2| w.game_monitors.iter().any(|r| r.contains(p.x as i32, (p.y - 1.0) as i32));
+        let before = self.live.len();
+        for l in self.live.iter().filter(|l| on_game(l.npc.pos)) {
+            if let Some(b) = l.bubble {
+                self.bubbles.close(b);
+            }
+        }
+        self.live.retain(|l| !on_game(l.npc.pos));
+        if self.live.len() != before {
+            log::info!("visitor: a game took their monitor; they left");
+        }
+        self.portals.retain(|p| !on_game(p.portal.spot.at));
+        self.bubbles.drop_on(w.game_monitors);
+
         // 1. Schedule.
         let cond = VisitConditions {
             user_idle_secs: w.user_idle_secs,
@@ -303,8 +341,9 @@ impl Visitors {
         let arrive = self.set.defs[def].arrive;
         let ledges: Vec<Footing> = w.terrain.ledges.iter().map(|l| Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner }).collect();
         // Nav surfaces first (reachable by construction), raw ledges as a fallback.
-        let at = plan_placement(arrive, &footings, knight.pos, &w.desk.monitors, &mut self.rng, &mut reachable)
-            .or_else(|| plan_placement(arrive, &ledges, knight.pos, &w.desk.monitors, &mut self.rng, &mut reachable));
+        let monitors: Vec<_> = w.desk.monitors.iter().filter(|m| !w.game_monitors.contains(&m.rect)).cloned().collect();
+        let at = plan_placement(arrive, &footings, knight.pos, &monitors, &mut self.rng, &mut reachable)
+            .or_else(|| plan_placement(arrive, &ledges, knight.pos, &monitors, &mut self.rng, &mut reachable));
         let Some(at) = at else {
             log::info!("visitor: no good spot for {} right now", self.set.defs[def].display);
             return;
