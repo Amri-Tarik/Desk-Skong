@@ -546,3 +546,17 @@ fn geo_is_worth_running_for() {
     }
     assert!(matches!(style, Some(TravelStyle::Normal | TravelStyle::Hurry)), "{style:?}");
 }
+
+#[test]
+fn coins_on_both_sides_are_not_dithering_and_a_calm_down_never_blocks_geo() {
+    // Live: gathering coins left and right tripped the dithering guard; its calm-down then
+    // zeroed every behaviour, so he sat with Geo and an enemy on screen.
+    let mut sim = Sim::new();
+    sim.coins = vec![Vec2::new(500.0, FLOOR), Vec2::new(1400.0, FLOOR), Vec2::new(700.0, FLOOR), Vec2::new(1250.0, FLOOR)];
+    assert!(sim.run_until(20.0, |s| s.coins.is_empty()), "gathered them all: {:?}", sim.coins);
+    assert_eq!(sim.brain.oscillations(), 0, "collecting isn't dithering");
+    // A calm-down in progress (from some earlier pastime) doesn't hold Geo back.
+    sim.brain.calm_until = sim.brain.now + 100.0;
+    sim.coins = vec![Vec2::new(1300.0, FLOOR)];
+    assert!(sim.run_until(1.0, |s| s.brain.behaviour() == BehaviourKind::Loot), "Geo during a calm-down");
+}
