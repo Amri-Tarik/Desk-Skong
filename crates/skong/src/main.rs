@@ -4,12 +4,16 @@ use std::path::PathBuf;
 use anyhow::{Context, Result, bail};
 
 mod app;
+mod control;
+mod logring;
+mod overlay;
 mod benches;
+mod fx;
 mod grab;
 mod browser;
 mod keyboard;
 mod settings;
-mod wander;
+mod navbuild;
 
 pub struct Args {
     pub data: PathBuf,
@@ -22,6 +26,7 @@ pub struct Args {
     /// Live content terrain (screen capture). Off with `--no-vision`.
     pub vision: bool,
     pub sit_test: bool,
+    pub fx_test: bool,
 }
 
 const USAGE: &str = "usage: skong [--browse] [--capturable] [--no-vision] [--capture-stats] [--data DIR] [--skins DIR] [--skin NAME] [--scale F] [--clip NAME]";
@@ -37,6 +42,7 @@ fn parse_args() -> Result<Args> {
         capturable: false,
         vision: true,
         sit_test: false,
+        fx_test: false,
     };
     let mut it = std::env::args().skip(1);
     while let Some(k) = it.next() {
@@ -52,6 +58,7 @@ fn parse_args() -> Result<Args> {
             "--no-vision" => a.vision = false,
             "--capture-stats" => skong_win::capture::set_stats_logging(true),
             "--sit-test" => a.sit_test = true,
+            "--fx-test" => a.fx_test = true,
             "-h" | "--help" => {
                 println!("{USAGE}");
                 std::process::exit(0);
@@ -63,8 +70,20 @@ fn parse_args() -> Result<Args> {
 }
 
 fn main() -> Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    logring::init();
     skong_win::desktop::enable_per_monitor_dpi();
     let args = parse_args()?;
+    // Only one pet at a time: two instances fight over global hotkeys and screen capture.
+    let _instance = if args.browse {
+        None
+    } else {
+        match skong_win::monitor::single_instance() {
+            Some(g) => Some(g),
+            None => {
+                log::warn!("Desk-Skong is already running (see the tray); exiting");
+                return Ok(());
+            }
+        }
+    };
     if args.browse { browser::run(&args) } else { app::run(&args) }
 }

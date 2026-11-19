@@ -1,15 +1,21 @@
 //! The live pet: desktop → terrain → controller → locomotion/acts → sprite window,
 //! controlled from a tray menu and global hotkeys (Ctrl+Alt+…): K manual control,
 //! A random act, W wake, R respawn at cursor, S next skin, B bench at cursor, C click-through,
-//! P pause, Q quit.
+//! P pause, D debug overlay, Q quit. Control panels connect over a named pipe (`control`).
 use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
 use skong_core::acts::{ActId, ActLibrary, ActPlayer, ActStatus, Requirement};
 use skong_core::anim::{AnimEvent, Animator, ClipId, ClipLibrary};
-use skong_core::assets::{Skin, SpriteBank, SpriteKey, VANILLA};
+use std::collections::HashMap;
+
+use skong_core::assets::{Frame, Skin, SpriteBank, SpriteKey, VANILLA};
+use skong_core::effects::EffectSet;
+
+use crate::fx::Fx;
 use skong_core::controller::{Abilities, Character, CharacterParams, MoveEvent, MoveInput, MoveState, Side};
-use skong_core::ai::Poke;
+use skong_core::ai::{ActCatalog, AttackDir, Brain, BrainConfig, Cursor, GraphNavigator, Motion, Percepts, Poke, RunningAct, UserActivity};
+use skong_win::input::{self, UserInput};
 
 use crate::grab::Grab;
 use skong_core::geom::Vec2;
@@ -27,26 +33,12 @@ use crate::Args;
 use crate::keyboard::Keyboard;
 use crate::settings::{BOTHER, SCALES, Settings};
 use crate::benches::{Benches, SEAT_BELOW_ORIGIN};
-use crate::wander::{Seating, Wander};
+use crate::navbuild::NavBuilder;
+use crate::control::ControlServer;
+use crate::overlay::PetOverlay;
+use skong_ipc::Command;
 
-/// Everything the user can ask for, from hotkeys or the tray menu.
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Command {
-    ToggleManual,
-    RandomAct,
-    Wake,
-    RespawnAtCursor,
-    NextSkin,
-    SetSkin(usize),
-    SetScale(f32),
-    SetBother(f32),
-    ToggleClickThrough,
-    PlaceBenchAtCursor(usize),
-    PlaceBenchNearKnight(usize),
-    ClearBenches,
-    TogglePause,
-    Quit,
-}
+mod panel;
 
 const HOTKEYS: &[(i32, vk::VIRTUAL_KEY, Command)] = &[
     (1, vk::VK_K, Command::ToggleManual),
@@ -58,6 +50,7 @@ const HOTKEYS: &[(i32, vk::VIRTUAL_KEY, Command)] = &[
     (7, vk::VK_P, Command::TogglePause),
     (8, vk::VK_Q, Command::Quit),
     (9, vk::VK_B, Command::PlaceBenchAtCursor(0)),
+    (10, vk::VK_D, Command::ToggleDebugOverlay),
 ];
 
 // Tray menu ids.
@@ -67,6 +60,9 @@ const ID_PAUSE: u32 = 3;
 const ID_ACT: u32 = 4;
 const ID_RESPAWN: u32 = 5;
 const ID_CLEAR_BENCHES: u32 = 6;
+const ID_VISION: u32 = 7;
+const ID_OVERLAY: u32 = 8;
+const ID_PANEL: u32 = 10;
 const ID_QUIT: u32 = 9;
 const ID_SKIN0: u32 = 1000;
 const ID_SCALE0: u32 = 2000;
@@ -94,13 +90,21 @@ impl Data {
         vanilla_of(&self.skins)
     }
 
-    fn load_look(&self, skin: usize, scale: f32) -> Result<Look> {
+    /// Rasterize the knight and every effect (each at its own scale) in one pass.
+    fn load_look(&self, skin: usize, scale: f32, fx: &Fx) -> Result<(Look, Vec<HashMap<SpriteKey, Frame>>)> {
         let t = Instant::now();
+        let ppu = 64.0 * scale;
+        let keys = self.lib.sprite_keys();
+        let fx_sets = fx.raster_sets();
+        let mut sets: Vec<(&[SpriteKey], f32)> = vec![(&keys, ppu)];
+        sets.extend(fx_sets.iter().map(|(k, s)| (k.as_slice(), ppu * s)));
         let mut bank = SpriteBank::load_metadata(&self.args_data)?;
-        bank.rasterize_skin(&self.skins[skin], self.vanilla(), &self.lib.sprite_keys(), 64.0 * scale)?;
+        let mut frames = bank.rasterize_sets(&self.skins[skin], self.vanilla(), &sets)?;
+        let fx_frames = frames.split_off(1);
+        bank.install_frames(frames.pop().unwrap_or_default(), ppu);
         let feet_offset = self.lib.get(self.idle).frames.first().and_then(|f| f.sprite).and_then(|k| bank.frame(k)).map_or(0.0, |f| f.image.height as f32 - f.anchor[1]);
         log::info!("skin '{}' at x{scale} ready in {:?} ({} KiB of frames)", self.skins[skin].name, t.elapsed(), bank.frame_bytes() / 1024);
-        Ok(Look { bank, feet_offset })
+        Ok((Look { bank, feet_offset }, fx_frames))
     }
 }
 
@@ -123,7 +127,19 @@ struct Pet {
     /// Seat line (screen y) while a seated act plays.
     seat_y: Option<f32>,
     benches: Benches,
-    brain: Wander,
+    fx: Fx,
+    /// Seconds a walking act step has been pushing without moving.
+    act_blocked: f32,
+    /// Debug (`--fx-test`): seconds since start, drives a scripted superdash.
+    fx_test: Option<f32>,
+    brain: Brain,
+    nav: GraphNavigator,
+    navb: NavBuilder,
+    user_input: UserInput,
+    /// Controller events not yet seen by the brain.
+    brain_events: Vec<MoveEvent>,
+    /// Last brain debug line (behaviour, mood, top utilities).
+    brain_debug: String,
     keyboard: Keyboard,
     manual: bool,
     paused: bool,
@@ -137,6 +153,10 @@ struct Pet {
 
     move_events: Vec<MoveEvent>,
     anim_events: Vec<AnimEvent>,
+
+    /// Control panels (named pipe) and the terrain / nav debug overlay.
+    control: ControlServer,
+    overlay: PetOverlay,
 }
 
 pub fn run(args: &Args) -> Result<()> {
@@ -158,7 +178,10 @@ pub fn run(args: &Args) -> Result<()> {
     let acts = ActLibrary::load(&args.data.join("../acts.json"), &lib)?;
     let idle = lib.id("Idle").context("Idle clip")?;
     let data = Data { args_data: args.data.clone(), lib, acts, skins, idle };
-    let look = data.load_look(skin, settings.scale)?;
+    let mut fx = Fx::new(EffectSet::load(&args.data.join("../effects.json"), &args.data.join("animations"), &meta)?);
+    fx.capturable = args.capturable;
+    let (look, fx_frames) = data.load_look(skin, settings.scale, &fx)?;
+    fx.install_frames(fx_frames);
 
     let watcher = DesktopWatcher::new()?;
     let topts = TerrainOptions::default();
@@ -184,6 +207,11 @@ pub fn run(args: &Args) -> Result<()> {
     let tray = Tray::new("Desk-Skong", &tray_icon(&data, &look))?;
     let benches = Benches::load(&args.data.join("../props.json"), data.vanilla().map(|s| s.dir.as_path()), settings.scale)?;
 
+    let mut brain = Brain::new(BrainConfig::default(), ActCatalog::from_library(&data.acts), seed());
+    brain.set_bother_level(settings.bother);
+    let navb = NavBuilder::new();
+    navb.reset(&terrain, &ch);
+
     let mut pet = Pet {
         data,
         settings,
@@ -199,7 +227,15 @@ pub fn run(args: &Args) -> Result<()> {
         act,
         seat_y: None,
         benches,
-        brain: Wander::new(seed()),
+        fx,
+        act_blocked: 0.0,
+        fx_test: args.fx_test.then_some(0.0),
+        brain,
+        nav: GraphNavigator::new(),
+        navb,
+        user_input: UserInput::new()?,
+        brain_events: Vec::new(),
+        brain_debug: String::new(),
         keyboard: Keyboard::default(),
         manual: false,
         paused: false,
@@ -210,7 +246,10 @@ pub fn run(args: &Args) -> Result<()> {
         drawn: None,
         move_events: Vec::new(),
         anim_events: Vec::new(),
+        control: ControlServer::start(),
+        overlay: PetOverlay::default(),
     };
+    pet.control.set_hello(pet.hello());
 
     pet.benches.capturable = args.capturable;
     if args.sit_test {
@@ -223,7 +262,7 @@ pub fn run(args: &Args) -> Result<()> {
             log::warn!("{e:#}");
         }
     }
-    log::info!("tray menu ready; hotkeys Ctrl+Alt + K manual, A act, W wake, R respawn at cursor, S skin, C click-through, P pause, Q quit");
+    log::info!("tray menu ready; hotkeys Ctrl+Alt + K manual, A act, W wake, R respawn at cursor, S skin, C click-through, P pause, D debug overlay, Q quit");
 
     let mut last_housekeeping = Instant::now();
     rl.run(|tick| {
@@ -235,6 +274,7 @@ pub fn run(args: &Args) -> Result<()> {
                 cmds.extend(pet.menu_command(id));
             }
         }
+        cmds.extend(pet.service_panel());
         for c in cmds {
             if pet.apply(c)? == Flow::Quit {
                 return Ok(Flow::Quit);
@@ -248,12 +288,13 @@ pub fn run(args: &Args) -> Result<()> {
             pet.benches.raise_all();
             pet.win.raise();
             log::debug!(
-                "knight at ({:.0},{:.0}) {:?} clip '{}' act {:?}",
+                "knight at ({:.0},{:.0}) {:?} clip '{}' act {:?} | brain: {}",
                 pet.ch.pos.x,
                 pet.ch.pos.y,
                 pet.ch.state,
                 pet.data.lib.get(pet.anim.clip()).name,
-                pet.act.as_ref().map(|p| pet.data.acts.get(p.act()).name.as_str())
+                pet.act.as_ref().map(|p| pet.data.acts.get(p.act()).name.as_str()),
+                pet.brain_debug
             );
         }
         Ok(Flow::Continue)
@@ -263,8 +304,10 @@ pub fn run(args: &Args) -> Result<()> {
 impl Pet {
     fn tick(&mut self, dt: f32) -> Result<()> {
         self.handle_mouse();
-        let d = &self.data;
         self.move_events.clear();
+        if let Some(g) = self.navb.poll() {
+            self.nav.set_graph(g);
+        }
 
         // 1. World: rebuild terrain only when the desktop or the on-screen content changed.
         let desk_changed = self.watcher.poll();
@@ -273,28 +316,19 @@ impl Pet {
             self.ch.on_terrain_rebuilt(&self.terrain, &new, &mut self.move_events);
             self.benches.follow(&self.terrain, &new);
             self.terrain = new;
+            self.navb.request(&self.terrain, &self.ch);
         }
 
-        // 2. Intent.
-        let mut input = if self.manual {
-            self.keyboard.read()
-        } else {
-            let seat = self.benches.seat_here(&self.ch, &self.terrain);
-            let seating = Seating { here: seat.is_some(), bench_x: self.benches.on_my_surface(&self.ch).map(|i| self.benches.placed[i].0.pos.x) };
-            let dec = self.brain.decide(&self.ch, &d.acts, self.act.is_some(), seating, dt);
-            if let Some(id) = dec.act
-                && self.ch.is_grounded()
-                && !self.loco.busy()
-            {
-                let seated = d.acts.get(id).requires == Requirement::Seat;
-                if !seated || seat.is_some() {
-                    log::info!("act '{}'{}", d.acts.get(id).name, if seated { " (seated)" } else { "" });
-                    self.seat_y = if seated { seat } else { None };
-                    self.act = Some(ActPlayer::start(&d.acts, &d.lib, &mut self.anim, id, seed()));
-                }
-            }
-            dec.input
-        };
+        // 2. Intent: keyboard in manual mode, otherwise the brain.
+        let mut input = if self.manual { self.keyboard.read(self.control.manual_keys()) } else { self.think(dt) };
+        if let Some(t) = self.fx_test.as_mut() {
+            // Scripted: idle 3 s, charge a superdash for 1.2 s, release, repeat every 6 s.
+            *t += dt;
+            let phase = *t % 6.0;
+            input = MoveInput { superdash_held: (3.0..4.2).contains(&phase), ..MoveInput::default() };
+            self.act = None;
+        }
+        let d = &self.data;
         if let Some(p) = &self.act {
             let wants_to_move = input.x != 0.0 || input.jump_pressed || input.dash_pressed;
             if self.manual && wants_to_move && p.interruptible(&d.acts) {
@@ -304,8 +338,21 @@ impl Pet {
             }
         }
         if let Some(g) = self.act.as_ref().and_then(|p| p.gait(&d.acts)) {
+            // Walking acts (map stroll, lantern patrol) pace their ledge: turn around at its
+            // ends and when blocked, instead of pushing into walls or walking off.
+            let near_end = self.ch.support.as_ref().is_some_and(|s| {
+                let margin = self.ch.size.x;
+                (self.ch.facing == Side::Left && self.ch.pos.x - s.x0 < margin) || (self.ch.facing == Side::Right && s.x1 - self.ch.pos.x < margin)
+            });
+            self.act_blocked = if self.ch.is_grounded() && self.ch.vel.x.abs() < 5.0 { self.act_blocked + dt } else { 0.0 };
+            if near_end || self.act_blocked > 0.25 {
+                self.ch.facing = self.ch.facing.opposite();
+                self.act_blocked = 0.0;
+            }
             input.gait = g;
             input.x = self.ch.facing.sign();
+        } else {
+            self.act_blocked = 0.0;
         }
 
         // 3. Physics (suspended while the user holds the knight).
@@ -338,7 +385,64 @@ impl Pet {
             self.anim.play(&d.lib, d.idle, true);
         }
 
-        self.draw()
+        // The brain sees this tick's controller events on its next tick.
+        self.brain_events.extend_from_slice(&self.move_events);
+        if self.brain_events.len() > 256 {
+            self.brain_events.drain(..128);
+        }
+
+        self.draw()?;
+        self.trigger_fx();
+        let origin = self.knight_origin();
+        self.fx.update(dt, origin, self.ch.facing == Side::Right, self.ch.params.px_per_unit)
+    }
+
+    /// Screen position of the knight sprite's origin (seated acts put the sitting pose's
+    /// seat line on the seat; otherwise feet on the ground).
+    fn knight_origin(&self) -> Vec2 {
+        let y = match self.seat_y.filter(|_| self.act.is_some()) {
+            Some(seat) => seat - SEAT_BELOW_ORIGIN * self.ch.params.px_per_unit,
+            None => self.ch.pos.y - self.look.feet_offset,
+        };
+        Vec2::new(self.ch.pos.x, y)
+    }
+
+    /// Spawn / stop effects for this tick's movement events (game offsets from the prefab).
+    fn trigger_fx(&mut self) {
+        let origin = self.knight_origin();
+        let right = self.ch.facing == Side::Right;
+        for e in &self.move_events {
+            match e {
+                MoveEvent::SuperdashCharging => {
+                    let on_wall = matches!(self.ch.state, MoveState::SuperdashCharge { wall: Some(_) });
+                    self.fx.spawn(if on_wall { "sd_charge_wall" } else { "sd_charge" }, origin, right);
+                }
+                MoveEvent::SuperdashCharged => self.fx.spawn("sd_bling", origin, right),
+                MoveEvent::SuperdashCancelled => {
+                    self.fx.stop("sd_charge");
+                    self.fx.stop("sd_charge_wall");
+                }
+                MoveEvent::SuperdashLaunched => {
+                    self.fx.stop("sd_charge");
+                    self.fx.stop("sd_charge_wall");
+                    self.fx.spawn("sd_burst", origin, right);
+                    self.fx.spawn("sd_trail", origin, right);
+                }
+                MoveEvent::SuperdashHitWall => {
+                    self.fx.stop("sd_trail");
+                    self.fx.spawn("sd_break", origin, right);
+                    self.fx.spawn("sd_trail_end", origin, right);
+                }
+                MoveEvent::SuperdashEnded if self.fx.is_live("sd_trail") => {
+                    self.fx.stop("sd_trail");
+                    self.fx.spawn("sd_trail_end", origin, right);
+                }
+                MoveEvent::DoubleJumped => self.fx.spawn("double_jump", origin, right),
+                MoveEvent::WallJumped { .. } => self.fx.spawn("wall_puff", origin, right),
+                MoveEvent::DashStarted { shadow: true } => self.fx.spawn("shadow_burst", origin, right),
+                _ => {}
+            }
+        }
     }
 
     /// Present only when the frame changed; otherwise just move the window.
@@ -346,13 +450,9 @@ impl Pet {
         let flip = self.ch.facing == Side::Right; // HK sprites face left
         let Some(key) = self.anim.current(&self.data.lib) else { return Ok(()) };
         let Some(frame) = self.look.bank.frame(key) else { return Ok(()) };
-        let x = (self.ch.pos.x - frame.anchor_x(flip)).round() as i32;
-        // Seated acts put the sitting pose's seat line on the seat; otherwise feet on the ground.
-        let origin_y = match self.seat_y.filter(|_| self.act.is_some()) {
-            Some(seat) => seat - SEAT_BELOW_ORIGIN * self.ch.params.px_per_unit,
-            None => self.ch.pos.y - self.look.feet_offset,
-        };
-        let y = (origin_y - frame.anchor[1]).round() as i32;
+        let origin = self.knight_origin();
+        let x = (origin.x - frame.anchor_x(flip)).round() as i32;
+        let y = (origin.y - frame.anchor[1]).round() as i32;
         if self.drawn != Some((key, flip)) {
             self.win.present_flipped(&frame.image, x, y, flip)?;
             self.drawn = Some((key, flip));
@@ -360,6 +460,85 @@ impl Pet {
             self.win.move_to(x, y)?;
         }
         Ok(())
+    }
+
+    /// One brain tick: gather percepts, apply the intent's acts/signals/attacks, and
+    /// return this tick's movement input.
+    fn think(&mut self, dt: f32) -> MoveInput {
+        let seat = self.benches.seat_here(&self.ch, &self.terrain);
+        let benches: Vec<Vec2> = self.benches.placed.iter().map(|(b, _)| b.pos).collect();
+        let (left, right) = input::mouse_buttons();
+        let cursor = monitor::cursor_pos().map(|(x, y)| Cursor { pos: Vec2::new(x as f32, y as f32), left, right });
+        let user = UserActivity { idle_secs: input::idle_secs(), keys_per_sec: self.user_input.keys_per_sec() };
+        let act = self.act.as_ref().map(|p| RunningAct { id: p.act(), interruptible: p.interruptible(&self.data.acts) });
+        let percepts = Percepts {
+            dt,
+            knight: &self.ch,
+            terrain: &self.terrain,
+            desktop: self.watcher.snapshot(),
+            cursor,
+            user,
+            fullscreen_front: false,
+            pokes: &self.pokes,
+            act,
+            benches: &benches,
+            perch: seat.is_some(),
+            move_events: &self.brain_events,
+        };
+        let intent = self.brain.tick(&percepts, &mut self.nav);
+        self.pokes.clear();
+        self.brain_events.clear();
+        if intent.debug != self.brain_debug {
+            self.brain_debug = intent.debug;
+        }
+
+        let d = &self.data;
+        if intent.cancel_act && self.act.as_ref().is_some_and(|p| p.interruptible(&d.acts)) {
+            self.act = None;
+        }
+        if let Some(sig) = intent.signal
+            && let Some(p) = self.act.as_mut()
+        {
+            p.signal(&d.acts, &d.lib, &mut self.anim, sig);
+        }
+        let can_start = self.act.is_none() && self.ch.is_grounded() && !self.loco.busy();
+        if let Some(id) = intent.act.filter(|_| can_start) {
+            let seated = d.acts.get(id).requires == Requirement::Seat;
+            if !seated || seat.is_some() {
+                log::info!("act '{}'{}", d.acts.get(id).name, if seated { " (seated)" } else { "" });
+                self.seat_y = if seated { seat } else { None };
+                self.act = Some(ActPlayer::start(&d.acts, &d.lib, &mut self.anim, id, seed()));
+            }
+        }
+        if let Some(a) = intent.attack
+            && self.act.is_none()
+            && self.ch.is_grounded()
+            && let Some(id) = d.acts.id(a.dir.act_name())
+        {
+            self.ch.facing = a.side;
+            let slash = match a.dir {
+                AttackDir::Forward if seed().is_multiple_of(2) => "slash_alt",
+                AttackDir::Forward => "slash",
+                AttackDir::Up => "up_slash",
+                AttackDir::Down => "down_slash",
+            };
+            let origin = Vec2::new(self.ch.pos.x, self.ch.pos.y - self.look.feet_offset);
+            self.fx.spawn(slash, origin, a.side == Side::Right);
+            self.seat_y = None;
+            self.act = Some(ActPlayer::start(&d.acts, &d.lib, &mut self.anim, id, seed()));
+        }
+        if let Some(f) = intent.face
+            && self.act.is_none()
+            && self.ch.is_grounded()
+            && self.ch.vel.x.abs() < 1.0
+        {
+            self.ch.facing = f;
+        }
+        match intent.motion {
+            Motion::Hold => MoveInput::default(),
+            Motion::Navigate { .. } => self.nav.next_input(&self.ch, &self.terrain, dt),
+            Motion::Direct(i) => i,
+        }
     }
 
     /// Clicks on the knight poke him; press-and-drag picks him up; release throws him.
@@ -376,14 +555,6 @@ impl Pet {
                 }
                 Some(Poke::Click { pos }) => {
                     self.pokes.push(Poke::Click { pos });
-                    // Until the brain is wired in: wake a napping knight, otherwise startle him.
-                    if let Some(p) = self.act.as_mut() {
-                        p.signal(&self.data.acts, &self.data.lib, &mut self.anim, "woken");
-                    } else if self.ch.is_grounded()
-                        && let Some(id) = self.data.acts.id("startled")
-                    {
-                        self.start_act(id);
-                    }
                 }
                 None => {}
             }
@@ -436,9 +607,11 @@ impl Pet {
                 self.ch = Character::new(params, self.ch.abilities, self.ch.pos);
                 self.loco = Locomotion::new(&self.data.lib, &params)?;
                 self.benches.rescale(s);
+                self.navb.reset(&self.terrain, &self.ch);
                 self.settings.save();
             }
             Command::SetBother(b) => {
+                self.brain.set_bother_level(b);
                 self.settings.bother = b;
                 self.settings.save();
             }
@@ -462,6 +635,7 @@ impl Pet {
             }
             Command::ClearBenches => self.benches.clear(),
             Command::Quit => return Ok(Flow::Quit),
+            Command::SetManual(_) | Command::ToggleVision | Command::ToggleDebugOverlay | Command::SetOverlayLayers(_) | Command::OpenPanel => return self.apply_panel(c),
         }
         Ok(Flow::Continue)
     }
@@ -485,7 +659,9 @@ impl Pet {
     }
 
     fn reload_look(&mut self) -> Result<()> {
-        self.look = self.data.load_look(self.skin, self.settings.scale)?;
+        let (look, fx_frames) = self.data.load_look(self.skin, self.settings.scale, &self.fx)?;
+        self.look = look;
+        self.fx.install_frames(fx_frames);
         self.drawn = None;
         if let Err(e) = self.tray.set_icon(&tray_icon(&self.data, &self.look)) {
             log::warn!("tray icon: {e:#}");
@@ -518,6 +694,10 @@ impl Pet {
             MenuItem::check(ID_CLICK, "Click-through", self.settings.click_through),
             MenuItem::check(ID_PAUSE, "Pause", self.paused),
             MenuItem::Separator,
+            MenuItem::check(ID_VISION, "Vision (content terrain)", self.content.is_enabled()),
+            MenuItem::check(ID_OVERLAY, "Debug overlay\tCtrl+Alt+D", self.overlay.is_on()),
+            MenuItem::action(ID_PANEL, "Open control panel"),
+            MenuItem::Separator,
             MenuItem::action(ID_QUIT, "Quit"),
         ]
     }
@@ -531,6 +711,9 @@ impl Pet {
             ID_RESPAWN => Command::RespawnAtCursor,
             ID_QUIT => Command::Quit,
             ID_CLEAR_BENCHES => Command::ClearBenches,
+            ID_VISION => Command::ToggleVision,
+            ID_OVERLAY => Command::ToggleDebugOverlay,
+            ID_PANEL => Command::OpenPanel,
             i if (ID_BENCH0..ID_BENCH0 + self.benches.styles.len() as u32).contains(&i) => Command::PlaceBenchNearKnight((i - ID_BENCH0) as usize),
             i if (ID_SKIN0..ID_SKIN0 + self.data.skins.len() as u32).contains(&i) => Command::SetSkin((i - ID_SKIN0) as usize),
             i if (ID_SCALE0..ID_SCALE0 + SCALES.len() as u32).contains(&i) => Command::SetScale(SCALES[(i - ID_SCALE0) as usize].1),

@@ -25,3 +25,28 @@ pub fn primary_work_area() -> RectI {
         }
     }
 }
+
+/// Held for the process lifetime; dropping it releases the single-instance lock.
+pub struct InstanceGuard(windows::Win32::Foundation::HANDLE);
+
+impl Drop for InstanceGuard {
+    fn drop(&mut self) {
+        // SAFETY: closing our own mutex handle.
+        let _ = unsafe { windows::Win32::Foundation::CloseHandle(self.0) };
+    }
+}
+
+/// `Some(guard)` if no other Desk-Skong pet is running in this session, `None` otherwise.
+pub fn single_instance() -> Option<InstanceGuard> {
+    use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError};
+    use windows::Win32::System::Threading::CreateMutexW;
+    // SAFETY: named mutex creation; the last-error check must directly follow the call.
+    unsafe {
+        let h = CreateMutexW(None, true, windows::core::w!(r"Local\DeskSkongPet")).ok()?;
+        if GetLastError() == ERROR_ALREADY_EXISTS {
+            let _ = windows::Win32::Foundation::CloseHandle(h);
+            return None;
+        }
+        Some(InstanceGuard(h))
+    }
+}

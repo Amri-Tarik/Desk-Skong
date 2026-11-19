@@ -17,7 +17,7 @@ using AssetsTools.NET.Texture;
 
 internal static class Program
 {
-    sealed record Options(string DataDir, string? OutDir, bool List, HashSet<string>? Collections, HashSet<string>? Animations, string[] Files, string? DumpMono, int MaxArray, string? TexturesDir, string? Find, HashSet<string>? ExportSprites);
+    sealed record Options(string DataDir, string? OutDir, bool List, HashSet<string>? Collections, HashSet<string>? Animations, string[] Files, string? DumpMono, int MaxArray, string? TexturesDir, string? Find, HashSet<string>? ExportSprites, bool Hierarchy);
 
     static int Main(string[] args)
     {
@@ -484,12 +484,87 @@ internal static class Program
     /// Prints every MonoBehaviour of class <c>--dump-mono</c> as JSON: its serialized fields
     /// plus the built-in components on the same GameObject (BoxCollider2D, Rigidbody2D, ...).
     /// Only serialized data is read; no game code is decompiled.
+    static AssetExternal? TransformOf(AssetsManager am, AssetExternal go)
+    {
+        foreach (var c in go.baseField["m_Component.Array"].Children)
+        {
+            var ext = am.GetExtAsset(go.file, c["component"]);
+            if (ext.info is not null && (AssetClassID)ext.info.TypeId is AssetClassID.Transform or AssetClassID.RectTransform) return ext;
+        }
+        return null;
+    }
+
+    /// One line per GameObject: name, active, local position/scale, components (with tk2d
+    /// collection / animation library + default clip), then children indented.
+    static void PrintTree(AssetsManager am, Scanner scan, AssetsFileInstance file, AssetTypeValueField transform, int depth)
+    {
+        var go = am.GetExtAsset(file, transform["m_GameObject"]);
+        var p = transform["m_LocalPosition"]; var s = transform["m_LocalScale"];
+        var parts = new List<string>();
+        foreach (var c in go.baseField["m_Component.Array"].Children)
+        {
+            try
+            {
+                var ext = am.GetExtAsset(go.file, c["component"]);
+                if (ext.info is null) continue;
+                var type = (AssetClassID)ext.info.TypeId;
+                if (type is AssetClassID.Transform or AssetClassID.RectTransform) continue;
+                if (type != AssetClassID.MonoBehaviour) { parts.Add(type.ToString()); continue; }
+                var cls = scan.ClassName(ext.file, ext.info) ?? "?";
+                var detail = "";
+                if (cls is "tk2dSprite" or "tk2dSpriteAnimator" or "tk2dSlicedSprite" or "tk2dTiledSprite")
+                {
+                    var bf = am.GetBaseField(ext.file, ext.info);
+                    try { var col = am.GetExtAsset(ext.file, bf["collection"]).baseField; if (col is not null) detail += $" col={NameOrGo(am, ext.file, col)} sprite={bf["_spriteId"].AsInt}"; } catch { }
+                    try
+                    {
+                        var lib = am.GetExtAsset(ext.file, bf["library"]);
+                        if (lib.baseField is not null)
+                        {
+                            int clip = bf["defaultClipId"].AsInt;
+                            var clips = lib.baseField["clips.Array"];
+                            var clipName = clip >= 0 && clip < clips.AsArray.size ? clips[clip]["name"].AsString : "?";
+                            detail += $" lib={NameOrGo(am, lib.file, lib.baseField)} clip=\"{clipName}\" autoplay={bf["playAutomatically"].AsBool}";
+                        }
+                    }
+                    catch { }
+                }
+                parts.Add(cls + detail);
+            }
+            catch { }
+        }
+        var active = go.baseField["m_IsActive"].AsBool ? "" : " (inactive)";
+        Console.WriteLine($"{new string(' ', depth * 2)}{go.baseField["m_Name"].AsString}{active} pos=({p["x"].AsFloat:0.###},{p["y"].AsFloat:0.###},{p["z"].AsFloat:0.###}) scale=({s["x"].AsFloat:0.###},{s["y"].AsFloat:0.###}) [{string.Join("; ", parts)}]");
+        foreach (var child in transform["m_Children.Array"].Children)
+        {
+            var ct = am.GetExtAsset(file, child);
+            if (ct.baseField is not null) PrintTree(am, scan, ct.file, ct.baseField, depth + 1);
+        }
+    }
+
+    static string NameOrGo(AssetsManager am, AssetsFileInstance file, AssetTypeValueField mb)
+    {
+        var n = mb["m_Name"].AsString;
+        if (!string.IsNullOrEmpty(n)) return n;
+        try { return am.GetExtAsset(file, mb["m_GameObject"]).baseField["m_Name"].AsString; } catch { return "?"; }
+    }
+
     static int DumpMono(AssetsManager am, Scanner scan, Options opt)
     {
         if (scan.Dumped.Count == 0)
         {
             Console.Error.WriteLine($"no MonoBehaviour of class {opt.DumpMono} in {string.Join(",", opt.Files)}");
             return 5;
+        }
+        if (opt.Hierarchy)
+        {
+            foreach (var e in scan.Dumped)
+            {
+                var go = am.GetExtAsset(e.Afi, e.Field["m_GameObject"]);
+                var tr = TransformOf(am, go);
+                if (tr is not null) PrintTree(am, scan, tr.Value.file, tr.Value.baseField, 0);
+            }
+            return 0;
         }
         var result = new List<object?>();
         foreach (var e in scan.Dumped)
@@ -574,7 +649,7 @@ internal static class Program
         string? data = null, outDir = null; bool list = false;
         HashSet<string>? cols = null, anims = null;
         string[] files = ["resources.assets"];
-        string? dumpMono = null; int maxArray = 64; string? textures = null; string? find = null; HashSet<string>? exportSprites = null;
+        string? dumpMono = null; int maxArray = 64; string? textures = null; string? find = null; HashSet<string>? exportSprites = null; bool hierarchy = false;
         for (int i = 0; i < args.Length; i++)
         {
             string Next() => i + 1 < args.Length ? args[++i] : throw new ArgumentException($"missing value for {args[i]}");
@@ -591,14 +666,15 @@ internal static class Program
                 case "--textures": textures = Next(); break;
                 case "--find": find = Next(); break;
                 case "--export-sprites": exportSprites = Set(Next()); break;
+                case "--hierarchy": hierarchy = true; break;
                 case "--files": files = Next().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries); break;
                 default: throw new ArgumentException($"unknown arg {args[i]}");
             }
         }
         if (data is null) throw new ArgumentException("--data is required");
-        return new Options(data, outDir, list, cols, anims, files, dumpMono, maxArray, textures, find, exportSprites);
+        return new Options(data, outDir, list, cols, anims, files, dumpMono, maxArray, textures, find, exportSprites, hierarchy);
     }
 
     static void PrintUsage() => Console.Error.WriteLine(
-        "usage: HK_TK2D_Exporter --data <hollow_knight_Data> (--list | --out <dir> | --dump-mono <Class>) [--collections A,B] [--animations A,B] [--files resources.assets,level1] [--max-array N] [--textures <dir>] [--find <name-substring>] [--export-sprites a,b --textures <dir>]");
+        "usage: HK_TK2D_Exporter --data <hollow_knight_Data> (--list | --out <dir> | --dump-mono <Class>) [--collections A,B] [--animations A,B] [--files resources.assets,level1] [--max-array N] [--textures <dir>] [--find <name-substring>] [--export-sprites a,b --textures <dir>] [--dump-mono <Class> --hierarchy]");
 }

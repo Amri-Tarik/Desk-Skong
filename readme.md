@@ -14,6 +14,45 @@
 
 ---
 
+## Usage
+
+Build and run the pet (Windows, Rust stable):
+
+```text
+cargo build --release -p skong -p skong-panel
+target\release\skong.exe [--skin NAME] [--scale F] [--no-vision] [--data DIR] [--skins DIR]
+```
+
+The knight lives in the notification area: right-click the tray icon for skins, size,
+mischief, benches, manual control, click-through, pause, vision, the debug overlay and
+**Open control panel**. Only one pet runs at a time. Logs go to stderr (`RUST_LOG=debug`
+for more).
+
+**Global hotkeys** (Ctrl+Alt + …): `K` manual control · `A` do something · `W` wake ·
+`R` respawn at cursor · `S` next skin · `B` bench at cursor · `C` click-through ·
+`P` pause · `D` debug overlay · `Q` quit. Manual control: arrows move, Up jumps, LShift
+dashes, hold LCtrl for a superdash, Z walks, X sprints.
+
+**Control panel** (`skong-panel.exe`, or tray → *Open control panel*; it must sit next to
+`skong.exe`): every tray action, live status (knight state, brain, terrain and nav-graph
+counts, vision stats, CPU/RAM) and the pet's log stream with level/text filters, copy and
+clear. It connects to the running pet over `\\.\pipe\desk-skong` and reconnects by itself
+if the pet restarts; several panels can be open at once. While the panel window is
+focused, the arrows / Up / Shift / Ctrl / Z / X drive the knight without leaking into
+other apps ("Drive with keyboard while focused", on by default), and the plain letters
+`K A W R S B C P D` do what Ctrl+Alt+letter does (not while typing in a text field).
+`skong-panel --self-test` checks a running pet from the command line.
+
+**Debug overlay** (`Ctrl+Alt+D`, tray or panel): draws over the whole desktop — ground
+ledges blue, window tops green, detected content ledges magenta, walls orange, nav
+surfaces cyan and every nav edge coloured by move kind (legend top-right), with the
+knight's current route thick on top. The panel chooses the layers. It is click-through,
+invisible to screenshots/vision, and redraws only when terrain, nav graph or route
+change. `cargo run -p skong-win --example terrain_debug --release` shows the terrain
+layer without the pet.
+
+---
+
 ## Project Goals
 
 - **Zero art pipeline:** Reuse community Hollow Knight skins by reading existing atlases/metadata once.

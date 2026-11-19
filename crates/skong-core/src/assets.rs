@@ -364,15 +364,26 @@ impl SpriteBank {
     /// atlas plus the (small) rasterized frames. Collections the skin lacks come from
     /// `fallback` (normally the vanilla export) or are skipped.
     pub fn rasterize_skin(&mut self, skin: &Skin, fallback: Option<&Skin>, keys: &[SpriteKey], px_per_unit: f32) -> Result<()> {
-        self.frames.clear();
+        let mut sets = self.rasterize_sets(skin, fallback, &[(keys, px_per_unit)])?;
+        self.frames = sets.pop().unwrap_or_default();
         self.px_per_unit = px_per_unit;
-        let mut by_col: HashMap<u16, Vec<u32>> = HashMap::new();
-        for k in keys {
-            by_col.entry(k.collection).or_default().push(k.sprite);
+        Ok(())
+    }
+
+    /// Rasterize several key sets, each at its own scale, decoding every atlas only once.
+    /// Returns one frame map per set (this bank's own frames are untouched).
+    pub fn rasterize_sets(&self, skin: &Skin, fallback: Option<&Skin>, sets: &[(&[SpriteKey], f32)]) -> Result<Vec<HashMap<SpriteKey, Frame>>> {
+        let mut out: Vec<HashMap<SpriteKey, Frame>> = vec![HashMap::new(); sets.len()];
+        // collection -> [(set index, sprite id)]
+        let mut by_col: HashMap<u16, Vec<(usize, u32)>> = HashMap::new();
+        for (i, (keys, _)) in sets.iter().enumerate() {
+            for k in keys.iter() {
+                by_col.entry(k.collection).or_default().push((i, k.sprite));
+            }
         }
-        for (col, mut ids) in by_col {
-            ids.sort_unstable();
-            ids.dedup();
+        for (col, mut wanted) in by_col {
+            wanted.sort_unstable();
+            wanted.dedup();
             let meta = &self.collections[col as usize];
             let Some(path) = skin.atlas_for(&meta.name).or_else(|| fallback?.atlas_for(&meta.name)) else {
                 log::debug!("skin '{}' (and fallback) has no atlas for '{}'", skin.name, meta.name);
@@ -389,13 +400,19 @@ impl SpriteBank {
                     meta.atlas_height
                 );
             }
-            for id in ids {
+            for (set, id) in wanted {
                 if let Some(s) = meta.sprites.get(id as usize) {
-                    self.frames.insert(SpriteKey { collection: col, sprite: id }, rasterize(s, &atlas, px_per_unit));
+                    out[set].insert(SpriteKey { collection: col, sprite: id }, rasterize(s, &atlas, sets[set].1));
                 }
             }
         }
-        Ok(())
+        Ok(out)
+    }
+
+    /// Replace this bank's frames (e.g. from [`Self::rasterize_sets`]).
+    pub fn install_frames(&mut self, frames: HashMap<SpriteKey, Frame>, px_per_unit: f32) {
+        self.frames = frames;
+        self.px_per_unit = px_per_unit;
     }
 
     pub fn frame(&self, key: SpriteKey) -> Option<&Frame> {

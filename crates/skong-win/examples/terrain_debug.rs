@@ -18,38 +18,50 @@
 //! ```
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result};
-use skong_core::canvas::premul;
+use anyhow::Result;
 use skong_core::desktop::DesktopSnapshot;
-use skong_core::geom::RectF;
-use skong_core::terrain::{Facing, LedgeKind, Terrain, TerrainOptions, WallKind};
+use skong_core::geom::Vec2;
+use skong_core::terrain::{LedgeKind, Terrain, TerrainOptions, WallKind};
 use skong_core::vision::Activity;
 use skong_win::capture::{CaptureStats, ContentFeed};
-use skong_win::desktop::{DesktopWatcher, enable_per_monitor_dpi, mark_dirty};
-use windows::Win32::Foundation::{COLORREF, FILETIME, HWND, LPARAM, LRESULT, POINT, SIZE, WAIT_FAILED, WPARAM};
-use windows::Win32::Graphics::Gdi::{
-    AC_SRC_ALPHA, AC_SRC_OVER, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BLENDFUNCTION, CreateCompatibleDC,
-    CreateDIBSection, DIB_RGB_COLORS, DeleteDC, DeleteObject, HBITMAP, HDC, HGDIOBJ, SelectObject,
-};
-use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use skong_win::debug_overlay::{DebugLine, DebugOverlay, Scene};
+use skong_win::desktop::{DesktopWatcher, enable_per_monitor_dpi};
+use windows::Win32::Foundation::{FILETIME, WAIT_FAILED};
 use windows::Win32::System::Threading::{GetCurrentProcess, GetProcessTimes};
 use windows::Win32::UI::Input::KeyboardAndMouse::{MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, RegisterHotKey, UnregisterHotKey};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, MSG, MsgWaitForMultipleObjects, PM_REMOVE,
-    PeekMessageW, QS_ALLINPUT, RegisterClassW, SW_SHOWNOACTIVATE, SetWindowDisplayAffinity, ShowWindow,
-    TranslateMessage, ULW_ALPHA, UpdateLayeredWindow, WDA_EXCLUDEFROMCAPTURE, WM_DISPLAYCHANGE, WM_DPICHANGED,
-    WM_HOTKEY, WM_QUIT, WM_SETTINGCHANGE, WNDCLASSW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
-    WS_EX_TRANSPARENT, WS_POPUP,
+    DispatchMessageW, MSG, MsgWaitForMultipleObjects, PM_REMOVE, PeekMessageW, QS_ALLINPUT, TranslateMessage, WM_HOTKEY, WM_QUIT,
 };
-use windows::core::w;
 
 const HOTKEY_QUIT: i32 = 1;
-const LINE: i32 = 3;
+
+/// Terrain layer of the shared debug overlay (the pet can also draw the nav graph), plus
+/// activity hotspots outlined in yellow.
+fn scene<'a>(terrain: &'a Terrain, spots: &'a [DebugLine]) -> Scene<'a> {
+    Scene { terrain: Some(terrain), lines: spots, legend: true, ..Default::default() }
+}
+
+/// Rect outlines for activity spots.
+fn spot_lines(a: &Activity) -> Vec<DebugLine> {
+    let mut out = Vec::new();
+    for s in &a.spots {
+        let r = s.rect.to_f();
+        let c = [Vec2::new(r.left, r.top), Vec2::new(r.right, r.top), Vec2::new(r.right, r.bottom), Vec2::new(r.left, r.bottom)];
+        for i in 0..4 {
+            out.push(DebugLine { a: c[i], b: c[(i + 1) % 4], rgb: (255, 230, 40), width: 2 });
+        }
+    }
+    out
+}
 
 fn main() -> Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let args = Args::parse();
     enable_per_monitor_dpi();
+    // SAFETY: thread-level hotkey; WM_HOTKEY arrives in this thread's queue.
+    if let Err(e) = unsafe { RegisterHotKey(None, HOTKEY_QUIT, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, u32::from(b'Q')) } {
+        eprintln!("Ctrl+Alt+Q unavailable ({e}); use --seconds");
+    }
 
     let mut watcher = DesktopWatcher::new()?;
     let opts = TerrainOptions { include_wallpaper_content: args.wallpaper, ..TerrainOptions::default() };
@@ -61,9 +73,8 @@ fn main() -> Result<()> {
     print_terrain(&terrain, args.verbose);
 
     let mut overlay = if args.overlay {
-        let mut o = Overlay::new(terrain.bounds)?;
-        feed.not_own_window(o.hwnd);
-        o.draw(&terrain, feed.activity());
+        let mut o = DebugOverlay::new(terrain.bounds)?;
+        o.draw(&scene(&terrain, &[]));
         o.present()?;
         println!("overlay up; Ctrl+Alt+Q to quit");
         Some(o)
@@ -108,10 +119,7 @@ fn main() -> Result<()> {
         if activity_changed {
             last_activity = feed.activity().clone();
             for s in &last_activity.spots {
-                println!(
-                    "  activity: {:?} intensity {:.2} for {:.1} s, owner {:?}",
-                    s.rect, s.intensity, s.age_secs, s.owner
-                );
+                println!("  activity: {:?} intensity {:.2} for {:.1} s, owner {:?}", s.rect, s.intensity, s.age_secs, s.owner);
             }
         }
         if !desk_changed && !content_changed && !activity_changed {
@@ -129,15 +137,16 @@ fn main() -> Result<()> {
         }
         print_terrain(&terrain, args.verbose);
         if let Some(o) = overlay.as_mut() {
-            if terrain.bounds != o.bounds {
-                *o = Overlay::new(terrain.bounds)?;
-                feed.not_own_window(o.hwnd);
+            if terrain.bounds != o.bounds() {
+                *o = DebugOverlay::new(terrain.bounds)?;
             }
-            o.draw(&terrain, feed.activity());
+            o.draw(&scene(&terrain, &spot_lines(&last_activity)));
             o.present()?;
         }
     }
     feed.shutdown();
+    // SAFETY: unregistering the hotkey registered in main.
+    let _ = unsafe { UnregisterHotKey(None, HOTKEY_QUIT) };
     println!("exiting after {changes} desktop changes, {updates} content updates");
     summary.print(started.elapsed());
     Ok(())
@@ -248,196 +257,6 @@ fn print_terrain(t: &Terrain, verbose: bool) {
 
 fn truncate(s: &str, n: usize) -> String {
     s.chars().take(n).collect()
-}
-
-/// Window procedure: forward display changes to the watcher, default for the rest.
-extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
-    if matches!(msg, WM_DISPLAYCHANGE | WM_SETTINGCHANGE | WM_DPICHANGED) {
-        mark_dirty();
-    }
-    // SAFETY: forwarding the original arguments.
-    unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
-}
-
-/// Full-desktop layered window backed by a top-down 32-bpp premultiplied DIB.
-struct Overlay {
-    hwnd: HWND,
-    bounds: RectF,
-    origin: POINT,
-    size: SIZE,
-    dc: HDC,
-    bitmap: HBITMAP,
-    old: HGDIOBJ,
-    bits: *mut u32,
-}
-
-impl Overlay {
-    fn new(bounds: RectF) -> Result<Self> {
-        let origin = POINT { x: bounds.left as i32, y: bounds.top as i32 };
-        let size = SIZE { cx: (bounds.width() as i32).max(1), cy: (bounds.height() as i32).max(1) };
-        let hwnd = create_window(origin, size)?;
-        // SAFETY: valid window owned by this thread. Affinity is best-effort.
-        unsafe {
-            if let Err(e) = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE) {
-                eprintln!("SetWindowDisplayAffinity failed: {e}");
-            }
-            if let Err(e) = RegisterHotKey(Some(hwnd), HOTKEY_QUIT, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, u32::from(b'Q')) {
-                eprintln!("Ctrl+Alt+Q unavailable ({e}); use --seconds or close the console");
-            }
-        }
-        let (dc, bitmap, bits) = create_dib(size)?;
-        // SAFETY: select our bitmap into our DC; restored in Drop.
-        let old = unsafe { SelectObject(dc, bitmap.into()) };
-        // SAFETY: valid window; SW_SHOWNOACTIVATE never steals focus.
-        let _ = unsafe { ShowWindow(hwnd, SW_SHOWNOACTIVATE) };
-        Ok(Self { hwnd, bounds, origin, size, dc, bitmap, old, bits })
-    }
-
-    fn pixels(&mut self) -> &mut [u32] {
-        // SAFETY: `bits` points to cx*cy u32s owned by `bitmap`, alive as long as self.
-        unsafe { std::slice::from_raw_parts_mut(self.bits, (self.size.cx * self.size.cy) as usize) }
-    }
-
-    fn draw(&mut self, t: &Terrain, activity: &Activity) {
-        let (ox, oy, w, h) = (self.origin.x, self.origin.y, self.size.cx, self.size.cy);
-        let green = premul(40, 230, 60, 230);
-        let blue = premul(40, 120, 255, 230);
-        let orange = premul(255, 140, 20, 230);
-        let magenta = premul(255, 40, 220, 230);
-        let purple = premul(150, 60, 255, 230);
-        let yellow = premul(255, 230, 40, 200);
-        let px = self.pixels();
-        px.fill(0);
-        let mut fill = |x0: f32, y0: f32, x1: f32, y1: f32, c: u32| {
-            let (x0, x1) = ((x0 as i32 - ox).clamp(0, w), (x1 as i32 - ox).clamp(0, w));
-            let (y0, y1) = ((y0 as i32 - oy).clamp(0, h), (y1 as i32 - oy).clamp(0, h));
-            for y in y0..y1 {
-                px[(y * w + x0) as usize..(y * w + x1) as usize].fill(c);
-            }
-        };
-        let half = (LINE / 2) as f32;
-        for l in &t.ledges {
-            let c = match l.kind {
-                LedgeKind::Ground => blue,
-                LedgeKind::OneWay => green,
-                LedgeKind::Content => magenta,
-            };
-            fill(l.x0, l.y - half, l.x1, l.y - half + LINE as f32, c);
-        }
-        for wall in &t.walls {
-            // Draw on the solid side's inside so adjacent window walls stay distinguishable.
-            let x0 = match wall.face {
-                Facing::Left => wall.x,
-                Facing::Right => wall.x - LINE as f32,
-            };
-            let c = if wall.kind == WallKind::Content { purple } else { orange };
-            fill(x0, wall.y0, x0 + LINE as f32, wall.y1, c);
-        }
-        for s in &activity.spots {
-            let r = s.rect.to_f();
-            fill(r.left, r.top, r.right, r.top + 2.0, yellow);
-            fill(r.left, r.bottom - 2.0, r.right, r.bottom, yellow);
-            fill(r.left, r.top, r.left + 2.0, r.bottom, yellow);
-            fill(r.right - 2.0, r.top, r.right, r.bottom, yellow);
-        }
-    }
-
-    fn present(&self) -> Result<()> {
-        let blend = BLENDFUNCTION {
-            BlendOp: AC_SRC_OVER as u8,
-            BlendFlags: 0,
-            SourceConstantAlpha: 255,
-            AlphaFormat: AC_SRC_ALPHA as u8,
-        };
-        let src = POINT { x: 0, y: 0 };
-        // SAFETY: all pointers reference locals/fields alive for the call.
-        unsafe {
-            UpdateLayeredWindow(
-                self.hwnd,
-                None,
-                Some(&self.origin),
-                Some(&self.size),
-                Some(self.dc),
-                Some(&src),
-                COLORREF(0),
-                Some(&blend),
-                ULW_ALPHA,
-            )
-        }
-        .context("UpdateLayeredWindow")
-    }
-}
-
-impl Drop for Overlay {
-    fn drop(&mut self) {
-        // SAFETY: tearing down resources created in `new`, in reverse order.
-        unsafe {
-            let _ = UnregisterHotKey(Some(self.hwnd), HOTKEY_QUIT);
-            SelectObject(self.dc, self.old);
-            let _ = DeleteObject(self.bitmap.into());
-            let _ = DeleteDC(self.dc);
-            let _ = DestroyWindow(self.hwnd);
-        }
-    }
-}
-
-fn create_window(origin: POINT, size: SIZE) -> Result<HWND> {
-    // SAFETY: registering a class with a 'static wndproc and name; creating a popup
-    // window on this thread.
-    unsafe {
-        let instance = GetModuleHandleW(None)?;
-        let class = w!("SkongTerrainDebug");
-        let wc =
-            WNDCLASSW { lpfnWndProc: Some(wndproc), hInstance: instance.into(), lpszClassName: class, ..Default::default() };
-        // Re-registration (overlay recreated after a display change) fails harmlessly.
-        RegisterClassW(&wc);
-        let ex = WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST;
-        CreateWindowExW(
-            ex,
-            class,
-            w!("skong terrain debug"),
-            WS_POPUP,
-            origin.x,
-            origin.y,
-            size.cx,
-            size.cy,
-            None,
-            None,
-            Some(instance.into()),
-            None,
-        )
-        .context("CreateWindowExW")
-    }
-}
-
-fn create_dib(size: SIZE) -> Result<(HDC, HBITMAP, *mut u32)> {
-    let bmi = BITMAPINFO {
-        bmiHeader: BITMAPINFOHEADER {
-            biSize: size_of::<BITMAPINFOHEADER>() as u32,
-            biWidth: size.cx,
-            biHeight: -size.cy, // top-down
-            biPlanes: 1,
-            biBitCount: 32,
-            biCompression: BI_RGB.0,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    // SAFETY: memory DC compatible with the screen; DIB section with a valid header.
-    unsafe {
-        let dc = CreateCompatibleDC(None);
-        if dc.is_invalid() {
-            anyhow::bail!("CreateCompatibleDC failed");
-        }
-        let mut bits = std::ptr::null_mut();
-        match CreateDIBSection(Some(dc), &bmi, DIB_RGB_COLORS, &mut bits, None, 0) {
-            Ok(bitmap) => Ok((dc, bitmap, bits.cast())),
-            Err(e) => {
-                let _ = DeleteDC(dc);
-                Err(e).context("CreateDIBSection")
-            }
-        }
-    }
 }
 
 /// Aggregate content-capture timings and process CPU use.

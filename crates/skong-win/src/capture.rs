@@ -84,6 +84,9 @@ const OWN_MARGIN: i32 = 8;
 pub const ACTIVITY_INTERVAL: Duration = Duration::from_millis(100);
 /// How often [`ContentFeed`] re-lists our own windows.
 const OWN_REFRESH: Duration = Duration::from_secs(1);
+/// Own windows larger than this (px²) are not treated as such: they are full-screen
+/// debug overlays, not the knight or his props.
+const MAX_OWN_AREA: i64 = 1024 * 1024;
 
 static STATS_LOG: AtomicBool = AtomicBool::new(false);
 
@@ -836,6 +839,17 @@ pub struct ContentFeed {
     /// Latest hotspots per output, and the merged view with owners.
     spots: Vec<(u32, Vec<ActivitySpot>)>,
     activity: Activity,
+    totals: CaptureTotals,
+    /// Content was switched off: the next poll reports a change (terrain loses it).
+    cleared: bool,
+}
+
+/// Running totals over the feed's lifetime (status displays).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CaptureTotals {
+    pub updates: u64,
+    pub frames: u64,
+    pub last: Option<CaptureStats>,
 }
 
 impl ContentFeed {
@@ -856,6 +870,8 @@ impl ContentFeed {
             own_rects: Vec::new(),
             spots: Vec::new(),
             activity: Activity::default(),
+            totals: CaptureTotals::default(),
+            cleared: false,
         };
         if enabled {
             f.restart(desk);
@@ -884,6 +900,33 @@ impl ContentFeed {
         self.capture.is_some()
     }
 
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// Turn content capture on or off at runtime. Either way the next [`Self::poll`]
+    /// reports a change so terrain is rebuilt with (or without) content.
+    pub fn set_enabled(&mut self, on: bool, desk: &DesktopSnapshot) {
+        if on == self.enabled {
+            return;
+        }
+        self.enabled = on;
+        if on {
+            self.monitors = desk.monitors.clone();
+            self.restart(desk);
+        } else {
+            self.shutdown();
+            self.layer = ContentLayer::default();
+            self.spots.clear();
+            self.activity = Activity::default();
+        }
+        self.cleared = true;
+    }
+
+    pub fn totals(&self) -> CaptureTotals {
+        self.totals
+    }
+
     fn secs(&self, t: Instant) -> f64 {
         t.saturating_duration_since(self.epoch).as_secs_f64()
     }
@@ -892,8 +935,9 @@ impl ContentFeed {
     /// `true` when content changed and terrain should be rebuilt.
     pub fn poll(&mut self, desk: &DesktopSnapshot, desk_changed: bool) -> bool {
         self.stats.clear();
+        let cleared = std::mem::take(&mut self.cleared);
         if !self.enabled {
-            return false;
+            return cleared;
         }
         if desk_changed {
             self.layer.observe_desktop(desk, self.secs(Instant::now()));
@@ -908,12 +952,15 @@ impl ContentFeed {
             }
         }
         self.update_own_rects();
-        let Some(cap) = &self.capture else { return false };
-        let (mut changed, mut activity) = (false, desk_changed);
+        let Some(cap) = &self.capture else { return cleared };
+        let (mut changed, mut activity) = (cleared, desk_changed);
         while let Some(msg) = cap.try_recv() {
             match msg {
                 CaptureMsg::Content(u) => {
                     self.layer.ingest(u.source, &u.surfaces, &u.walls, desk, self.secs(u.captured_at));
+                    self.totals.updates += 1;
+                    self.totals.frames += u64::from(u.stats.frames);
+                    self.totals.last = Some(u.stats);
                     self.stats.push(u.stats);
                     changed = true;
                 }
@@ -945,6 +992,8 @@ impl ContentFeed {
                 let visible = unsafe { IsWindowVisible(h) }.as_bool();
                 (visible && unsafe { GetWindowRect(h, &mut r) }.is_ok()).then(|| rect_i(&r))
             })
+            // Debug overlays cover whole monitors; only sprite-sized windows are "us".
+            .filter(|r| (r.width() as i64) * (r.height() as i64) <= MAX_OWN_AREA)
             .collect();
         if rects != self.own_rects {
             if let Some(c) = &self.capture {

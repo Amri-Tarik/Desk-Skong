@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/skong-core", "crates/skong-win", "crates/skong"]
+members = ["crates/skong-core", "crates/skong-win", "crates/skong-ipc", "crates/skong", "crates/skong-panel"]
 
 [workspace.package]
 edition = "2024"
