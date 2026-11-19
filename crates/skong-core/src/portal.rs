@@ -1,13 +1,15 @@
 //! Dream portals: something (a visitor, later other props) arrives at a random standable
-//! spot anywhere on the virtual desktop through a rippling dream gate.
+//! spot anywhere on the virtual desktop through a portal (a puff of dust, or a dream gate).
 //!
 //! * [`pick_spot`] chooses where: a standable surface the knight can actually reach,
 //!   preferring places far from him and — sometimes — on another monitor, so he gets to
 //!   cross the screen with his full movement kit.
-//! * [`Portal`] is the timing: it opens (glow + ripple), lets its guest step out at
-//!   [`Portal::EMERGE`], and closes after [`Portal::LIFETIME`]. The app renders it (dream
-//!   gate glow and the white dream ripple) and asks [`Portal::take_emerge`] when to show
-//!   the guest.
+//! * [`Portal`] is the timing: it opens, lets its guest step out, and closes. Its
+//!   [`PortalStyle`] picks the look: subtle dust puffs and a quick fade-in (default), or
+//!   the dream gate (glow + white dream ripple) for special moments. The app renders it
+//!   and asks [`Portal::take_emerge`] when to show the guest.
+use serde::Deserialize;
+
 use crate::desktop::{Monitor, WindowId};
 use crate::geom::Vec2;
 
@@ -97,33 +99,58 @@ pub enum PortalPhase {
     Closed,
 }
 
-/// One dream gate's timing.
+/// How arrivals look.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PortalStyle {
+    /// A few small dust puffs at the feet and a quick fade-in. Unobtrusive.
+    #[default]
+    Dust,
+    /// The dream gate: glow and the white dream ripple. Flashy; for special moments.
+    Dream,
+}
+
+impl PortalStyle {
+    /// Seconds from opening until the guest steps out.
+    pub fn emerge(self) -> f32 {
+        match self {
+            PortalStyle::Dust => 0.1,
+            PortalStyle::Dream => 0.7,
+        }
+    }
+
+    /// Seconds until the portal is gone.
+    pub fn lifetime(self) -> f32 {
+        match self {
+            PortalStyle::Dust => 0.6,
+            PortalStyle::Dream => 2.2,
+        }
+    }
+}
+
+/// One portal's timing.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Portal {
     pub spot: PortalSpot,
+    pub style: PortalStyle,
     t: f32,
     emerged: bool,
     emerge_taken: bool,
 }
 
 impl Portal {
-    /// Seconds from opening until the guest steps out.
-    pub const EMERGE: f32 = 0.7;
-    /// Seconds until the gate is gone.
-    pub const LIFETIME: f32 = 2.2;
-
-    pub fn open(spot: PortalSpot) -> Self {
-        Self { spot, t: 0.0, emerged: false, emerge_taken: false }
+    pub fn open(spot: PortalSpot, style: PortalStyle) -> Self {
+        Self { spot, style, t: 0.0, emerged: false, emerge_taken: false }
     }
 
     pub fn tick(&mut self, dt: f32) -> PortalPhase {
         self.t += dt.max(0.0);
-        self.emerged |= self.t >= Self::EMERGE;
+        self.emerged |= self.t >= self.style.emerge();
         self.phase()
     }
 
     pub fn phase(&self) -> PortalPhase {
-        if self.t >= Self::LIFETIME {
+        if self.t >= self.style.lifetime() {
             PortalPhase::Closed
         } else if self.emerged {
             PortalPhase::Open
@@ -196,12 +223,17 @@ mod tests {
 
     #[test]
     fn portal_timing() {
-        let mut p = Portal::open(PortalSpot { at: Vec2::new(10.0, 20.0), owner: None });
+        let mut p = Portal::open(PortalSpot { at: Vec2::new(10.0, 20.0), owner: None }, PortalStyle::Dream);
         assert_eq!(p.tick(0.3), PortalPhase::Opening);
         assert!(!p.take_emerge());
         assert_eq!(p.tick(0.5), PortalPhase::Open);
         assert!(p.take_emerge());
         assert!(!p.take_emerge());
         assert_eq!(p.tick(2.0), PortalPhase::Closed);
+        // Dust arrivals are quick.
+        let mut d = Portal::open(PortalSpot { at: Vec2::ZERO, owner: None }, PortalStyle::Dust);
+        assert_eq!(d.tick(0.15), PortalPhase::Open);
+        assert!(d.take_emerge());
+        assert_eq!(d.tick(0.5), PortalPhase::Closed);
     }
 }

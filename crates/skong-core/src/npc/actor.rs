@@ -99,7 +99,7 @@ pub struct Npc {
     knight_right: bool,
 }
 
-const FADE_IN: f32 = 0.6;
+const FADE_IN: f32 = 0.4;
 const FADE_OUT: f32 = 0.9;
 const GAP: f32 = 0.5;
 

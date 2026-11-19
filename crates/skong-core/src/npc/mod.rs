@@ -165,6 +165,8 @@ struct NpcsFile {
     npcs: Vec<NpcDef>,
     #[serde(default)]
     dream: DreamRules,
+    #[serde(default)]
+    portal_style: crate::portal::PortalStyle,
 }
 
 /// Clip ids of one NPC, resolved in its library.
@@ -189,6 +191,8 @@ pub struct NpcSet {
     pub libs: Vec<ClipLibrary>,
     pub visits: VisitConfig,
     pub dream: DreamRules,
+    /// How portal arrivals / departures look (dust by default).
+    pub portal_style: crate::portal::PortalStyle,
 }
 
 impl NpcSet {
@@ -217,7 +221,7 @@ impl NpcSet {
         if file.npcs.is_empty() {
             bail!("{}: no npcs", npcs_json.display());
         }
-        Ok(NpcSet { defs: file.npcs, clips, lib_of, libs, visits: file.visits, dream: file.dream })
+        Ok(NpcSet { defs: file.npcs, clips, lib_of, libs, visits: file.visits, dream: file.dream, portal_style: file.portal_style })
     }
 
     pub fn id(&self, name: &str) -> Option<usize> {

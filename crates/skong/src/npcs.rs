@@ -18,7 +18,7 @@ use skong_core::desktop::{DesktopSnapshot, WindowInfo};
 use skong_core::geom::{RectF, RectI, Vec2};
 use skong_core::nav::{NavGoal, NavGraph, TravelStyle};
 use skong_core::npc::{Arrival, Npc, NpcEnv, NpcEvent, NpcPhase, NpcSet, Placement, TalkContext, VisitConditions, VisitScheduler, plan_placement};
-use skong_core::portal::{Footing, Portal, PortalPhase, PortalSpot};
+use skong_core::portal::{Footing, Portal, PortalPhase, PortalSpot, PortalStyle, SpotOptions, pick_spot};
 use skong_core::terrain::Terrain;
 use skong_win::sprite_window::SpriteWindow;
 
@@ -270,7 +270,7 @@ impl Visitors {
             {
                 emerged.push(g);
             }
-            if phase == PortalPhase::Closed {
+            if phase == PortalPhase::Closed && p.portal.style == PortalStyle::Dream {
                 fx.stop("portal_glow");
             }
         }
@@ -296,8 +296,7 @@ impl Visitors {
         }
         self.live.retain(|l| l.npc.phase() != NpcPhase::Gone);
         for at in std::mem::take(&mut self.pending_fx) {
-            fx.spawn("portal_glow", at, false);
-            fx.spawn("portal_ripple", at, false);
+            portal_fx(fx, self.set.portal_style, at);
         }
         if let Err(e) = self.draw() {
             log::warn!("visitors: {e:#}");
@@ -319,6 +318,22 @@ impl Visitors {
             }
         }
         self.bubbles.update(dt);
+    }
+
+    /// A reachable spot for something to arrive (e.g. a Geo shower), away from games;
+    /// plays the arrival effect there. `None` when nothing fits.
+    pub fn arrival_spot(&mut self, terrain: &Terrain, desk: &DesktopSnapshot, knight: &Character, graph: Option<&NavGraph>, game_monitors: &[RectI], fx: &mut Fx) -> Option<Vec2> {
+        let footings: Vec<Footing> = match graph {
+            Some(g) => g.surfaces().iter().map(|s| Footing { x0: s.x0, x1: s.x1, y: s.y, owner: s.owner }).collect(),
+            None => terrain.ledges.iter().map(|l| Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner }).collect(),
+        };
+        let monitors: Vec<_> = desk.monitors.iter().filter(|m| !game_monitors.contains(&m.rect)).cloned().collect();
+        let rng = &mut self.rng;
+        let mut random = || rng.f32();
+        let mut reachable = |p: Vec2| graph.is_none_or(|g| g.plan(knight, NavGoal::Point(p), TravelStyle::Hurry).is_some());
+        let spot = pick_spot(&footings, knight.pos, &monitors, &SpotOptions::default(), &mut random, &mut reachable)?;
+        portal_fx(fx, self.set.portal_style, spot.at);
+        Some(spot.at)
     }
 
     /// Debug: the dream test wants a dream nail now.
@@ -371,9 +386,8 @@ impl Visitors {
             Arrival::Portal | Arrival::Drop => {
                 let lift = if arrive == Arrival::Drop { 2.5 * self.ppu } else { 0.0 };
                 let base = at.feet - Vec2::new(0.0, lift);
-                fx.spawn("portal_glow", base, false);
-                fx.spawn("portal_ripple", base, false);
-                self.portals.push(OpenPortal { portal: Portal::open(PortalSpot { at: base, owner: at.owner }), guest: Some((def, at)) });
+                portal_fx(fx, self.set.portal_style, base);
+                self.portals.push(OpenPortal { portal: Portal::open(PortalSpot { at: base, owner: at.owner }, self.set.portal_style), guest: Some((def, at)) });
             }
             Arrival::Perch | Arrival::Walk => self.add_npc(def, at, w),
         }
@@ -416,7 +430,7 @@ impl Visitors {
                 }
                 NpcEvent::ConversationOver => log::info!("visitor: conversation with {} over", self.set.defs[self.live[i].npc.def].display),
                 NpcEvent::OpenPortal(at) => {
-                    self.portals.push(OpenPortal { portal: Portal::open(PortalSpot { at, owner: None }), guest: None });
+                    self.portals.push(OpenPortal { portal: Portal::open(PortalSpot { at, owner: None }, self.set.portal_style), guest: None });
                     self.pending_fx.push(at);
                 }
                 NpcEvent::Gone => {
@@ -489,4 +503,28 @@ impl Visitors {
         let secs = skong_core::bubble::read_secs(&text) + 1.0;
         self.bubbles.say(head, &text, BubbleStyle::Thought, secs, area);
     }
+}
+
+/// The look of a portal opening at `at` (feet point).
+fn portal_fx(fx: &mut Fx, style: PortalStyle, at: Vec2) {
+    match style {
+        PortalStyle::Dust => {
+            fx.spawn("arrive_puff", at, false);
+            fx.spawn("arrive_puff_side", at, false);
+            fx.spawn("arrive_puff_side", at, true);
+        }
+        PortalStyle::Dream => {
+            fx.spawn("portal_glow", at, false);
+            fx.spawn("portal_ripple", at, false);
+        }
+    }
+}
+
+/// Where a portal Geo shower starts: a strip `width` wide (at most ~2.5 units) a little above
+/// the arrival spot's feet point.
+pub fn shower_rect(feet: Vec2, width: f32, scale: f32) -> RectF {
+    let ppu = 64.0 * scale;
+    let w = width.min(2.5 * ppu).max(20.0);
+    let top = feet.y - 2.0 * ppu;
+    RectF::new(feet.x - w * 0.5, top - 10.0, feet.x + w * 0.5, top)
 }
