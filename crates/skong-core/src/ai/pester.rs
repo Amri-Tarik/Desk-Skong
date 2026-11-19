@@ -1,6 +1,6 @@
 //! Pestering the cursor: not a fight, just showing off around it. He buzzes about it with
 //! hops that cross under it, loops that go up one side, dash over the top and fall down the
-//! other, quick dash-bys back and forth, and the odd Cyclone Slash spin, then gets bored of
+//! other, quick dash-bys back and forth, pogo bounces off it, and the odd Cyclone Slash spin, then gets bored of
 //! it. Nothing scores; a click on him ends the game (he flinches and lets it be).
 use crate::controller::{Gait, MoveInput, Side};
 use crate::geom::Vec2;
@@ -8,6 +8,7 @@ use crate::nav::{NavGoal, TravelStyle};
 
 use super::behaviours::{ActWait, Ctx, Status, Travel, TravelStep};
 use super::percept::{CursorSense, Poke};
+use super::combat::{KitMove, Kit, Mark, POGO_SWING_CD};
 use super::{Attack, AttackDir, Motion};
 
 /// Close enough to start playing (px from the body center).
@@ -32,6 +33,8 @@ enum Trick {
     DashBy,
     /// Jump up at it and flick the nail past it (never touching it).
     Flick,
+    /// Jump over it (double jump if need be) and pogo off it on the way down, a few times.
+    Pogo,
 }
 
 impl Trick {
@@ -41,6 +44,7 @@ impl Trick {
             Trick::Loop => "loop",
             Trick::DashBy => "dash-by",
             Trick::Flick => "flick",
+            Trick::Pogo => "pogo",
         }
     }
 }
@@ -71,6 +75,8 @@ pub(crate) struct Pester {
     goal_at: Vec2,
     /// No chasing again before this (s left): the last chase found no route.
     chase_cd: f32,
+    /// Pogo bounces off the cursor (see [`super::combat`]).
+    kit: Kit,
 }
 
 impl Pester {
@@ -91,6 +97,7 @@ impl Pester {
             travel: None,
             goal_at: Vec2::ZERO,
             chase_cd: 0.0,
+            kit: Kit::new(ctx.now),
         }
     }
 
@@ -190,7 +197,7 @@ impl Pester {
     }
 
     fn next_trick(&mut self, ctx: &mut Ctx) {
-        let options = [(Trick::Hops, 1.0), (Trick::Loop, 1.2), (Trick::DashBy, 0.8), (Trick::Flick, 0.7)];
+        let options = [(Trick::Hops, 1.0), (Trick::Loop, 1.2), (Trick::DashBy, 0.8), (Trick::Flick, 0.7), (Trick::Pogo, 1.3)];
         let mut next = ctx.rng.pick_weighted(&options).unwrap_or(Trick::Hops);
         if next == self.trick {
             next = ctx.rng.pick_weighted(&options).unwrap_or(Trick::Hops);
@@ -297,6 +304,7 @@ impl Pester {
                     self.flick_cd = 0.9;
                 }
             }
+            Trick::Pogo => self.pogo(ctx, c, &mut input),
         }
         if self.jump_hold > 0.0 {
             input.jump_held = true;
@@ -304,5 +312,38 @@ impl Pester {
         }
         ctx.out.face = Some(toward);
         ctx.out.motion = Motion::Direct(input);
+    }
+
+    /// Get above the cursor (a jump, a double jump if it hangs high) and pogo off it on the
+    /// way down; the bounces chain a few times (then a rest).
+    fn pogo(&mut self, ctx: &mut Ctx, c: CursorSense, input: &mut MoveInput) {
+        let k = ctx.p.knight;
+        let ppu = k.params.px_per_unit;
+        let off = c.offset;
+        let toward = Side::of(off.x).unwrap_or(k.facing);
+        match self.kit.step(ctx, &Mark::point(off), self.flick_cd <= 0.0, false, false, input) {
+            Some(KitMove::PogoSwing) => {
+                // Bouncing off the cursor itself: showing off, nothing scores.
+                ctx.out.attack = Some(Attack { dir: AttackDir::Down, side: toward, hit: true });
+                self.flick_cd = POGO_SWING_CD;
+                self.kit.bounce(ctx.now, input);
+                ctx.mind.excite(0.05);
+            }
+            Some(_) => {}
+            None => {
+                // Under it, then up past it.
+                input.x = (off.x / ppu).clamp(-1.0, 1.0);
+                let above_head = off.y < -0.5 * k.size.y;
+                let resting = ctx.now < self.kit.pogo_ready_at;
+                if k.is_grounded() && !resting && off.x.abs() < 1.5 * ppu {
+                    input.jump_pressed = true;
+                    self.jump_hold = 0.35;
+                } else if !k.is_grounded() && above_head && !self.double_done && k.vel.y > -60.0 && k.can_double_jump() {
+                    input.jump_pressed = true;
+                    self.double_done = true;
+                    self.jump_hold = 0.2;
+                }
+            }
+        }
     }
 }

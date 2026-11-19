@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use crate::controller::Side;
 use crate::geom::Vec2;
-use crate::stakes::{DeathKind, Spell, SpellBook, SpellConfig, SpellSituation};
+use crate::stakes::{DeathKind, Spell, SpellBook, SpellConfig, SpellCues, SpellSituation};
 
 use super::behaviours::{ActWait, BehaviourKind, Ctx};
 use super::battle::BattleScore;
@@ -30,6 +30,22 @@ pub enum StakeEvent {
     Victory { at: Vec2 },
     /// He couldn't reach the coin at `at`: let it fade.
     AbandonCoin { at: Vec2 },
+    /// A combat move chosen for a reason (see [`super::combat`]); spells and nail arts are
+    /// `Cast`, and the pogo bounce itself is the controller's `MoveEvent::Pogo`.
+    Technique(Technique),
+}
+
+/// Combat moves the brain picks by situation (besides spells and nail arts).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Technique {
+    /// Desolate Dive (`dark`: Descending Dark) onto a foe below him.
+    Dive { dark: bool },
+    /// A shadow dash through a lunging foe.
+    Dodge,
+    /// A crystal dash at a far foe on his ledge to open the fight.
+    CrystalOpener,
+    /// Kicked off a wall to get at a flyer above.
+    WallLeap,
 }
 
 /// The Shade as the app sees it (only while it exists and is alive).
@@ -245,7 +261,14 @@ pub(crate) fn victory(ctx: &mut Ctx) {
 /// Maybe use a special against a target at `off` (target − body centre). On success the
 /// act to play is returned (wrap it in a phase) and a `Cast` event is emitted.
 pub(crate) fn try_spell(ctx: &mut Ctx, off: Option<Vec2>, just_hit: bool, fight_over: bool) -> Option<(Spell, ActWait)> {
+    try_spell_cued(ctx, off, just_hit, fight_over, SpellCues::default())
+}
+
+/// [`try_spell`] with what the foe is up to: a moment that calls for one special (wraiths
+/// at a flyer above, a great slash into a wind-up, a cyclone between two foes) gets it.
+pub(crate) fn try_spell_cued(ctx: &mut Ctx, off: Option<Vec2>, just_hit: bool, fight_over: bool, cues: SpellCues) -> Option<(Spell, ActWait)> {
     let situation = SpellSituation {
+        cues,
         target: off,
         grounded: ctx.grounded(),
         just_hit,

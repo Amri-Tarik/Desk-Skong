@@ -6,6 +6,8 @@
 //! * Every choice has a reason: a foe level and far away gets a fireball, one right above
 //!   gets the wraiths, one close in front a great slash or a cyclone, one at mid range a
 //!   dash slash; being hit may answer with thorns; a hurt knight focuses after the fight.
+//! * Some moments call for one in particular ([`SpellCues`]): the wraiths at a flyer above,
+//!   a great slash into a wind-up, a cyclone between two foes. Those skip the chance roll.
 //! * Specials are occasional (`SpellConfig::chance` per opportunity, a minimum gap between
 //!   them) so plain slashes stay the bread and butter.
 use serde::Deserialize;
@@ -139,6 +141,35 @@ pub struct SpellSituation {
     pub rolls: [f32; 2],
     /// Render scale (px per game unit / 64): reach scales with it.
     pub scale: f32,
+    /// What the foe is up to (see [`SpellCues`]).
+    pub cues: SpellCues,
+}
+
+/// Moments that call for one special in particular: it is used whenever it is ready (no
+/// chance roll; the gap between specials and its cooldown still hold).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SpellCues {
+    /// The target flies (a Vengefly above him gets the Howling Wraiths).
+    pub flying: bool,
+    /// The target winds up an attack right in front of him (a Great Slash cuts it short).
+    pub winding_up: bool,
+    /// Foes within a Cyclone Slash's reach (two or more: spin).
+    pub crowd: u32,
+}
+
+impl SpellCues {
+    /// The special this moment calls for, if it reaches `off`.
+    pub fn called_for(&self, off: Vec2, scale: f32) -> Option<Spell> {
+        if self.crowd >= 2 && Spell::Cyclone.reaches(off, scale) {
+            Some(Spell::Cyclone)
+        } else if self.winding_up && Spell::GreatSlash.reaches(off, scale) {
+            Some(Spell::GreatSlash)
+        } else if self.flying && Spell::Scream.reaches(off, scale) {
+            Some(Spell::Scream)
+        } else {
+            None
+        }
+    }
 }
 
 /// Soul meter and cooldowns.
@@ -188,7 +219,14 @@ impl SpellBook {
             return (near && self.ready(Spell::Thorns, now) && s.rolls[0] < cfg.thorns_chance).then_some(Spell::Thorns);
         }
         let off = s.target?;
-        if !s.grounded || now - self.last_special < cfg.min_gap || s.rolls[0] >= cfg.chance {
+        if !s.grounded || now - self.last_special < cfg.min_gap {
+            return None;
+        }
+        // The moment calls for it: no roll.
+        if let Some(sp) = s.cues.called_for(off, s.scale).filter(|sp| self.ready(*sp, now)) {
+            return Some(sp);
+        }
+        if s.rolls[0] >= cfg.chance {
             return None;
         }
         // Most specific first: the situation decides, the roll only breaks ties.

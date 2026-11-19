@@ -36,6 +36,7 @@
 //! | jump + double jump flat distance, Run       | 15.56  | 996    |
 //! | jump + double jump flat distance, Sprint    | 18.75  | 1200   |
 //! | dash distance (ground or air)               | 5.0    | 320    |
+//! | pogo bounce rise (down slash that hits)     | 4.52   | 289    |
 //! | superdash speed                             | 30 /s  | 1920/s |
 //! | wall-jump kick-off speed                    | 16 /s  | 1024/s |
 //! | wall slide speed                            | 8 /s   | 512/s  |
@@ -183,6 +184,14 @@ pub struct CharacterParams {
     /// Recovery after the dive hits the ground (*chosen*, HK `Quake Finish` wait ~ clip).
     pub dive_land_time: f32,
 
+    /// Pogo: a down slash that hits something mid-air bounces him up at this speed
+    /// (*chosen*, HK-like: the game's `BOUNCE_VELOCITY` is not in our dump yet; re-check
+    /// with `--dump-mono HeroController`).
+    pub pogo_speed: f32,
+    /// Pogo: the upward speed is held this long before gravity takes over (like HK's
+    /// `BOUNCE_TIME`; *chosen*).
+    pub pogo_time: f32,
+
     /// Ledges this far above the feet are stepped onto while grounded (*chosen*).
     pub step_height: f32,
     /// A window appearing/rising under the body by at most this much lifts the
@@ -235,6 +244,8 @@ impl CharacterParams {
             dive_antic_time: 0.25,
             dive_speed: 50.0,
             dive_land_time: 0.6,
+            pogo_speed: 12.0,
+            pogo_time: 0.25,
             step_height: 0.1,
             pop_up_height: 0.5,
         }
@@ -319,6 +330,11 @@ impl CharacterParams {
     /// Analytic feet rise of a held double jump, in units.
     pub fn double_jump_height(&self) -> f32 {
         rise(self.double_jump_speed, self.double_jump_time, self.gravity)
+    }
+
+    /// Analytic feet rise of a pogo bounce (held bounce + ballistic), in units.
+    pub fn pogo_height(&self) -> f32 {
+        rise(self.pogo_speed, self.pogo_time, self.gravity)
     }
 
     /// Horizontal distance covered by one dash, in units.

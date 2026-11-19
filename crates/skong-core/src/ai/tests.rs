@@ -125,6 +125,9 @@ struct Sim {
     wall: bool,
     /// Force the knight's horizontal velocity (oscillation tests).
     vel_override: Option<f32>,
+    /// Run the real controller on the brain's input (jumps, pogos, dives, dashes) instead of
+    /// only sliding him along routes; acts then start only on the ground, as in the app.
+    physics: bool,
     /// Hold the superdash button (charging a crystal dash) in the applied input.
     charging: bool,
     dark: bool,
@@ -196,6 +199,7 @@ impl Sim {
             act: None,
             wall: false,
             vel_override: None,
+            physics: false,
             charging: false,
             dark: false,
             selection: None,
@@ -264,11 +268,13 @@ impl Sim {
             self.last_input = MoveInput::default();
         }
         self.last_input.superdash_held |= self.charging;
-        self.knight.vel.x = match self.vel_override {
-            Some(v) => v,
-            None if self.wall => 0.0,
-            None => self.last_input.x * 150.0,
-        };
+        if !self.physics {
+            self.knight.vel.x = match self.vel_override {
+                Some(v) => v,
+                None if self.wall => 0.0,
+                None => self.last_input.x * 150.0,
+            };
+        }
         let perch = self.knight.support.is_some_and(|s| s.kind != LedgeKind::Ground);
         let p = Percepts {
             dt: DT,
@@ -317,6 +323,7 @@ impl Sim {
         }
         if let Some(id) = intent.act
             && self.act.is_none()
+            && (!self.physics || self.knight.is_grounded())
         {
             let name = self.act_name(id);
             let left = act_secs(&name);
@@ -338,6 +345,9 @@ impl Sim {
             }
         }
         self.dream_gate(intent.gate);
+        if self.physics {
+            self.move_knight(intent.motion);
+        }
 
         // Every route arrives after `trip` seconds (unless a wall is in the way).
         if self.nav.status == NavStatus::Moving && !self.wall {
@@ -358,6 +368,24 @@ impl Sim {
         }
         self.intents.push(intent.clone());
         intent
+    }
+
+    /// `physics`: the real controller runs the brain's input (4 substeps per brain tick;
+    /// button presses on the first only). Its events reach the brain next tick.
+    fn move_knight(&mut self, motion: Motion) {
+        let input = match motion {
+            _ if self.act.is_some() => MoveInput::default(),
+            Motion::Hold => MoveInput::default(),
+            Motion::Direct(i) => i,
+            Motion::Navigate { goal, .. } => {
+                let dx = self.goal_point(goal).x - self.knight.pos.x;
+                MoveInput { x: if dx.abs() > 1.0 { dx.signum() } else { 0.0 }, ..Default::default() }
+            }
+        };
+        let held = MoveInput { jump_pressed: false, dash_pressed: false, dive_pressed: false, pogo: false, ..input };
+        for i in 0..4 {
+            self.knight.step(if i == 0 { &input } else { &held }, &self.terrain, DT / 4.0, &mut self.events);
+        }
     }
 
     /// Like the app: the gate glows until the warp act ends, then he is moved to it and

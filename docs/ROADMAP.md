@@ -67,6 +67,8 @@ Checked in tests only (unless noted). Note anything that looks off:
 - [ ] Cursor hit markers and the defeat burst; fight mode; screen-share toggle
 - [ ] Lantern in dark places (dark-theme detection thresholds)
 - [ ] Fatal falls → Shade
+- [ ] Combat kit: pogo chains (enemies, Zote, the cursor in battles and pester), dive from a window
+      top, shadow-dash dodge through a Husk lunge, crystal-dash opener, wraiths at a Vengefly
 - [ ] Enemies: feet line and facing, arrivals, hit flash, death and corpse fade, how often
       they bump him; Zote's spar. _(One Vengefly fight verified in the live logs.)_
 - [ ] Gauntlet: the announcement, wave pacing and breathers, drop-in dust puffs, the reward

@@ -70,6 +70,9 @@ pub struct MoveInput {
     /// it, so content walls (lines, borders) don't block. Window and monitor edges still do.
     /// Released: turn back out.
     pub behind: bool,
+    /// The down slash swung this tick hit something below him: pogo off it (see
+    /// [`Character::pogo`]). Ignored unless airborne.
+    pub pogo: bool,
 }
 
 /// Stepping behind screen content ([`MoveInput::behind`]).
@@ -197,6 +200,9 @@ pub enum MoveEvent {
     LostSupport,
     /// The window we stood on moved (he falls / it slides out from under him).
     PlatformMoved { owner: WindowId },
+    /// A mid-air down slash hit something and bounced him up (double jump and air dash
+    /// refilled), as in the game.
+    Pogo,
 }
 
 /// Countdown / elapsed timers, seconds.
@@ -423,6 +429,9 @@ impl Character {
                 self.steer(x_in, input.gait, dt);
             }
             MoveState::Airborne => {
+                if input.pogo {
+                    self.pogo(events);
+                }
                 if input.dive_pressed && self.abilities.dive {
                     self.start_dive(input.dive_dark, events);
                     return;
@@ -618,6 +627,22 @@ impl Character {
         self.double_jump = false;
         self.begin_rise(self.params.double_jump_speed, self.params.double_jump_time);
         events.push(MoveEvent::DoubleJumped);
+    }
+
+    /// Pogo: a down slash connected mid-air. He bounces up at `pogo_speed` (held for
+    /// `pogo_time`, not cut by releasing jump) and gets his double jump and air dash back.
+    /// Only while airborne (`false` otherwise: nothing happens). Emits [`MoveEvent::Pogo`].
+    pub fn pogo(&mut self, events: &mut Vec<MoveEvent>) -> bool {
+        if self.state != MoveState::Airborne || self.support.is_some() {
+            return false;
+        }
+        let p = self.params;
+        self.begin_rise(p.pogo_speed, p.pogo_time);
+        // A bounce, not a jump: the button doesn't shape it.
+        self.timers.jump_active = false;
+        self.refill_air_moves();
+        events.push(MoveEvent::Pogo);
+        true
     }
 
     fn start_wall_jump(&mut self, wall: Side, x_in: f32, events: &mut Vec<MoveEvent>) {

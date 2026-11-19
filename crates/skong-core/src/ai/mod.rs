@@ -31,6 +31,7 @@
 mod activity;
 mod battle;
 mod behaviours;
+mod combat;
 mod companion;
 mod config;
 mod greet;
@@ -77,7 +78,7 @@ pub use places::{DiscoveryEvent, KnownPlace, PlaceId, PlaceKind, PlaceMemory};
 pub use shiny::{KnownShiny, ShinyMemory};
 pub use repertoire::{ActCatalog, ActInfo};
 pub use spots::{Vantage, View};
-pub use stakes::{Lethality, ShadeSense, StakeEvent, StakesConfig, StakesSense};
+pub use stakes::{Lethality, ShadeSense, StakeEvent, StakesConfig, StakesSense, Technique};
 
 use crate::acts::{ActId, Requirement};
 use crate::controller::{MoveEvent, MoveInput, Side};
@@ -815,6 +816,11 @@ impl Brain {
         self.score_shinies(p, nav);
         self.score_highlight(p, nav);
         self.scan_dream_gate(p, nav);
+        if finished {
+            // A finished battle's cooldown counts now, or it would be picked right again
+            // (fight mode's breather between rounds).
+            self.battle_over();
+        }
         self.utilities = self.score_behaviours(p);
         let eligible = self.cfg.tiers.eligible;
         let tiered: Vec<(BehaviourKind, f32, Tier)> = self.utilities.iter().map(|&(k, u)| (k, u, self.tier_at(k, u, p))).collect();
@@ -906,8 +912,8 @@ impl Brain {
         }
     }
 
-    fn switch_to(&mut self, kind: BehaviourKind, reason: SwitchReason, p: &Percepts, nav: &mut dyn Navigator, out: &mut Intent) {
-        let from = self.active.kind();
+    /// A cursor battle is over: no new one before its cooldown.
+    fn battle_over(&mut self) {
         if let Active::Battle(b) = &self.active {
             let base = self.cfg.battle.cooldown / self.cfg.bother_level.max(0.05);
             let after = if b.outcome() == Some(Outcome::GaveUp) { base * 0.5 } else { base };
@@ -915,6 +921,11 @@ impl Brain {
             let after = if self.fight_mode { 6.0 } else { after };
             self.battle_ready_at = self.now + after;
         }
+    }
+
+    fn switch_to(&mut self, kind: BehaviourKind, reason: SwitchReason, p: &Percepts, nav: &mut dyn Navigator, out: &mut Intent) {
+        let from = self.active.kind();
+        self.battle_over();
         if from == BehaviourKind::Pester {
             self.pester_over();
         }
