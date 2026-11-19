@@ -284,7 +284,10 @@ impl Senses {
             .find(|b| k.is_grounded() && (b.x - k.pos.x).abs() <= BENCH_REACH && (b.y - k.pos.y).abs() <= 8.0);
         self.perch = p.perch && k.is_grounded();
         self.woken = false;
-        let pressing = k.is_grounded() && p.act.is_none() && p.last_input.x.abs() > 0.1 && k.vel.x.abs() < 8.0;
+        // Charging a crystal dash holds a direction without moving for 0.8 s: not stuck (the
+        // brain used to call that a wall and cancel the trip mid-charge).
+        let charging = p.last_input.superdash_held || matches!(k.state, crate::controller::MoveState::SuperdashCharge { .. });
+        let pressing = k.is_grounded() && p.act.is_none() && !charging && p.last_input.x.abs() > 0.1 && k.vel.x.abs() < 8.0;
         let before = self.push_for;
         self.push_for = if pressing { self.push_for + p.dt } else { 0.0 };
         self.stuck = before < STUCK_SECS && self.push_for >= STUCK_SECS;

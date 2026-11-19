@@ -121,6 +121,8 @@ struct Sim {
     wall: bool,
     /// Force the knight's horizontal velocity (oscillation tests).
     vel_override: Option<f32>,
+    /// Hold the superdash button (charging a crystal dash) in the applied input.
+    charging: bool,
     dark: bool,
     last_input: MoveInput,
     last_motion: Motion,
@@ -186,6 +188,7 @@ impl Sim {
             act: None,
             wall: false,
             vel_override: None,
+            charging: false,
             dark: false,
             last_input: MoveInput::default(),
             last_motion: Motion::Hold,
@@ -250,6 +253,7 @@ impl Sim {
         if self.act.is_some() {
             self.last_input = MoveInput::default();
         }
+        self.last_input.superdash_held |= self.charging;
         self.knight.vel.x = match self.vel_override {
             Some(v) => v,
             None if self.wall => 0.0,
@@ -1360,4 +1364,22 @@ fn seated_and_the_cursor_comes_over_he_stays_seated() {
     sim.run(3.0);
     let after: Vec<&String> = sim.started[before..].iter().collect();
     assert!(!after.iter().any(|a| *a == "get_up"), "got up for nothing: {after:?}");
+}
+
+#[test]
+fn charging_a_crystal_dash_is_not_being_stuck() {
+    // The live bug: the charge holds a direction without moving for 0.8 s; the stuck
+    // detector (0.25 s) called it a wall and cancelled the trip before the dash launched.
+    let mut sim = calm(BrainConfig::default());
+    sim.cursor = Some(Cursor { pos: Vec2::new(1800.0, 900.0), ..Default::default() });
+    sim.nav.trip = 1e9;
+    assert!(sim.run_while(3.0, |s| !matches!(s.last_motion, Motion::Navigate { .. })), "travelling");
+    sim.vel_override = Some(0.0);
+    sim.charging = true;
+    sim.run(1.0);
+    assert_eq!(sim.brain.stuck_count(), 0, "charging isn't stuck");
+    // Pressing into a wall without charging still is.
+    sim.charging = false;
+    sim.run(1.0);
+    assert!(sim.brain.stuck_count() >= 1, "a real wall still counts");
 }
