@@ -493,7 +493,7 @@ impl Pet {
             move_events: &self.brain_events,
             activity: &self.activity,
             last_input: self.last_input,
-            local_hour: None,
+            local_hour: Some(monitor::local_hour()),
             dark: false,
         };
         let intent = self.brain.tick(&percepts, &mut self.nav);
