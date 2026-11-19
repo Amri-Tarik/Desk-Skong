@@ -64,6 +64,9 @@ const HOTKEYS: &[(i32, vk::VIRTUAL_KEY, Command)] = &[
     (12, vk::VK_H, Command::GoToCursor { hurry: true }),
 ];
 
+/// Ctrl+Alt+M: the tray menu, at the cursor (not a [`Command`]: it's local UI).
+const MENU_HOTKEY: i32 = 13;
+
 // Tray menu ids.
 const ID_MANUAL: u32 = 1;
 const ID_CLICK: u32 = 2;
@@ -76,6 +79,7 @@ const ID_OVERLAY: u32 = 8;
 const ID_PANEL: u32 = 10;
 const ID_INVITE: u32 = 11;
 const ID_DREAM: u32 = 12;
+const ID_SHARE: u32 = 14;
 const ID_QUIT: u32 = 9;
 const ID_SKIN0: u32 = 1000;
 const ID_SCALE0: u32 = 2000;
@@ -339,6 +343,7 @@ pub fn run(args: &Args) -> Result<()> {
     pet.benches.capturable = args.capturable;
     pet.discoveries.capturable = args.capturable;
     pet.shinies.capturable = args.capturable;
+    pet.apply_share_visible();
     if args.panel.unwrap_or(pet.settings.open_panel) {
         pet.apply(Command::OpenPanel)?;
     }
@@ -352,18 +357,26 @@ pub fn run(args: &Args) -> Result<()> {
             log::warn!("{e:#}");
         }
     }
-    log::info!("tray menu ready; hotkeys Ctrl+Alt + K manual, A act, W wake, R respawn at cursor, G walk / H hurry to cursor, S skin, C click-through, P pause, D debug overlay, Q quit");
+    if let Err(e) = rl.register_hotkey(MENU_HOTKEY, vk::VK_M) {
+        log::warn!("{e:#}");
+    }
+    log::info!("tray menu ready; hotkeys Ctrl+Alt + M menu, K manual, A act, W wake, R respawn at cursor, G walk / H hurry to cursor, S skin, C click-through, P pause, D debug overlay, Q quit");
 
     let mut last_housekeeping = Instant::now();
     let mut goto_test_at = args.goto_test.then(Instant::now);
     rl.run(|tick| {
         let mut cmds: Vec<Command> = tick.hotkeys.iter().filter_map(|h| HOTKEYS.iter().find(|k| k.0 == *h).map(|k| k.2)).collect();
+        // Ctrl+Alt+M opens the tray menu at the cursor, from anywhere.
+        let menu_key = tick.hotkeys.contains(&MENU_HOTKEY);
         for ev in pet.tray.take_events() {
             if ev == TrayEvent::MenuRequested
                 && let Some(id) = pet.tray.show_menu(&pet.menu())
             {
                 cmds.extend(pet.menu_command(id));
             }
+        }
+        if menu_key && let Some(id) = pet.tray.show_menu(&pet.menu()) {
+            cmds.extend(pet.menu_command(id));
         }
         cmds.extend(pet.service_panel());
         if let Some(t) = goto_test_at.as_mut()
@@ -796,6 +809,19 @@ impl Pet {
 
     /// Is it dark where he is? Every 2 s, the mean luminance of the screen around him (a
     /// dark-themed editor, a night photo, a dimmed screen). Hysteresis keeps it steady.
+    /// Apply "visible in screen shares": every window of ours shows in capture (or not),
+    /// and while they show, vision freezes under all of them so it never sees our own
+    /// sprites as content (otherwise only the knight freezes the content under him).
+    fn apply_share_visible(&mut self) {
+        let on = self.settings.share_visible;
+        skong_win::sprite_window::set_share_visible(on);
+        if on || self.fx.capturable {
+            self.content.freeze_all();
+        } else {
+            self.content.freeze_only(vec![self.win.hwnd()]);
+        }
+    }
+
     fn sense_darkness(&mut self, dt: f32) {
         self.dark.1 -= dt;
         if self.dark.1 > 0.0 {
@@ -1062,6 +1088,12 @@ impl Pet {
                 self.win.set_click_through(self.settings.click_through);
                 self.settings.save();
             }
+            Command::ToggleShareVisible => {
+                self.settings.share_visible = !self.settings.share_visible;
+                self.apply_share_visible();
+                self.settings.save();
+                log::info!("visible in screen shares: {}", self.settings.share_visible);
+            }
             Command::TogglePause => {
                 self.paused = !self.paused;
                 self.win.set_visible(!self.paused);
@@ -1143,6 +1175,7 @@ impl Pet {
             MenuItem::action(ID_RESPAWN, "Come here (respawn at cursor)"),
             MenuItem::check(ID_MANUAL, "Manual control", self.manual),
             MenuItem::check(ID_CLICK, "Click-through", self.settings.click_through),
+            MenuItem::check(ID_SHARE, "Visible in screen shares", self.settings.share_visible),
             MenuItem::check(ID_PAUSE, "Pause", self.paused),
             MenuItem::Separator,
             MenuItem::check(ID_VISION, "Vision (content terrain)", self.content.is_enabled()),
@@ -1157,6 +1190,7 @@ impl Pet {
         Some(match id {
             ID_MANUAL => Command::ToggleManual,
             ID_CLICK => Command::ToggleClickThrough,
+            ID_SHARE => Command::ToggleShareVisible,
             ID_PAUSE => Command::TogglePause,
             ID_ACT => Command::RandomAct,
             ID_RESPAWN => Command::RespawnAtCursor,

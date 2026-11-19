@@ -121,10 +121,13 @@ impl SpriteWindow {
                 None,
             )
             .context("CreateWindowExW")?;
-            // Keep ourselves out of screenshots / screen capture (and out of our own vision).
-            if let Err(e) = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE) {
+            // Keep ourselves out of screenshots / screen capture (and out of our own vision),
+            // unless the user wants the pet visible in screen shares.
+            let aff = if share_visible() { WDA_NONE } else { WDA_EXCLUDEFROMCAPTURE };
+            if let Err(e) = SetWindowDisplayAffinity(hwnd, aff) {
                 log::warn!("SetWindowDisplayAffinity failed: {e}");
             }
+            live_windows().lock().map(|mut l| l.push(hwnd.0 as isize)).ok();
             let dc = CreateCompatibleDC(None);
             let mut win = Self { hwnd, dc, bitmap: HBITMAP::default(), old_bitmap: HGDIOBJ::default(), bits: std::ptr::null_mut(), cap: (0, 0), shown: None };
             win.ensure_capacity(256, 256)?;
@@ -243,7 +246,7 @@ impl SpriteWindow {
 
     /// Debug: allow screenshots / capture to see the sprite (excluded by default).
     pub fn set_capturable(&self, on: bool) {
-        let aff = if on { WDA_NONE } else { WDA_EXCLUDEFROMCAPTURE };
+        let aff = if on || share_visible() { WDA_NONE } else { WDA_EXCLUDEFROMCAPTURE };
         // SAFETY: display affinity of our own window.
         if let Err(e) = unsafe { SetWindowDisplayAffinity(self.hwnd, aff) } {
             log::warn!("SetWindowDisplayAffinity: {e}");
@@ -289,6 +292,35 @@ impl Drop for SpriteWindow {
             }
             let _ = DeleteDC(self.dc);
             let _ = DestroyWindow(self.hwnd);
+        }
+        let me = self.hwnd.0 as isize;
+        live_windows().lock().map(|mut l| l.retain(|h| *h != me)).ok();
+    }
+}
+
+/// "Visible in screen shares": every sprite window of ours shows up in screen capture
+/// (Discord, OBS, screenshots). Off (default): they are excluded, which also keeps them
+/// out of the pet's own vision.
+static SHARE_VISIBLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn share_visible() -> bool {
+    SHARE_VISIBLE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Every live sprite window (raw handles), to re-apply the share setting.
+fn live_windows() -> &'static std::sync::Mutex<Vec<isize>> {
+    static LIVE: std::sync::OnceLock<std::sync::Mutex<Vec<isize>>> = std::sync::OnceLock::new();
+    LIVE.get_or_init(|| std::sync::Mutex::new(Vec::new()))
+}
+
+/// Show (or hide) all of our sprite windows in screen capture, now and for new ones.
+pub fn set_share_visible(on: bool) {
+    SHARE_VISIBLE.store(on, std::sync::atomic::Ordering::Relaxed);
+    let aff = if on { WDA_NONE } else { WDA_EXCLUDEFROMCAPTURE };
+    if let Ok(list) = live_windows().lock() {
+        for &h in list.iter() {
+            // SAFETY: display affinity of our own (live) windows; a stale handle just fails.
+            let _ = unsafe { SetWindowDisplayAffinity(HWND(h as *mut _), aff) };
         }
     }
 }
