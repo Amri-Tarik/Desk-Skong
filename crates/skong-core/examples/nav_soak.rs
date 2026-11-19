@@ -81,6 +81,7 @@ fn main() {
     }
     let mut build_ms = Vec::new();
     let mut dives = 0usize;
+    let mut hard_landings = 0usize;
     for seed in 1..=desktops {
         let mut rng = Rng(seed * 7919);
         let desk = desktop(&mut rng, n);
@@ -132,13 +133,18 @@ fn main() {
                     }
                     // Like the app: dive on big straight drops (excited on odd seeds).
                     let mut input = input;
-                    if f.dive_ok(&ch) && let Some(dark) = ch.auto_dive(&t, &input, seed % 2 == 1) {
+                    if ch.hard_landing_ahead(&t) && !(f.dive_ok(&ch) && ch.auto_dive(&t, &input, seed % 2 == 1).is_some()) {
+                        input.dive_pressed = true;
+                        input.dive_dark = true;
+                        dives += 1;
+                    } else if f.dive_ok(&ch) && let Some(dark) = ch.auto_dive(&t, &input, seed % 2 == 1) {
                         input.dive_pressed = true;
                         input.dive_dark = dark;
                         dives += 1;
                     }
                     ev.clear();
                     ch.step(&input, &t, DT, &mut ev);
+                    hard_landings += ev.iter().filter(|e| matches!(e, skong_core::controller::MoveEvent::Landed { hard: true })).count();
                     if std::env::var("SOAK_TICKS").ok().as_deref() == Some(&format!("{seed}:{}:{style:?}", w.id)) && f.route().moves.len() == 1 {
                         println!("    x {:.1} y {:.1} v {:.0},{:.0} in {:.2} j{} d{} dn{} {:?} {:?}", ch.pos.x, ch.pos.y, ch.vel.x, ch.vel.y, input.x, u8::from(input.jump_pressed), u8::from(input.dash_pressed), u8::from(input.down), ch.state, ev);
                     }
@@ -166,6 +172,7 @@ fn main() {
         println!("  {what}: {n}");
     }
     println!("auto-dives during routes: {dives}");
+    println!("hard landings during routes (fatal now): {hard_landings}");
     build_ms.sort_by(f32::total_cmp);
     if let (Some(med), Some(max)) = (build_ms.get(build_ms.len() / 2), build_ms.last()) {
         println!("graph build: median {med:.2} ms, max {max:.2} ms over {} desktops", build_ms.len());

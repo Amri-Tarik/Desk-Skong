@@ -617,8 +617,11 @@ impl Brain {
         if std::mem::take(&mut self.visitors.knock) {
             woken |= napping || matches!(self.active, Active::Nap(_)); // a visitor! up you get
         }
-        if p.move_events.contains(&MoveEvent::Landed { hard: true }) {
-            self.knocked_out = true;
+        // Fall damage is fatal: a long fall that no dive or down-dash broke (those land
+        // softly) kills him. He leaves a Shade with his Geo: something to go and do.
+        if p.move_events.contains(&MoveEvent::Landed { hard: true }) && self.stakes.pending_death.is_none() && !matches!(self.active, Active::Dead(_)) {
+            log::info!("brain: a fatal fall");
+            self.stakes.pending_death = Some((crate::stakes::DeathKind::Fall, false));
         }
         if woken {
             self.senses.woken = true;
