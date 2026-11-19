@@ -139,6 +139,8 @@ struct Pet {
     benches: Benches,
     /// Things found in windows (benches, hot springs, geo deposits).
     discoveries: Discoveries,
+    /// Who stands where: props, NPCs, ... (nothing is placed inside something else).
+    occupancy: skong_core::occupancy::Occupancy,
     fx: Fx,
     /// Keeps the knight off monitors running a fullscreen game.
     games: GameGuard,
@@ -262,6 +264,7 @@ pub fn run(args: &Args) -> Result<()> {
         seat_y: None,
         benches,
         discoveries,
+        occupancy: Default::default(),
         fx,
         games: GameGuard::new(),
         game_hidden: false,
@@ -351,9 +354,8 @@ pub fn run(args: &Args) -> Result<()> {
             last_housekeeping = Instant::now();
             pet.benches.raise_all();
             pet.raise_visitors();
-            pet.discoveries.raise_backs();
+            pet.discoveries.raise_all();
             pet.win.raise();
-            pet.discoveries.raise_fronts();
             log::debug!(
                 "knight at ({:.0},{:.0}) {:?} clip '{}' act {:?} | brain: {}",
                 pet.ch.pos.x,
@@ -909,7 +911,7 @@ impl Pet {
     }
 
     fn place_bench(&mut self, style: usize, at: Vec2) {
-        match self.benches.place(style, at, &self.terrain) {
+        match self.benches.place(style, at, &self.terrain, &self.occupancy) {
             Ok(()) => self.win.raise(), // keep the knight in front of his furniture
             Err(e) => log::warn!("bench: {e:#}"),
         }

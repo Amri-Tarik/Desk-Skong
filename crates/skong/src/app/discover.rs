@@ -12,7 +12,7 @@ use super::Pet;
 
 const ID_DISCOVER0: u32 = 5000;
 const ID_FORGET: u32 = 5003;
-const KINDS: [&str; 3] = ["Reveal a bench here", "Reveal a hot spring here", "Reveal a geo deposit here"];
+const KINDS: [&str; 2] = ["Reveal a bench here", "Reveal a geo deposit here"];
 
 /// Tray submenu: reveal a find on the knight's window (or the one under the cursor).
 pub(super) fn menu() -> MenuItem {
@@ -32,7 +32,8 @@ pub(super) fn menu_command(id: u32) -> Option<Command> {
 
 impl Pet {
     pub(super) fn discoveries_tick(&mut self, dt: f32) {
-        self.discoveries.update(dt, (self.watcher.snapshot(), &self.terrain), &self.benches, &mut self.fx, &self.ch, &self.win);
+        self.benches.claim(&mut self.occupancy);
+        self.discoveries.update(dt, (self.watcher.snapshot(), &self.terrain), &self.benches, &mut self.occupancy, &mut self.fx, (&self.ch, &self.win));
     }
 
     /// Before the brain ticks: found benches join `benches`, the brain learns the places,
@@ -45,7 +46,7 @@ impl Pet {
 
     pub(super) fn on_discovery(&mut self, ev: DiscoveryEvent) {
         match ev {
-            DiscoveryEvent::Explored(id) => self.discoveries.explored(id, self.watcher.snapshot(), &self.terrain, &self.benches),
+            DiscoveryEvent::Explored(id) => self.discoveries.explored(id, (self.watcher.snapshot(), &self.terrain), &self.benches, &self.occupancy),
             DiscoveryEvent::Used(id) => self.discoveries.used(id),
             DiscoveryEvent::Struck(id) => {
                 if let Some(d) = self.discoveries.struck(id, &self.ch, &mut self.fx) {
@@ -66,7 +67,7 @@ impl Pet {
                     desk.windows.iter().find(|w| w.rect.contains(x, y)).map(|w| w.id)
                 };
                 match self.ch.support.and_then(|s| s.owner).or_else(under_cursor) {
-                    Some(id) => self.discoveries.force(kind, id, desk, &self.terrain, &self.benches),
+                    Some(id) => self.discoveries.force(kind, id, (desk, &self.terrain), &self.benches, &self.occupancy),
                     None => log::warn!("discover: stand the knight on a window (or point at one) first"),
                 }
             }

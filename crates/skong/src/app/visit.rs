@@ -45,6 +45,7 @@ impl Pet {
             knight_busy: busy,
             hour: monitor::local_hour(),
             game_monitors: &self.games.game_monitors,
+            occupancy: &self.occupancy,
         };
         f(v, &world, &mut self.fx);
     }
@@ -63,6 +64,9 @@ impl Pet {
             v.knight_clip(&clip, origin, right, fx);
             v.tick(dt, w, fx);
         });
+        if let Some(v) = &self.visitors {
+            v.claim(&mut self.occupancy);
+        }
         if self.visitors.as_mut().is_some_and(|v| v.take_dream_request()) && self.act.is_none() {
             let _ = self.apply_visit(Command::DreamNail);
         }

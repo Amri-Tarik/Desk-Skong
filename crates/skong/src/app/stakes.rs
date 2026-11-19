@@ -258,12 +258,13 @@ impl Pet {
             log::info!("a geo shower: {} geo", d.amount);
             // Through a portal at a reachable spot (see `npcs::Visitors::arrival_spot`).
             let graph = self.nav.graph().map(|g| g.as_ref());
-            if let Some(p) = self.visitors.as_mut().and_then(|v| v.arrival_spot(&self.terrain, desk, &self.ch, graph, &self.games.game_monitors, &mut self.fx)) {
+            if let Some(p) = self.visitors.as_mut().and_then(|v| v.arrival_spot((&self.terrain, desk, &self.games.game_monitors, &self.occupancy), &self.ch, graph, &mut self.fx)) {
                 d.rect = crate::npcs::shower_rect(p, d.rect.width(), scale);
             }
             st.geo.spill(&d);
         }
         st.geo.step(dt, &self.terrain, &st.areas);
+        st.geo.evict_from(&self.occupancy);
         if !st.dead {
             let got: u32 = st.geo.collect(self.ch.body()).iter().map(|p| p.value).sum();
             if got > 0 {
@@ -364,7 +365,7 @@ impl Pet {
                 let mut d: GeoDrop = st.sources.shower(sky);
                 let graph = self.nav.graph().map(|g| g.as_ref());
                 let desk = self.watcher.snapshot();
-                if let Some(p) = self.visitors.as_mut().and_then(|v| v.arrival_spot(&self.terrain, desk, &self.ch, graph, &self.games.game_monitors, &mut self.fx)) {
+                if let Some(p) = self.visitors.as_mut().and_then(|v| v.arrival_spot((&self.terrain, desk, &self.games.game_monitors, &self.occupancy), &self.ch, graph, &mut self.fx)) {
                     d.rect = crate::npcs::shower_rect(p, d.rect.width(), self.settings.scale);
                 }
                 st.geo.spill(&d);

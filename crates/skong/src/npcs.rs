@@ -17,6 +17,7 @@ use skong_core::controller::Character;
 use skong_core::desktop::{DesktopSnapshot, WindowInfo};
 use skong_core::geom::{RectF, RectI, Vec2};
 use skong_core::nav::{NavGoal, NavGraph, TravelStyle};
+use skong_core::occupancy::{ClaimKey, ClaimKind, Occupancy};
 use skong_core::npc::{Arrival, Npc, NpcEnv, NpcEvent, NpcPhase, NpcSet, Placement, TalkContext, VisitConditions, VisitScheduler, plan_placement};
 use skong_core::portal::{Footing, Portal, PortalPhase, PortalSpot, PortalStyle, SpotOptions, pick_spot};
 use skong_core::terrain::Terrain;
@@ -61,6 +62,13 @@ pub struct World<'a> {
     pub hour: f32,
     /// Monitors with a fullscreen game: nothing of ours shows or arrives there.
     pub game_monitors: &'a [RectI],
+    /// Props and other things already standing somewhere: don't arrive on top of them.
+    pub occupancy: &'a Occupancy,
+}
+
+/// Space a visitor (or a portal arrival) needs around its feet `p`, scaled by `ppu`.
+fn footprint(p: Vec2, ppu: f32) -> RectF {
+    RectF::new(p.x - 0.8 * ppu, p.y - 2.4 * ppu, p.x + 0.8 * ppu, p.y)
 }
 
 pub struct Visitors {
@@ -325,7 +333,7 @@ impl Visitors {
 
     /// A reachable spot for something to arrive (e.g. a Geo shower), away from games;
     /// plays the arrival effect there. `None` when nothing fits.
-    pub fn arrival_spot(&mut self, terrain: &Terrain, desk: &DesktopSnapshot, knight: &Character, graph: Option<&NavGraph>, game_monitors: &[RectI], fx: &mut Fx) -> Option<Vec2> {
+    pub fn arrival_spot(&mut self, (terrain, desk, game_monitors, occ): (&Terrain, &DesktopSnapshot, &[RectI], &Occupancy), knight: &Character, graph: Option<&NavGraph>, fx: &mut Fx) -> Option<Vec2> {
         let footings: Vec<Footing> = match graph {
             Some(g) => g.surfaces().iter().map(|s| Footing { x0: s.x0, x1: s.x1, y: s.y, owner: s.owner }).collect(),
             None => terrain.ledges.iter().map(|l| Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner }).collect(),
@@ -333,10 +341,19 @@ impl Visitors {
         let monitors: Vec<_> = desk.monitors.iter().filter(|m| !game_monitors.contains(&m.rect)).cloned().collect();
         let rng = &mut self.rng;
         let mut random = || rng.f32();
-        let mut reachable = |p: Vec2| graph.is_none_or(|g| g.plan(knight, NavGoal::Point(p), TravelStyle::Hurry).is_some());
+        let ppu = self.ppu;
+        let mut reachable = |p: Vec2| occ.is_free(footprint(p, ppu), None) && graph.is_none_or(|g| g.plan(knight, NavGoal::Point(p), TravelStyle::Hurry).is_some());
         let spot = pick_spot(&footings, knight.pos, &monitors, &SpotOptions::default(), &mut random, &mut reachable)?;
         portal_fx(fx, self.set.portal_style, spot.at);
         Some(spot.at)
+    }
+
+    /// Claim every live visitor's footprint so props, finds and coins keep clear of them.
+    pub fn claim(&self, occ: &mut Occupancy) {
+        occ.release_kind(ClaimKind::Npc);
+        for (i, l) in self.live.iter().enumerate() {
+            occ.claim(ClaimKey::new(ClaimKind::Npc, i as u64), footprint(l.npc.pos, self.ppu), 60);
+        }
     }
 
     /// Debug: the dream test wants a dream nail now.
@@ -382,7 +399,8 @@ impl Visitors {
             None => w.terrain.ledges.iter().map(|l| Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner }).collect(),
         };
         let knight = w.knight;
-        let mut reachable = |p: Vec2| w.graph.is_none_or(|g| g.plan(knight, NavGoal::Point(p), TravelStyle::Hurry).is_some());
+        let ppu = self.ppu;
+        let mut reachable = |p: Vec2| w.occupancy.is_free(footprint(p, ppu), None) && w.graph.is_none_or(|g| g.plan(knight, NavGoal::Point(p), TravelStyle::Hurry).is_some());
         let arrive = self.set.defs[def].arrive;
         let ledges: Vec<Footing> = w.terrain.ledges.iter().map(|l| Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner }).collect();
         // Nav surfaces first (reachable by construction), raw ledges as a fallback.

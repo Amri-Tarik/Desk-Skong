@@ -32,7 +32,7 @@ pub enum Command {
     PlaceBenchAtCursor(usize),
     PlaceBenchNearKnight(usize),
     ClearBenches,
-    /// Reveal a find in the window under the knight: 0 bench, 1 hot spring, 2 geo deposit.
+    /// Reveal a find in the window under the knight: 0 bench, 1 geo deposit.
     Discover(u8),
     /// Forget everything found in windows.
     ForgetDiscoveries,
