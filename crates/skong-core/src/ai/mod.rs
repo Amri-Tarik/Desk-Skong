@@ -880,8 +880,14 @@ impl Brain {
             self.travel_dir = 0.0;
             self.recent_goals.clear();
         }
-        // End a running (interruptible) act gracefully rather than snapping out of it.
-        if let Some(a) = p.act.filter(|a| a.interruptible)
+        // End a running (interruptible) act gracefully rather than snapping out of it —
+        // except a seat when the next behaviour is happy seated too (idle, keeping company,
+        // resting): getting up only to sit straight back down looked silly. It gets up
+        // gracefully later if that behaviour needs to move (`Ctx::free_to_move`).
+        let seated = p.act.and_then(|a| self.rep.catalog.get(a.id)).is_some_and(|a| a.requires == Requirement::Seat);
+        let stays_seated = seated && matches!(kind, BehaviourKind::Idle | BehaviourKind::Companion | BehaviourKind::Rest | BehaviourKind::Nap);
+        if !stays_seated
+            && let Some(a) = p.act.filter(|a| a.interruptible)
             && let Some(exit) = self.rep.catalog.get(a.id).and_then(behaviours::exit_act_for)
         {
             out.exit_act = self.rep.catalog.id(exit);

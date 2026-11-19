@@ -46,9 +46,6 @@ The prioritised backlog lives in [ROADMAP.md](ROADMAP.md) (the user edits and an
   arcs vs. nearby windows, his nail vanishing at the bow: no sheathe clip), thought clouds.
 - Training drills only check room on the current ledge; a dash slash near an edge may drop him
   off (he walks back).
-- If the brain switches behaviour right after he sits (e.g. idle → companion), he may get
-  up and sit straight back down (the new behaviour re-requests a seated act). Fix: keep a
-  running seated act when the next behaviour wants to sit too.
 - Nav graph builds are 26–72 % slower than before climbing on a 30-window stress desktop
   (background thread; ~3 ms median on realistic desktops). Next lever: share climb outcomes
   per source/wall across targets.

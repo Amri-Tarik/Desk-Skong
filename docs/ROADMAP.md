@@ -5,10 +5,12 @@ _Working list, last updated 2026-11-19. Reorder freely and add notes under any i
 
 ## 1. Next up: quick wins
 
-- [ ] **Hornet faces the knight.** Her clips face one way, so when the knight is on her
+- [x] **Hornet faces the knight.** _(Her talk clip looks left while pointing right: it is
+      no longer mirrored, so her face turns to him; the needle points the other way.)_ Her clips face one way, so when the knight is on her
       other side she looks like she's ignoring him. Every visitor whose art faces one way
       should turn toward him while idling and talking.
-- [ ] **Re-sit quirk.** If the brain switches behaviour right after he sits, he gets up
+- [x] **Re-sit quirk.** _(Fixed: a seat survives switching to idle / company / rest / nap;
+      leaving it later is always graceful.)_ If the brain switches behaviour right after he sits, he gets up
       and sits straight back down. Fix: keep a running seated act when the next behaviour
       wants to sit too.
 - [ ] **Crystal dash on long runs.** Today the planner only uses it as a last resort

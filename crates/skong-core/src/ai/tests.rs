@@ -284,6 +284,13 @@ impl Sim {
         if intent.cancel_act && self.act.as_ref().is_some_and(|a| a.act.interruptible) {
             self.act = None;
         }
+        // Like the app: a graceful exit replaces the running act with its short exit act.
+        if let Some(exit) = intent.exit_act
+            && self.act.as_ref().is_some_and(|a| a.act.interruptible)
+        {
+            self.started.push(self.act_name(exit));
+            self.act = Some(PlayingAct { act: RunningAct { id: exit, interruptible: false }, left: 0.4 });
+        }
         if intent.signal == Some("woken")
             && let Some(a) = &mut self.act
             && self.catalog.get(a.act.id).is_some_and(|i| i.name == "nap")
@@ -820,7 +827,7 @@ fn riding_a_moving_window_is_fun() {
 // --- Balance & stability ----------------------------------------------------------------
 
 /// Acts the knight may start with nobody doing anything special.
-const QUIET_ACTS: [&str; 10] = ["dream_nail", "gaze_into_screen", "look_up", "look_down", "stare_at_user", "rest", "lean_back", "read_map", "map_stroll", "pick_up_trinket"];
+const QUIET_ACTS: [&str; 15] = ["dream_nail", "gaze_into_screen", "look_up", "look_down", "stare_at_user", "rest", "lean_back", "read_map", "map_stroll", "pick_up_trinket", "get_up", "look_up_end", "look_down_end", "turn_from_screen", "put_map_away"];
 
 #[test]
 fn quiet_five_minutes_are_mostly_purposeful() {
@@ -843,7 +850,9 @@ fn quiet_five_minutes_are_mostly_purposeful() {
     assert!(sim.started.iter().all(|a| QUIET_ACTS.contains(&a.as_str())), "out-of-context act: {:?}", sim.started);
     assert!(sim.started.iter().any(|a| a == "rest" || a == "lean_back"), "never sat: {:?}", sim.started);
     let fidgets = sim.intents.iter().filter(|i| i.reason.contains("(fidget)")).count();
-    assert!((fidgets as f32) < 0.15 * ticks as f32);
+    // (Graceful exits — getting up, putting the map away — keep the last fidget's reason for
+    // their 0.4 s, hence a little headroom.)
+    assert!((fidgets as f32) < 0.18 * ticks as f32, "fidgeting {:.0}% of the time", 100.0 * fidgets as f32 / ticks as f32);
 }
 
 #[test]
@@ -1335,4 +1344,18 @@ fn fight_mode_fights_the_cursor_round_after_round_until_switched_off() {
     sim.run(100.0);
     let kinds = sim.run(30.0);
     assert!(!kinds.contains(&BehaviourKind::Battle), "off again");
+}
+
+#[test]
+fn seated_and_the_cursor_comes_over_he_stays_seated() {
+    // The re-sit quirk: idle and sitting on a window edge, then the cursor turns up and
+    // keeping company takes over. He used to get up and sit straight back down.
+    let mut sim = with_window(calm(BrainConfig::default()));
+    sim.place(Vec2::new(500.0, 400.0));
+    assert!(sim.run_while(60.0, |s| s.act.as_ref().is_none_or(|a| !matches!(s.act_name(a.act.id).as_str(), "lean_back" | "rest"))), "sat down: {:?}", sim.started);
+    let before = sim.started.len();
+    sim.cursor = Some(Cursor { pos: Vec2::new(560.0, 330.0), ..Default::default() });
+    sim.run(3.0);
+    let after: Vec<&String> = sim.started[before..].iter().collect();
+    assert!(!after.iter().any(|a| *a == "get_up"), "got up for nothing: {after:?}");
 }
