@@ -1,96 +1,81 @@
 # Desk-Skong roadmap
 
-_Working list, last updated 2026-11-19. Reorder freely and add notes under any item
+_Working list, last updated 2026-11-19 (night). Reorder freely and add notes under any item
 (`> note: …`). `docs/STATUS.md` keeps the record of what's done and the known issues._
 
-## 1. Next up: quick wins
+## 1. Next up
 
-- [x] **Hornet faces the knight.** _(Her talk clip looks left while pointing right: it is
-      no longer mirrored, so her face turns to him; the needle points the other way.)_ Her clips face one way, so when the knight is on her
-      other side she looks like she's ignoring him. Every visitor whose art faces one way
-      should turn toward him while idling and talking.
-- [x] **Re-sit quirk.** _(Fixed: a seat survives switching to idle / company / rest / nap;
-      leaving it later is always graceful.)_ If the brain switches behaviour right after he sits, he gets up
-      and sits straight back down. Fix: keep a running seated act when the next behaviour
-      wants to sit too.
-- [x] **Crystal dash on long runs.** _(Hurry crystal dashes along level runs longer than
-      ~15 units ≈ 576 px at scale 0.6, the break-even with sprinting. If it feels too
-      eager, add a margin in `superdash_break_even`. Wall-launched charges done: Hurry climbs
-      a wall to a high far ledge's height, charges clinging to it and flies across, where
-      nothing else connects the two directly. Follow-up: runs to slightly higher ledges.)_
+- [ ] **Training dummy** (`Training Dummy Real Anim`, sharedassets321: idle + light/heavy
+      hit L/R). Something to practise on when bored, and a natural prop for Sly's lessons.
+- [ ] **Pack the remaining art** (visitors, enemies, Geo rocks, bubbles) into the
+      `FrameStore` like the knight and effects: most of the remaining ~180 MB private memory.
+- [ ] **Small switches**: enemies on/off, a "Dream Gate now" debug button, a margin on how
+      eager the crystal dash is (`superdash_break_even`).
+- [ ] **Ability progression** — see the proposal in the conversation (2026-11-19); decide
+      whether to do it.
 
 ## 2. Reasons to move around
 
-- [x] **Enemies / training dummies** wandering in from the screen edges (enemy art from
-      level files). Zote as a sparring partner. Fights are his top priority, so this pays
-      off the most. _(Crawlid, Vengefly and Wandering Husk walk / fly / drop in every
-      7–25 min of presence (or when he's bored), on his monitor; he fights them (`Fight`,
-      above Geo and the cursor), they bump back (never lethal by default), die with their
-      death clip and burst Geo. Zote may challenge him after a talk and spars with his own
-      fight clips. Tuning in `data/enemies.json` and Zote's `spar`. Follow-ups: the
-      training dummy (`Training Dummy Real Anim`, sharedassets321), a tray/panel trigger.)_
-- [ ] **Geo showers through the subtle portal**, plus a tray/panel trigger for visits.
-- [x] **Dream Gate fallback.** When no route exists, he warps instead of giving up.
-      (Visitors, the Shade, Geo, deposits, shinies; settled ledges only; 90 s cooldown.)
-- [ ] **Hazards.** The spike/acid death acts exist but nothing triggers them. Needs a
-      design: what counts as spikes or acid on a desktop?
-- [ ] **Regional Geo rocks.** The game has City, Green, Fungal, Deep and Grave variants
-      (found in `sharedassets86/27/168/188/245`). Pick one per app for variety.
+- [x] **Enemies**: Crawlid, Vengefly, Wandering Husk wander / fly / drop in every 7–25 min
+      of presence (or when he's bored); he fights them above Geo and the cursor; they bump
+      back (non-lethal by default), die and burst Geo. "Send an enemy" in the tray / panel.
+      Zote may challenge him to a spar after a talk. Tuning: `data/enemies.json`, Zote's
+      `spar`.
+- [x] **Geo showers through the subtle portal**, settled ledges only; "Geo shower" in the
+      tray / panel.
+- [x] **Dream Gate fallback**: no route to a prize (visitors, the Shade, Geo, deposits,
+      shinies) → he plants a gate and warps; settled ledges only; 90 s cooldown.
+- [x] **Regional Geo rocks**: 10 regions, one per app (stable hash of the process name).
+- [x] **Crystal dash on long runs** and **launched from walls** (Hurry only).
+- ~~Hazards~~ — dropped (no desktop-native idea for spikes / acid yet).
 
 ## 3. Ideas and flavour
 
-- [ ] **Reacting to on-screen text** (opt-in, local only). Windows UI Automation's
-      "selection changed" event gives the highlighted text and where it is (Word, Notepad,
-      Edge/Chrome; Electron apps may need accessibility switched on). Start with "curious
-      about highlighted text", keyword reactions later.
-      _(Step 1 done: tray/panel toggle "Curious about highlighted text", off by default. He
-      walks to a spot near a fresh selection and looks at it, once; rectangles only, the
-      text is never read. Not yet seen live.)_
-- [ ] **Unn slug form** for very calm moods (28 unused `Slug *` clips).
-- [ ] **Ability progression**: earn dash, wings, claw and crystal heart through the
-      game's "collect" cutscenes. *Undecided.*
-- [ ] **The game's particles recreated** (crystal shards, run/land dust).
+- [x] **Curious about highlighted text** (opt-in, off by default; rectangles only, the
+      text is never read). Next step, keyword reactions, would need the text: a privacy
+      decision.
+- [x] **Unn slug form** for serene moments.
+- [x] **The game's particles recreated** (dust bits, crystal shards, Geo sparkle).
 
 ## 4. Technical, low priority
 
-<<<<<<< HEAD
-- [ ] Nav graph builds are slower since climbing (~2.3 ms median, background thread).
-      Next lever: share climb results per wall.
-- [x] Load animation frames only as needed, to cut memory at large scales (frames stay
-      packed until drawn: knight + effects 75 → 22 MiB private at x0.6, 202 → 41 at x1.0).
-=======
 - [x] Nav graph builds faster: collision queries test geometry before the window-overlap
       rule (soak median 2.3 → 2.0 ms, stress desktops −55 %, identical graphs).
 - [ ] Maybe: share climb simulations per source/wall across targets. Measured ceiling ≤ 8 %
       of ticks on the soak desktops (walls serve ~1.4 targets), ≤ 18 % on stress desktops;
       needs a replay cheaper than cloning the character each tick to pay off.
-- [ ] Load animation frames only as needed, to cut memory at large scales.
->>>>>>> e400bb9 (perf(path): test geometry before the window rule in collision queries)
+- [x] Frames stay packed until drawn (knight + effects 75 → 22 MiB private at x0.6,
+      202 → 41 at x1.0; live pet 228 → 183 MB private).
 - [ ] With "Visible in screen shares" (or `--capturable`) on, a rock or coin on a line
       that disappears can float until it's turned off.
 - [ ] Rotated monitors get no content terrain.
 
 ## Needs a look on screen
 
-These have only been checked in tests. Note anything that looks off:
+Checked in tests only (unless noted). Note anything that looks off:
 
 - [ ] Step-behind crossings (TurnToBG / TurnFromBG at drawn lines)
 - [ ] Pester tricks and their persistence (45–90 s)
 - [ ] Sly's lesson: demo arcs vs. nearby windows; his nail vanishing at the bow
-- [ ] Thought cloud behind the Geo / "?" emotes
-- [ ] Seated map: open, read, close
-- [ ] Geo Rock art and gleam; shiny glint and pick-up
-- [ ] Cursor hit markers and the defeat burst
+- [ ] Thought cloud behind the Geo / "?" emotes; seated map open / read / close
+- [ ] Geo Rock art and gleam (all regions, sizes); shiny glint and pick-up
+- [ ] Cursor hit markers and the defeat burst; fight mode; screen-share toggle
 - [ ] Lantern in dark places (dark-theme detection thresholds)
-- [ ] Fatal falls → Shade; fight mode; screen-share toggle
-- [ ] Enemies: art feet line and facing, arrivals from the edge / drops / fly-ins, the hit
-      flash, death clips and corpse fade, how often they bump him; Zote's spar (charges,
-      going down, getting up)
+- [ ] Fatal falls → Shade
+- [ ] Enemies: feet line and facing, arrivals, hit flash, death and corpse fade, how often
+      they bump him; Zote's spar. _(One Vengefly fight verified in the live logs.)_
+- [ ] Dream Gate: gate size, glow, warp timing
+- [ ] Crystal dash: charge → launch on long runs and off walls; particles (dust, shards)
+- [ ] Unn slug crawl speed and turns; highlighted-text curiosity with real apps
 
-## Recently done (day 2, #51–#80)
+## Recently done
 
-Sit loop; walls and stuck routes; step behind drawn lines; pester; fused poses; thought
-clouds; Geo from minimized windows; Nailsage Sly; strolls climb; deposits reachable,
-mined and relocated (no regrowth); the game's Geo Rock; settled-ledge rule (15 s); shinies;
-cursor play below Geo and visitors; hit markers; map and lantern back; fatal falls;
-Ctrl+Alt+M menu; screen-share toggle; fight mode.
+- Day 2, #51–#80: sit loop; walls and stuck routes; step behind drawn lines; pester; fused
+  poses; thought clouds; Geo from minimized windows; Nailsage Sly; strolls climb; deposits
+  reachable, mined and relocated; the game's Geo Rock; settled-ledge rule; shinies; cursor
+  play below Geo and visitors; hit markers; map and lantern; fatal falls; Ctrl+Alt+M menu;
+  screen-share toggle; fight mode.
+- Day 2 night, #81–#95: roadmap; Hornet's facing; re-sit quirk; crystal dash on runs, from
+  walls, and its charge no longer cancelled; portal Geo showers; regional rocks; particles;
+  Unn slug; highlighted text; Dream Gate; enemies + Zote spar + "Send an enemy"; packed
+  frames; faster nav builds.

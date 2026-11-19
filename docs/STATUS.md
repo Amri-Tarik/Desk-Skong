@@ -1,6 +1,8 @@
 # Desk-Skong — status & roadmap
 
-_Last updated 2026-11-19 (late afternoon): bug-test rounds 1–2 fixed and merged (#51–#62); no open PRs._
+_Last updated 2026-11-19 (night): everything through #95 merged — see the ROADMAP's
+"Recently done" for the night batch (enemies, Dream Gate, regional rocks, slug, particles,
+highlighted text, wall crystal dash, packed frames, faster nav builds); no open PRs._
 
 ## Done (merged to `master`)
 
