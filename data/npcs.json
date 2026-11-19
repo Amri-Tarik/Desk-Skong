@@ -283,6 +283,6 @@
     }
   ],
   "dream": [
-    { "match": [], "thoughts": ["mail password: **********", "bank PIN: ****", "installing bitcoin miner... 3%...", "zipbomb planted.", "10011 1101 00111 00101", "'{title}' (Not Responding)", "deleting System32... 12%...", "uploading browser history... done.", "1 virus found. keeping it.", "webcam: on.", "Update and restart? [Later] [Later] [Later]", "printing everything... all of it...", "battery low... so... tired...", "it is {daypart}. uptime: forever."] }
+    { "match": [], "thoughts": ["mail password: **********", "bank PIN: ****", "installing bitcoin miner... 3%...", "zipbomb planted.", "10011 1101 00111 00101", "'{title}' (Not Responding)", "deleting System32... 12%...", "uploading browser history... done.", "1 virus found. keeping it.", "webcam: on.", "Update and restart? [Later] [Later] [Later]", "printing everything... all of it...", "battery low... so... tired...", "it is {daypart}. uptime: forever.", "warning: 1 bug detected on title bar.", "it's not a bug. it's a feature. it has a nail.", "bug report: it is looking at me.", "debugging... the bug refuses to leave.", "status: WON'T FIX. bug is cute."] }
   ]
 }
