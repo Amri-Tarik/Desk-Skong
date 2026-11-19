@@ -448,7 +448,7 @@ mod tests {
         let t = run(5, 0.0, Mood::default(), &only("map"), 30.0);
         assert_eq!(t.states, vec!["map"]);
         let names: Vec<&str> = t.clips.iter().map(|c| c.1.as_str()).collect();
-        assert!(names.contains(&"Map Update") && names.last() == Some(&"Sit Map Close"), "{names:?}");
+        assert!(names.contains(&"Sit Map Read") && names.last() == Some(&"Sit Map Close"), "{names:?}");
         assert!(t.secs >= 4.5, "a map check lasts its minimum: {:.1}s", t.secs);
     }
 
