@@ -36,13 +36,17 @@ const LAZY_INTERVAL: Duration = Duration::from_millis(1000);
 const NAV_CONTENT_MIN_LEN: f32 = 120.0;
 const NAV_MAX_CONTENT_LEDGES: usize = 40;
 
-/// The terrain the planner sees: everything, minus the least useful content *ledges*.
-fn nav_terrain(t: &Terrain) -> Terrain {
-    use skong_core::terrain::LedgeKind;
+/// The terrain the planner sees: everything, minus the least useful content *ledges*, except
+/// the one the knight stands on: without it no route can start, and every plan from that
+/// ledge fails (he got stuck on a little prompt-box ledge, unable to go anywhere).
+fn nav_terrain(t: &Terrain, standing: Option<skong_core::controller::Support>) -> Terrain {
+    use skong_core::terrain::{Ledge, LedgeKind};
     let mut t = t.clone();
-    let mut content: Vec<_> = t.ledges.iter().filter(|l| l.kind == LedgeKind::Content && l.x1 - l.x0 >= NAV_CONTENT_MIN_LEN).copied().collect();
+    let under = |l: &Ledge| standing.is_some_and(|s| s.kind == l.kind && s.y == l.y && s.x0 == l.x0 && s.x1 == l.x1);
+    let mut content: Vec<_> = t.ledges.iter().filter(|l| l.kind == LedgeKind::Content && l.x1 - l.x0 >= NAV_CONTENT_MIN_LEN && !under(l)).copied().collect();
     content.sort_by(|a, b| (b.x1 - b.x0).total_cmp(&(a.x1 - a.x0)));
     content.truncate(NAV_MAX_CONTENT_LEDGES);
+    content.extend(t.ledges.iter().filter(|l| l.kind == LedgeKind::Content && under(l)).copied());
     t.ledges.retain(|l| l.kind != LedgeKind::Content);
     t.ledges.extend(content);
     t
@@ -89,7 +93,7 @@ impl NavBuilder {
                         }
                     }
                     let (Job::Build(t, ch, _) | Job::Reset(t, ch)) = job;
-                    let t = nav_terrain(&t);
+                    let t = nav_terrain(&t, ch.support);
                     last_build = Some(Instant::now());
                     let start = Instant::now();
                     let g = match prev.as_ref().filter(|_| !reset) {
@@ -137,5 +141,51 @@ impl Drop for NavBuilder {
         if let Some(t) = self.thread.take() {
             let _ = t.join();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use skong_core::controller::{Abilities, CharacterParams};
+    use skong_core::desktop::{DesktopSnapshot, Monitor, WindowInfo};
+    use skong_core::geom::{RectI, Vec2};
+    use skong_core::nav::{NavGoal, TravelStyle};
+    use skong_core::terrain::{ContentLedge, TerrainOptions};
+
+    #[test]
+    fn a_route_can_start_from_a_short_trimmed_content_ledge() {
+        // The user's case: standing on a small ledge in a prompt box (shorter than the
+        // planner's minimum), every plan failed.
+        let mon = Monitor { rect: RectI::new(0, 0, 2560, 1440), work: RectI::new(0, 0, 2560, 1400), primary: true, scale_milli: 1000 };
+        let win = WindowInfo {
+            id: 1,
+            rect: RectI::new(200, 100, 1800, 1400),
+            title: "w".into(),
+            class: String::new(),
+            process: String::new(),
+            pid: 0,
+            maximized: false,
+            fullscreen: false,
+            foreground: false,
+            topmost: false,
+        };
+        let desk = DesktopSnapshot { generation: 1, monitors: vec![mon], windows: vec![win] };
+        let ledges = [ContentLedge { x0: 600, x1: 680, y: 1300, owner: Some(1) }];
+        let t = Terrain::from_desktop_and_content(&desk, &ledges, &[], &TerrainOptions::default());
+        let mut ch = Character::new(CharacterParams::hollow_knight(38.4), Abilities::default(), Vec2::new(640.0, 1290.0));
+        let mut ev = vec![];
+        for _ in 0..240 {
+            ch.step(&Default::default(), &t, 1.0 / 120.0, &mut ev);
+        }
+        assert_eq!(ch.pos.y, 1300.0, "standing on the short ledge");
+        let goal = NavGoal::Point(Vec2::new(1500.0, 1400.0));
+        let trimmed = NavGraph::build(&nav_terrain(&t, None), &ch);
+        // The bug: no surface under him (plans started from the floor below, where he isn't, and
+        // following failed at once).
+        assert!(trimmed.surface_at(&ch).is_none());
+        let kept = NavGraph::build(&nav_terrain(&t, ch.support), &ch);
+        assert!(kept.surface_at(&ch).is_some());
+        assert!(kept.plan(&ch, goal, TravelStyle::Normal).is_some());
     }
 }
