@@ -214,6 +214,10 @@ impl ActLibrary {
         &self.lives[i]
     }
 
+    pub fn life_id(&self, name: &str) -> Option<usize> {
+        self.life_ids.get(name).map(|&(i, _)| i)
+    }
+
     pub fn get(&self, id: ActId) -> &Act {
         &self.acts[id.0 as usize]
     }
@@ -282,6 +286,17 @@ impl ActPlayer {
 
     pub fn is_done(&self) -> bool {
         self.done
+    }
+
+    /// Bias for `life` steps (tired → dozing and nodding, curious → map checks and glances).
+    pub fn set_mood(&mut self, mood: Mood) {
+        self.mood = mood;
+    }
+
+    /// Name of the life state playing, when the current step is a `life` step.
+    pub fn life_state<'a>(&self, acts: &'a ActLibrary) -> Option<&'a str> {
+        let l = acts.get(self.act).steps.get(self.step)?.life?;
+        self.life.as_ref().filter(|_| !self.done).map(|r| r.state_name(acts.life(l)))
     }
 
     /// Gait the current step wants the character to walk with, if any.
@@ -513,7 +528,7 @@ mod tests {
             anim.update(&clips, 1.0 / 120.0, &mut ev);
             p.update(&acts, &clips, &mut anim, 1.0 / 120.0, &ev);
         }
-        assert_eq!(clips.get(anim.clip()).name, "Sitting Asleep");
+        assert_eq!(clips.get(anim.clip()).name, "Sitting Asleep Breathe");
         p.signal(&acts, &clips, &mut anim, "woken");
         assert_eq!(clips.get(anim.clip()).name, "Wake To Sit");
         assert!(!p.interruptible(&acts));

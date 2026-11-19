@@ -5,7 +5,7 @@
       "base": "Sit Idle",
       "states": [
         { "name": "idle", "weight": 4.0, "steps": [ { "clip": "Sit Idle", "hold": [1.5, 4.0] } ] },
-        { "name": "glance", "weight": 2.0, "curious": 1.0, "steps": [ { "clip": "Sit Glance" }, { "clip": "Sit Idle", "hold": [0.5, 1.5] } ] },
+        { "name": "glance", "weight": 2.0, "curious": 1.0, "steps": [ { "clip": "Sit Glance" } ] },
         { "name": "look_down", "weight": 1.0, "tired": 0.5, "steps": [ { "clip": "Sit Look Down" } ] },
         { "name": "lean", "weight": 1.5, "tired": 0.3, "steps": [ { "clip": "Sit Lean" }, { "clip": "Sit Lean Idle", "hold": [3.0, 8.0] }, { "clip": "Sit Lean End" } ] },
         { "name": "map", "weight": 1.0, "curious": 2.0, "tired": -0.7, "steps": [ { "clip": "Sit Map Open" }, { "clip": "Map Update", "repeat": [1, 2] }, { "clip": "Sit Map Close" } ] },
@@ -125,17 +125,18 @@
           "clip": "Sit"
         },
         {
-          "clip": "Sit Idle",
+          "life": "seated",
+          "bias": { "nod": 4.0, "look_down": 2.0, "map": 0.0, "lean": 0.0, "doze": 0.0 },
           "hold": [
             2.0,
-            4.0
+            5.0
           ]
         },
         {
           "clip": "Sit Fall Asleep"
         },
         {
-          "clip": "Sitting Asleep",
+          "clip": "Sitting Asleep Breathe",
           "until": "woken",
           "hold": [
             60.0,
@@ -147,10 +148,11 @@
           "interruptible": false
         },
         {
-          "clip": "Sit Idle",
+          "life": "seated",
+          "bias": { "doze": 0.0, "nod": 0.0, "map": 0.0 },
           "hold": [
-            1.0,
-            2.5
+            1.5,
+            4.0
           ]
         },
         {
@@ -184,6 +186,14 @@
         },
         {
           "clip": "Sit Map Close"
+        },
+        {
+          "life": "seated",
+          "bias": { "map": 5.0, "glance": 1.5 },
+          "hold": [
+            10.0,
+            30.0
+          ]
         },
         {
           "clip": "Get Off"
@@ -267,7 +277,10 @@
           "clip": "TurnToBG"
         },
         {
-          "clip": "Look At King",
+          "clip": "Look At King"
+        },
+        {
+          "clip": "Look At King Idle",
           "hold": [
             2.0,
             5.0
@@ -438,7 +451,7 @@
           "clip": "ToProne"
         },
         {
-          "clip": "Prostrate",
+          "clip": "Prostrate Breathe",
           "hold": [
             3.0,
             8.0

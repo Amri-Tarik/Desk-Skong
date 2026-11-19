@@ -713,6 +713,11 @@ impl Pet {
         }
 
         let d = &self.data;
+        if let Some(p) = self.act.as_mut() {
+            // Seated life: tired → nods and dozes, bored → map checks and glances.
+            let needs = &self.brain.mind().needs;
+            p.set_mood(skong_core::life::Mood { tired: 1.0 - needs.energy, curious: needs.boredom });
+        }
         if intent.cancel_act && self.act.as_ref().is_some_and(|p| p.interruptible(&d.acts)) {
             self.act = None;
         }
