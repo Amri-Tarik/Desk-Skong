@@ -1,6 +1,7 @@
+| Bug-test round 1 (day 2) | Sit loop broken (boredom drives exploration and world events); planner sees every wall again, follower re-plans after 0.5 s of pushing, auto-dives only on straight planned drops; Geo noticed desktop-wide; **step behind drawn lines** (TurnToBG / TurnFromBG) instead of dashing through them; **pester** mode (hops, loops, dash-bys, flicks around the cursor); repeated poses fuse instead of stuttering; thought cloud behind Geo / ? emotes; minimized windows shatter into Geo (once per window per 10 min) | #51 #52 #53 #54 #55 #56 #57 |
 # Desk-Skong — status & roadmap
 
-_Last updated 2026-11-19: Sly the tutor on branch `npc_feat-sly-tutor`._
+_Last updated 2026-11-19 (afternoon): bug-test round 1 fixed and merged (#51–#58); no open PRs._
 
 ## Done (merged to `master`)
 
@@ -15,7 +16,7 @@ _Last updated 2026-11-19: Sly the tutor on branch `npc_feat-sly-tutor`._
 | Props & world | Benches (tray, Ctrl+Alt+B), perching on any window/content edge, seated pose tuned; discoveries in windows (benches, geo deposits, per app, persisted) | #18 #21 #41 |
 | Stakes | Death, the Shade (persisted, clamped, fights back), respawn, Geo coins + wallet (tray tooltip), shattered closed windows, Geo showers, Loot behaviour, spells & nail arts, panel "Stakes" buttons | #40 |
 | Living world (day 2) | NPC visitors (Cornifer, Quirrel, Zote, Elderbug, Hornet) with original lines, speech/thought bubbles, subtle dust-puff portals, Dream Nail on windows/visitors (never mid-talk); discoveries v2 with shared occupancy (no overlaps; coins hop out of props), no hot springs, finds on platforms that lasted ≥ 30 s | #42 #46 |
-| Training (day 3) | **Great Nailsage Sly** visits after the knight has fought (rarer than the others), talks, then runs a short lesson: he draws his nail, announces and demonstrates drills with his own clips (data-driven `demos`), the knight practises (`Train` behaviour: slashes / up / down slashes, jumps, dashes, Great / Cyclone / Dash Slash), Sly praises or corrects, closes and bows out; ends politely when the user types, leaves, or a fullscreen app comes up; mid-air slashes now render | — |
+| Training (day 2) | **Great Nailsage Sly** visits after the knight has fought (rarer than the others), talks, then runs a short lesson: he draws his nail, announces and demonstrates drills with his own clips (data-driven `demos`), the knight practises (`Train` behaviour: slashes / up / down slashes, jumps, dashes, Great / Cyclone / Dash Slash), Sly praises or corrects, closes and bows out; ends politely when the user types, leaves, or a fullscreen app comes up; mid-air slashes now render | #58 |
 | Behaviour (day 2) | Priority tiers (Urgent > Engagement: Shade, Geo, fights, NPC talks > Needs > Ambient), graceful exits (get up, put the map away); seated life (calm breathing idle, map checks, leaning, dozing; minimum holds only where they make sense; mood-driven pace; all seated frames on one seat line); silent knight emote icons (zzz, Geo, !, ?) | #44 #45 #48 |
 | Climbing (day 2) | Explicit wall-climb planning along any wall, shafts, content walls, monitor seams; robust replays and slip memory; 100 % arrival in 300-desktop soak | #43 |
 | Input & safety | Grab-and-throw, clicks/pokes, idle & typing-rate sensing (counts only), single instance, **fullscreen games**: knight moves to a free monitor or vanishes (no CPU) | #22 #26 #36 |
@@ -51,6 +52,10 @@ Nothing — all draft PRs from day 1 were finished and merged on day 2.
 
 ## Known issues
 
+- Not yet seen live (only tested in simulation): step-behind crossings, pester, Sly's lesson (demo
+  arcs vs. nearby windows, his nail vanishing at the bow: no sheathe clip), thought clouds.
+- Training drills only check room on the current ledge; a dash slash near an edge may drop him
+  off (he walks back).
 - If the brain switches behaviour right after he sits (e.g. idle → companion), he may get
   up and sit straight back down (the new behaviour re-requests a seated act). Fix: keep a
   running seated act when the next behaviour wants to sit too.
