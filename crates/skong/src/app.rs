@@ -13,12 +13,13 @@ use skong_core::assets::{Frame, Skin, SpriteBank, SpriteKey, VANILLA};
 use skong_core::effects::EffectSet;
 
 use crate::fx::Fx;
+use crate::gameguard::GameGuard;
 use skong_core::controller::{Abilities, Character, CharacterParams, MoveEvent, MoveInput, MoveState, Side};
 use skong_core::ai::{Navigator, NavStatus, ActCatalog, Activity, AttackDir, Brain, BrainConfig, Cursor, GraphNavigator, Motion, Percepts, Poke, RunningAct, UserActivity};
 use skong_win::input::{self, UserInput};
 
 use crate::grab::Grab;
-use skong_core::geom::Vec2;
+use skong_core::geom::{RectI, Vec2};
 use skong_core::locomotion::Locomotion;
 use skong_core::nav::{NavGoal, TravelStyle};
 use skong_core::terrain::{Terrain, TerrainOptions};
@@ -131,6 +132,14 @@ struct Pet {
     seat_y: Option<f32>,
     benches: Benches,
     fx: Fx,
+    /// Keeps the knight off monitors running a fullscreen game.
+    games: GameGuard,
+    /// Hidden because games cover every monitor.
+    game_hidden: bool,
+    /// Warping off a game monitor: destination work area, once the gate act ends.
+    leaving_for: Option<RectI>,
+    /// Vision state to restore after a game.
+    vision_before_game: bool,
     /// A user-requested trip (go to cursor) is being followed instead of the brain.
     forced_nav: bool,
     /// Seconds a walking act step has been pushing without moving.
@@ -239,6 +248,10 @@ pub fn run(args: &Args) -> Result<()> {
         seat_y: None,
         benches,
         fx,
+        games: GameGuard::new(),
+        game_hidden: false,
+        leaving_for: None,
+        vision_before_game: false,
         forced_nav: false,
         act_blocked: 0.0,
         fx_test: args.fx_test.then_some(0.0),
@@ -338,8 +351,13 @@ impl Pet {
 
         // 1. World: rebuild terrain only when the desktop or the on-screen content changed.
         let desk_changed = self.watcher.poll();
-        if self.content.poll(self.watcher.snapshot(), desk_changed) || desk_changed {
+        let games_changed = self.games.update(self.watcher.snapshot());
+        if games_changed {
+            self.benches.hide_on(&self.games.game_monitors);
+        }
+        if self.content.poll(self.watcher.snapshot(), desk_changed) || desk_changed || games_changed {
             let mut new = self.content.terrain(self.watcher.snapshot(), &self.topts);
+            self.games.filter_terrain(&mut new, self.watcher.snapshot());
             // Content-only changes keep the desktop generation, but the nav graph built from
             // them has different surfaces: give every rebuild its own generation so routes
             // planned on an older graph are re-planned.
@@ -348,6 +366,9 @@ impl Pet {
             self.benches.follow(&self.terrain, &new);
             self.terrain = new;
             self.navb.request(&self.terrain, &self.ch);
+        }
+        if self.game_step() {
+            return Ok(()); // hidden while games cover every monitor
         }
         // Screen activity for the brain (the feed updates it at <= 10 Hz).
         if *self.content.activity() != self.activity {
@@ -531,6 +552,78 @@ impl Pet {
 
     /// One brain tick: gather percepts, apply the intent's acts/signals/attacks, and
     /// return this tick's movement input.
+    /// Keep away from games: warp to a free monitor, or vanish when there is none.
+    /// Returns true while hidden (the rest of the tick is skipped).
+    fn game_step(&mut self) -> bool {
+        let desk = self.watcher.snapshot();
+        let all_taken = !desk.monitors.is_empty() && desk.monitors.iter().all(|m| self.games.is_game_monitor(&m.rect));
+        if self.game_hidden {
+            if all_taken {
+                return true;
+            }
+            if let Some(w) = self.games.free_work_area(desk, self.ch.pos) {
+                log::info!("a monitor is free again: the knight comes back");
+                self.game_hidden = false;
+                self.win.set_visible(true);
+                if self.vision_before_game {
+                    let desk = desk.clone();
+                    self.content.set_enabled(true, &desk);
+                }
+                self.warp_to(w);
+            }
+            return false;
+        }
+        if all_taken {
+            log::info!("games cover every monitor: the knight hides until one is free");
+            self.act = None;
+            self.forced_nav = false;
+            self.nav.stop();
+            self.leaving_for = None;
+            self.win.set_visible(false);
+            self.vision_before_game = self.content.is_enabled();
+            let desk = desk.clone();
+            self.content.set_enabled(false, &desk);
+            self.game_hidden = true;
+            return true;
+        }
+        let on_game = GameGuard::monitor_of(desk, self.ch.pos).is_some_and(|m| self.games.is_game_monitor(&m));
+        if !on_game {
+            self.leaving_for = None;
+            return false;
+        }
+        let Some(dest) = self.games.free_work_area(desk, self.ch.pos) else { return false };
+        match self.leaving_for {
+            // Dream-gate out (when standing), then reappear on the free monitor.
+            None if self.ch.is_grounded() && self.data.acts.id("dreamgate_out").is_some() => {
+                log::info!("game on the knight's monitor: warping to {dest:?}");
+                self.forced_nav = false;
+                self.nav.stop();
+                if let Some(id) = self.data.acts.id("dreamgate_out") {
+                    self.start_act(id);
+                }
+                self.leaving_for = Some(dest);
+            }
+            Some(_) if self.act.is_some() && self.ch.is_grounded() => {}
+            _ => {
+                self.leaving_for = None;
+                self.warp_to(dest);
+            }
+        }
+        false
+    }
+
+    /// Reappear on the floor of `work` (centre) with the dream-gate arrival.
+    fn warp_to(&mut self, work: RectI) {
+        let pos = Vec2::new((work.left + work.right) as f32 * 0.5, work.bottom as f32);
+        self.ch = Character::new(self.ch.params, self.ch.abilities, pos);
+        self.act = None;
+        self.forced_nav = false;
+        self.nav.stop();
+        if let Some(id) = self.data.acts.id("dreamgate_in") {
+            self.start_act(id);
+        }
+    }
+
     /// Follow a user-requested route; hand control back to the brain when it ends.
     fn follow_forced(&mut self, dt: f32) -> MoveInput {
         let input = self.nav.next_input(&self.ch, &self.terrain, dt);
