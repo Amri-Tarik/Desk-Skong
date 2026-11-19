@@ -31,6 +31,12 @@ pub trait Navigator {
     fn stop(&mut self);
     fn status(&self) -> NavStatus;
 
+    /// Kind of the planned move being executed, when the navigator knows (a wall jump means
+    /// sliding on a wall is part of the plan).
+    fn current_move(&self) -> Option<crate::nav::MoveKind> {
+        None
+    }
+
     /// Plan without moving: the travel time and where the route actually ends (planners
     /// may stop at the closest reachable point, e.g. under a ledge a stroll can't mount).
     /// `end: None` = this navigator can't tell; the default only knows the eta.
@@ -115,6 +121,10 @@ impl GraphNavigator {
 }
 
 impl Navigator for GraphNavigator {
+    fn current_move(&self) -> Option<crate::nav::MoveKind> {
+        self.follower.as_ref().and_then(|f| f.current_move())
+    }
+
     fn reach(&mut self, from: &Character, goal: NavGoal, style: TravelStyle) -> Option<Reach> {
         let r = self.graph.as_ref()?.plan(from, goal, style)?;
         Some(Reach { eta: r.eta, end: Some(r.end) })

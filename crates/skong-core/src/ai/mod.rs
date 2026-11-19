@@ -669,11 +669,12 @@ impl Brain {
     }
 
     /// Walking into a wall: pressing a direction without moving, or sliding down a wall on
-    /// a stroll (strolls never wall-jump). Stop, give up that goal for a while, turn away.
+    /// a stroll that isn't climbing it. Stop, give up that goal for a while, turn away.
     fn unstick(&mut self, nav: &mut dyn Navigator) {
         let unintended_wall = self.senses.wall_slide
             && match self.last_motion {
-                Motion::Navigate { style, .. } => style == TravelStyle::Stroll,
+                // Strolls only slide on a wall by mistake, unless the route is climbing it.
+                Motion::Navigate { style, .. } => style == TravelStyle::Stroll && nav.current_move() != Some(crate::nav::MoveKind::WallJump),
                 Motion::Direct(_) => !matches!(self.active, Active::Battle(_)),
                 Motion::Hold => false,
             };

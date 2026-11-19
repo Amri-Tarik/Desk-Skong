@@ -68,7 +68,7 @@ impl TravelStyle {
     /// Can this style use `edge`?
     pub fn allows(self, edge: &Edge) -> bool {
         match self {
-            TravelStyle::Stroll => edge.gait == Gait::Walk && matches!(edge.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::Jump | MoveKind::Behind),
+            TravelStyle::Stroll => edge.gait == Gait::Walk && !matches!(edge.kind, MoveKind::Dash | MoveKind::ShadowDash | MoveKind::Superdash),
             TravelStyle::Normal => edge.kind != MoveKind::Superdash,
             TravelStyle::Hurry => true,
         }

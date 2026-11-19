@@ -155,11 +155,12 @@ fn jumps_up_to_a_ledge_within_single_jump_height() {
 }
 
 #[test]
-fn double_jump_ledge_needs_more_than_a_stroll() {
-    // Floating 600 px above the ground: beyond a single jump, within a double jump.
+fn double_jump_ledge_strolls_and_runs_with_a_double_jump() {
+    // Floating 600 px above the ground: beyond a single jump, within a double jump. Strolls
+    // have the whole kit but dashes, so they double jump too.
     let t = with_windows(world(), &[(1, RectF::new(800.0, 440.0, 1100.0, 480.0))]);
-    let ch = knight(&t, 300.0, FLOOR);
-    assert!(plan_to(&t, &ch, NavGoal::OnWindow(1), TravelStyle::Stroll).is_none());
+    let mut ch = knight(&t, 300.0, FLOOR);
+    assert_eq!(reach_window(&t, &mut ch, 1, TravelStyle::Stroll), vec![MoveKind::DoubleJump]);
     let mut ch = knight(&t, 300.0, FLOOR);
     assert_eq!(reach_window(&t, &mut ch, 1, TravelStyle::Normal), vec![MoveKind::DoubleJump]);
 }
@@ -190,8 +191,8 @@ fn gap_only_crossable_with_dash() {
 fn tall_wall_climbed_with_wall_jumps() {
     // 900 px tall window standing on the ground: higher than jump + double jump.
     let t = with_windows(world(), &[(1, RectF::new(800.0, 140.0, 1200.0, 1040.0))]);
-    let ch = knight(&t, 300.0, FLOOR);
-    assert!(plan_to(&t, &ch, NavGoal::OnWindow(1), TravelStyle::Stroll).is_none());
+    let mut ch = knight(&t, 300.0, FLOOR);
+    assert_eq!(reach_window(&t, &mut ch, 1, TravelStyle::Stroll), vec![MoveKind::WallJump], "strolls climb too");
     let mut ch = knight(&t, 300.0, FLOOR);
     assert_eq!(reach_window(&t, &mut ch, 1, TravelStyle::Normal), vec![MoveKind::WallJump]);
     let no_claw = Abilities { wall_jump: false, ..Abilities::default() };

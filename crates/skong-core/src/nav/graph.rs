@@ -289,8 +289,11 @@ impl Builder<'_> {
         let walk = p.gait_speed_px(Gait::Walk);
         let run = p.gait_speed_px(Gait::Run);
         let low_enough = rise <= r.step;
+        // Strolls have the whole kit but dashes: walk-offs, jumps, double jumps, wall climbs.
         let stroll = (low_enough && within(gap, r.walk_off(walk, rise)))
-            || (rise < r.jump - 4.0 && within(gap, r.single(walk, rise)));
+            || (rise < r.jump - 4.0 && within(gap, r.single(walk, rise)))
+            || (ab.double_jump && rise < r.jump + r.double - 4.0 && within(gap, r.double(walk, rise)))
+            || (ab.wall_jump && rise > 0.0);
         let dash = if ab.dash { r.dash } else { 0.0 };
         let normal_jump = if ab.double_jump && rise < r.jump + r.double - 4.0 {
             within(gap, r.double(run, rise) + dash)
@@ -380,10 +383,10 @@ impl Builder<'_> {
         if tiers[1] {
             out[1] = self.search(Tier::Normal, s, t, region, None, &mut blocked);
         }
-        // Strolling only uses walk / drop / single jump at walking pace: if running could not
-        // connect the pair with those, walking will not either.
-        let basic = |f: &Found| matches!(f.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::DropThrough | MoveKind::Jump | MoveKind::Behind);
-        if tiers[0] && out[1].as_ref().is_some_and(basic) {
+        // Strolling uses everything but dashes, at walking pace: if running could not connect
+        // the pair at all, walking will not either. (A run that dashed may still be walkable
+        // with a climb instead, so any run result is worth a stroll search.)
+        if tiers[0] && out[1].is_some() {
             let hint = out[1].map(|f| f.script.recipe);
             out[0] = self.search(Tier::Stroll, s, t, region, hint, &mut blocked);
         }
@@ -453,7 +456,7 @@ impl Builder<'_> {
             match res {
                 Ok(f) => {
                     let ok = match tier {
-                        Tier::Stroll => matches!(f.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::Jump | MoveKind::Behind),
+                        Tier::Stroll => matches!(f.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::DropThrough | MoveKind::Jump | MoveKind::DoubleJump | MoveKind::WallJump | MoveKind::Behind),
                         Tier::Normal => f.kind != MoveKind::Superdash,
                         Tier::Hurry => true,
                     };
@@ -592,8 +595,8 @@ impl Builder<'_> {
             }
         };
         let Some(jtx) = land(want) else {
-            if tier == Tier::Normal {
-                self.climbs(s, t, &mk, out);
+            if tier != Tier::Hurry {
+                self.climbs(s, t, &mk, tier == Tier::Normal, out);
             }
             return;
         };
@@ -614,9 +617,8 @@ impl Builder<'_> {
                 out.push(jump(false, false, true));
             }
         }
-        if tier == Tier::Stroll {
-            return;
-        }
+        // Strolls climb too (jump, double jump, wall jumps at a walking pace), but never dash.
+        let dashes = tier != Tier::Stroll;
         // Escalate only when height, distance or a wall in the way calls for it: a pair that a
         // plain jump fails for other reasons (something else catches the knight) rarely
         // becomes possible with more power, and every candidate costs a simulation.
@@ -629,7 +631,7 @@ impl Builder<'_> {
             self.walls_between(jdir, jtakeoff, jtx).any(|w| reachable(w) && w.y0 < single_apex + 8.0 && w.y0 > double_apex - 8.0);
         let too_tall =
             shadow && self.walls_between(jdir, jtakeoff, jtx).any(|w| w.kind != WallKind::Monitor && reachable(w) && w.y0 <= double_apex - 8.0);
-        if ab.dash && rise <= r.step && within(gap, dash + r.walk_off(v, rise)) {
+        if dashes && ab.dash && rise <= r.step && within(gap, dash + r.walk_off(v, rise)) {
             let dir = sep.unwrap_or(jdir);
             let takeoff = edge_x(s, dir, r.half) - dir.sign() * (r.half + 2.0);
             let shadow = ab.shadow_dash && self.wall_between(dir, takeoff, jtx, (s.y - r.height, s.y - r.step), true);
@@ -643,20 +645,20 @@ impl Builder<'_> {
             out.push(jump(true, false, false));
         }
         let single_dash = rise < r.jump - 4.0 && !walled(single_apex, shadow);
-        if ab.dash && single_dash && within(gap, r.single(v, rise) + dash) && (!single_reaches || too_tall) {
+        if dashes && ab.dash && single_dash && within(gap, r.single(v, rise) + dash) && (!single_reaches || too_tall) {
             out.push(Script { needs_shadow: too_tall, ..jump(false, true, false) });
         }
         let double_dash = double_ok && !walled(double_apex, shadow);
-        if ab.dash && double_dash && within(gap, r.double(v, rise) + dash) && (!double_reaches || too_tall) {
+        if dashes && ab.dash && double_dash && within(gap, r.double(v, rise) + dash) && (!double_reaches || too_tall) {
             out.push(Script { needs_shadow: too_tall, ..jump(true, true, false) });
         }
-        self.climbs(s, t, &mk, out);
+        self.climbs(s, t, &mk, dashes, out);
     }
 
     /// Wall climbs from `s` up to `t`: for each usable wall (best first), a single-wall climb,
     /// a shaft climb when a facing wall is close, and a dash finish when `t` is far from the
     /// wall line.
-    fn climbs(&self, s: &Surface, t: &Surface, mk: &impl Fn(Recipe, Start, Side, f32, f32) -> Script, out: &mut Vec<Script>) {
+    fn climbs(&self, s: &Surface, t: &Surface, mk: &impl Fn(Recipe, Start, Side, f32, f32) -> Script, dashes: bool, out: &mut Vec<Script>) {
         let r = self.reach;
         if !self.abilities.wall_jump || s.y - t.y <= r.step {
             return;
@@ -686,7 +688,7 @@ impl Builder<'_> {
             if let Some(other) = shaft {
                 push(Some(cw(&other)), false);
             }
-            if far && self.abilities.dash {
+            if far && dashes && self.abilities.dash {
                 push(None, true);
             }
         }
