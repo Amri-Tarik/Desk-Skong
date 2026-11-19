@@ -116,7 +116,7 @@ impl Default for StakesConfig {
             masks: 5,
             shade_fight_secs: 60.0,
             unreachable_secs: 4.0,
-            loot_range: 2600.0,
+            loot_range: 8000.0,
             victory_geo: [8, 30],
             spells: SpellConfig::default(),
             sources: crate::stakes::GeoSourceConfig::default(),

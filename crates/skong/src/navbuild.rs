@@ -29,26 +29,22 @@ pub struct NavBuilder {
 const COALESCE: Duration = Duration::from_millis(60);
 /// Content-only changes (text streaming, scrolling…) rebuild at most this often.
 const LAZY_INTERVAL: Duration = Duration::from_millis(1000);
-/// Content surfaces shorter than this (px) aren't worth planning routes over; physics still
+/// Content ledges shorter than this (px) aren't worth planning routes over; physics still
 /// lands on them. Keeps busy screens (hundreds of detected lines) from exploding the graph.
+/// Walls are never trimmed: physics enforces every wall, so a planner that didn't know about
+/// one would route the knight straight into it (stuck against a prompt box border).
 const NAV_CONTENT_MIN_LEN: f32 = 120.0;
 const NAV_MAX_CONTENT_LEDGES: usize = 40;
-const NAV_MAX_CONTENT_WALLS: usize = 30;
 
-/// The terrain the planner sees: everything, minus the least useful content geometry.
+/// The terrain the planner sees: everything, minus the least useful content *ledges*.
 fn nav_terrain(t: &Terrain) -> Terrain {
-    use skong_core::terrain::{LedgeKind, WallKind};
+    use skong_core::terrain::LedgeKind;
     let mut t = t.clone();
     let mut content: Vec<_> = t.ledges.iter().filter(|l| l.kind == LedgeKind::Content && l.x1 - l.x0 >= NAV_CONTENT_MIN_LEN).copied().collect();
     content.sort_by(|a, b| (b.x1 - b.x0).total_cmp(&(a.x1 - a.x0)));
     content.truncate(NAV_MAX_CONTENT_LEDGES);
     t.ledges.retain(|l| l.kind != LedgeKind::Content);
     t.ledges.extend(content);
-    let mut walls: Vec<_> = t.walls.iter().filter(|w| w.kind == WallKind::Content && w.y1 - w.y0 >= NAV_CONTENT_MIN_LEN).copied().collect();
-    walls.sort_by(|a, b| (b.y1 - b.y0).total_cmp(&(a.y1 - a.y0)));
-    walls.truncate(NAV_MAX_CONTENT_WALLS);
-    t.walls.retain(|w| w.kind != WallKind::Content);
-    t.walls.extend(walls);
     t
 }
 
