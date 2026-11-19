@@ -1,6 +1,6 @@
 # Desk-Skong — status & roadmap
 
-_Last updated 2026-11-19 (end of the revival session)._
+_Last updated 2026-11-19 (midday): all parked work merged; no open PRs._
 
 ## Done (merged to `master`)
 
@@ -14,32 +14,17 @@ _Last updated 2026-11-19 (end of the revival session)._
 | Brain | Needs/emotions/personality, interest map, purposeful behaviours (companion, watch screen activity, explore & map windows, rest/nap/perch, battle, flee, hide, ride, recover), contextual acts, anti-ping-pong (reachable seats, failure cooldowns, oscillation guard), night lantern | #11 #20 #26 #31 #32 #38 |
 | Props & world | Benches (tray, Ctrl+Alt+B), perching on any window/content edge, seated pose tuned; discoveries in windows (benches, geo deposits, per app, persisted) | #18 #21 #41 |
 | Stakes | Death, the Shade (persisted, clamped, fights back), respawn, Geo coins + wallet (tray tooltip), shattered closed windows, Geo showers, Loot behaviour, spells & nail arts, panel "Stakes" buttons | #40 |
+| Living world (day 2) | NPC visitors (Cornifer, Quirrel, Zote, Elderbug, Hornet) with original lines, speech/thought bubbles, subtle dust-puff portals, Dream Nail on windows/visitors (never mid-talk); discoveries v2 with shared occupancy (no overlaps; coins hop out of props), no hot springs, finds on platforms that lasted ≥ 30 s | #42 #46 |
+| Behaviour (day 2) | Priority tiers (Urgent > Engagement: Shade, Geo, fights, NPC talks > Needs > Ambient), graceful exits (get up, put the map away); seated life (calm breathing idle, map checks, leaning, dozing; minimum holds only where they make sense; mood-driven pace; all seated frames on one seat line); silent knight emote icons (zzz, Geo, !, ?) | #44 #45 #48 |
+| Climbing (day 2) | Explicit wall-climb planning along any wall, shafts, content walls, monitor seams; robust replays and slip memory; 100 % arrival in 300-desktop soak | #43 |
 | Input & safety | Grab-and-throw, clicks/pokes, idle & typing-rate sensing (counts only), single instance, **fullscreen games**: knight moves to a free monitor or vanishes (no CPU) | #22 #26 #36 |
 
-## In flight (parked as draft PRs — see each PR for remaining steps)
+## In flight
 
-| Branch | Goal | PR |
-|---|---|---|
-| `path_wall-climbing` | Explicit wall-climb planning along any wall (single wall, shafts, content walls, monitor seam), perturbed-start validation + backup climbs, follower retries/avoids failing hops, auto-dive gated during climbs, overlay draws climbs. Soak: 100 % of planned routes arrive. **Left:** the last pruning step regressed coverage (unreachable window tops 12→18 at scale 0.6, 7→23 at 1.0) — bisect its three changes; final timings | [#43](https://github.com/Amri-Tarik/Desk-Skong/pull/43) (draft) |
-| `npc_visitors` | 5 visitors (Cornifer, Quirrel, Zote, Elderbug, Hornet) with original lines, speech/thought bubbles, `Greet` behaviour, subtle dust-puff portals (Geo showers use them), Dream Nail on windows and (after a talk) on visitors. Live-tested. Left: map `Greet` → Engagement tier, use shared occupancy, rethink the knight's own thought bubbles under the "silent knight" rule | [#42](https://github.com/Amri-Tarik/Desk-Skong/pull/42) (draft) |
-| `ai_discoveries-v2` | Shared `skong_core::occupancy` (claim/release/is-free/nudge; finds slide or hide on collision, benches outrank deposits), hot springs removed (old saves load fine), finds only on ledges that lasted ≥ 30 s (width-weighted, incl. content lines). Tests pass; not live-checked. **Left:** hook Geo coin settling and tray-bench placement into occupancy, NPC/Shade claims, screenshot check | [#46](https://github.com/Amri-Tarik/Desk-Skong/pull/46) (draft) |
-| `anim_seated-life` | Seated "life" state machine (idle, glance, look down, lean, map check, nod, doze → wake) via act step `{"life": "seated"}`; 8 new composite clips (`Knight.extra.json`: Sit Glance, Sit Lean Idle, Sitting Asleep Breathe, Prostrate Breathe, Look At King Idle…); `rest`/`lean_back` use it. Builds, tests pass. **Left:** `nap`/`read_map` on it, `bow_down`/`gaze_into_screen` → breathe/idle clips, pass mood from the app, state-machine tests, 30 s screenshot check, merge master | [#45](https://github.com/Amri-Tarik/Desk-Skong/pull/45) (draft) |
-| `ai_priority-tiers` | Behaviour tiers: Urgent > Engagement (Shade, Geo, fights; NPC `Greet` is a one-line addition) > Needs (only when critical) > Ambient (sitting…), immediate preemption, `Intent.exit_act` for graceful exits. **WIP — 9 ai tests fail**: Battle's 0.25 "invite" baseline makes Engagement almost always top-tier (make Battle eligible only when actually invited / raise the engagement eligibility threshold). Left: exit acts in acts.json, app handling of `exit_act`, tier tests; not yet merged with master | [#44](https://github.com/Amri-Tarik/Desk-Skong/pull/44) (draft) |
-
-Suggested order tomorrow (each needs `git merge origin/master` first):
-1. **#45 seated life** and **#46 discoveries v2** — finish their small leftovers, merge.
-2. **#42 NPC visitors** — adopt occupancy, merge.
-3. **#44 priority tiers** — fix the Battle-eligibility test failures, add exit acts + app
-   handling, map `Greet` to Engagement, merge.
-4. **#43 wall climbing** — bisect the coverage regression, record timings, merge.
-5. Backlog: knight emote icons first.
-
-Worktrees for these branches live in `E:/Data/Desk-Skong-wt/<branch>`.
+Nothing — all draft PRs from day 1 were finished and merged on day 2.
 
 ## Backlog (agreed ideas, not started)
 
-- **Knight emote icons instead of speech** — he's silent in-game: zzz (tired), Geo icon
-  (greed/excitement), "!" (surprise), "?" (curious); NPCs keep speech bubbles.
 - Crystal dash in the planner beyond gap crossing (long flat runs, wall-launched).
 - Geo showers through the (subtle) portal; tray/panel trigger for visits.
 - Ability progression (earn dash/wings/claw/crystal heart with the game's Collect
@@ -65,6 +50,11 @@ Worktrees for these branches live in `E:/Data/Desk-Skong-wt/<branch>`.
 
 ## Known issues
 
-- Wall scaling is unreliable on tall single walls/shafts until `path_wall-climbing` lands.
+- If the brain switches behaviour right after he sits (e.g. idle → companion), he may get
+  up and sit straight back down (the new behaviour re-requests a seated act). Fix: keep a
+  running seated act when the next behaviour wants to sit too.
+- Nav graph builds are 26–72 % slower than before climbing on a 30-window stress desktop
+  (background thread; ~3 ms median on realistic desktops). Next lever: share climb outcomes
+  per source/wall across targets.
 - Under `--capturable` (debug), vision can see our own effects/props.
 - Rotated monitors get no content terrain.
