@@ -3,7 +3,7 @@
 //! Reference numbers at this scale (see `controller::params`): body 32 x 82 px, single jump
 //! 379 px, jump + double jump 758 px, dash 320 px, Run jump + double jump flat ~996 px.
 use super::*;
-use crate::controller::{Abilities, CharacterParams, MoveInput, MoveState};
+use crate::controller::{Abilities, CharacterParams, MoveEvent, MoveInput, MoveState};
 use crate::desktop::{DesktopSnapshot, Monitor, WindowInfo};
 use crate::geom::{RectF, RectI};
 use crate::terrain::{Facing, Ledge, LedgeKind, TerrainOptions, Wall, WallKind, WindowBox};
@@ -185,6 +185,89 @@ fn gap_only_crossable_with_dash() {
     let no_dash = Abilities { dash: false, shadow_dash: false, superdash: false, ..Abilities::default() };
     let ch = knight_with(&t, 300.0, 0.0, no_dash);
     assert!(plan_to(&t, &ch, NavGoal::OnWindow(2), TravelStyle::Hurry).is_none());
+}
+
+// ------------------------------------------------------------------ crystal dash on level runs
+//
+// At this scale sprinting is 640 px/s and a crystal dash 1920 px/s, after a 0.8 s charge:
+// the dash pays off from ~960 px of level run (`search::superdash_break_even`).
+
+/// Follow `style` to a point on the floor of [`world`]; returns the route and the seconds taken.
+fn run_to(t: &Terrain, from_x: f32, to_x: f32, style: TravelStyle) -> (Route, f32) {
+    let mut ch = knight(t, from_x, FLOOR);
+    let g = NavGraph::build(t, &ch);
+    let goal = NavGoal::Point(Vec2::new(to_x, FLOOR));
+    let route = g.plan(&ch, goal, style).expect("route");
+    let mut f = PathFollower::new(route.clone(), goal, style);
+    let mut ev = vec![];
+    for tick in 0..(20.0 / DT) as usize {
+        let (input, status) = f.next_input(&ch, &g, t, DT);
+        if status != FollowStatus::Moving {
+            assert_eq!(status, FollowStatus::Arrived, "{style:?} {:?} at {:?}", route.moves, ch.pos);
+            assert!((ch.pos.x - to_x).abs() <= 6.0 && ch.pos.y == FLOOR, "{style:?} ended at {:?}", ch.pos);
+            return (route, tick as f32 * DT);
+        }
+        ev.clear();
+        ch.step(&input, t, DT, &mut ev);
+        assert!(!ev.iter().any(|e| matches!(e, MoveEvent::Landed { hard: true })), "hard landing");
+    }
+    panic!("{style:?} {:?}: never arrived, at {:?}", route.moves, ch.pos);
+}
+
+#[test]
+fn hurry_crystal_dashes_along_a_long_floor() {
+    let t = world();
+    for (from, to) in [(100.0, 1800.0), (1800.0, 100.0), (100.0, 1300.0)] {
+        let (route, secs) = run_to(&t, from, to, TravelStyle::Hurry);
+        assert_eq!(route.moves, vec![MoveKind::Superdash], "{from} -> {to}");
+        // Launched right where he stands, not from the end of the floor.
+        let e = route.edges().next().expect("edge");
+        assert!((e.takeoff - from).abs() < 1.0, "takeoff {}", e.takeoff);
+        let sprint = (to - from).abs() / (10.0 * PPU);
+        assert!(secs < sprint - 0.2, "{from} -> {to}: {secs:.2} s, sprinting takes {sprint:.2} s");
+    }
+    // Too short a run for the charge to pay off: he just sprints.
+    let (route, _) = run_to(&t, 100.0, 800.0, TravelStyle::Hurry);
+    assert!(route.moves.is_empty(), "{:?}", route.moves);
+}
+
+#[test]
+fn only_hurry_crystal_dashes() {
+    let t = world();
+    for style in [TravelStyle::Stroll, TravelStyle::Normal] {
+        let (route, _) = run_to(&t, 100.0, 1800.0, style);
+        assert!(route.moves.is_empty(), "{style:?}: {:?}", route.moves);
+    }
+    // Not even where nothing else gets there (a gap only a crystal dash spans).
+    let t = high_platforms(3200.0, 1500.0);
+    let ch = knight(&t, 300.0, 0.0);
+    let g = NavGraph::build(&t, &ch);
+    assert!(g.edges().iter().any(|e| e.kind == MoveKind::Superdash && e.from == e.to), "dashes along a ledge");
+    for style in [TravelStyle::Stroll, TravelStyle::Normal] {
+        assert!(g.edges().iter().filter(|e| e.kind == MoveKind::Superdash).all(|e| !style.allows(e)));
+        assert!(g.plan(&ch, NavGoal::OnWindow(2), style).is_none(), "{style:?}");
+    }
+}
+
+#[test]
+fn hurry_crystal_dashes_across_a_long_level_gap() {
+    // Two window tops at the same height, 700 px apart: a running double jump + dash gets
+    // across, but the crystal dash is faster.
+    let a = RectF::new(100.0, 600.0, 700.0, 1040.0);
+    let b = RectF::new(1400.0, 600.0, 2400.0, 1040.0);
+    let t = with_windows(world_sized(2560.0, 1080.0), &[(1, a), (2, b)]);
+    let goal = NavGoal::Point(Vec2::new(2200.0, 600.0));
+    let mut ch = knight(&t, 200.0, 0.0);
+    let g = NavGraph::build(&t, &ch);
+    let (status, route) = follow(&g, &t, &mut ch, goal, TravelStyle::Hurry, 20.0);
+    assert_eq!(status, FollowStatus::Arrived, "{:?} at {:?}", route.moves, ch.pos);
+    assert_eq!(route.moves, vec![MoveKind::Superdash]);
+    assert_eq!(owner_under(&ch), Some(2));
+    assert!((ch.pos.x - 2200.0).abs() <= 6.0, "{:?}", ch.pos);
+    let mut ch = knight(&t, 200.0, 0.0);
+    let (status, route) = follow(&g, &t, &mut ch, goal, TravelStyle::Normal, 20.0);
+    assert_eq!(status, FollowStatus::Arrived);
+    assert!(!route.moves.contains(&MoveKind::Superdash), "{:?}", route.moves);
 }
 
 #[test]
@@ -449,7 +532,9 @@ fn edges_are_consistent() {
         assert!(g.edges_from(s).iter().all(|e| e.from == s));
     }
     for e in g.edges() {
-        assert!(e.to < g.surfaces().len() && e.from != e.to && e.duration > 0.0);
+        // Only a crystal dash along one long surface leads back to its own surface.
+        let along = e.kind == MoveKind::Superdash && e.script.free;
+        assert!(e.to < g.surfaces().len() && (e.from != e.to || along) && e.duration > 0.0);
     }
 }
 

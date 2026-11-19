@@ -6,13 +6,15 @@ use std::collections::BinaryHeap;
 use super::graph::SIM_DT;
 use super::script::{Start, run_up};
 use super::{Edge, MoveKind, NavGoal, NavGraph, Route, RouteStep, SurfaceId, TravelStyle};
-use crate::controller::{Character, MoveInput};
+use crate::controller::{Character, CharacterParams, Gait, MoveInput};
 use crate::geom::Vec2;
 
 /// Fixed overhead per edge (s): prefer fewer moves at equal time.
 const EDGE_COST: f32 = 0.05;
 /// Extra cost (s) for flashy moves in a normal-mood route.
 const FLASHY_COST: f32 = 0.25;
+/// Extra cost (s) of a standing take-off: stopping and settling at it.
+const STAND_COST: f32 = 0.15;
 /// Longest fall predicted when planning from mid-air (s).
 const MAX_FALL: f32 = 4.0;
 /// Point goals: surfaces whose closest point is within this many px of the best are
@@ -28,6 +30,7 @@ pub(super) fn plan(g: &NavGraph, from: &Character, goal: NavGoal, style: TravelS
 pub(super) fn plan_with(g: &NavGraph, from: &Character, goal: NavGoal, style: TravelStyle, extra: &dyn Fn(&Edge) -> f32) -> Option<Route> {
     let (start, start_x) = start_state(g, from)?;
     let v = from.params.gait_speed_px(style.gait());
+    let fly = from.params.superdash_speed_px();
     let n = 1 + g.edges.len();
     let mut cost = vec![f32::INFINITY; n];
     let mut prev = vec![usize::MAX; n];
@@ -50,7 +53,8 @@ pub(super) fn plan_with(g: &NavGraph, from: &Character, goal: NavGoal, style: Tr
                 continue;
             }
             let j = 1 + g.out_start[s] + k;
-            let nc = c + approach_cost(from, e, x, v) + e.duration + penalty(e, style) + extra(e);
+            let launch = launch_x(e, x);
+            let nc = c + approach_cost(from, e, launch, x, v) + duration_from(e, launch, fly) + penalty(e, style) + extra(e);
             if !nc.is_finite() {
                 continue;
             }
@@ -100,7 +104,7 @@ pub(super) fn plan_with(g: &NavGraph, from: &Character, goal: NavGoal, style: Tr
     let mut steps = Vec::new();
     let mut i = last;
     while i != 0 {
-        let e = g.edges[i - 1];
+        let e = launched(g.edges[i - 1], state(prev[i]).1, fly);
         steps.push(RouteStep { edge: e, from: g.surfaces[e.from], to: g.surfaces[e.to] });
         i = prev[i];
     }
@@ -133,19 +137,53 @@ fn start_state(g: &NavGraph, ch: &Character) -> Option<(SurfaceId, f32)> {
     None
 }
 
-/// Time to walk from `x` to the edge's take-off (with a run-up when needed).
-fn approach_cost(ch: &Character, e: &Edge, x: f32, v: f32) -> f32 {
+/// Time to walk from `x` to the take-off `takeoff` (with a run-up when needed).
+fn approach_cost(ch: &Character, e: &Edge, takeoff: f32, x: f32, v: f32) -> f32 {
     let s = e.script;
-    let walk = (s.takeoff - x).abs() / v;
+    let walk = (takeoff - x).abs() / v;
     match s.start {
         Start::Run => {
             let runup = run_up(ch, s.gait);
-            let ahead = (s.takeoff - x) * s.dir.sign();
+            let ahead = (takeoff - x) * s.dir.sign();
             if ahead < runup { walk + 2.0 * (runup - ahead.max(0.0)) / v } else { walk }
         }
-        Start::Stand => walk + 0.15,
+        Start::Stand => walk + STAND_COST,
         Start::Pass => walk,
     }
+}
+
+/// Where `e` leaves from when the knight stands at `x`: its take-off, or for a crystal dash
+/// along a level run ([`Script::free`](super::script::Script::free)) the nearest point of
+/// its launch span (right where he stands, when inside it).
+fn launch_x(e: &Edge, x: f32) -> f32 {
+    let s = &e.script;
+    if s.free { x.clamp(s.back.min(s.takeoff), s.back.max(s.takeoff)) } else { s.takeoff }
+}
+
+/// Duration of `e` taken off at `launch`: a free crystal dash flies further from further
+/// back, at `fly` px/s (its edge duration is for the edge's own take-off).
+fn duration_from(e: &Edge, launch: f32, fly: f32) -> f32 {
+    let s = &e.script;
+    if s.free { e.duration + (s.takeoff - launch) * s.dir.sign() / fly } else { e.duration }
+}
+
+/// `e` as taken off from `x` (what the follower replays and the overlay draws).
+fn launched(mut e: Edge, x: f32, fly: f32) -> Edge {
+    if e.script.free {
+        let launch = launch_x(&e, x);
+        e.duration = duration_from(&e, launch, fly);
+        e.takeoff = launch;
+        e.script.takeoff = launch;
+    }
+    e
+}
+
+/// Shortest level run (px) a crystal dash is worth in a hurry: the charge (plus stopping for
+/// it and the per-move overhead) is fixed time the flight must win back over sprinting.
+pub(super) fn superdash_break_even(p: &CharacterParams) -> f32 {
+    let (sprint, fly) = (p.gait_speed_px(Gait::Sprint), p.superdash_speed_px());
+    let fixed = p.superdash_charge_time + STAND_COST + EDGE_COST;
+    if fly > sprint { fixed / (1.0 / sprint - 1.0 / fly) } else { f32::INFINITY }
 }
 
 fn penalty(e: &Edge, style: TravelStyle) -> f32 {

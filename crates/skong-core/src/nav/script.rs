@@ -68,6 +68,10 @@ pub(crate) struct Script {
     pub needs_shadow: bool,
     /// Walls of a [`Recipe::Climb`].
     pub climb: Option<Climb>,
+    /// A [`Recipe::Superdash`] along a level run: validated charging at `back`, and any
+    /// take-off between `back` and `takeoff` flies the same line to `tx`, so the search
+    /// launches it from wherever the knight stands in that span.
+    pub free: bool,
 }
 
 /// A wall stretch the knight can slide on: line `x`, rows `y0..y1`.
@@ -174,7 +178,7 @@ impl Exec {
     /// Walking (never airborne) across other segments of the source ledge is fine: a ground
     /// dash or walk may pass through a window standing on the floor on its way to `to`.
     pub fn outcome(&mut self, ch: &Character, from: &Surface, to: &Surface) -> Outcome {
-        if to.holds(ch) {
+        if to.holds(ch) && (self.script.recipe != Recipe::Superdash || self.superdash_over(ch)) {
             return Outcome::Done;
         }
         if self.stage == Stage::Approach {
@@ -187,6 +191,15 @@ impl Exec {
         // A superdash that ended (hit a wall, failed to launch) while still over the source.
         let fizzled = self.released && ch.state != MoveState::Superdash;
         if self.airborne || fizzled || !from.shares_ledge(ch) { Outcome::Wrong } else { Outcome::Continue }
+    }
+
+    /// A superdash has flown and stopped at (or past) its target x. Standing on the target is
+    /// not enough: a dash along one surface (or onto a touching one) stands on it while
+    /// charging and while flying.
+    fn superdash_over(&self, ch: &Character) -> bool {
+        let s = self.script;
+        let flying = matches!(ch.state, MoveState::Superdash | MoveState::SuperdashCharge { .. });
+        self.released && !flying && (ch.pos.x - s.tx) * s.dir.sign() >= -ch.size.x * 0.5
     }
 
     /// No further upward impulse will come from the script (falling below the target is final).
