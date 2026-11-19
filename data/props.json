@@ -6,5 +6,14 @@
     { "name": "Hive bed", "sprite": "guardian_bench", "seat": 0.57 },
     { "name": "Fungal sofa", "sprite": "fung_bench_new", "seat": 0.40 },
     { "name": "Tram seat", "sprite": "tram_interior_bench", "seat": 0.38 }
-  ]
+  ],
+  "discoveries": {
+    "$comment": "Art for things found in windows (crates/skong/src/discoveries.rs), exported like the benches. Hot spring: far rim, near rim, surface glow, steam haze, side rocks. Geo deposit: a rock (geo is drawn on).",
+    "spring_back_rim": "hot_spring_layers_0054_01-copy-24",
+    "spring_front_rim": "hot_spring_layers_0055_01-copy-26",
+    "spring_glow": "hot_spring_layers_0033_water_glow",
+    "spring_steam": "hot_spring_layers_0029_Layer-10",
+    "spring_rock": "hot_spring_layers_0019_Layer-16",
+    "deposit_rock": "mines_small_rock"
+  }
 }

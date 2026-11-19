@@ -11,6 +11,7 @@ use crate::terrain::Terrain;
 use super::config::BrainConfig;
 use super::needs::Mind;
 use super::percept::Senses;
+use super::places::PlaceMemory;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PoiKind {
@@ -123,6 +124,8 @@ pub struct InterestMap {
     processes: BTreeMap<String, f32>,
     /// Unreachable targets, skipped until the given time.
     blocked: BTreeMap<PoiKey, f32>,
+    /// Things found in windows (see [`super::places`]).
+    pub(crate) places: PlaceMemory,
 }
 
 impl InterestMap {

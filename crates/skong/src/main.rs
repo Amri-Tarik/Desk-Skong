@@ -8,6 +8,7 @@ mod control;
 mod logring;
 mod overlay;
 mod benches;
+mod discoveries;
 mod fx;
 mod gameguard;
 mod grab;
