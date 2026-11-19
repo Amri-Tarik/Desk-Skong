@@ -339,3 +339,22 @@ fn shade_never_floats_off_screen_and_settles_somewhere_reachable() {
         assert!(areas.iter().any(|a| a.contains(sh.pos)), "{:?}", sh.pos);
     }
 }
+
+#[test]
+fn coins_never_rest_inside_a_claimed_prop() {
+    use crate::occupancy::{ClaimKey, ClaimKind, Occupancy};
+    let t = terrain();
+    let mut occ = Occupancy::default();
+    // A bench on the window ledge (y = 600) spanning x 600..700.
+    occ.claim(ClaimKey::new(ClaimKind::Bench, 1), RectF::new(600.0, 540.0, 700.0, 600.0), 100);
+    let mut g = GeoField::new(3);
+    g.burst(Vec2::new(650.0, 560.0), 30);
+    for _ in 0..900 {
+        g.step(1.0 / 60.0, &t, &[]);
+        g.evict_from(&occ);
+    }
+    assert!(g.coins().iter().all(|c| c.resting), "all settled");
+    for c in g.coins() {
+        assert!(occ.covering(c.pos, 4.0).is_none(), "coin resting inside the bench: {c:?}");
+    }
+}
