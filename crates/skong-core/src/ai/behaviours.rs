@@ -104,10 +104,12 @@ pub enum BehaviourKind {
     DreamGate,
     /// Fight the enemies that wandered in (or spar with a visitor who challenged him).
     Fight,
+    /// A gauntlet's ceremonies: ready himself at the announcement, cheer at the end.
+    Gauntlet,
 }
 
 impl BehaviourKind {
-    pub const ALL: [BehaviourKind; 23] = [
+    pub const ALL: [BehaviourKind; 24] = [
         BehaviourKind::Idle,
         BehaviourKind::Companion,
         BehaviourKind::Watch,
@@ -131,6 +133,7 @@ impl BehaviourKind {
         BehaviourKind::Highlight,
         BehaviourKind::DreamGate,
         BehaviourKind::Fight,
+        BehaviourKind::Gauntlet,
     ];
 
     pub fn label(self) -> &'static str {
@@ -158,6 +161,7 @@ impl BehaviourKind {
             BehaviourKind::Highlight => "highlight",
             BehaviourKind::DreamGate => "dream gate",
             BehaviourKind::Fight => "fight",
+            BehaviourKind::Gauntlet => "gauntlet",
         }
     }
 
@@ -174,6 +178,8 @@ impl BehaviourKind {
             BehaviourKind::ShadeHunt | BehaviourKind::Loot | BehaviourKind::Shiny | BehaviourKind::Greet | BehaviourKind::Train | BehaviourKind::Fight => Tier::Engagement,
             // Only ever for one of those prizes, out of walking reach.
             BehaviourKind::DreamGate => Tier::Engagement,
+            // The gauntlet's announcement and closing cheer, between its fights.
+            BehaviourKind::Gauntlet => Tier::Engagement,
             BehaviourKind::Nap | BehaviourKind::Rest | BehaviourKind::Recover => Tier::Needs,
             // The cursor is a boredom killer (battles, pestering): an ambient pastime, never
             // allowed to interrupt Geo or visitors, and dropped the moment those show up.
@@ -200,6 +206,7 @@ impl BehaviourKind {
                 | BehaviourKind::Loot
                 | BehaviourKind::DreamGate
                 | BehaviourKind::Fight
+                | BehaviourKind::Gauntlet
         )
     }
 }
@@ -1078,6 +1085,7 @@ pub(crate) enum Active {
     Highlight(super::highlight::LookAtHighlight),
     DreamGate(super::dream_gate::DreamGate),
     Fight(Box<super::fight::Fight>),
+    Gauntlet(super::gauntlet::Ceremony),
 }
 
 impl Active {
@@ -1106,6 +1114,7 @@ impl Active {
             Active::Highlight(_) => BehaviourKind::Highlight,
             Active::DreamGate(_) => BehaviourKind::DreamGate,
             Active::Fight(_) => BehaviourKind::Fight,
+            Active::Gauntlet(_) => BehaviourKind::Gauntlet,
         }
     }
 
@@ -1134,6 +1143,7 @@ impl Active {
             Active::Highlight(b) => b.tick(ctx),
             Active::DreamGate(b) => b.tick(ctx),
             Active::Fight(b) => b.tick(ctx),
+            Active::Gauntlet(b) => b.tick(ctx),
         }
     }
 
@@ -1163,6 +1173,7 @@ impl Active {
             Active::Highlight(b) => b.reason(ctx),
             Active::DreamGate(b) => b.reason(),
             Active::Fight(b) => b.reason(),
+            Active::Gauntlet(b) => b.reason(),
         }
     }
 }

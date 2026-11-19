@@ -38,6 +38,7 @@ mod death;
 mod highlight;
 mod dream_gate;
 mod fight;
+mod gauntlet;
 mod interest;
 mod navigator;
 mod needs;
@@ -293,6 +294,8 @@ pub struct Brain {
     oscillations: u32,
     /// Last time he fought (the cursor, the Shade) or swung his nail in earnest.
     last_fight_at: f32,
+    /// The gauntlet ceremony (serial, stage) already done (see `ai::gauntlet`).
+    gauntlet_done: Option<(u32, crate::enemy::GauntletStage)>,
 }
 
 impl Brain {
@@ -338,6 +341,7 @@ impl Brain {
             top_tier: Tier::Ambient,
             oscillations: 0,
             last_fight_at: f32::NEG_INFINITY,
+            gauntlet_done: None,
             cfg,
         }
     }
@@ -968,6 +972,10 @@ impl Brain {
         let wish = if kind == BehaviourKind::DreamGate { self.stakes.gate.wish.take() } else { None };
         let flee_from = if kind == BehaviourKind::Flee { self.flee_from.take().unwrap_or(p.knight.pos) } else { p.knight.pos };
         let death = if kind == BehaviourKind::Dead { self.stakes.pending_death.take() } else { None };
+        let cue = self.senses.gauntlet;
+        if kind == BehaviourKind::Gauntlet {
+            self.gauntlet_done = cue.map(|c| (c.serial, c.stage));
+        }
         let mut ctx = self.ctx(p, nav, out);
         let active = match kind {
             BehaviourKind::Explore => match poi {
@@ -1020,6 +1028,10 @@ impl Brain {
                 None => Active::Idle(Idle::start(&mut ctx)),
             },
             BehaviourKind::Fight => Active::Fight(Box::new(fight::Fight::start(&mut ctx))),
+            BehaviourKind::Gauntlet => match cue {
+                Some(c) => Active::Gauntlet(gauntlet::Ceremony::start(&mut ctx, c)),
+                None => Active::Idle(Idle::start(&mut ctx)),
+            },
         };
         let kind = active.kind();
         log::debug!("brain: {} -> {} ({reason:?})", from.label(), kind.label());
@@ -1276,6 +1288,7 @@ impl Brain {
             (BehaviourKind::Highlight, self.highlight_utility(p)),
             (BehaviourKind::DreamGate, self.dream_gate_utility()),
             (BehaviourKind::Fight, fight),
+            (BehaviourKind::Gauntlet, self.gauntlet_utility(p)),
         ];
         u.extend(self.stakes_utilities(p));
         let calm = self.now < self.calm_until;

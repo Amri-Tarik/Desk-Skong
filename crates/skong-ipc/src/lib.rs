@@ -55,6 +55,8 @@ pub enum Command {
     InviteVisitor,
     /// Let an enemy wander in (debug / for fun).
     SendEnemy,
+    /// Start a gauntlet (waves of enemies, a reward) at the next good moment.
+    StartGauntlet,
     /// The knight dream-nails the window he stands on (thought bubble).
     DreamNail,
     /// Path-find to the cursor (Stroll, or Hurry with the full movement kit).
@@ -327,6 +329,7 @@ mod tests {
             Command::PlaceBenchNearKnight(1),
             Command::SetOverlayLayers(OverlayLayers { terrain: false, nav: true, route: true }),
             Command::ToggleDebugOverlay,
+            Command::StartGauntlet,
             Command::Quit,
         ] {
             round_trip(PanelMsg::Command(c));

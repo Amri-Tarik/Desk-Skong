@@ -1,5 +1,7 @@
 //! Real `data/enemies.json` against the exported clips, the enemy sim on a fake desktop,
 //! and arrival planning.
+mod gauntlet;
+
 use std::path::Path;
 
 use super::*;

@@ -82,6 +82,7 @@ const ID_OVERLAY: u32 = 8;
 const ID_PANEL: u32 = 10;
 const ID_INVITE: u32 = 11;
 const ID_ENEMY: u32 = 21;
+const ID_GAUNTLET: u32 = 22;
 const ID_DREAM: u32 = 12;
 const ID_SHARE: u32 = 14;
 const ID_FIGHT: u32 = 15;
@@ -665,6 +666,8 @@ impl Pet {
                 BehaviourKind::Loot => self.emotes.show(Emote::Geo),
                 BehaviourKind::Flee | BehaviourKind::Greet | BehaviourKind::ShadeHunt => self.emotes.show(Emote::Bang),
                 BehaviourKind::Explore | BehaviourKind::Watch | BehaviourKind::Shiny | BehaviourKind::Highlight => self.emotes.show(Emote::Question),
+                // A gauntlet's announcement: a brief "!" before he readies himself.
+                BehaviourKind::Gauntlet if self.brain.senses().gauntlet.is_some_and(|c| c.stage == skong_core::enemy::GauntletStage::Announce) => self.emotes.show(Emote::Bang),
                 _ => {}
             }
         }
@@ -1210,6 +1213,7 @@ impl Pet {
                 }
                 None => log::warn!("enemies: not loaded"),
             },
+            Command::StartGauntlet => self.start_gauntlet(),
             Command::Discover(_) | Command::ForgetDiscoveries => return self.apply_discovery(c),
             Command::Quit => return Ok(Flow::Quit),
             Command::Stakes(c) => self.apply_stakes(c),
@@ -1273,6 +1277,7 @@ impl Pet {
             MenuItem::check(ID_FIGHT, "Fight the cursor", self.brain.fight_mode()),
             MenuItem::action(ID_INVITE, "Invite a visitor"),
             MenuItem::action(ID_ENEMY, "Send an enemy"),
+            MenuItem::action(ID_GAUNTLET, "Start a gauntlet"),
             MenuItem::action(ID_SHOWER, "Geo shower"),
             MenuItem::action(ID_DREAM, "Dream-nail a window"),
             MenuItem::action(ID_RESPAWN, "Come here (respawn at cursor)"),
@@ -1307,6 +1312,7 @@ impl Pet {
             ID_PANEL => Command::OpenPanel,
             ID_INVITE => Command::InviteVisitor,
             ID_ENEMY => Command::SendEnemy,
+            ID_GAUNTLET => Command::StartGauntlet,
             ID_SHOWER => Command::Stakes(skong_ipc::StakesCommand::SpillGeo),
             ID_DREAM => Command::DreamNail,
             i if (ID_BENCH0..ID_BENCH0 + self.benches.styles.len() as u32).contains(&i) => Command::PlaceBenchNearKnight((i - ID_BENCH0) as usize),

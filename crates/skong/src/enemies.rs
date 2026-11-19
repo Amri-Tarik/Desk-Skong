@@ -1,6 +1,7 @@
 //! App side of enemies: schedules their arrivals (rare, organic; or when the bored knight
 //! asks), picks where they show up, renders each in its own sprite window (vanilla art,
 //! a white flash when struck), applies the knight's blows, and reports bumps and kills.
+//! Also runs gauntlets (waves of enemies and a reward; `skong_core::enemy::gauntlet`).
 //!
 //! The logic lives in `skong_core::enemy`; this module is rendering and plumbing.
 use std::collections::HashMap;
@@ -11,7 +12,7 @@ use skong_core::ai::Foe;
 use skong_core::ai::rng::Rng;
 use skong_core::assets::{Frame, Skin, SpriteBank, SpriteKey};
 use skong_core::canvas::Image;
-use skong_core::enemy::{Enemy, EnemyEnv, EnemySet, EntryKind, plan_arrival};
+use skong_core::enemy::{Enemy, EnemyEnv, EnemySet, EntryKind, GauntletCue, GauntletDirector, GauntletEvent, GauntletWorld, plan_arrival};
 use skong_core::geom::{RectF, Vec2};
 use skong_core::nav::{NavGoal, TravelStyle};
 use skong_core::npc::{VisitConditions, VisitScheduler};
@@ -33,6 +34,25 @@ struct LiveEnemy {
 pub struct EnemyNews {
     /// Bumps the knight took.
     pub hits: u32,
+    /// Gauntlet events (started, wave cleared, completed, aborted...; see
+    /// [`GauntletEvent::name`]).
+    pub gauntlet: Vec<GauntletEvent>,
+    /// A completed gauntlet's reward: burst this much Geo by the knight.
+    pub reward: Option<u32>,
+    /// Gauntlet arrivals dropping in: a subtle dust portal at these feet points.
+    pub puffs: Vec<Vec2>,
+}
+
+/// The knight, as the gauntlet cares.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct KnightState {
+    /// Fighting (enemies, a spar, the cursor) or in a lesson.
+    pub fighting: bool,
+    pub down: bool,
+    /// How hurt he is (0..1).
+    pub hurt: f32,
+    /// He backed off from a fight (knocked about) and leaves enemies alone for now.
+    pub backed_off: bool,
 }
 
 pub struct Enemies {
@@ -55,6 +75,8 @@ pub struct Enemies {
     /// The invitation came from the user (tray / panel): ignore presence and sleep.
     forced: bool,
     hidden: bool,
+    /// Gauntlets (waves of enemies, a reward).
+    gauntlet: Option<GauntletDirector>,
 }
 
 impl Enemies {
@@ -63,6 +85,13 @@ impl Enemies {
         let set = EnemySet::load(&data_dir.join("../enemies.json"), &data_dir.join("animations"), &meta)?;
         let mut rng = Rng::new(seed);
         let sched = VisitScheduler::new(set.schedule, &mut rng);
+        let gauntlet = match GauntletDirector::new(set.gauntlet.clone(), &set) {
+            Ok(g) => Some(g),
+            Err(e) => {
+                log::warn!("gauntlets disabled: {e:#}");
+                None
+            }
+        };
         log::info!(
             "enemies: {} ({}), first in ~{:.0} min of presence",
             set.defs.len(),
@@ -85,6 +114,7 @@ impl Enemies {
             invited: false,
             forced: false,
             hidden: false,
+            gauntlet,
         };
         e.rescale(vanilla, scale)?;
         Ok(e)
@@ -126,6 +156,28 @@ impl Enemies {
         self.forced = true;
     }
 
+    /// Start a gauntlet (the tray / panel): at the next good moment (no other fight, no
+    /// visitor, no fullscreen app, nobody typing hard).
+    pub fn start_gauntlet(&mut self) -> bool {
+        match self.gauntlet.as_mut() {
+            Some(g) => {
+                g.request();
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// The gauntlet under way, for the brain.
+    pub fn gauntlet_cue(&self) -> Option<GauntletCue> {
+        self.gauntlet.as_ref().and_then(|g| g.cue())
+    }
+
+    /// A gauntlet is under way (no visitors meanwhile).
+    pub fn gauntlet_active(&self) -> bool {
+        self.gauntlet.as_ref().is_some_and(|g| g.active())
+    }
+
     /// For the brain.
     pub fn foes(&self) -> Vec<Foe> {
         self.live.iter().filter_map(|l| l.enemy.foe(&self.set, self.ppu)).collect()
@@ -141,6 +193,9 @@ impl Enemies {
         let d = &self.set.defs[l.enemy.def];
         let amount = d.geo[0] + self.rng.next_u32() % (d.geo[1] - d.geo[0] + 1);
         log::info!("enemy: {} is beaten ({amount} geo)", d.display);
+        if let Some(g) = self.gauntlet.as_mut() {
+            g.on_kill(id, &mut self.rng);
+        }
         Some((l.enemy.body(&self.set, self.ppu).center(), amount))
     }
 
@@ -166,8 +221,8 @@ impl Enemies {
     }
 
     /// `knight`: his body (None while dead / hidden). `visitor_present`: someone is
-    /// visiting (no enemies then).
-    pub fn tick(&mut self, dt: f32, w: &World, knight: Option<RectF>, visitor_present: bool) -> EnemyNews {
+    /// visiting (no enemies then). `ks`: what the gauntlet needs to know about him.
+    pub fn tick(&mut self, dt: f32, w: &World, knight: Option<RectF>, visitor_present: bool, ks: KnightState) -> EnemyNews {
         let mut news = EnemyNews::default();
         if self.hidden {
             self.hidden = false;
@@ -183,6 +238,13 @@ impl Enemies {
             log::info!("enemy: a game took its monitor; it is gone");
         }
 
+        // 0. A gauntlet (under way or waiting to start) holds back every other arrival.
+        let gauntlet = self.tick_gauntlet(dt, w, visitor_present, ks, &mut news);
+        if gauntlet && !self.forced {
+            // The bored knight's wish for an enemy is more than granted.
+            self.invited = false;
+        }
+
         // 1. Arrivals: the schedule, invitations, the rest of a group. Never during a visit,
         // a fullscreen app, fast typing, the user away or the knight asleep / held.
         let alive = self.live.iter().filter(|l| l.enemy.alive()).count();
@@ -191,12 +253,12 @@ impl Enemies {
             user_idle_secs: w.user_idle_secs,
             keys_per_sec: w.keys_per_sec,
             fullscreen: w.fullscreen,
-            visitor_present,
+            visitor_present: visitor_present || gauntlet,
             knight_busy: w.knight_busy,
         };
-        let due = self.sched.tick(dt, &VisitConditions { visitor_present: visitor_present || alive >= max || self.pending > 0, ..base }, &mut self.rng);
+        let due = self.sched.tick(dt, &VisitConditions { visitor_present: base.visitor_present || alive >= max || self.pending > 0, ..base }, &mut self.rng);
         let free = self.sched.blocked(&base).is_none();
-        let forced_ok = self.forced && !w.fullscreen && !visitor_present;
+        let forced_ok = self.forced && !w.fullscreen && !visitor_present && !gauntlet;
         if w.graph.is_some() && self.invited && (free || forced_ok) {
             // Invited (the bored knight, the menu): one more, even with a full house.
             self.invited = false;
@@ -236,10 +298,59 @@ impl Enemies {
         news
     }
 
+    /// The gauntlet's tick: start / waves / reward / abort. Returns whether one is under way
+    /// or waiting to start.
+    fn tick_gauntlet(&mut self, dt: f32, w: &World, visitor_present: bool, ks: KnightState, news: &mut EnemyNews) -> bool {
+        let Some(mut g) = self.gauntlet.take() else { return false };
+        let alive: Vec<u32> = self.live.iter().filter(|l| l.enemy.alive() && !l.enemy.dismissed()).map(|l| l.enemy.id).collect();
+        let gw = GauntletWorld {
+            keys_per_sec: w.keys_per_sec,
+            user_idle_secs: w.user_idle_secs,
+            away_secs: self.set.schedule.away_secs,
+            fullscreen: w.fullscreen,
+            visitor_present,
+            others_alive: alive.iter().filter(|&&id| !g.is_member(id)).count(),
+            knight_busy: w.knight_busy,
+            knight_fighting: ks.fighting,
+            knight_down: ks.down,
+            knight_hurt: ks.backed_off || ks.hurt > g.cfg.hurt,
+            knight_at: w.knight.pos,
+            ready: w.graph.is_some(),
+        };
+        let step = g.tick(dt, &gw, &|id| alive.contains(&id), &mut self.rng);
+        for l in self.live.iter_mut().filter(|l| step.dismiss.contains(&l.enemy.id)) {
+            l.enemy.dismiss();
+        }
+        if let Some(def) = step.spawn {
+            let placed = self.spawn_def(w, def);
+            if let Some((id, at, dropped)) = placed {
+                if let Some(l) = self.live.iter_mut().find(|l| l.enemy.id == id) {
+                    l.enemy.hold(g.hold_secs());
+                }
+                if dropped {
+                    news.puffs.push(at);
+                }
+            }
+            g.spawned(placed.map(|p| p.0));
+        }
+        news.reward = step.reward;
+        news.gauntlet.extend(step.events);
+        let busy = g.active() || g.pending().is_some();
+        self.gauntlet = Some(g);
+        busy
+    }
+
     /// Pick an enemy and where it shows up, and let it in.
     fn spawn(&mut self, w: &World) {
         let items: Vec<(usize, f32)> = self.set.defs.iter().enumerate().map(|(i, d)| (i, d.weight)).collect();
-        let Some(def) = self.rng.pick_weighted(&items) else { return };
+        if let Some(def) = self.rng.pick_weighted(&items) {
+            self.spawn_def(w, def);
+        }
+    }
+
+    /// Let an enemy of `def` in at a good spot. Returns its id, where it lands and whether it
+    /// drops in from above (`None`: no good spot right now).
+    fn spawn_def(&mut self, w: &World, def: usize) -> Option<(u32, Vec2, bool)> {
         let ppu = self.ppu;
         let d = &self.set.defs[def];
         // Settled ledges only (no windows being dragged, no scrolling content).
@@ -257,13 +368,13 @@ impl Enemies {
         };
         let Some(at) = plan_arrival(d, &footings, knight.pos, &monitors, ppu, &mut self.rng, &mut reachable) else {
             log::info!("enemy: no good spot for a {} right now", d.display);
-            return;
+            return None;
         };
         let win = match SpriteWindow::new() {
             Ok(win) => win,
             Err(e) => {
                 log::warn!("enemy window: {e:#}");
-                return;
+                return None;
             }
         };
         win.set_click_through(true);
@@ -279,6 +390,7 @@ impl Enemies {
         let area = w.desk.monitor_at(at.at.x as i32, (at.at.y - 1.0) as i32).or(w.desk.primary()).map_or(w.terrain.bounds, |m| m.work.to_f());
         enemy.attach(&EnemyEnv { terrain: w.terrain, knight: None, ppu, area });
         self.live.push(LiveEnemy { enemy, win, drawn: None });
+        Some((id, at.at, at.entry == EntryKind::Drop))
     }
 
     fn draw(&mut self) -> Result<()> {

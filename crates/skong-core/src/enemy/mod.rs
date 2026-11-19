@@ -12,6 +12,8 @@
 //!   without a fullscreen game, reachable for the knight.
 //! * Scheduling reuses [`crate::npc::VisitScheduler`] (presence time, never during
 //!   fullscreen apps or fast typing).
+//! * [`GauntletDirector`] — the gauntlet: waves of enemies, a reward (see [`gauntlet`]).
+pub mod gauntlet;
 mod sim;
 #[cfg(test)]
 mod tests;
@@ -30,6 +32,7 @@ use crate::geom::Vec2;
 use crate::npc::VisitConfig;
 use crate::portal::Footing;
 
+pub use gauntlet::{AbortReason, GauntletConfig, GauntletCue, GauntletDirector, GauntletEvent, GauntletStage, GauntletStep, GauntletTrigger, GauntletWorld};
 pub use sim::{Enemy, EnemyEnv, EnemyPhase, EnemyTick};
 
 /// How an enemy gets around.
@@ -163,6 +166,8 @@ struct EnemiesFile {
     schedule: VisitConfig,
     #[serde(default)]
     rules: EnemyRules,
+    #[serde(default)]
+    gauntlet: GauntletConfig,
     enemies: Vec<EnemyDef>,
 }
 
@@ -191,6 +196,8 @@ pub struct EnemySet {
     pub libs: Vec<ClipLibrary>,
     pub schedule: VisitConfig,
     pub rules: EnemyRules,
+    /// The gauntlet (validated against the roster).
+    pub gauntlet: GauntletConfig,
 }
 
 impl EnemySet {
@@ -222,7 +229,9 @@ impl EnemySet {
         if file.rules.max_alive == 0 || file.rules.group[0] == 0 || file.rules.group[1] < file.rules.group[0] {
             bail!("{}: bad rules", json.display());
         }
-        Ok(EnemySet { defs: file.enemies, clips, lib_of, libs, schedule: file.schedule, rules: file.rules })
+        let set = EnemySet { defs: file.enemies, clips, lib_of, libs, schedule: file.schedule, rules: file.rules, gauntlet: file.gauntlet };
+        set.gauntlet.resolve(&set).with_context(|| format!("{}", json.display()))?;
+        Ok(set)
     }
 
     pub fn id(&self, name: &str) -> Option<usize> {
