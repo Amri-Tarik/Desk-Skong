@@ -157,8 +157,12 @@ impl BehaviourKind {
     pub fn tier(self) -> Tier {
         match self {
             BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead => Tier::Urgent,
-            BehaviourKind::Battle | BehaviourKind::Pester | BehaviourKind::ShadeHunt | BehaviourKind::Loot | BehaviourKind::Shiny | BehaviourKind::Greet | BehaviourKind::Train => Tier::Engagement,
+            // Geo and visitors keep him busy: they beat anything cursor-related.
+            BehaviourKind::ShadeHunt | BehaviourKind::Loot | BehaviourKind::Shiny | BehaviourKind::Greet | BehaviourKind::Train => Tier::Engagement,
             BehaviourKind::Nap | BehaviourKind::Rest | BehaviourKind::Recover => Tier::Needs,
+            // The cursor is a boredom killer (battles, pestering): an ambient pastime, never
+            // allowed to interrupt Geo or visitors, and dropped the moment those show up.
+            BehaviourKind::Battle | BehaviourKind::Pester => Tier::Ambient,
             BehaviourKind::Idle | BehaviourKind::Companion | BehaviourKind::Watch | BehaviourKind::Explore | BehaviourKind::Ride | BehaviourKind::Visit => {
                 Tier::Ambient
             }
