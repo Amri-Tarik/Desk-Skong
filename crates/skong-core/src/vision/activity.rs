@@ -17,7 +17,7 @@ pub struct Activity {
 }
 
 /// A connected cluster of changing cells.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ActivitySpot {
     /// Bounding box of the cluster, virtual-desktop px.
     pub rect: RectI,

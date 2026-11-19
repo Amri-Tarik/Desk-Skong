@@ -140,7 +140,7 @@ struct Pet {
     brain_events: Vec<MoveEvent>,
     /// Input applied on the last physics step (the brain notices walking into walls).
     last_input: MoveInput,
-    /// Screen activity for the brain (empty until the vision feed provides it).
+    /// Screen activity for the brain, mirrored from the vision feed.
     activity: Activity,
     /// Last brain debug line (behaviour, mood, top utilities).
     brain_debug: String,
@@ -323,6 +323,10 @@ impl Pet {
             self.benches.follow(&self.terrain, &new);
             self.terrain = new;
             self.navb.request(&self.terrain, &self.ch);
+        }
+        // Screen activity for the brain (the feed updates it at <= 10 Hz).
+        if *self.content.activity() != self.activity {
+            self.activity.clone_from(self.content.activity());
         }
 
         // 2. Intent: keyboard in manual mode, otherwise the brain.

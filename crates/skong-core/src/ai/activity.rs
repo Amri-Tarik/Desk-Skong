@@ -1,34 +1,14 @@
 //! Screen activity: where things change on screen, the knight's main source of curiosity.
 //!
-//! [`Activity`] / [`ActivitySpot`] mirror the shape the vision layer exposes
-//! (`skong_core::vision::Activity` via `ContentFeed::activity()`). Until that lands they
-//! are defined here; once it does, replace both with
-//! `pub use crate::vision::{Activity, ActivitySpot};` (same fields).
+//! [`Activity`] / [`ActivitySpot`] are the vision layer's (`skong_core::vision`, delivered
+//! by `ContentFeed::activity()`), re-exported here.
 //!
 //! The [`ActivityTracker`] gives spots an identity across frames (spots are re-detected
 //! every frame with slightly different rects), remembers how long each has been quiet and
 //! how *satiated* the knight is with it, so he watches a spot for a while and then moves on.
 use crate::desktop::WindowId;
 use crate::geom::{RectI, Vec2};
-
-/// One region of the screen that is changing.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct ActivitySpot {
-    pub rect: RectI,
-    pub center: Vec2,
-    /// 0..1: how much / how strongly it changes.
-    pub intensity: f32,
-    /// Seconds it has been active.
-    pub age_secs: f32,
-    /// Window the spot lies in, if any.
-    pub owner: Option<WindowId>,
-}
-
-/// All active spots this frame.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct Activity {
-    pub spots: Vec<ActivitySpot>,
-}
+pub use crate::vision::{Activity, ActivitySpot};
 
 /// Below this intensity a spot counts as quiet.
 pub const QUIET: f32 = 0.12;
