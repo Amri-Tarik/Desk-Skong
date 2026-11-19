@@ -32,7 +32,7 @@ impl Pet {
     fn with_visitors(&mut self, f: impl FnOnce(&mut Visitors, &World, &mut crate::fx::Fx)) {
         let Some(v) = self.visitors.as_mut() else { return };
         let busy = self.grab.held_pos().is_some()
-            || matches!(self.brain.behaviour(), BehaviourKind::Nap | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Flee);
+            || matches!(self.brain.behaviour(), BehaviourKind::Nap | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Flee | BehaviourKind::Fight);
         let (discoveries, terrain) = (&self.discoveries, &self.terrain);
         let settled = |f: &skong_core::portal::Footing| discoveries.settled(terrain, f.owner, f.y, f.x0, f.x1);
         let world = World {

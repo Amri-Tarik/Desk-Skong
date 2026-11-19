@@ -1,0 +1,292 @@
+{
+  "name": "Zombie Basic1",
+  "clips": [
+    {
+      "name": "Attack Anticipate",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 30,
+          "sprite": "z01_attack_v02000"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 31,
+          "sprite": "z01_attack_v02001"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 32,
+          "sprite": "z01_attack_v02002"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 33,
+          "sprite": "z01_attack_v02003"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 34,
+          "sprite": "z01_attack_v02004"
+        }
+      ]
+    },
+    {
+      "name": "Idle",
+      "fps": 10,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 15,
+          "sprite": "idle0000"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 16,
+          "sprite": "idle0001"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 17,
+          "sprite": "idle0002"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 18,
+          "sprite": "idle0003"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 19,
+          "sprite": "idle0004"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 20,
+          "sprite": "idle0005"
+        }
+      ]
+    },
+    {
+      "name": "Walk",
+      "fps": 10,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 21,
+          "sprite": "walk0000"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 22,
+          "sprite": "walk0001"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 23,
+          "sprite": "walk0002"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 24,
+          "sprite": "walk0003"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 25,
+          "sprite": "walk0004"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 26,
+          "sprite": "walk0005"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 27,
+          "sprite": "walk0006"
+        }
+      ]
+    },
+    {
+      "name": "Turn",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 28,
+          "sprite": "turn0000"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 29,
+          "sprite": "turn0001"
+        }
+      ]
+    },
+    {
+      "name": "Fall",
+      "fps": 10,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 6,
+          "sprite": "death0000"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 7,
+          "sprite": "death0001"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 8,
+          "sprite": "death0002"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 9,
+          "sprite": "death0003"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 8,
+          "sprite": "death0002"
+        }
+      ]
+    },
+    {
+      "name": "Attack Lunge",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 35,
+          "sprite": "z01_attack_v02005"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 36,
+          "sprite": "z01_attack_v02006"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 37,
+          "sprite": "z01_attack_v02007"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 38,
+          "sprite": "z01_attack_v02008"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 35,
+          "sprite": "z01_attack_v02005"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 36,
+          "sprite": "z01_attack_v02006"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 37,
+          "sprite": "z01_attack_v02007"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 38,
+          "sprite": "z01_attack_v02008"
+        }
+      ]
+    },
+    {
+      "name": "Attack Cooldown",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 39,
+          "sprite": "z01_attack_v02009"
+        }
+      ]
+    },
+    {
+      "name": "Death Air",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 6,
+          "sprite": "death0000"
+        }
+      ]
+    },
+    {
+      "name": "Death Land",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 7,
+          "sprite": "death0001"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 8,
+          "sprite": "death0002"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 9,
+          "sprite": "death0003"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 10,
+          "sprite": "death0004"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 11,
+          "sprite": "death0005"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 12,
+          "sprite": "death0006"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 13,
+          "sprite": "death0007"
+        },
+        {
+          "collection": "Zombie Basic 1",
+          "sprite_id": 14,
+          "sprite": "death0008"
+        }
+      ]
+    }
+  ]
+}

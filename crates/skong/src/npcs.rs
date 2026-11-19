@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::Result;
-use skong_core::ai::{LessonReport, LessonSignal, Visitor};
+use skong_core::ai::{Foe, LessonReport, LessonSignal, Visitor};
 use skong_core::ai::rng::Rng;
 use skong_core::assets::{Frame, Skin, SpriteBank, SpriteKey};
 use skong_core::bubble::BubbleStyle;
@@ -38,7 +38,8 @@ struct Metrics {
 struct LiveNpc {
     npc: Npc,
     win: SpriteWindow,
-    drawn: Option<(SpriteKey, bool, u8)>,
+    /// Last drawn (frame, mirrored, alpha, flash level).
+    drawn: Option<(SpriteKey, bool, u8, u8)>,
     bubble: Option<BubbleId>,
 }
 
@@ -108,6 +109,8 @@ pub struct Visitors {
     /// Debug (`--dream-test`): seconds until the knight is asked to dream-nail again.
     pub dream_test: Option<f32>,
     dream_wanted: bool,
+    /// Sparring charges that caught the knight since the brain last looked.
+    knight_hits: u32,
 }
 
 const SLASH_CLIP: &str = "DN Slash";
@@ -147,6 +150,7 @@ impl Visitors {
             hidden: false,
             dream_test: None,
             dream_wanted: false,
+            knight_hits: 0,
         };
         v.rescale(vanilla, scale)?;
         Ok(v)
@@ -216,6 +220,11 @@ impl Visitors {
             && let Some(lesson) = Lesson::plan(l, &ctx, &mut self.rng)
         {
             self.live[i].npc.set_lesson(lesson);
+        } else if let Some(s) = &self.set.defs[def].spar
+            && self.rng.chance(s.chance)
+        {
+            // A fighter: the talk ends in a challenge.
+            self.live[i].npc.plan_spar(&self.set);
         }
         let mut events = Vec::new();
         if self.live[i].npc.begin_talk(lines, w.knight.pos.x, &self.set, &mut events) {
@@ -233,6 +242,26 @@ impl Visitors {
             LessonSignal::Stop => self.live[i].npc.end_lesson(&mut events),
         }
         self.handle_events(i, events, w);
+    }
+
+    /// A visitor sparring with the knight, as one of the brain's foes.
+    pub fn foes(&self) -> Vec<Foe> {
+        self.live.iter().filter_map(|l| l.npc.foe(&self.set, self.ppu)).collect()
+    }
+
+    /// Sparring charges that caught the knight since the last call.
+    pub fn take_knight_hits(&mut self) -> u32 {
+        std::mem::take(&mut self.knight_hits)
+    }
+
+    /// The knight's blow lands on his sparring partner `id`.
+    pub fn strike_spar(&mut self, id: u32, damage: u32, from: Vec2, w: &World) {
+        let Some(i) = self.live.iter().position(|l| l.npc.id == id) else { return };
+        let area = self.area_at(self.live[i].npc.pos, w.desk);
+        let env = NpcEnv { terrain: w.terrain, knight: w.knight.pos, ppu: self.ppu, area };
+        if self.live[i].npc.spar_strike(damage, from.x, &self.set, &env) {
+            log::info!("visitor: {} goes down", self.set.defs[self.live[i].npc.def].display);
+        }
     }
 
     /// Hide everything (games on every monitor); the next tick shows it again.
@@ -392,7 +421,7 @@ impl Visitors {
 
     /// A visitor is talking (no dream nails, no unrelated acts meanwhile).
     pub fn conversing(&self) -> bool {
-        self.live.iter().any(|l| matches!(l.npc.phase(), NpcPhase::Talking | NpcPhase::Teaching))
+        self.live.iter().any(|l| matches!(l.npc.phase(), NpcPhase::Talking | NpcPhase::Teaching | NpcPhase::Sparring))
     }
 
     /// The brain aimed its dream nail at visitor `id`.
@@ -498,6 +527,11 @@ impl Visitors {
                     let who = &self.set.defs[self.live[i].npc.def].display;
                     log::info!("visitor: {who}'s lesson {}", if finished { "is over" } else { "was cut short" });
                 }
+                NpcEvent::HitKnight => self.knight_hits += 1,
+                NpcEvent::SparOver { lost } => {
+                    let who = &self.set.defs[self.live[i].npc.def].display;
+                    log::info!("visitor: the spar with {who} is over ({})", if lost { "he lost" } else { "it fizzled out" });
+                }
                 NpcEvent::OpenPortal(at) => {
                     self.portals.push(OpenPortal { portal: Portal::open(PortalSpot { at, owner: None }, self.set.portal_style), guest: None });
                     self.pending_fx.push(at);
@@ -535,13 +569,17 @@ impl Visitors {
             let x = (origin.x - frame.anchor_x(flip)).round() as i32;
             let y = (origin.y - frame.anchor[1]).round() as i32;
             let alpha = (l.npc.alpha.clamp(0.0, 1.0) * 255.0) as u8;
-            if l.drawn != Some((key, flip, alpha)) {
+            // A sparring partner flashes white when struck.
+            let flash = (l.npc.flash.clamp(0.0, 1.0) * 4.0).round() as u8;
+            if l.drawn != Some((key, flip, alpha, flash)) {
+                let flashed = (flash > 0).then(|| crate::enemies::flashed(&frame.image, flash as f32 / 4.0));
+                let img = flashed.as_ref().unwrap_or(&frame.image);
                 if alpha == 255 {
-                    l.win.present_flipped(&frame.image, x, y, flip)?;
+                    l.win.present_flipped(img, x, y, flip)?;
                 } else {
-                    l.win.present_flipped(&faded(&frame.image, alpha), x, y, flip)?;
+                    l.win.present_flipped(&faded(img, alpha), x, y, flip)?;
                 }
-                l.drawn = Some((key, flip, alpha));
+                l.drawn = Some((key, flip, alpha, flash));
             } else {
                 l.win.move_to(x, y)?;
             }
@@ -610,7 +648,7 @@ impl Visitors {
     /// The dream-nailed visitor's inner thought (never over their own speech bubble).
     fn visitor_thought(&mut self, i: usize, w: &World) {
         let l = &self.live[i];
-        if matches!(l.npc.phase(), NpcPhase::Talking | NpcPhase::Teaching) || l.bubble.is_some_and(|b| self.bubbles.is_open(b)) {
+        if matches!(l.npc.phase(), NpcPhase::Talking | NpcPhase::Teaching | NpcPhase::Sparring) || l.bubble.is_some_and(|b| self.bubbles.is_open(b)) {
             return;
         }
         let d = &self.set.defs[l.npc.def];

@@ -24,6 +24,8 @@ pub enum VisitorState {
     Talking,
     /// Teaching the knight after the talk (see [`Visitor::lesson`]).
     Teaching,
+    /// Sparring with the knight after the talk (he is also one of the brain's foes).
+    Sparring,
     Leaving,
 }
 
@@ -218,7 +220,7 @@ impl Greet {
                 }
                 ctx.out.waiting = false;
                 if !talking && act.is_none() {
-                    if v.greeted && !self.dream_decided && v.state != VisitorState::Teaching {
+                    if v.greeted && !self.dream_decided && !matches!(v.state, VisitorState::Teaching | VisitorState::Sparring) {
                         // Afterwards, sometimes: dream-nail them to hear what they really think.
                         self.dream_decided = true;
                         let chance = DREAM_NAIL_CHANCE * (0.5 + ctx.mind.personality.curiosity);

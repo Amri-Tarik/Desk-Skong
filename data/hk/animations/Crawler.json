@@ -1,0 +1,120 @@
+{
+  "name": "Crawler",
+  "clips": [
+    {
+      "name": "walk",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Crawler",
+          "sprite_id": 2,
+          "sprite": "goomba_walk0000"
+        },
+        {
+          "collection": "Crawler",
+          "sprite_id": 3,
+          "sprite": "goomba_walk0001"
+        },
+        {
+          "collection": "Crawler",
+          "sprite_id": 4,
+          "sprite": "goomba_walk0002"
+        },
+        {
+          "collection": "Crawler",
+          "sprite_id": 5,
+          "sprite": "goomba_walk0003"
+        }
+      ]
+    },
+    {
+      "name": "turn",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Crawler",
+          "sprite_id": 1,
+          "sprite": "goomba_turn_r_0000"
+        },
+        {
+          "collection": "Crawler",
+          "sprite_id": 0,
+          "sprite": "goomba_turn_r_0001"
+        }
+      ]
+    },
+    {
+      "name": "idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Crawler",
+          "sprite_id": 2,
+          "sprite": "goomba_walk0000"
+        },
+        {
+          "collection": "Crawler",
+          "sprite_id": 3,
+          "sprite": "goomba_walk0001"
+        },
+        {
+          "collection": "Crawler",
+          "sprite_id": 4,
+          "sprite": "goomba_walk0002"
+        },
+        {
+          "collection": "Crawler",
+          "sprite_id": 5,
+          "sprite": "goomba_walk0003"
+        }
+      ]
+    },
+    {
+      "name": "Death Air",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Crawler",
+          "sprite_id": 11,
+          "sprite": "goomba_death0000"
+        },
+        {
+          "collection": "Crawler",
+          "sprite_id": 10,
+          "sprite": "goomba_death0001"
+        },
+        {
+          "collection": "Crawler",
+          "sprite_id": 8,
+          "sprite": "goomba_death0002"
+        }
+      ]
+    },
+    {
+      "name": "Death Land",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Crawler",
+          "sprite_id": 9,
+          "sprite": "goomba_death0003"
+        },
+        {
+          "collection": "Crawler",
+          "sprite_id": 12,
+          "sprite": "goomba_death0004"
+        }
+      ]
+    }
+  ]
+}

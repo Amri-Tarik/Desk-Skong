@@ -1,7 +1,7 @@
-//! One live visitor: footing, animation and the arrive → wait → talk (→ teach) → leave
-//! cycle.
+//! One live visitor: footing, animation and the arrive → wait → talk (→ teach / spar) →
+//! leave cycle.
 use crate::ai::rng::Rng;
-use crate::ai::{LessonCue, LessonStage, Visitor, VisitorState};
+use crate::ai::{Foe, FoeKind, LessonCue, LessonStage, Visitor, VisitorState};
 use crate::anim::{Animator, ClipId, ClipLibrary, WrapMode};
 use crate::assets::SpriteKey;
 use crate::desktop::WindowId;
@@ -35,6 +35,10 @@ pub enum NpcEvent {
     LessonOver { finished: bool },
     /// Open a dream portal here (portal departures).
     OpenPortal(Vec2),
+    /// A sparring charge caught the knight.
+    HitKnight,
+    /// The spar is over (`lost`: he was beaten; otherwise it fizzled out).
+    SparOver { lost: bool },
     /// Fully gone: drop the visitor.
     Gone,
 }
@@ -46,6 +50,7 @@ pub enum NpcPhase {
     Waiting,
     Talking,
     Teaching,
+    Sparring,
     Leaving,
     Gone,
 }
@@ -67,6 +72,8 @@ enum State {
     Talking { lines: Vec<(String, Option<String>)>, i: usize, t: f32, stage: Stage },
     /// The lesson after the conversation.
     Teaching(Box<Teach>),
+    /// A spar after the conversation.
+    Sparring(Box<Spar>),
     /// After the conversation: a moment before leaving.
     Lingering { left: f32 },
     /// `hold`: seconds of the leave clip still to play before moving / fading.
@@ -137,6 +144,44 @@ impl Teach {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SparStage {
+    /// Saying the challenge.
+    Challenge,
+    /// On guard between charges.
+    Stance,
+    Antic,
+    Charge,
+    Recover,
+    /// Staggered by a blow.
+    Recoil,
+    /// Knocked down (fall clip, then lying there).
+    Down,
+    GetUp,
+    /// Saving face after losing.
+    Concede,
+}
+
+/// A spar in progress.
+#[derive(Clone, Copy, Debug)]
+struct Spar {
+    stage: SparStage,
+    t: f32,
+    len: f32,
+    elapsed: f32,
+    hits_left: u32,
+    /// Charge direction (±1).
+    dir: f32,
+    /// The current charge already caught the knight.
+    hit_done: bool,
+    /// Seconds the knight has been far away.
+    far_for: f32,
+}
+
+/// Seconds Zote lies on the ground before getting up.
+const DOWN_SECS: f32 = 1.4;
+const RECOIL_SECS: f32 = 0.35;
+
 /// Context for one tick.
 pub struct NpcEnv<'a> {
     pub terrain: &'a Terrain,
@@ -170,6 +215,10 @@ pub struct Npc {
     knight_right: bool,
     /// A lesson to teach once the conversation is over.
     lesson: Option<Lesson>,
+    /// Challenge the knight to a spar once the conversation is over.
+    spar_planned: bool,
+    /// White hit flash (sparring), 1 → 0.
+    pub flash: f32,
 }
 
 const FADE_IN: f32 = 0.4;
@@ -209,6 +258,8 @@ impl Npc {
             rng,
             knight_right: false,
             lesson: None,
+            spar_planned: false,
+            flash: 0.0,
         }
     }
 
@@ -218,6 +269,7 @@ impl Npc {
             State::Waiting { .. } | State::Lingering { .. } => NpcPhase::Waiting,
             State::Talking { .. } => NpcPhase::Talking,
             State::Teaching(_) => NpcPhase::Teaching,
+            State::Sparring(_) => NpcPhase::Sparring,
             State::Exit { .. } => NpcPhase::Leaving,
             State::Gone => NpcPhase::Gone,
         }
@@ -237,6 +289,10 @@ impl Npc {
         let d = &set.defs[self.def];
         let c = &set.clips[self.def];
         let clip = self.anim.clip();
+        // Fight clips are side views drawn facing left.
+        if c.spar.as_ref().is_some_and(|s| s.contains(clip)) {
+            return self.looking_right;
+        }
         // Some talk clips are drawn facing the other way than the rest of the art.
         let talk = clip == c.talk || Some(clip) == c.talk_end;
         let base = match d.faces {
@@ -270,11 +326,19 @@ impl Npc {
         self.lesson = Some(lesson);
     }
 
+    /// Challenge the knight to a spar once the conversation is over (needs a `spar` def).
+    pub fn plan_spar(&mut self, set: &NpcSet) {
+        self.spar_planned = set.clips[self.def].spar.is_some();
+    }
+
     /// Leave now (e.g. nobody can reach us, or the app shuts visits off).
     pub fn leave(&mut self, set: &NpcSet, env: &NpcEnv, events: &mut Vec<NpcEvent>) {
         if !matches!(self.state, State::Exit { .. } | State::Gone) {
-            if matches!(self.state, State::Talking { .. } | State::Teaching(_)) {
+            if matches!(self.state, State::Talking { .. } | State::Teaching(_) | State::Sparring(_)) {
                 events.push(NpcEvent::LineDone);
+            }
+            if matches!(self.state, State::Sparring(_)) {
+                events.push(NpcEvent::SparOver { lost: false });
             }
             self.state = self.start_exit(set, env, events);
         }
@@ -289,6 +353,7 @@ impl Npc {
                 (VisitorState::Talking, Some(*i), react)
             }
             State::Teaching(t) => (VisitorState::Teaching, None, t.react()),
+            State::Sparring(_) => (VisitorState::Sparring, None, None),
             _ => {
                 let s = match self.phase() {
                     NpcPhase::Arriving => VisitorState::Arriving,
@@ -321,6 +386,7 @@ impl Npc {
         let c = &set.clips[self.def];
         let lib = set.lib(self.def);
         self.follow(env, dt);
+        self.flash = (self.flash - dt / 0.2).max(0.0);
         let mut anim_events = Vec::new();
         self.anim.update(lib, dt, &mut anim_events);
 
@@ -390,6 +456,7 @@ impl Npc {
             }
             State::Talking { lines, i, t, stage } => self.talk_tick(lines, i, t + dt, stage, set, events),
             State::Teaching(teach) => self.teach_tick(teach, dt, set, env, events),
+            State::Sparring(spar) => self.spar_tick(spar, dt, set, env, events),
             State::Lingering { left } => {
                 if near_knight {
                     self.looking_right = env.knight.x > self.pos.x;
@@ -530,6 +597,7 @@ impl Npc {
                     events.push(NpcEvent::ConversationOver);
                     match self.lesson.take() {
                         Some(lesson) => self.start_lesson(lesson, set, events),
+                        None if std::mem::take(&mut self.spar_planned) => self.start_spar(set, events),
                         None => State::Lingering { left: self.rng.range(3.0, 6.0) },
                     }
                 }
@@ -686,6 +754,195 @@ impl Npc {
             }
         }
         State::Teaching(t)
+    }
+
+    // --- Sparring ---------------------------------------------------------------------
+
+    fn start_spar(&mut self, set: &NpcSet, events: &mut Vec<NpcEvent>) -> State {
+        let (Some(def), Some(clips)) = (set.defs[self.def].spar.as_ref(), set.clips[self.def].spar.as_ref()) else {
+            return State::Lingering { left: self.rng.range(3.0, 6.0) };
+        };
+        let text = def.challenge[self.rng.next_u32() as usize % def.challenge.len()].clone();
+        let len = crate::bubble::read_secs(&text);
+        self.anim.play(set.lib(self.def), clips.taunt, true);
+        self.looking_right = self.knight_right;
+        events.push(NpcEvent::Say { text, secs: len });
+        let s = Spar { stage: SparStage::Challenge, t: 0.0, len, elapsed: 0.0, hits_left: def.hits, dir: 1.0, hit_done: false, far_for: 0.0 };
+        State::Sparring(Box::new(s))
+    }
+
+    /// Sparring and can be struck right now.
+    fn spar_vulnerable(&self) -> bool {
+        matches!(&self.state, State::Sparring(s) if matches!(s.stage, SparStage::Stance | SparStage::Antic | SparStage::Charge | SparStage::Recover | SparStage::Recoil))
+    }
+
+    /// The brain's view of him as a sparring partner (while the spar is on).
+    pub fn foe(&self, set: &NpcSet, ppu: f32) -> Option<Foe> {
+        let State::Sparring(s) = &self.state else { return None };
+        if matches!(s.stage, SparStage::Down | SparStage::GetUp | SparStage::Concede) {
+            return None;
+        }
+        let size = set.defs[self.def].spar.as_ref().map_or([1.0, 2.0], |d| d.size);
+        let half = Vec2::new(size[0], size[1]) * 0.5 * ppu;
+        Some(Foe {
+            id: self.id,
+            kind: FoeKind::Sparring,
+            pos: self.pos - Vec2::new(0.0, half.y),
+            feet: self.pos,
+            half,
+            flying: false,
+            vulnerable: self.spar_vulnerable(),
+            attacking: matches!(s.stage, SparStage::Antic | SparStage::Charge),
+        })
+    }
+
+    /// The knight's blow lands (from `from_x`). Returns `true` when it puts him down.
+    pub fn spar_strike(&mut self, damage: u32, from_x: f32, set: &NpcSet, env: &NpcEnv) -> bool {
+        if !self.spar_vulnerable() {
+            return false;
+        }
+        let Some(clips) = set.clips[self.def].spar.clone() else { return false };
+        let lib = set.lib(self.def);
+        let span = self.spar_span(set, env);
+        let State::Sparring(s) = &mut self.state else { return false };
+        s.hits_left = s.hits_left.saturating_sub(damage.max(1));
+        self.flash = 1.0;
+        let away = if self.pos.x >= from_x { 1.0 } else { -1.0 };
+        self.pos.x = (self.pos.x + away * 0.35 * env.ppu).clamp(span.0, span.1.max(span.0));
+        self.looking_right = away < 0.0;
+        s.t = 0.0;
+        let down = s.hits_left == 0;
+        if down {
+            s.stage = SparStage::Down;
+            s.len = once_secs(lib, clips.fall) + DOWN_SECS;
+            self.anim.play(lib, clips.fall, true);
+        } else {
+            s.stage = SparStage::Recoil;
+            s.len = RECOIL_SECS;
+            self.anim.play(lib, clips.hit, true);
+        }
+        self.resync_rel(env);
+        down
+    }
+
+    /// Where he may charge: his ledge, inside the monitor.
+    fn spar_span(&self, set: &NpcSet, env: &NpcEnv) -> (f32, f32) {
+        let half = 0.5 * set.defs[self.def].spar.as_ref().map_or(1.0, |d| d.size[0]) * env.ppu;
+        env.terrain
+            .ledges
+            .iter()
+            .find(|l| (l.y - self.pos.y).abs() < 1.5 && l.x0 - 1.0 <= self.pos.x && self.pos.x <= l.x1 + 1.0)
+            .map_or((self.pos.x, self.pos.x), |l| (l.x0.max(env.area.left) + half, l.x1.min(env.area.right) - half))
+    }
+
+    /// End a spar that went nowhere: a parting word, then leave as usual.
+    fn spar_fizzle(&mut self, set: &NpcSet, events: &mut Vec<NpcEvent>) -> State {
+        events.push(NpcEvent::LineDone);
+        events.push(NpcEvent::SparOver { lost: false });
+        self.anim.play(set.lib(self.def), set.clips[self.def].idle, false);
+        let mut left = self.rng.range(1.5, 3.0);
+        if let Some(def) = set.defs[self.def].spar.as_ref() {
+            let text = def.abandon[self.rng.next_u32() as usize % def.abandon.len()].clone();
+            let secs = crate::bubble::read_secs(&text);
+            left += secs;
+            events.push(NpcEvent::Say { text, secs });
+        }
+        State::Lingering { left }
+    }
+
+    fn spar_tick(&mut self, mut s: Box<Spar>, dt: f32, set: &NpcSet, env: &NpcEnv, events: &mut Vec<NpcEvent>) -> State {
+        let (Some(def), Some(clips)) = (set.defs[self.def].spar.clone(), set.clips[self.def].spar.clone()) else {
+            return State::Lingering { left: 2.0 };
+        };
+        let lib = set.lib(self.def);
+        let ppu = env.ppu;
+        s.t += dt;
+        s.elapsed += dt;
+        let fighting = !matches!(s.stage, SparStage::Down | SparStage::GetUp | SparStage::Concede);
+        let far = (env.knight.x - self.pos.x).abs() > 14.0 * ppu || (env.knight.y - self.pos.y).abs() > 5.0 * ppu;
+        s.far_for = if far { s.far_for + dt } else { 0.0 };
+        if fighting && (s.elapsed > def.max_secs || s.far_for > 8.0) {
+            return self.spar_fizzle(set, events);
+        }
+        let knight_dx = env.knight.x - self.pos.x;
+        let face_knight = |me: &mut Self| {
+            if knight_dx.abs() > 2.0 {
+                me.looking_right = knight_dx > 0.0;
+            }
+        };
+        let next = |me: &mut Self, s: &mut Spar, stage: SparStage, clip: crate::anim::ClipId, len: f32| {
+            s.stage = stage;
+            s.t = 0.0;
+            s.len = len;
+            me.anim.play(lib, clip, true);
+        };
+        match s.stage {
+            SparStage::Challenge => {
+                face_knight(self);
+                if s.t >= s.len {
+                    events.push(NpcEvent::LineDone);
+                    let len = self.rng.range(def.pause[0], def.pause[1]);
+                    next(self, &mut s, SparStage::Stance, clips.stance, len);
+                }
+            }
+            SparStage::Stance => {
+                face_knight(self);
+                if s.t >= s.len {
+                    next(self, &mut s, SparStage::Antic, clips.antic, once_secs(lib, clips.antic).max(0.2));
+                }
+            }
+            SparStage::Antic => {
+                if s.t >= s.len {
+                    s.dir = if knight_dx >= 0.0 { 1.0 } else { -1.0 };
+                    self.looking_right = s.dir > 0.0;
+                    s.hit_done = false;
+                    next(self, &mut s, SparStage::Charge, clips.attack, def.charge_secs);
+                }
+            }
+            SparStage::Charge => {
+                let span = self.spar_span(set, env);
+                let x = (self.pos.x + s.dir * def.charge_speed * ppu * dt).clamp(span.0, span.1.max(span.0));
+                let stuck = (x - self.pos.x).abs() < 0.01;
+                self.pos.x = x;
+                self.resync_rel(env);
+                let reach = (0.5 * def.size[0] + 0.5) * ppu;
+                if !s.hit_done && (env.knight.x - self.pos.x).abs() < reach && (env.knight.y - self.pos.y).abs() < 1.5 * ppu {
+                    s.hit_done = true;
+                    events.push(NpcEvent::HitKnight);
+                }
+                if s.t >= s.len || stuck {
+                    next(self, &mut s, SparStage::Recover, clips.recover, once_secs(lib, clips.recover).max(0.4));
+                }
+            }
+            SparStage::Recover | SparStage::Recoil => {
+                if s.t >= s.len {
+                    let len = self.rng.range(def.pause[0], def.pause[1]);
+                    next(self, &mut s, SparStage::Stance, clips.stance, len);
+                }
+            }
+            SparStage::Down => {
+                if s.t >= s.len {
+                    next(self, &mut s, SparStage::GetUp, clips.get_up, once_secs(lib, clips.get_up).max(0.2));
+                }
+            }
+            SparStage::GetUp => {
+                if s.t >= s.len {
+                    face_knight(self);
+                    let text = def.lose[self.rng.next_u32() as usize % def.lose.len()].clone();
+                    let len = crate::bubble::read_secs(&text);
+                    events.push(NpcEvent::Say { text, secs: len });
+                    next(self, &mut s, SparStage::Concede, set.clips[self.def].idle, len);
+                }
+            }
+            SparStage::Concede => {
+                if s.t >= s.len {
+                    events.push(NpcEvent::LineDone);
+                    events.push(NpcEvent::SparOver { lost: true });
+                    return State::Lingering { left: self.rng.range(2.0, 3.5) };
+                }
+            }
+        }
+        State::Sparring(s)
     }
 
     /// Ride the owner window; fall onto the next ledge when unsupported.

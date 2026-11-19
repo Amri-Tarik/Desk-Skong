@@ -140,11 +140,23 @@ pub(crate) struct StakesMind {
     pub dying: bool,
     /// Dream Gate state: cooldown and the unreachable prize worth a warp.
     pub gate: super::dream_gate::GateMind,
+    /// Fights with enemies / sparring partners (see [`super::fight`]).
+    pub fight: super::fight::FightMind,
 }
 
 impl StakesMind {
     pub fn new(cfg: &StakesConfig) -> Self {
-        Self { sense: StakesSense::default(), spells: SpellBook::new(&cfg.spells), pending_death: None, shade_ready_at: 0.0, loot_ready_at: 0.0, force_hunt: false, dying: false, gate: Default::default() }
+        Self {
+            sense: StakesSense::default(),
+            spells: SpellBook::new(&cfg.spells),
+            pending_death: None,
+            shade_ready_at: 0.0,
+            loot_ready_at: 0.0,
+            force_hunt: false,
+            dying: false,
+            gate: Default::default(),
+            fight: Default::default(),
+        }
     }
 }
 

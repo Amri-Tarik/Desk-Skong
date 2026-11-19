@@ -37,6 +37,7 @@ mod greet;
 mod death;
 mod highlight;
 mod dream_gate;
+mod fight;
 mod interest;
 mod navigator;
 mod needs;
@@ -64,6 +65,7 @@ pub use battle::{BattleScore, Outcome};
 pub use behaviours::{BehaviourKind, Tier};
 pub use config::{BattleConfig, BoredomConfig, BrainConfig, CompanionConfig, NeedRates, Personality, SereneConfig, TierConfig, WatchConfig};
 pub use dream_gate::{DreamGateConfig, GateWish, Prize};
+pub use fight::{FightConfig, Foe, FoeKind, FoeStrike};
 pub use greet::{STAND_OFF_UNITS, Visitor, VisitorState};
 pub use train::{LessonCue, LessonReport, LessonSignal, LessonStage};
 pub use interest::{InterestMap, Poi, PoiKey, PoiKind, PoiTarget, ScoredPoi};
@@ -149,6 +151,8 @@ pub struct Intent {
     pub attack: Option<Attack>,
     /// Death / respawn / Shade / Geo / spell events for the app.
     pub stakes: Vec<StakeEvent>,
+    /// Blows that landed on enemies / a sparring partner (see [`Brain::see_foes`]).
+    pub strikes: Vec<FoeStrike>,
     /// Face this way (when standing still).
     pub face: Option<Side>,
     pub behaviour: Option<BehaviourKind>,
@@ -187,6 +191,8 @@ pub enum WorldEvent {
     /// A playful chase of the cursor. The brain handles this one itself (it invites a
     /// battle); the app may show a cue.
     CursorChase,
+    /// Let an enemy wander in for him to fight.
+    Enemy,
 }
 
 /// Why the last behaviour switch happened.
@@ -521,7 +527,7 @@ impl Brain {
             Motion::Navigate { style: TravelStyle::Stroll, .. } => 0.1,
         };
         let kind = self.active.kind();
-        let fighting = matches!(kind, BehaviourKind::Battle | BehaviourKind::Pester | BehaviourKind::ShadeHunt)
+        let fighting = matches!(kind, BehaviourKind::Battle | BehaviourKind::Pester | BehaviourKind::ShadeHunt | BehaviourKind::Fight)
             || (kind != BehaviourKind::Train && (out.attack.is_some() || out.stakes.iter().any(|e| matches!(e, StakeEvent::Cast { .. }))));
         if fighting {
             self.last_fight_at = self.now;
@@ -549,12 +555,19 @@ impl Brain {
             || !self.stakes.sense.coins.is_empty()
             || self.interest.shinies.best.is_some()
             || self.interest.highlight.best.is_some()
+            || !self.senses.foes.is_empty()
             || matches!(self.active.kind().tier(), Tier::Engagement | Tier::Urgent);
         if interesting || self.bored_for < b.event_after || self.now < self.next_event_at || s.user_busy || s.user_away || s.fullscreen {
             return;
         }
         let chase_ok = self.cfg.bother_level > 0.0 && self.mind.needs.mischief > 0.3 && s.cursor.is_some();
-        let options = [(WorldEvent::GeoShower, 1.0), (WorldEvent::Visitor, 1.0), (WorldEvent::Shiny, 1.0), (WorldEvent::CursorChase, if chase_ok { 1.0 } else { 0.0 })];
+        let options = [
+            (WorldEvent::GeoShower, 1.0),
+            (WorldEvent::Visitor, 1.0),
+            (WorldEvent::Shiny, 1.0),
+            (WorldEvent::CursorChase, if chase_ok { 1.0 } else { 0.0 }),
+            (WorldEvent::Enemy, if self.now >= self.stakes.fight.ready_at { 1.0 } else { 0.0 }),
+        ];
         let Some(ev) = self.rng.pick_weighted(&options) else { return };
         log::info!("brain: bored stiff with nothing going on; asking the world for {ev:?}");
         if ev == WorldEvent::CursorChase {
@@ -849,6 +862,9 @@ impl Brain {
         let t = &self.cfg.tiers;
         let critical = self.mind.needs.energy < t.critical_energy;
         match kind {
+            // Enemies about: fights come first, Geo and shinies wait (a pile being gathered
+            // is dropped for the fight, then picked up again).
+            BehaviourKind::Loot | BehaviourKind::Shiny | BehaviourKind::Visit if self.fight_utility(p) > 0.0 => Tier::Ambient,
             // Asked to fight: the cursor battle is an engagement, not a pastime.
             BehaviourKind::Battle if self.fight_mode => Tier::Engagement,
             // A geo deposit is Geo: an engagement like loot (other found places, benches, are
@@ -994,6 +1010,7 @@ impl Brain {
                 Some(w) => Active::DreamGate(dream_gate::DreamGate::start(&mut ctx, w)),
                 None => Active::Idle(Idle::start(&mut ctx)),
             },
+            BehaviourKind::Fight => Active::Fight(Box::new(fight::Fight::start(&mut ctx))),
         };
         let kind = active.kind();
         log::debug!("brain: {} -> {} ({reason:?})", from.label(), kind.label());
@@ -1225,6 +1242,9 @@ impl Brain {
         };
         let visit = self.visit_utility();
         let visit = if visit > 0.0 { (visit + 0.25 * bored).min(1.1) } else { 0.0 };
+        // Enemies about: the cursor is no fun now (fight mode included).
+        let fight = self.fight_utility(p);
+        let (battle, pester) = if fight > 0.0 { (0.0, 0.0) } else { (battle, pester) };
 
         let mut u = vec![
             (BehaviourKind::Idle, idle),
@@ -1246,6 +1266,7 @@ impl Brain {
             (BehaviourKind::Shiny, self.shiny_utility(p)),
             (BehaviourKind::Highlight, self.highlight_utility(p)),
             (BehaviourKind::DreamGate, self.dream_gate_utility()),
+            (BehaviourKind::Fight, fight),
         ];
         u.extend(self.stakes_utilities(p));
         let calm = self.now < self.calm_until;

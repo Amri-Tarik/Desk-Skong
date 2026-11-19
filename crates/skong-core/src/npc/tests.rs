@@ -306,3 +306,96 @@ fn a_lesson_cut_short_says_goodbye_and_an_ignored_one_ends() {
     assert!(ev.contains(&NpcEvent::LessonOver { finished: false }), "gave up on an absent student");
     assert_eq!(npc.phase(), NpcPhase::Gone);
 }
+
+fn env_at(t: &Terrain, knight: Vec2) -> NpcEnv<'_> {
+    NpcEnv { terrain: t, knight, ppu: 64.0, area: RectF::new(0.0, 0.0, 1920.0, 1040.0) }
+}
+
+/// Zote, landed on the window top and done talking, about to challenge the knight.
+fn zote_after_talk(s: &NpcSet, t: &Terrain, knight: Vec2, ev: &mut Vec<NpcEvent>) -> Npc {
+    let id = s.id("zote").expect("zote");
+    assert!(s.clips[id].spar.is_some(), "zote spars");
+    let mut npc = Npc::new(1, id, s, Placement { feet: Vec2::new(800.0, 500.0), owner: Some(7), walk_to: None }, 3, 64.0);
+    npc.attach(&env_at(t, knight));
+    for _ in 0..(4.0 / DT) as usize {
+        npc.tick(DT, s, &env_at(t, knight), ev);
+    }
+    assert!(npc.can_talk(), "{:?}", npc.phase());
+    npc.plan_spar(s);
+    assert!(npc.begin_talk(vec![("Halt!".into(), None)], knight.x, s, ev));
+    for _ in 0..(10.0 / DT) as usize {
+        npc.tick(DT, s, &env_at(t, knight), ev);
+        if npc.phase() == NpcPhase::Sparring {
+            break;
+        }
+    }
+    assert_eq!(npc.phase(), NpcPhase::Sparring, "the talk ends in a challenge");
+    npc
+}
+
+#[test]
+fn zote_challenges_spars_goes_down_and_concedes() {
+    let s = set();
+    let t = Terrain::from_desktop(&desk(500), &TerrainOptions::default());
+    let knight = Vec2::new(950.0, 500.0);
+    let mut ev = Vec::new();
+    let mut npc = zote_after_talk(&s, &t, knight, &mut ev);
+    assert_eq!(npc.percept(&s, 64.0).state, VisitorState::Sparring);
+    let f = npc.foe(&s, 64.0).expect("a sparring partner");
+    assert_eq!(f.kind, crate::ai::FoeKind::Sparring);
+    assert!(!f.vulnerable, "not while he is still saying his challenge");
+    // On guard: now he can be struck; his charges catch a knight who stands there.
+    let mut hits = 0;
+    let mut charged = false;
+    for _ in 0..(16.0 / DT) as usize {
+        let mut e = Vec::new();
+        npc.tick(DT, &s, &env_at(&t, knight), &mut e);
+        hits += e.iter().filter(|e| matches!(e, NpcEvent::HitKnight)).count();
+        charged |= npc.foe(&s, 64.0).is_some_and(|f| f.attacking);
+    }
+    assert!(charged && hits >= 1, "he charges at the knight ({hits} hits)");
+    let x0 = npc.pos.x;
+    assert!((400.0..=1200.0).contains(&x0), "never charges off his window: {x0}");
+    // Five blows put him down (no death: he gets up and concedes, then leaves).
+    let hits_needed = s.defs[npc.def].spar.as_ref().unwrap().hits;
+    let mut down = false;
+    let mut blows = 0;
+    for _ in 0..(20.0 / DT) as usize {
+        if npc.foe(&s, 64.0).is_some_and(|f| f.vulnerable) && !down {
+            blows += 1;
+            down = npc.spar_strike(1, knight.x, &s, &env_at(&t, knight));
+            assert!(npc.flash > 0.9, "flashes when struck");
+        }
+        npc.tick(DT, &s, &env_at(&t, knight), &mut ev);
+        if down {
+            break;
+        }
+    }
+    assert!(down && blows == hits_needed as usize, "{blows} blows");
+    assert!(npc.foe(&s, 64.0).is_none(), "down: no longer a foe");
+    ev.clear();
+    for _ in 0..(30.0 / DT) as usize {
+        npc.tick(DT, &s, &env_at(&t, knight), &mut ev);
+    }
+    assert!(ev.contains(&NpcEvent::SparOver { lost: true }));
+    let lose = &s.defs[npc.def].spar.as_ref().unwrap().lose;
+    assert!(ev.iter().any(|e| matches!(e, NpcEvent::Say { text, .. } if lose.contains(text))), "saves face: {ev:?}");
+    assert_eq!(npc.phase(), NpcPhase::Gone, "and leaves");
+}
+
+#[test]
+fn a_spar_the_knight_walks_away_from_fizzles_out() {
+    let s = set();
+    let t = Terrain::from_desktop(&desk(500), &TerrainOptions::default());
+    let mut ev = Vec::new();
+    let mut npc = zote_after_talk(&s, &t, Vec2::new(950.0, 500.0), &mut ev);
+    ev.clear();
+    let far = Vec2::new(1900.0, 1040.0);
+    for _ in 0..(12.0 / DT) as usize {
+        npc.tick(DT, &s, &env_at(&t, far), &mut ev);
+    }
+    assert!(ev.contains(&NpcEvent::SparOver { lost: false }));
+    let abandon = &s.defs[npc.def].spar.as_ref().unwrap().abandon;
+    assert!(ev.iter().any(|e| matches!(e, NpcEvent::Say { text, .. } if abandon.contains(text))));
+    assert!(npc.foe(&s, 64.0).is_none());
+}

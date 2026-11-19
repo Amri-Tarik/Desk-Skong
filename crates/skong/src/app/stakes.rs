@@ -389,6 +389,7 @@ impl Pet {
             WorldEvent::Shiny => self.shiny_requested(),
             // The brain invites the cursor to a battle itself.
             WorldEvent::CursorChase => {}
+            WorldEvent::Enemy => self.invite_enemy(),
         }
     }
 

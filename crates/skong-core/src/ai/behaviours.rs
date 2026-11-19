@@ -102,10 +102,12 @@ pub enum BehaviourKind {
     Highlight,
     /// No route to a prize: plant a dream gate by it and warp there.
     DreamGate,
+    /// Fight the enemies that wandered in (or spar with a visitor who challenged him).
+    Fight,
 }
 
 impl BehaviourKind {
-    pub const ALL: [BehaviourKind; 22] = [
+    pub const ALL: [BehaviourKind; 23] = [
         BehaviourKind::Idle,
         BehaviourKind::Companion,
         BehaviourKind::Watch,
@@ -128,6 +130,7 @@ impl BehaviourKind {
         BehaviourKind::Shiny,
         BehaviourKind::Highlight,
         BehaviourKind::DreamGate,
+        BehaviourKind::Fight,
     ];
 
     pub fn label(self) -> &'static str {
@@ -154,6 +157,7 @@ impl BehaviourKind {
             BehaviourKind::Shiny => "shiny",
             BehaviourKind::Highlight => "highlight",
             BehaviourKind::DreamGate => "dream gate",
+            BehaviourKind::Fight => "fight",
         }
     }
 
@@ -166,7 +170,8 @@ impl BehaviourKind {
         match self {
             BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead => Tier::Urgent,
             // Geo and visitors keep him busy: they beat anything cursor-related.
-            BehaviourKind::ShadeHunt | BehaviourKind::Loot | BehaviourKind::Shiny | BehaviourKind::Greet | BehaviourKind::Train => Tier::Engagement,
+            // Fights rank with visitors, above Geo (by utility within the tier).
+            BehaviourKind::ShadeHunt | BehaviourKind::Loot | BehaviourKind::Shiny | BehaviourKind::Greet | BehaviourKind::Train | BehaviourKind::Fight => Tier::Engagement,
             // Only ever for one of those prizes, out of walking reach.
             BehaviourKind::DreamGate => Tier::Engagement,
             BehaviourKind::Nap | BehaviourKind::Rest | BehaviourKind::Recover => Tier::Needs,
@@ -181,7 +186,21 @@ impl BehaviourKind {
 
     /// Exclusive behaviours end themselves; only urgent challengers may interrupt.
     pub fn exclusive(self) -> bool {
-        matches!(self, BehaviourKind::Nap | BehaviourKind::Battle | BehaviourKind::Pester | BehaviourKind::Train | BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead | BehaviourKind::ShadeHunt | BehaviourKind::Loot | BehaviourKind::DreamGate)
+        matches!(
+            self,
+            BehaviourKind::Nap
+                | BehaviourKind::Battle
+                | BehaviourKind::Pester
+                | BehaviourKind::Train
+                | BehaviourKind::Flee
+                | BehaviourKind::Hide
+                | BehaviourKind::KnockedOut
+                | BehaviourKind::Dead
+                | BehaviourKind::ShadeHunt
+                | BehaviourKind::Loot
+                | BehaviourKind::DreamGate
+                | BehaviourKind::Fight
+        )
     }
 }
 
@@ -1058,6 +1077,7 @@ pub(crate) enum Active {
     Shiny(super::shiny::PickShiny),
     Highlight(super::highlight::LookAtHighlight),
     DreamGate(super::dream_gate::DreamGate),
+    Fight(Box<super::fight::Fight>),
 }
 
 impl Active {
@@ -1085,6 +1105,7 @@ impl Active {
             Active::Shiny(_) => BehaviourKind::Shiny,
             Active::Highlight(_) => BehaviourKind::Highlight,
             Active::DreamGate(_) => BehaviourKind::DreamGate,
+            Active::Fight(_) => BehaviourKind::Fight,
         }
     }
 
@@ -1112,6 +1133,7 @@ impl Active {
             Active::Shiny(b) => b.tick(ctx),
             Active::Highlight(b) => b.tick(ctx),
             Active::DreamGate(b) => b.tick(ctx),
+            Active::Fight(b) => b.tick(ctx),
         }
     }
 
@@ -1140,6 +1162,7 @@ impl Active {
             Active::Shiny(b) => b.reason(),
             Active::Highlight(b) => b.reason(ctx),
             Active::DreamGate(b) => b.reason(),
+            Active::Fight(b) => b.reason(),
         }
     }
 }

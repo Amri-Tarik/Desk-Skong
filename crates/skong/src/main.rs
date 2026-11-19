@@ -10,6 +10,7 @@ mod overlay;
 mod benches;
 mod bubble;
 mod npcs;
+mod enemies;
 mod discoveries;
 mod shinies;
 mod emotes;

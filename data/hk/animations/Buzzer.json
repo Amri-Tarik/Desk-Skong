@@ -1,0 +1,249 @@
+{
+  "name": "Buzzer",
+  "clips": [
+    {
+      "name": "Chase",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Buzzer",
+          "sprite_id": 6,
+          "sprite": "fly0000"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 12,
+          "sprite": "fly0001"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 13,
+          "sprite": "fly0002"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 14,
+          "sprite": "fly0003"
+        }
+      ]
+    },
+    {
+      "name": "Idle",
+      "fps": 12,
+      "loop_start": 3,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Buzzer",
+          "sprite_id": 8,
+          "sprite": "idle_01"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 9,
+          "sprite": "idle_02"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 7,
+          "sprite": "idle_03"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 10,
+          "sprite": "idle_05"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 18,
+          "sprite": "idle_06"
+        }
+      ]
+    },
+    {
+      "name": "Startle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Buzzer",
+          "sprite_id": 17,
+          "sprite": "startle_01"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 11,
+          "sprite": "startle_02"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 16,
+          "sprite": "startle_03"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 15,
+          "sprite": "startle_04"
+        }
+      ]
+    },
+    {
+      "name": "Death Air",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Buzzer",
+          "sprite_id": 2,
+          "sprite": "death0000"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 4,
+          "sprite": "death0001"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 5,
+          "sprite": "death0002"
+        }
+      ]
+    },
+    {
+      "name": "Death Land",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Buzzer",
+          "sprite_id": 3,
+          "sprite": "death0003"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 0,
+          "sprite": "death0004"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 1,
+          "sprite": "death0005"
+        }
+      ]
+    },
+    {
+      "name": "Fly",
+      "fps": 12,
+      "loop_start": 3,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Buzzer",
+          "sprite_id": 6,
+          "sprite": "fly0000"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 12,
+          "sprite": "fly0001"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 13,
+          "sprite": "fly0002"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 14,
+          "sprite": "fly0003"
+        }
+      ]
+    },
+    {
+      "name": "TurnToFly",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Buzzer",
+          "sprite_id": 19,
+          "sprite": "turn001"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 21,
+          "sprite": "turn002"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 6,
+          "sprite": "fly0000"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 12,
+          "sprite": "fly0001"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 13,
+          "sprite": "fly0002"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 14,
+          "sprite": "fly0003"
+        }
+      ]
+    },
+    {
+      "name": "TurnToIdle",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Buzzer",
+          "sprite_id": 19,
+          "sprite": "turn001"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 21,
+          "sprite": "turn002"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 8,
+          "sprite": "idle_01"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 9,
+          "sprite": "idle_02"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 7,
+          "sprite": "idle_03"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 10,
+          "sprite": "idle_05"
+        },
+        {
+          "collection": "Buzzer",
+          "sprite_id": 18,
+          "sprite": "idle_06"
+        }
+      ]
+    }
+  ]
+}
