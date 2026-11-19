@@ -408,7 +408,7 @@ impl Pet {
             self.ch.on_terrain_rebuilt(&self.terrain, &new, &mut self.move_events);
             self.benches.follow(&self.terrain, &new);
             self.terrain = new;
-            self.navb.request(&self.terrain, &self.ch);
+            self.navb.request(&self.terrain, &self.ch, !desk_changed && !games_changed);
         }
         if self.game_step() {
             self.hide_visitors();
