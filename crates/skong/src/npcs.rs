@@ -66,6 +66,9 @@ pub struct World<'a> {
     pub occupancy: &'a Occupancy,
     /// Seconds since the knight last fought (some visitors only come after a fight).
     pub since_fight: f32,
+    /// Has this footing been on screen long enough to arrive on (see
+    /// [`skong_core::lasting::SETTLED_SECS`])? Dragged windows and scrolling content aren't.
+    pub settled: &'a dyn Fn(&Footing) -> bool,
 }
 
 /// Space a visitor (or a portal arrival) needs around its feet `p`, scaled by `ppu`.
@@ -415,15 +418,21 @@ impl Visitors {
                 }
             }
         };
+        let ppu = self.ppu;
+        // Settled ledges only, low enough that the visitor's sprite stays on its monitor.
+        let headroom = |f: &Footing| {
+            let x = (0.5 * (f.x0 + f.x1)) as i32;
+            w.desk.monitors.iter().find(|m| m.rect.contains(x, f.y as i32 - 1)).is_none_or(|m| f.y - 3.6 * ppu >= m.rect.top as f32)
+        };
+        let ok = |f: &Footing| (w.settled)(f) && headroom(f);
         let footings: Vec<Footing> = match w.graph {
-            Some(g) => g.surfaces().iter().map(|s| Footing { x0: s.x0, x1: s.x1, y: s.y, owner: s.owner }).collect(),
-            None => w.terrain.ledges.iter().map(|l| Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner }).collect(),
+            Some(g) => g.surfaces().iter().map(|s| Footing { x0: s.x0, x1: s.x1, y: s.y, owner: s.owner }).filter(|f| ok(f)).collect(),
+            None => w.terrain.ledges.iter().map(|l| Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner }).filter(|f| ok(f)).collect(),
         };
         let knight = w.knight;
-        let ppu = self.ppu;
         let mut reachable = |p: Vec2| w.occupancy.is_free(footprint(p, ppu), None) && w.graph.is_none_or(|g| g.plan(knight, NavGoal::Point(p), TravelStyle::Hurry).is_some());
         let arrive = self.set.defs[def].arrive;
-        let ledges: Vec<Footing> = w.terrain.ledges.iter().map(|l| Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner }).collect();
+        let ledges: Vec<Footing> = w.terrain.ledges.iter().map(|l| Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner }).filter(|f| ok(f)).collect();
         // Nav surfaces first (reachable by construction), raw ledges as a fallback.
         let monitors: Vec<_> = w.desk.monitors.iter().filter(|m| !w.game_monitors.contains(&m.rect)).cloned().collect();
         let at = plan_placement(arrive, &footings, knight.pos, &monitors, &mut self.rng, &mut reachable)

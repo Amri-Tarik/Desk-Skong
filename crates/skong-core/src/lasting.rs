@@ -9,6 +9,11 @@
 use crate::desktop::WindowId;
 use crate::terrain::{Ledge, Terrain};
 
+/// Window ledges must have lasted this long (s) before visitors arrive on them or the
+/// knight sits on them: anything younger may be a window being dragged or content
+/// scrolling past (things ended up floating in the air).
+pub const SETTLED_SECS: f32 = 15.0;
+
 /// A ledge missing this long is forgotten (s): rides out re-detection flicker.
 pub const FORGET_SECS: f32 = 3.0;
 /// Same ledge if within this many px vertically (window-relative).
@@ -65,6 +70,21 @@ impl LedgeAges {
         self.entries.retain(|e| now - e.last <= FORGET_SECS);
     }
 
+    /// Like [`LedgeAges::observe`], but anything new counts as already `age` seconds old (the
+    /// first look at a desktop: what is there was there before anyone looked).
+    pub fn observe_aged(&mut self, terrain: &Terrain, now: f32, age: f32) {
+        self.observe(terrain, now);
+        for e in self.entries.iter_mut().filter(|e| e.first == now) {
+            e.first = now - age;
+        }
+    }
+
+    /// Has `l` been around long enough to stand things on ([`SETTLED_SECS`])? Ledges no
+    /// window owns (monitor floors) always are.
+    pub fn settled(&self, terrain: &Terrain, l: &Ledge, now: f32) -> bool {
+        l.owner.is_none() || self.age(terrain, l, now) >= SETTLED_SECS
+    }
+
     /// Seconds `l` has been on screen (0 if unknown).
     pub fn age(&self, terrain: &Terrain, l: &Ledge, now: f32) -> f32 {
         rel(terrain, l).and_then(|(o, x0, x1, dy)| self.find(o, x0, x1, dy)).map_or(0.0, |i| now - self.entries[i].first)
@@ -114,5 +134,27 @@ mod tests {
         a.observe(&terrain(100.0, 100.0, false), 30.0);
         a.observe(&with, 31.0);
         assert_eq!(a.age(&with, &with.ledges[1], 31.0), 0.0);
+    }
+
+    #[test]
+    fn only_settled_ledges_carry_things_and_the_first_look_counts_as_settled() {
+        // What is on screen when the brain first looks counts as settled at once.
+        let t = terrain(100.0, 100.0, false);
+        let mut a = LedgeAges::default();
+        a.observe_aged(&t, 0.0, SETTLED_SECS);
+        assert!(a.settled(&t, &t.ledges[0], 0.0));
+        // A content line that appears later must last SETTLED_SECS first.
+        let line = terrain(100.0, 100.0, true);
+        for i in 1..=10 {
+            a.observe(&line, i as f32);
+        }
+        assert!(!a.settled(&line, &line.ledges[1], 10.0));
+        for i in 11..=26 {
+            a.observe(&line, i as f32);
+        }
+        assert!(a.settled(&line, &line.ledges[1], 26.0));
+        // Floors (no owner) always are.
+        let floor = Ledge { x0: 0.0, x1: 100.0, y: 1000.0, kind: LedgeKind::Ground, owner: None };
+        assert!(LedgeAges::default().settled(&line, &floor, 0.0));
     }
 }

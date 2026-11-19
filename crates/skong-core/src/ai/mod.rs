@@ -422,6 +422,19 @@ impl Brain {
             self.guard_oscillation(p, nav, &mut out);
         }
         self.interest.observe(self.now, dt, &self.senses, p.desktop, &self.cfg);
+        // Ledge ages (seats must have settled): on every new terrain and every 0.25 s.
+        let generation = p.terrain.generation;
+        match self.interest.ages_seen {
+            None => {
+                self.interest.ages.observe_aged(p.terrain, self.now, crate::lasting::SETTLED_SECS);
+                self.interest.ages_seen = Some((self.now, generation));
+            }
+            Some((at, g)) if g != generation || self.now - at >= 0.25 => {
+                self.interest.ages.observe(p.terrain, self.now);
+                self.interest.ages_seen = Some((self.now, generation));
+            }
+            Some(_) => {}
+        }
 
         let asleep = self.asleep(p);
         let seated = !asleep && p.act.and_then(|a| self.rep.catalog.get(a.id)).is_some_and(|a| a.requires == Requirement::Seat);
