@@ -17,6 +17,7 @@ pub mod effects;
 pub mod fxraster;
 pub mod geom;
 pub mod lasting;
+pub mod life;
 pub mod locomotion;
 pub mod nav;
 pub mod npc;

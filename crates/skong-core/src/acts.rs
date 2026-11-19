@@ -6,6 +6,8 @@
 //! * looping clip — plays for `hold` seconds (default: one pass), or until `until` signal;
 //! * one-shot clip — plays `repeat` times, then holds the last frame for `hold` seconds;
 //! * `move` — the controller should walk with that gait while the step runs.
+//! * `life` — run a weighted state machine from the file's `lives` (see [`crate::life`])
+//!   for `hold` seconds instead of one clip (`bias` scales its states' weights by name).
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -15,9 +17,14 @@ use serde::Deserialize;
 use crate::anim::{AnimEvent, Animator, ClipId, ClipLibrary};
 use crate::assets::read_json;
 use crate::controller::Gait;
+use crate::life::{Life, LifeJson, LifeRun, Mood};
 
 #[derive(Debug, Deserialize)]
 struct ActsFile {
+    /// Lives (weighted state machines) usable by `life` steps in this and later files.
+    #[serde(default)]
+    lives: std::collections::BTreeMap<String, LifeJson>,
+    #[serde(default)]
     acts: Vec<ActJson>,
 }
 
@@ -36,8 +43,14 @@ struct ActJson {
 }
 
 #[derive(Debug, Deserialize)]
-struct StepJson {
-    clip: String,
+pub(crate) struct StepJson {
+    /// Optional for `life` steps (defaults to the life's base clip).
+    #[serde(default)]
+    clip: Option<String>,
+    #[serde(default)]
+    life: Option<String>,
+    #[serde(default)]
+    bias: HashMap<String, f32>,
     #[serde(default)]
     hold: Option<[f32; 2]>,
     #[serde(default)]
@@ -57,6 +70,45 @@ fn one() -> f32 {
 }
 fn yes() -> bool {
     true
+}
+
+impl StepJson {
+    /// Validate against `clips` and the lives known so far (name -> (index, base clip)).
+    pub(crate) fn resolve(self, ctx: &str, clips: &ClipLibrary, lives: &HashMap<String, (usize, ClipId)>) -> Result<Step> {
+        let s = self;
+        let life = match s.life.as_deref() {
+            None => None,
+            Some(l) => Some(*lives.get(l).with_context(|| format!("{ctx}: unknown life '{l}'"))?),
+        };
+        let clip = match (&s.clip, life) {
+            (Some(c), _) => clips.id(c).with_context(|| format!("{ctx}: unknown clip '{c}'"))?,
+            (None, Some((_, base))) => base,
+            (None, None) => bail!("{ctx}: step without clip"),
+        };
+        let gait = match s.movement.as_deref() {
+            None => None,
+            Some("walk") => Some(Gait::Walk),
+            Some("run") => Some(Gait::Run),
+            Some("sprint") => Some(Gait::Sprint),
+            Some(m) => bail!("{ctx}: unknown move '{m}'"),
+        };
+        let turn = match s.turn.as_deref() {
+            None => None,
+            Some(t) => Some(clips.id(t).with_context(|| format!("{ctx}: unknown turn clip '{t}'"))?),
+        };
+        let repeat = s.repeat.map_or((1, 1), |[lo, hi]| (lo.max(1), hi.max(lo.max(1))));
+        Ok(Step {
+            clip,
+            hold: s.hold.map(|[lo, hi]| (lo, hi.max(lo))),
+            repeat,
+            until: s.until,
+            gait,
+            interruptible: s.interruptible,
+            turn,
+            life: life.map(|(i, _)| i),
+            bias: s.bias,
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
@@ -80,6 +132,10 @@ pub struct Step {
     pub interruptible: bool,
     /// Clip played when a walking step turns around (e.g. "Map Turn"), then the step clip resumes.
     pub turn: Option<ClipId>,
+    /// Index of the life this step runs (see [`ActLibrary::life`]).
+    pub life: Option<usize>,
+    /// Per-state weight multipliers for the life.
+    pub bias: HashMap<String, f32>,
 }
 
 #[derive(Clone, Debug)]
@@ -106,6 +162,8 @@ pub struct ActId(pub u16);
 pub struct ActLibrary {
     acts: Vec<Act>,
     by_name: HashMap<String, ActId>,
+    lives: Vec<Life>,
+    life_ids: HashMap<String, (usize, ClipId)>,
 }
 
 impl ActLibrary {
@@ -126,30 +184,19 @@ impl ActLibrary {
     fn add_file(&mut self, path: &Path, clips: &ClipLibrary) -> Result<()> {
         let raw: ActsFile = read_json(path)?;
         let lib = self;
+        for (name, j) in raw.lives {
+            let life = Life::from_json(&name, j, clips)?;
+            if lib.life_ids.insert(name.clone(), (lib.lives.len(), life.base)).is_some() {
+                bail!("duplicate life '{name}'");
+            }
+            lib.lives.push(life);
+        }
         for a in raw.acts {
             if a.steps.is_empty() {
                 bail!("act '{}' has no steps", a.name);
             }
-            let steps = a
-                .steps
-                .into_iter()
-                .map(|s| {
-                    let clip = clips.id(&s.clip).with_context(|| format!("act '{}': unknown clip '{}'", a.name, s.clip))?;
-                    let gait = match s.movement.as_deref() {
-                        None => None,
-                        Some("walk") => Some(Gait::Walk),
-                        Some("run") => Some(Gait::Run),
-                        Some("sprint") => Some(Gait::Sprint),
-                        Some(m) => bail!("act '{}': unknown move '{m}'", a.name),
-                    };
-                    let turn = match s.turn.as_deref() {
-                        None => None,
-                        Some(t) => Some(clips.id(t).with_context(|| format!("act '{}': unknown turn clip '{t}'", a.name))?),
-                    };
-                    let repeat = s.repeat.map_or((1, 1), |[lo, hi]| (lo.max(1), hi.max(lo.max(1))));
-                    Ok(Step { clip, hold: s.hold.map(|[lo, hi]| (lo, hi.max(lo))), repeat, until: s.until, gait, interruptible: s.interruptible, turn })
-                })
-                .collect::<Result<Vec<_>>>()?;
+            let ctx = format!("act '{}'", a.name);
+            let steps = a.steps.into_iter().map(|s| s.resolve(&ctx, clips, &lib.life_ids)).collect::<Result<Vec<_>>>()?;
             let id = ActId(lib.acts.len() as u16);
             if lib.by_name.insert(a.name.clone(), id).is_some() {
                 bail!("duplicate act '{}'", a.name);
@@ -161,6 +208,14 @@ impl ActLibrary {
 
     pub fn id(&self, name: &str) -> Option<ActId> {
         self.by_name.get(name).copied()
+    }
+
+    pub fn life(&self, i: usize) -> &Life {
+        &self.lives[i]
+    }
+
+    pub fn life_id(&self, name: &str) -> Option<usize> {
+        self.life_ids.get(name).map(|&(i, _)| i)
     }
 
     pub fn get(&self, id: ActId) -> &Act {
@@ -208,11 +263,17 @@ pub struct ActPlayer {
     rng: u32,
     /// Playing the step's turn clip (see [`ActPlayer::turned`]).
     turning: bool,
+    /// The current `life` step's state machine.
+    life: Option<LifeRun>,
+    /// Biases life choices (set by the app from the brain's needs).
+    mood: Mood,
+    /// Wrapping up: after the current life step, go straight to the act's last step.
+    wrapping: bool,
 }
 
 impl ActPlayer {
     pub fn start(acts: &ActLibrary, clips: &ClipLibrary, anim: &mut Animator, act: ActId, seed: u32) -> Self {
-        let mut p = Self { act, step: 0, phase: Phase::Playing, timer: 0.0, repeats_left: 1, done: false, rng: seed | 1, turning: false };
+        let mut p = Self { act, step: 0, phase: Phase::Playing, timer: 0.0, repeats_left: 1, done: false, rng: seed | 1, turning: false, life: None, mood: Mood::default(), wrapping: false };
         p.enter_step(acts, clips, anim);
         p
     }
@@ -229,6 +290,37 @@ impl ActPlayer {
         self.done
     }
 
+    /// Asked to stop. During a `life` step the act ends gracefully instead of being cut:
+    /// not urgent, the current state plays out (bounded by its minimum); urgent, it leaves
+    /// through the state's exit clip (closing the map, sitting up). Then the act's last step
+    /// (Get Off) plays. Returns false when the current step is not a life step (the caller
+    /// cuts or replaces the act as before).
+    pub fn wrap_up(&mut self, acts: &ActLibrary, clips: &ClipLibrary, anim: &mut Animator, urgent: bool) -> bool {
+        let Some(l) = acts.get(self.act).steps.get(self.step).and_then(|s| s.life) else { return false };
+        let Some(run) = self.life.as_mut().filter(|_| !self.done) else { return false };
+        self.wrapping = true;
+        let mut seed = self.rng;
+        run.wrap_up(acts.life(l), urgent, clips, anim, &mut || xorshift(&mut seed));
+        self.rng = seed;
+        true
+    }
+
+    /// Wrapping up (see [`Self::wrap_up`]).
+    pub fn is_wrapping(&self) -> bool {
+        self.wrapping
+    }
+
+    /// Bias for `life` steps (tired → dozing and nodding, curious → map checks and glances).
+    pub fn set_mood(&mut self, mood: Mood) {
+        self.mood = mood;
+    }
+
+    /// Name of the life state playing, when the current step is a `life` step.
+    pub fn life_state<'a>(&self, acts: &'a ActLibrary) -> Option<&'a str> {
+        let l = acts.get(self.act).steps.get(self.step)?.life?;
+        self.life.as_ref().filter(|_| !self.done).map(|r| r.state_name(acts.life(l)))
+    }
+
     /// Gait the current step wants the character to walk with, if any.
     pub fn gait(&self, acts: &ActLibrary) -> Option<Gait> {
         if self.done { None } else { acts.get(self.act).steps[self.step].gait }
@@ -236,12 +328,22 @@ impl ActPlayer {
 
     /// Whether the current step may be cut short.
     pub fn interruptible(&self, acts: &ActLibrary) -> bool {
+        if let (Some(run), Some(l)) = (&self.life, acts.get(self.act).steps.get(self.step).and_then(|s| s.life)) {
+            return self.done || (acts.get(self.act).steps[self.step].interruptible && run.interruptible(acts.life(l)));
+        }
         self.done || acts.get(self.act).steps[self.step].interruptible
     }
 
     /// External signal (e.g. "woken"). Ends the current step if it waits on it.
     pub fn signal(&mut self, acts: &ActLibrary, clips: &ClipLibrary, anim: &mut Animator, name: &str) {
         if self.done {
+            return;
+        }
+        let step = &acts.get(self.act).steps[self.step];
+        if let (Some(run), Some(l)) = (self.life.as_mut(), step.life) {
+            let mut seed = self.rng;
+            run.signal(acts.life(l), &step.bias, clips, anim, name, &mut || xorshift(&mut seed));
+            self.rng = seed;
             return;
         }
         if acts.get(self.act).steps[self.step].until.as_deref() == Some(name) {
@@ -267,6 +369,19 @@ impl ActPlayer {
             return ActStatus::Done;
         }
         let step = &acts.get(self.act).steps[self.step];
+        if let (Some(run), Some(l)) = (self.life.as_mut(), step.life) {
+            let mut seed = self.rng;
+            run.update(acts.life(l), self.mood, &step.bias, clips, anim, dt, anim_events, &mut || xorshift(&mut seed));
+            self.rng = seed;
+            if run.is_done() {
+                if self.wrapping && self.step + 1 < acts.get(self.act).steps.len() {
+                    // Skip to the way out (Get Off).
+                    self.step = acts.get(self.act).steps.len() - 2;
+                }
+                self.next_step(acts, clips, anim);
+            }
+            return if self.done { ActStatus::Done } else { ActStatus::Running { gait: acts.get(self.act).steps[self.step].gait } };
+        }
         let looping = clips.get(step.clip).wrap.loops();
         if self.turning {
             let t = step.turn.unwrap_or(step.clip);
@@ -331,6 +446,14 @@ impl ActPlayer {
         anim.play(clips, step.clip, true);
         self.phase = Phase::Playing;
         self.turning = false;
+        self.life = None;
+        if let Some(l) = step.life {
+            let budget = self.sample(step.hold.unwrap_or((10.0, 30.0)));
+            let mut seed = self.rng;
+            self.life = Some(LifeRun::start(acts.life(l), budget, self.mood, &step.bias, clips, anim, &mut || xorshift(&mut seed)));
+            self.rng = seed;
+            return;
+        }
         self.repeats_left = self.sample_u(step.repeat);
         // Looping clips run for `hold` (default one full pass); `until` steps use the
         // upper bound of `hold` as a timeout.
@@ -342,12 +465,7 @@ impl ActPlayer {
     }
 
     fn next_rand(&mut self) -> f32 {
-        let mut x = self.rng;
-        x ^= x << 13;
-        x ^= x >> 17;
-        x ^= x << 5;
-        self.rng = x;
-        (x >> 8) as f32 / (1u32 << 24) as f32
+        xorshift(&mut self.rng)
     }
 
     fn sample(&mut self, (lo, hi): (f32, f32)) -> f32 {
@@ -357,6 +475,16 @@ impl ActPlayer {
     fn sample_u(&mut self, (lo, hi): (u32, u32)) -> u32 {
         lo + ((hi - lo + 1) as f32 * self.next_rand()) as u32 % (hi - lo + 1)
     }
+}
+
+/// xorshift32 step, returning 0..1.
+fn xorshift(state: &mut u32) -> f32 {
+    let mut x = *state;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    *state = x;
+    (x >> 8) as f32 / (1u32 << 24) as f32
 }
 
 #[cfg(test)]
@@ -426,10 +554,48 @@ mod tests {
             anim.update(&clips, 1.0 / 120.0, &mut ev);
             p.update(&acts, &clips, &mut anim, 1.0 / 120.0, &ev);
         }
-        assert_eq!(clips.get(anim.clip()).name, "Sitting Asleep");
+        assert_eq!(clips.get(anim.clip()).name, "Sitting Asleep Breathe");
         p.signal(&acts, &clips, &mut anim, "woken");
         assert_eq!(clips.get(anim.clip()).name, "Wake To Sit");
         assert!(!p.interruptible(&acts));
+    }
+
+    #[test]
+    fn seated_acts_wrap_up_through_get_off() {
+        let (clips, acts) = libs();
+        let id = acts.id("rest").expect("rest");
+        for (urgent, max_s) in [(true, 2.5), (false, 25.0)] {
+            for seed in 1..6 {
+                let mut anim = Animator::new(clips.id("Idle").expect("Idle"));
+                let mut p = ActPlayer::start(&acts, &clips, &mut anim, id, seed);
+                let (dt, mut ev) = (1.0 / 60.0, Vec::new());
+                let mut step = |p: &mut ActPlayer, anim: &mut Animator| {
+                    ev.clear();
+                    anim.update(&clips, dt, &mut ev);
+                    p.update(&acts, &clips, anim, dt, &ev)
+                };
+                for _ in 0..(60.0 * (3.0 + seed as f32)) as usize {
+                    step(&mut p, &mut anim);
+                }
+                assert!(p.life_state(&acts).is_some(), "in the seated life");
+                assert!(p.wrap_up(&acts, &clips, &mut anim, urgent));
+                let mut seen = vec![];
+                let mut t = 0.0;
+                while step(&mut p, &mut anim) != ActStatus::Done && t < 60.0 {
+                    t += dt;
+                    let n = clips.get(anim.clip()).name.clone();
+                    if seen.last() != Some(&n) {
+                        seen.push(n);
+                    }
+                }
+                assert!(t < max_s, "urgent={urgent} seed {seed}: took {t:.1}s: {seen:?}");
+                assert_eq!(seen.last().map(String::as_str), Some("Get Off"), "{seen:?}");
+            }
+        }
+        // Not a life step: the caller decides (cut or exit act).
+        let mut anim = Animator::new(clips.id("Idle").expect("Idle"));
+        let mut p = ActPlayer::start(&acts, &clips, &mut anim, acts.id("look_up").expect("act"), 1);
+        assert!(!p.wrap_up(&acts, &clips, &mut anim, true));
     }
 
     #[test]

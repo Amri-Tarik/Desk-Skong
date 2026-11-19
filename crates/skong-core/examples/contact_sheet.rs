@@ -36,7 +36,8 @@ fn main() -> Result<()> {
             // anchor at cell (center x, 70% down)
             let ax = col as i32 * cell + cell / 2;
             let ay = row as i32 * cell + cell * 7 / 10;
-            sheet.blit_over(&fr.image, ax - fr.anchor[0] as i32, ay - fr.anchor[1] as i32, false);
+            // Seat-line corrections (seated clips) applied, as when the knight sits.
+            sheet.blit_over(&fr.image, ax - fr.anchor[0] as i32, ay - fr.anchor[1] as i32 + (f.dy * ppu).round() as i32, false);
             sheet.px[(ay * sheet.width as i32 + ax) as usize] = 0xffff_0000;
         }
     }

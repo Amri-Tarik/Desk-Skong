@@ -354,6 +354,13 @@ impl SpriteBank {
         self.by_name.get(name).copied()
     }
 
+    /// Key of the sprite called `name` in `collection`.
+    pub fn sprite_key(&self, collection: &str, name: &str) -> Option<SpriteKey> {
+        let ci = self.collection_index(collection)?;
+        let i = self.collections[ci as usize].sprites.iter().position(|s| s.name == name)?;
+        Some(SpriteKey { collection: ci, sprite: i as u32 })
+    }
+
     pub fn sprite_name(&self, key: SpriteKey) -> Option<&str> {
         let c = self.collections.get(key.collection as usize)?;
         c.sprites.get(key.sprite as usize).map(|s| s.name.as_str())
