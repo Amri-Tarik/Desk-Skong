@@ -43,6 +43,8 @@ pub enum Command {
     InviteVisitor,
     /// The knight dream-nails the window he stands on (thought bubble).
     DreamNail,
+    /// Path-find to the cursor (Stroll, or Hurry with the full movement kit).
+    GoToCursor { hurry: bool },
     Quit,
 }
 
