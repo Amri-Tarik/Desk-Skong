@@ -14,7 +14,7 @@
 use std::path::{Path, PathBuf};
 
 use skong_core::achievements::{self, AchievementEvent as E, Tracker, Totals};
-use skong_core::ai::{AttackDir, BehaviourKind, FoeKind, Intent, Poke, StakeEvent};
+use skong_core::ai::{BehaviourKind, FoeKind, Intent, Poke, StakeEvent};
 use skong_core::controller::{BehindPhase, MoveEvent, MoveState};
 use skong_core::geom::Vec2;
 use skong_core::stakes::{DeathKind, Spell};
@@ -26,8 +26,6 @@ use crate::emotes::Emote;
 
 /// A release faster than this is a throw, not a drop (px/s).
 const THROW_SPEED: f32 = 500.0;
-/// After a mid-air down-strike that connects, an upward bounce within this long is a pogo (s).
-const POGO_WINDOW: f32 = 0.4;
 /// How long the last unlock stays in the tray tooltip (s).
 const TIP_SECS: f32 = 15.0 * 60.0;
 /// Seconds between saves while progress keeps changing (Geo pickups).
@@ -61,8 +59,6 @@ pub struct Achievements {
     gaming: bool,
     lost_battle: bool,
     battling: bool,
-    /// Seconds left for a down-strike that connected mid-air to turn into a bounce.
-    pogo: f32,
     /// Last unlock's title for the tray tooltip, and seconds left.
     tip: Option<(String, f32)>,
     /// Something changed for the panel.
@@ -100,7 +96,6 @@ impl Achievements {
             gaming: false,
             lost_battle: false,
             battling: false,
-            pogo: 0.0,
             tip: None,
             changed: true,
             since_save: 0.0,
@@ -213,13 +208,6 @@ impl Pet {
         {
             self.achieve(E::BenchRested { style });
         }
-        // TODO(combat-kit): once `MoveEvent::Pogo` lands on master, map it in
-        // `achievements_tick` and drop this heuristic: a down-strike mid-air that connects
-        // (an enemy, the Shade, or the cursor), while falling, then an upward bounce.
-        let connected = !intent.strikes.is_empty() || intent.attack.is_some_and(|a| a.hit) || intent.stakes.iter().any(|e| matches!(e, StakeEvent::StrikeShade { .. }));
-        if intent.attack.is_some_and(|a| a.dir == AttackDir::Down) && connected && !self.ch.is_grounded() && self.ch.vel.y >= 0.0 {
-            self.achievements.pogo = POGO_WINDOW;
-        }
     }
 
     /// A click, grab or throw on the knight.
@@ -253,6 +241,7 @@ impl Pet {
                 MoveEvent::WallJumped { .. } => evs.push(E::WallJumped),
                 MoveEvent::SuperHardLanded => evs.push(E::SuperHardLanding),
                 MoveEvent::PlatformMoved { .. } => evs.push(E::WindowRode),
+                MoveEvent::Pogo => evs.push(E::Pogo),
                 MoveEvent::SuperdashLaunched => {
                     let from_wall = matches!(self.achievements.state, MoveState::SuperdashCharge { wall: Some(_) });
                     evs.push(E::SuperdashLaunched { monitor: here, from_wall });
@@ -275,13 +264,6 @@ impl Pet {
             evs.push(E::SteppedBehind);
         }
         a.behind = behind;
-        if a.pogo > 0.0 {
-            a.pogo -= dt;
-            if !self.ch.is_grounded() && self.ch.vel.y < -1.0 {
-                a.pogo = 0.0;
-                evs.push(E::Pogo);
-            }
-        }
 
         // Acts: the slug form, a Dream Gate warp (the arrival far from the warp's spot).
         let act = self.act.as_ref().map(|p| self.data.acts.get(p.act()).name.clone());
