@@ -15,6 +15,7 @@ pub mod desktop;
 pub mod discovery;
 pub mod dreamgate;
 pub mod effects;
+pub mod enemy;
 pub mod fxraster;
 pub mod geom;
 pub mod lasting;

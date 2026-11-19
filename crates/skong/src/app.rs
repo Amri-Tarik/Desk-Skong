@@ -47,6 +47,7 @@ use skong_ipc::Command;
 
 mod discover;
 mod dreamgate;
+mod enemy;
 mod panel;
 mod visit;
 mod stakes;
@@ -220,6 +221,9 @@ struct Pet {
     visitors: Option<crate::npcs::Visitors>,
     /// Death, the Shade, Geo and spell effects.
     stakes: stakes::Stakes,
+    /// Enemies wandering in (None if their data is missing) and the bumps they gave him.
+    enemies: Option<crate::enemies::Enemies>,
+    enemy_hits: u32,
 }
 
 pub fn run(args: &Args) -> Result<()> {
@@ -341,8 +345,11 @@ pub fn run(args: &Args) -> Result<()> {
         control: ControlServer::start(),
         overlay: PetOverlay::default(),
         visitors: None,
+        enemies: None,
+        enemy_hits: 0,
     };
     pet.visitors = pet.load_visitors(args.capturable);
+    pet.enemies = pet.load_enemies(args.capturable);
     if let (Some(v), Some(name)) = (pet.visitors.as_mut(), &args.visit) {
         v.invite((name != "any").then(|| name.clone()));
     }
@@ -411,6 +418,7 @@ pub fn run(args: &Args) -> Result<()> {
             last_housekeeping = Instant::now();
             pet.benches.raise_all();
             pet.raise_visitors();
+            pet.raise_enemies();
             pet.discoveries.raise_all();
             pet.shinies.raise_all();
             pet.win.raise();
@@ -482,6 +490,7 @@ impl Pet {
         }
         if self.game_step() {
             self.hide_visitors();
+            self.hide_enemies();
             return Ok(()); // hidden while games cover every monitor
         }
         // Screen activity for the brain (the feed updates it at <= 10 Hz).
@@ -606,6 +615,7 @@ impl Pet {
         self.discoveries_tick(dt);
         let origin = self.knight_origin();
         self.tick_visitors(dt);
+        self.tick_enemies(dt);
         self.emote_tick(dt, origin)?;
         self.fx.update(dt, origin, self.ch.facing == Side::Right, self.ch.params.px_per_unit)
     }
@@ -868,6 +878,7 @@ impl Pet {
 
     fn think(&mut self, dt: f32) -> MoveInput {
         self.stakes_sense();
+        self.see_foes();
         let mut benches: Vec<Vec2> = self.benches.placed.iter().map(|(b, _)| b.pos).collect();
         let seat = self.discovery_percepts(&mut benches).or_else(|| self.benches.seat_here(&self.ch, &self.terrain));
         let (left, right) = input::mouse_buttons();
@@ -904,6 +915,7 @@ impl Pet {
         let visitors = self.visitor_percepts();
         self.brain.see_visitors(visitors);
         let intent = self.brain.tick(&percepts, &mut self.nav);
+        self.apply_strikes(&intent.strikes);
         let quiet = lingering_fits(&intent, self.ch.facing);
         if let Some(id) = intent.greet {
             self.greet_visitor(id);
@@ -1189,6 +1201,7 @@ impl Pet {
         self.fx.install_frames(fx_frames);
         self.drawn = None;
         self.rescale_visitors();
+        self.rescale_enemies();
         if let Err(e) = self.tray.set_icon(&tray_icon(&self.data, &self.look)) {
             log::warn!("tray icon: {e:#}");
         }

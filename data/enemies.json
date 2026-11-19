@@ -1,0 +1,70 @@
+{
+  "$comment": "Enemies that wander in for the knight to fight. Clips come from the exported vanilla libraries in data/hk/animations (enemy art is always vanilla: skins/Vanilla; every enemy's art faces left and is mirrored to face right). `moves`: ground (walks / crawls along ledges, walks in from a monitor edge when its ledge reaches one, else drops in) or fly (flies in from the nearer side edge to hover `hover` units over a ledge). Clips: idle, move, turn (once, then mirrored), startle (once, on noticing the knight), chase (default: move), antic + attack + recover (a lunge that moves `lunge` units/s), fall (dropping in), death_air (struck dead, thrown back), death_land (lying dead; fades after a moment). `hp`: blows it takes (spells count more). `speed` / `chase_speed`: game units/s. `aggro`: notices the knight this close (game units; 0 = never, a harmless crawler that only bumps into him). `reach`: starts its attack this close. `size`: body [w, h] in game units (blows, contact, where the knight stands). `geo`: [min, max] burst when killed. `stay`: seconds it roams before wandering off if nobody fights it. `schedule`: like npcs.json `visits` (presence-time countdown; never during fullscreen apps, fast typing, or while a visitor is around). `rules`: `max_alive` at once, a visit brings `group` [min, max] of them, `stagger` seconds apart. The bored knight can also ask for one (world event).",
+  "schedule": {
+    "enabled": true,
+    "first": [240, 720],
+    "gap": [420, 1500],
+    "busy_keys_per_sec": 2.5,
+    "away_secs": 90,
+    "retry": 30
+  },
+  "rules": { "max_alive": 2, "group": [1, 2], "stagger": 5 },
+  "enemies": [
+    {
+      "name": "crawlid",
+      "display": "Crawlid",
+      "library": "Crawler",
+      "moves": "ground",
+      "weight": 1.2,
+      "clips": { "idle": "idle", "move": "walk", "turn": "turn", "death_air": "Death Air", "death_land": "Death Land" },
+      "hp": 2,
+      "speed": 1.5,
+      "aggro": 0,
+      "size": [1.6, 1.2],
+      "geo": [2, 4],
+      "stay": [60, 120]
+    },
+    {
+      "name": "vengefly",
+      "display": "Vengefly",
+      "library": "Buzzer",
+      "moves": "fly",
+      "clips": { "idle": "Idle", "move": "Fly", "startle": "Startle", "chase": "Chase", "death_air": "Death Air", "death_land": "Death Land" },
+      "hp": 3,
+      "speed": 2.0,
+      "chase_speed": 4.5,
+      "aggro": 7,
+      "size": [1.4, 1.4],
+      "hover": 2.4,
+      "geo": [3, 6],
+      "stay": [50, 100]
+    },
+    {
+      "name": "husk",
+      "display": "Wandering Husk",
+      "library": "Zombie Basic1",
+      "moves": "ground",
+      "weight": 0.9,
+      "clips": {
+        "idle": "Idle",
+        "move": "Walk",
+        "turn": "Turn",
+        "antic": "Attack Anticipate",
+        "attack": "Attack Lunge",
+        "recover": "Attack Cooldown",
+        "fall": "Fall",
+        "death_air": "Death Air",
+        "death_land": "Death Land"
+      },
+      "hp": 4,
+      "speed": 1.2,
+      "chase_speed": 2.4,
+      "aggro": 7,
+      "reach": 3,
+      "lunge": 7,
+      "size": [1.4, 1.9],
+      "geo": [5, 9],
+      "stay": [60, 120]
+    }
+  ]
+}

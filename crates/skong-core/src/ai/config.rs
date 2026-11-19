@@ -304,6 +304,8 @@ pub struct BrainConfig {
     pub stakes: super::stakes::StakesConfig,
     /// Warping to a prize no route reaches.
     pub dream_gate: super::dream_gate::DreamGateConfig,
+    /// Fights with enemies and sparring partners.
+    pub fight: super::fight::FightConfig,
     pub companion: CompanionConfig,
     pub watch: WatchConfig,
     /// The Unn slug's serene crawl.
@@ -340,6 +342,7 @@ impl Default for BrainConfig {
             battle: BattleConfig::default(),
             stakes: super::stakes::StakesConfig::default(),
             dream_gate: super::dream_gate::DreamGateConfig::default(),
+            fight: super::fight::FightConfig::default(),
             companion: CompanionConfig::default(),
             watch: WatchConfig::default(),
             serene: SereneConfig::default(),

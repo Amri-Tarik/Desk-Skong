@@ -196,6 +196,20 @@ impl ClipLibrary {
         self.clips.iter().enumerate().map(|(i, c)| (ClipId(i as u16), c))
     }
 
+    /// Append every clip of `other` under `prefix` + its name (a character's second
+    /// library, e.g. Zote's fight clips next to his visitor clips). Names already taken
+    /// keep the existing clip.
+    pub fn merge(&mut self, other: ClipLibrary, prefix: &str) {
+        for mut c in other.clips {
+            c.name = format!("{prefix}{}", c.name);
+            if self.by_name.contains_key(&c.name) {
+                continue;
+            }
+            self.by_name.insert(c.name.clone(), ClipId(self.clips.len() as u16));
+            self.clips.push(c);
+        }
+    }
+
     /// Every sprite referenced by any clip (for rasterizing up front).
     pub fn sprite_keys(&self) -> Vec<SpriteKey> {
         let mut v: Vec<SpriteKey> = self.clips.iter().flat_map(|c| c.frames.iter().filter_map(|f| f.sprite)).collect();

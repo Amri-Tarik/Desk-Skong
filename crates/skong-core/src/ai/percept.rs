@@ -231,6 +231,8 @@ pub struct Senses {
     pub returned_at: Option<f32>,
     /// NPC visitors on screen (from [`super::Brain::see_visitors`]).
     pub visitors: Vec<super::Visitor>,
+    /// Enemies and sparring partners on screen (from [`super::Brain::see_foes`]).
+    pub foes: Vec<super::Foe>,
 }
 
 impl Senses {

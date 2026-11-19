@@ -21,9 +21,14 @@ _Working list, last updated 2026-11-19. Reorder freely and add notes under any i
 
 ## 2. Reasons to move around
 
-- [ ] **Enemies / training dummies** wandering in from the screen edges (enemy art from
+- [x] **Enemies / training dummies** wandering in from the screen edges (enemy art from
       level files). Zote as a sparring partner. Fights are his top priority, so this pays
-      off the most.
+      off the most. _(Crawlid, Vengefly and Wandering Husk walk / fly / drop in every
+      7–25 min of presence (or when he's bored), on his monitor; he fights them (`Fight`,
+      above Geo and the cursor), they bump back (never lethal by default), die with their
+      death clip and burst Geo. Zote may challenge him after a talk and spars with his own
+      fight clips. Tuning in `data/enemies.json` and Zote's `spar`. Follow-ups: the
+      training dummy (`Training Dummy Real Anim`, sharedassets321), a tray/panel trigger.)_
 - [ ] **Geo showers through the subtle portal**, plus a tray/panel trigger for visits.
 - [x] **Dream Gate fallback.** When no route exists, he warps instead of giving up.
       (Visitors, the Shade, Geo, deposits, shinies; settled ledges only; 90 s cooldown.)
@@ -68,6 +73,9 @@ These have only been checked in tests. Note anything that looks off:
 - [ ] Cursor hit markers and the defeat burst
 - [ ] Lantern in dark places (dark-theme detection thresholds)
 - [ ] Fatal falls → Shade; fight mode; screen-share toggle
+- [ ] Enemies: art feet line and facing, arrivals from the edge / drops / fly-ins, the hit
+      flash, death clips and corpse fade, how often they bump him; Zote's spar (charges,
+      going down, getting up)
 
 ## Recently done (day 2, #51–#80)
 

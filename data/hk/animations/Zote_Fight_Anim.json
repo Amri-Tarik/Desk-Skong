@@ -1,0 +1,409 @@
+{
+  "name": "Zote Fight Anim",
+  "clips": [
+    {
+      "name": "Roll",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 7,
+          "sprite": "action_roll0000"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 30,
+          "sprite": "action_roll0001"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 22,
+          "sprite": "action_roll0002"
+        }
+      ]
+    },
+    {
+      "name": "Antic",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 23,
+          "sprite": "action_antic0000"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 25,
+          "sprite": "action_antic0001"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 8,
+          "sprite": "action_antic0002"
+        }
+      ]
+    },
+    {
+      "name": "Attack",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 35,
+          "sprite": "action_attack0000"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 12,
+          "sprite": "action_attack0001"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 26,
+          "sprite": "action_attack0002"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 24,
+          "sprite": "action_attack0003"
+        }
+      ]
+    },
+    {
+      "name": "Grumble",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 11,
+          "sprite": "action_death_grumble0000"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 17,
+          "sprite": "action_death_grumble0001"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 4,
+          "sprite": "action_death_grumble0002"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 2,
+          "sprite": "action_death_grumble0003"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 11,
+          "sprite": "action_death_grumble0000"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 17,
+          "sprite": "action_death_grumble0001"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 4,
+          "sprite": "action_death_grumble0002"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 2,
+          "sprite": "action_death_grumble0003"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 11,
+          "sprite": "action_death_grumble0000"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 17,
+          "sprite": "action_death_grumble0001"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 4,
+          "sprite": "action_death_grumble0002"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 2,
+          "sprite": "action_death_grumble0003"
+        }
+      ]
+    },
+    {
+      "name": "Get Up",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 1,
+          "sprite": "action_land_to_idle0000"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 5,
+          "sprite": "action_land_to_idle0001"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 34,
+          "sprite": "action_land_to_idle0002"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 31,
+          "sprite": "action_land_to_idle0003"
+        }
+      ]
+    },
+    {
+      "name": "Fall",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 10,
+          "sprite": "action_land0000"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 15,
+          "sprite": "action_land0001"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 36,
+          "sprite": "action_land0002"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 0,
+          "sprite": "action_land0003"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 3,
+          "sprite": "action_land0004"
+        }
+      ]
+    },
+    {
+      "name": "Roar",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 28,
+          "sprite": "action_roar0000"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 6,
+          "sprite": "action_roar0001"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 32,
+          "sprite": "action_roar0002"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 29,
+          "sprite": "action_roar0003"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 27,
+          "sprite": "action_roar0004"
+        }
+      ]
+    },
+    {
+      "name": "Death Land",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 18,
+          "sprite": "action_roll_to_death0000"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 16,
+          "sprite": "action_roll_to_death0001"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 19,
+          "sprite": "action_roll_to_death0002"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 21,
+          "sprite": "action_roll_to_death0003"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 14,
+          "sprite": "action_roll_to_death0004"
+        }
+      ]
+    },
+    {
+      "name": "Turn",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 33,
+          "sprite": "action_turn0000"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 9,
+          "sprite": "action_turn0001"
+        }
+      ]
+    },
+    {
+      "name": "Wound Air",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 13,
+          "sprite": "action_wound_to_roll0000"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 20,
+          "sprite": "action_wound_to_roll0001"
+        }
+      ]
+    },
+    {
+      "name": "Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 43,
+          "sprite": "look_left0000"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 44,
+          "sprite": "look_left0001"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 42,
+          "sprite": "look_left0002"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 46,
+          "sprite": "look_left0003"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 45,
+          "sprite": "look_left0004"
+        }
+      ]
+    },
+    {
+      "name": "Recover",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 8,
+          "sprite": "action_antic0002"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 25,
+          "sprite": "action_antic0001"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 23,
+          "sprite": "action_antic0000"
+        }
+      ]
+    },
+    {
+      "name": "TurnToIdle",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 33,
+          "sprite": "action_turn0000"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 9,
+          "sprite": "action_turn0001"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 43,
+          "sprite": "look_left0000"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 44,
+          "sprite": "look_left0001"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 42,
+          "sprite": "look_left0002"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 46,
+          "sprite": "look_left0003"
+        },
+        {
+          "collection": "Zote Fight Cln",
+          "sprite_id": 45,
+          "sprite": "look_left0004"
+        }
+      ]
+    }
+  ]
+}

@@ -18,6 +18,7 @@
 mod actor;
 pub mod dream;
 pub mod lesson;
+pub mod spar;
 pub mod talk;
 mod visits;
 #[cfg(test)]
@@ -36,6 +37,7 @@ use crate::assets::{SpriteBank, read_json};
 pub use actor::{Npc, NpcEnv, NpcEvent, NpcPhase, Placement, once_secs};
 pub use dream::DreamRules;
 pub use lesson::{DemoStep, DrillDef, Lesson, LessonDef, PlannedDrill};
+pub use spar::{SparClips, SparDef};
 pub use talk::{Line, TalkContext};
 pub use visits::{VisitConditions, VisitConfig, VisitScheduler};
 
@@ -164,6 +166,20 @@ pub struct NpcDef {
     /// Shade, spells and nail arts). Invitations by name ignore it.
     #[serde(default)]
     pub after_fight: Option<f32>,
+    /// More clip libraries merged into this visitor's, their clip names prefixed (e.g.
+    /// Zote's fight clips as "Fight Idle", "Fight Antic"...).
+    #[serde(default)]
+    pub extra_libraries: Vec<ExtraLibrary>,
+    /// A fighter: after the conversation he may challenge the knight to a spar (see [`spar`]).
+    #[serde(default)]
+    pub spar: Option<SparDef>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExtraLibrary {
+    pub library: String,
+    pub prefix: String,
 }
 
 fn one() -> f32 {
@@ -209,6 +225,7 @@ pub struct NpcClips {
     pub demos: BTreeMap<String, Vec<(ClipId, Option<f32>)>>,
     /// The lesson stance (idle when unset).
     pub stance: Option<ClipId>,
+    pub spar: Option<SparClips>,
 }
 
 /// Every visitor definition with its clip library.
@@ -233,13 +250,22 @@ impl NpcSet {
         let mut lib_idx: HashMap<String, usize> = HashMap::new();
         let mut lib_of = Vec::new();
         let mut clips = Vec::new();
+        let load = |name: &str, who: &str| {
+            let path = anim_dir.join(format!("{}.json", name.replace(' ', "_")));
+            ClipLibrary::load(&path, bank).with_context(|| format!("npc '{who}'"))
+        };
         for d in &file.npcs {
-            let li = match lib_idx.get(&d.library) {
+            // A library merged with extras is its own entry.
+            let key = d.extra_libraries.iter().fold(d.library.clone(), |k, e| format!("{k}+{}:{}", e.prefix, e.library));
+            let li = match lib_idx.get(&key) {
                 Some(&i) => i,
                 None => {
-                    let path = anim_dir.join(format!("{}.json", d.library.replace(' ', "_")));
-                    libs.push(ClipLibrary::load(&path, bank).with_context(|| format!("npc '{}'", d.name))?);
-                    lib_idx.insert(d.library.clone(), libs.len() - 1);
+                    let mut lib = load(&d.library, &d.name)?;
+                    for e in &d.extra_libraries {
+                        lib.merge(load(&e.library, &d.name)?, &e.prefix);
+                    }
+                    libs.push(lib);
+                    lib_idx.insert(key, libs.len() - 1);
                     libs.len() - 1
                 }
             };
@@ -282,6 +308,7 @@ fn resolve(d: &NpcDef, lib: &ClipLibrary) -> Result<NpcClips> {
             .map(|(k, steps)| Ok((k.clone(), steps.iter().map(|s| Ok((get(s.clip())?, s.secs()))).collect::<Result<Vec<_>>>()?)))
             .collect::<Result<_>>()?,
         stance: d.lesson.as_ref().and_then(|l| l.stance.as_deref()).map(get).transpose()?,
+        spar: d.spar.as_ref().map(|s| s.resolve(lib, &d.name)).transpose()?,
     })
 }
 
@@ -313,6 +340,9 @@ fn validate(d: &NpcDef) -> Result<()> {
     }
     if d.after_fight.is_some_and(|s| s.is_nan() || s <= 0.0) {
         bail!("npc '{}': after_fight must be positive", d.name);
+    }
+    if let Some(s) = &d.spar {
+        s.validate().with_context(|| format!("npc '{}'", d.name))?;
     }
     Ok(())
 }
