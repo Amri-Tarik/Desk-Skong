@@ -81,6 +81,16 @@ impl PathFollower {
         self.route.steps.get(self.step).map(|s| s.edge.kind)
     }
 
+    /// May the app turn a fall into a dive now? Only where a straight drop is the plan
+    /// (walk-offs, drops, drop-throughs; or a fall after a slip, before re-planning): a dive
+    /// lands where that fall would. Mid-jump or mid-climb a dive would wreck the move.
+    pub fn dive_ok(&self) -> bool {
+        match self.route.steps.get(self.step) {
+            None => true,
+            Some(step) => self.replan.is_some() || matches!(step.edge.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::DropThrough),
+        }
+    }
+
     /// Re-plans so far (terrain changes, drift, timeouts).
     pub fn replans(&self) -> u32 {
         self.replans
@@ -103,6 +113,7 @@ impl PathFollower {
             let was_script = exec.stage == Stage::Script;
             match exec.outcome(ch, &step.from, &step.to) {
                 Outcome::Done => self.start_step(self.step + 1),
+                Outcome::Wrong if self.replan == Some(Replan::Drift) => {}
                 Outcome::Wrong => {
                     self.slipped(step.edge);
                     self.request(Replan::Drift);
@@ -118,14 +129,14 @@ impl PathFollower {
         if graph.generation != self.route.generation && !in_script {
             self.request(Replan::Stale);
         }
-        if self.stage_time > self.stage_limit {
+        if self.stage_time > self.stage_limit && self.replan != Some(Replan::Drift) {
             if in_script && let Some(step) = self.route.steps.get(self.step) {
                 self.slipped(step.edge);
             }
             self.request(Replan::Drift);
         }
         if let Some(reason) = self.replan {
-            if !ch.is_grounded() || ch.state == MoveState::HardLanding {
+            if !ch.is_grounded() || matches!(ch.state, MoveState::HardLanding | MoveState::Dive { .. }) {
                 return (idle, FollowStatus::Moving);
             }
             if let Some(status) = self.do_replan(reason, ch, graph) {

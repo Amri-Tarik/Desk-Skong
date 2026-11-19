@@ -3,12 +3,17 @@
 //!
 //! Trajectories are a cheap quadratic curve per edge (take-off on the source surface →
 //! land point) shaped by the move kind — jumps arc above both ends, drops and dashes
-//! leave horizontally then fall. They are illustrations, not re-simulations.
-use super::{Edge, MoveKind, NavGraph, Route};
+//! leave horizontally then fall. Climbs zig-zag up the wall(s) they actually use. They are
+//! illustrations, not re-simulations.
+use super::{Climb, Edge, MoveKind, NavGraph, Route};
 use crate::geom::Vec2;
 
 /// Segments per trajectory.
 const STEPS: usize = 10;
+/// Climb drawings: height per drawn hop, sideways kick of a single-wall climb, hop cap.
+const CLIMB_HOP_PX: f32 = 120.0;
+const CLIMB_KICK_PX: f32 = 28.0;
+const MAX_HOPS: usize = 16;
 
 /// A short polyline in screen coordinates.
 #[derive(Clone, Debug, PartialEq)]
@@ -17,6 +22,17 @@ pub struct DebugPath {
     pub points: Vec<Vec2>,
     /// Part of the current route.
     pub highlighted: bool,
+    /// A wall climb: after the take-off point, `points` alternate wall contact / kick-out up
+    /// the wall(s) used ([`DebugPath::wall_contacts`]), then reach the landing.
+    pub climb: bool,
+}
+
+impl DebugPath {
+    /// Points where a climb touches its wall (empty for other moves).
+    pub fn wall_contacts(&self) -> impl Iterator<Item = Vec2> + '_ {
+        let n = if self.climb { self.points.len().saturating_sub(1) } else { 0 };
+        self.points.iter().take(n).skip(1).step_by(2).copied()
+    }
 }
 
 /// Feet range a knight can stand on (`lo..hi` at `y`).
@@ -51,6 +67,9 @@ pub fn route_paths(route: &Route) -> Vec<DebugPath> {
 /// Approximate trajectory of one edge taking off at height `from_y`.
 pub fn edge_path(edge: &Edge, from_y: f32, highlighted: bool) -> DebugPath {
     let p0 = Vec2::new(edge.takeoff, from_y);
+    if let Some(c) = edge.climb {
+        return DebugPath { kind: edge.kind, points: climb_points(p0, edge.land, &c), highlighted, climb: true };
+    }
     let p2 = edge.land;
     let mid = (p0 + p2) * 0.5;
     let dx = (p2.x - p0.x).abs();
@@ -76,7 +95,30 @@ pub fn edge_path(edge: &Edge, from_y: f32, highlighted: bool) -> DebugPath {
             p0 * (u * u) + control * (2.0 * u * t) + p2 * (t * t)
         })
         .collect();
-    DebugPath { kind: edge.kind, points, highlighted }
+    DebugPath { kind: edge.kind, points, highlighted, climb: false }
+}
+
+/// Take-off, then wall contact / kick-out pairs up the climbed wall (bouncing to the facing
+/// wall of a shaft), from where the wall starts (or the take-off height) to its top (or the
+/// landing height), then the landing.
+fn climb_points(p0: Vec2, land: Vec2, c: &Climb) -> Vec<Vec2> {
+    let w = c.wall;
+    let toward = if w.x >= p0.x { 1.0 } else { -1.0 };
+    let out_x = c.shaft.map_or(w.x - toward * CLIMB_KICK_PX, |o| o.x);
+    let bottom = w.y1.min(p0.y);
+    let top = w.y0.max(land.y).min(bottom);
+    let hops = (((bottom - top) / CLIMB_HOP_PX).ceil() as usize).clamp(1, MAX_HOPS);
+    let step = (bottom - top) / hops as f32;
+    let mut points = Vec::with_capacity(2 * hops + 3);
+    points.push(p0);
+    for i in 0..hops {
+        let y = bottom - step * i as f32;
+        points.push(Vec2::new(w.x, y));
+        points.push(Vec2::new(out_x, y - 0.5 * step));
+    }
+    points.push(Vec2::new(w.x, top));
+    points.push(land);
+    points
 }
 
 #[cfg(test)]

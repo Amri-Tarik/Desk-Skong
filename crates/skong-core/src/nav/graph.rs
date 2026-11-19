@@ -23,6 +23,8 @@ pub(crate) const SIM_DT: f32 = 1.0 / 120.0;
 const MAX_CLIMB_WALLS: usize = 3;
 /// Perturbed re-runs a climb must also pass.
 const PERTURBATIONS: u8 = 2;
+/// A climb run without a new high point for this long (s) is abandoned.
+const CLIMB_STALL: f32 = 1.5;
 /// Slowest take-off speed (fraction of the gait speed) a perturbed run uses; just above what
 /// the follower's approach accepts.
 const RUN_FRACTION_MIN: f32 = 0.82;
@@ -62,6 +64,9 @@ pub struct BuildStats {
     pub ticks: usize,
     /// Climbs that worked once but failed from a perturbed start (rejected).
     pub brittle: usize,
+    /// Wall-climb simulations (perturbed re-runs included) and their ticks.
+    pub climb_sims: usize,
+    pub climb_ticks: usize,
     pub millis: f32,
 }
 
@@ -417,21 +422,46 @@ impl Builder<'_> {
         let mut found: Option<Found> = None;
         let mut alternative = None;
         let mut caught = false;
+        let mut dead_walls: Vec<f32> = Vec::new();
+        let (mut stalled_walls, mut short_walls): (Vec<f32>, Vec<f32>) = (Vec::new(), Vec::new());
+        // Jumps tried, and whether any of them failed in a way a climb could fix (bounced back
+        // onto the source off a wall, or fell short). Jumps that were all caught by other
+        // surfaces on the way say the same of climbs.
+        let (mut jumps_tried, mut climb_could_help) = (false, false);
+        let mut alternative_tries = 0;
         for c in &cands {
-            // Looking for an alternative: only climbs up another wall.
+            // Looking for an alternative: one try at a climb up another wall.
             if let Some(f) = found {
                 let other_wall = c.climb.zip(f.script.climb).is_some_and(|(a, b)| a.wall.x != b.wall.x);
-                if !other_wall {
+                if !other_wall || alternative_tries >= 1 {
                     continue;
                 }
+                alternative_tries += 1;
+            }
+            if c.recipe == Recipe::Climb && jumps_tried && !climb_could_help {
+                continue;
             }
             // Caught on the way by another surface: an air dash (flying further at the same
             // heights) will not do better, unless it is meant to shadow-dash through a wall.
             let dash_jump = matches!(c.recipe, Recipe::Jump { dash: true, .. });
-            if blocked.contains(&c.tx) || (caught && dash_jump && !c.needs_shadow) {
+            let dead_wall = c.climb.is_some_and(|cl| dead_walls.contains(&cl.wall.x));
+            // Climb variants only where the plain climb up that wall showed they could help: a
+            // shaft where it stalled, a dash finish where it topped out but fell short.
+            let needless = c.climb.is_some_and(|cl| {
+                (cl.shaft.is_some() && !stalled_walls.contains(&cl.wall.x)) || (cl.dash && !short_walls.contains(&cl.wall.x))
+            });
+            if needless {
                 continue;
             }
-            match self.simulate(*c, s, t, region, 0) {
+            if dead_wall || blocked.contains(&c.tx) || (caught && dash_jump && !c.needs_shadow) {
+                continue;
+            }
+            let res = self.simulate(*c, s, t, region, 0);
+            if matches!(c.recipe, Recipe::Jump { .. }) {
+                jumps_tried = true;
+                climb_could_help |= !matches!(res, Ok(_) | Err(Fail::Landed { source: false, .. }));
+            }
+            match res {
                 Ok(f) => {
                     let ok = match tier {
                         Tier::Stroll => matches!(f.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::Jump),
@@ -452,6 +482,10 @@ impl Builder<'_> {
                 }
                 Err(Fail::Landed { above: true, near: true, source: false }) if c.recipe != Recipe::Climb => blocked.push(c.tx),
                 Err(Fail::Landed { source: false, .. }) if matches!(c.recipe, Recipe::Jump { .. }) => caught = true,
+                // Caught by another surface on the way up that wall: its other variants would be too.
+                Err(Fail::Landed { source: false, .. }) if let Some(cl) = c.climb => dead_walls.push(cl.wall.x),
+                Err(Fail::Short) if let Some(cl) = c.climb => short_walls.push(cl.wall.x),
+                Err(Fail::Other) if let Some(cl) = c.climb => stalled_walls.push(cl.wall.x),
                 Err(_) => {}
             }
         }
@@ -641,7 +675,9 @@ impl Builder<'_> {
                 Side::Right => t.hi > wall.x,
                 Side::Left => t.lo < wall.x,
             };
-            let tx = if over { inset(t, wall.x + sign * (r.half + 8.0), r.half) } else { inset(t, hover - sign * (r.half + 8.0), r.half) };
+            let want = if over { wall.x + sign * (r.half + 8.0) } else { hover - sign * (r.half + 8.0) };
+            // Land where nothing sits on top of the target (it would catch the knight first).
+            let Some(tx) = self.exposed_x(t, want, t.y - r.jump) else { continue };
             let cw = |w: &Wall| ClimbWall { x: w.x, y0: w.y0, y1: w.y1 };
             let far = (tx - hover).abs() > 4.0 * r.half + 32.0;
             let mut push = |shaft: Option<ClimbWall>, dash: bool| {
@@ -770,6 +806,9 @@ impl Builder<'_> {
     /// scripts that only work from one exact start.
     fn simulate(&mut self, mut script: Script, s: &Surface, t: &Surface, region: RectF, perturb: u8) -> Result<Found, Fail> {
         self.stats.sims += 1;
+        if script.recipe == Recipe::Climb {
+            self.stats.climb_sims += 1;
+        }
         let r = self.reach;
         // Per-tick cost grows with the terrain in view, so each run gets only the part of the
         // pair's local terrain its move can reach: its horizontal span and its apex.
@@ -834,8 +873,12 @@ impl Builder<'_> {
         let (mut double, mut wall, mut dash, mut shadow, mut jumped, mut through, mut superdash) =
             (false, false, false, false, false, false, false);
         let (mut hard, mut approach_t, mut still) = (false, 0.0, 0u32);
+        let (mut best_y, mut best_t) = (s.y, 0.0f32);
         loop {
             self.stats.ticks += 1;
+            if script.recipe == Recipe::Climb {
+                self.stats.climb_ticks += 1;
+            }
             let input = exec.input(&ch, script.gait, SIM_DT);
             let (old_x, was_shadow) = (ch.pos.x, matches!(ch.state, MoveState::Dashing { shadow: true }));
             ev.clear();
@@ -863,7 +906,12 @@ impl Builder<'_> {
                 Outcome::Done => break,
                 Outcome::Wrong => {
                     let near = (ch.pos.x - script.tx).abs() <= ch.size.x;
-                    return Err(Fail::Landed { above: ch.pos.y < t.y, near, source: s.shares_ledge(&ch) });
+                    let above = ch.pos.y < t.y;
+                    if exec.finished && !above {
+                        // A climb that made it to the top but not across.
+                        return Err(Fail::Short);
+                    }
+                    return Err(Fail::Landed { above, near, source: s.shares_ledge(&ch) });
                 }
                 Outcome::Continue => {}
             }
@@ -888,8 +936,16 @@ impl Builder<'_> {
             let charging = matches!(ch.state, MoveState::SuperdashCharge { .. });
             let stuck = still > 12 && !charging;
             let inside = (region.left..=region.right).contains(&ch.pos.x) && (region.top..=region.bottom).contains(&ch.pos.y);
+            // A climb that stops gaining height is going nowhere (sliding / hovering in place).
+            if script.recipe == Recipe::Climb && exec.stage == Stage::Script {
+                if ch.pos.y < best_y - 4.0 {
+                    (best_y, best_t) = (ch.pos.y, exec.t);
+                } else if exec.t - best_t > CLIMB_STALL {
+                    return Err(if exec.finished { Fail::Short } else { Fail::Other });
+                }
+            }
             if stuck || !inside || exec.t > limit {
-                return Err(Fail::Other);
+                return Err(if exec.finished { Fail::Short } else { Fail::Other });
             }
         }
         let kind = if superdash {

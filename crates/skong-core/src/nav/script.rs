@@ -131,6 +131,8 @@ pub(crate) struct Exec {
     released: bool,
     /// Side (of the body) of the wall last kicked off during a climb.
     kicked: Option<Side>,
+    /// A climb reached its finish (above the wall top or the target).
+    pub finished: bool,
 }
 
 impl Exec {
@@ -147,6 +149,7 @@ impl Exec {
             dash_done: false,
             released: false,
             kicked: None,
+            finished: false,
         }
     }
 
@@ -348,6 +351,7 @@ impl Exec {
         let above_top = ch.pos.y < c.wall.y0 - CLEAR_PX;
         let finishing = above_top || (!c.over && ch.pos.y < s.ty - CLEAR_PX);
         if finishing && !first {
+            self.finished = true;
             input.x = steer(ch.pos.x, s.tx, p.px(STEER_UNITS));
             if falling && ch.pos.y > s.ty - CLEAR_PX && ch.can_double_jump() {
                 press_jump(input);

@@ -7,7 +7,8 @@
 //! runs between changes; dropping the overlay frees the window and its pixels.
 //!
 //! Colours: Ground ledges blue, OneWay green, Content magenta, walls orange, content walls purple; nav surfaces
-//! (standable spans) cyan; edges per [`MoveKind`] (see [`move_color`]), the current route
+//! (standable spans) cyan; edges per [`MoveKind`] (see [`move_color`]); climbs also mark the
+//! wall stretch they use and a white hand-hold at each wall contact; the current route
 //! thicker and opaque. A legend sits in the primary monitor's top-right corner.
 use anyhow::{Context, Result, bail};
 use skong_core::canvas::premul;
@@ -75,6 +76,8 @@ const CONTENT: (u8, u8, u8) = (255, 40, 220);
 const WALL: (u8, u8, u8) = (255, 140, 20);
 const CONTENT_WALL: (u8, u8, u8) = (150, 60, 255);
 const SURFACE: (u8, u8, u8) = (0, 230, 230);
+/// Hand-holds marking where a climb edge touches its wall.
+const CLIMB_HOLD: (u8, u8, u8) = (255, 255, 255);
 
 /// Display changes re-trigger desktop enumeration; everything else is default.
 extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
@@ -173,6 +176,16 @@ impl DebugOverlay {
             for seg in p.points.windows(2) {
                 c.line(seg[0], seg[1], width, color);
             }
+            // Climbs: the stretch of wall used, and a hand-hold at every wall contact.
+            let mut contacts = p.wall_contacts();
+            if let Some(first) = contacts.next() {
+                let top = p.wall_contacts().last().unwrap_or(first);
+                c.line(first, top, width + 2, argb(move_color(p.kind), alpha / 2));
+                let hold = argb(CLIMB_HOLD, alpha);
+                for h in std::iter::once(first).chain(contacts) {
+                    c.rect(h.x - 3.0, h.y - 3.0, h.x + 3.0, h.y + 3.0, hold);
+                }
+            }
             if p.highlighted && let Some(&end) = p.points.last() {
                 c.rect(end.x - 4.0, end.y - 4.0, end.x + 4.0, end.y + 4.0, color);
             }
@@ -190,6 +203,7 @@ impl DebugOverlay {
         let mut rows: Vec<(String, (u8, u8, u8))> = MoveKind::ALL.iter().map(|k| (format!("{k:?}"), move_color(*k))).collect();
         rows.extend([
             ("nav surface".to_string(), SURFACE),
+            ("climb hand-hold".to_string(), CLIMB_HOLD),
             ("ground".to_string(), GROUND),
             ("one-way".to_string(), ONE_WAY),
             ("content".to_string(), CONTENT),

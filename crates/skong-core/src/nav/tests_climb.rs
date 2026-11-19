@@ -54,16 +54,29 @@ fn follow(t: &Terrain, ch: &mut Character, goal: NavGoal, style: TravelStyle) ->
     let route = g.plan(ch, goal, style).unwrap_or_else(|| panic!("no {style:?} route to {goal:?} from {:?}", ch.pos));
     let moves = route.moves.clone();
     let mut f = PathFollower::new(route, goal, style);
-    let mut ev = vec![];
-    for _ in 0..(40.0 / DT) as usize {
-        let (input, status) = f.next_input(ch, &g, t, DT);
+    (drive(&g, t, ch, &mut f, 40.0).0, moves)
+}
+
+/// Step the follower like the app does, including its automatic Desolate Dive on big straight
+/// drops (only where the follower allows it). Returns the end status and the dives made.
+fn drive(g: &NavGraph, t: &Terrain, ch: &mut Character, f: &mut PathFollower, secs: f32) -> (FollowStatus, usize) {
+    let (mut ev, mut dives) = (vec![], 0);
+    for _ in 0..(secs / DT) as usize {
+        let (mut input, status) = f.next_input(ch, g, t, DT);
         if status != FollowStatus::Moving {
-            return (status, moves);
+            return (status, dives);
+        }
+        if f.dive_ok()
+            && let Some(dark) = ch.auto_dive(t, &input, false)
+        {
+            input.dive_pressed = true;
+            input.dive_dark = dark;
+            dives += 1;
         }
         ev.clear();
         ch.step(&input, t, DT, &mut ev);
     }
-    (FollowStatus::Moving, moves)
+    (FollowStatus::Moving, dives)
 }
 
 fn assert_reaches_window(t: &Terrain, from: Vec2, id: WindowId) -> Vec<MoveKind> {
@@ -149,30 +162,84 @@ fn cross_the_seam_to_a_higher_neighbour_floor() {
     assert_eq!(status, FollowStatus::Arrived, "{moves:?} at {:?}", ch.pos);
 }
 
+
 #[test]
-#[ignore]
-fn zz_trace_climb() {
-    use super::script::*;
-    use crate::controller::{Gait, Side};
-    let ws = vec![
-        win(1, 388, 293, 963, 1300), win(2, -533, 640, 715, 1182), win(3, 814, 132, 1865, 899), win(4, 2082, 159, 2484, 1079),
-        win(5, 1237, 44, 2305, 802), win(6, 1438, 434, 2299, 1213), win(7, 81, 46, 1186, 940), win(8, 511, 28, 1654, 992),
-    ];
-    let mon = Monitor { work: RectI::new(0, 0, 2560, 1392), ..primary() };
-    let t = desktop(vec![mon], ws);
-    let ch0 = knight(&t, 1945.0, 1392.0);
-    let half = ch0.size.x * 0.5;
-    let sc = Script { recipe: Recipe::Climb, start: Start::Run, dir: Side::Right, gait: Gait::Run, takeoff: 2082.0 - half - 48.0, back: 1950.0, tx: 2082.0 + half + 8.0, ty: 159.0, needs_shadow: false, climb: Some(Climb { wall: ClimbWall { x: 2082.0, y0: 159.0, y1: 1079.0 }, shaft: None, dash: false, over: true }) };
-    let mut ch = ch0.clone();
-    let mut ex = Exec::new(sc);
-    let mut ev = vec![];
-    for i in 0..1200 {
-        let inp = ex.input(&ch, Gait::Run, DT);
-        ev.clear();
-        ch.step(&inp, &t, DT, &mut ev);
-        if i % 6 == 0 || !ev.is_empty() {
-            println!("{i} x {:.1} y {:.1} v {:?} in.x {:.2} j {} {:?} {:?}", ch.pos.x, ch.pos.y, ch.vel, inp.x, inp.jump_pressed, ch.state, ev);
-        }
-        if ch.is_grounded() && ex.stage == Stage::Script && ex.t > 0.3 { println!("grounded at {:?}", ch.pos); break; }
+fn climbs_hold_from_many_starting_points() {
+    // The follower reaches the take-off from anywhere (near, far, either side, walking in
+    // or turning around); the climb script must not depend on one exact arrival.
+    let t = desktop(vec![primary()], vec![win(1, 1000, 300, 1400, 1400), win(2, 1700, 500, 1900, 1400)]);
+    for x in [60.0, 400.0, 900.0, 975.0, 1450.0, 1600.0, 1950.0, 2500.0] {
+        let mut ch = knight(&t, x, FLOOR);
+        let (status, moves) = follow(&t, &mut ch, NavGoal::OnWindow(1), TravelStyle::Normal);
+        assert_eq!(status, FollowStatus::Arrived, "from x {x}: {moves:?} ended at {:?}", ch.pos);
+        assert_eq!(ch.support.and_then(|s| s.owner), Some(1), "from x {x}");
     }
+}
+
+#[test]
+fn dives_during_a_drop_land_where_the_drop_would() {
+    // Off the top of a tall window down to the taskbar: the app's auto-dive kicks in on the
+    // way down and the follower carries on.
+    let t = desktop(vec![primary()], vec![win(1, 1000, 300, 1400, 1400)]);
+    let mut ch = knight(&t, 1200.0, 0.0);
+    assert_eq!(ch.pos.y, 300.0);
+    let goal = NavGoal::Point(Vec2::new(500.0, FLOOR));
+    let g = NavGraph::build(&t, &ch);
+    let route = g.plan(&ch, goal, TravelStyle::Normal).expect("route");
+    assert!(route.moves.iter().any(|m| matches!(m, MoveKind::Drop | MoveKind::DropThrough)), "{:?}", route.moves);
+    let mut f = PathFollower::new(route, goal, TravelStyle::Normal);
+    let (status, dives) = drive(&g, &t, &mut ch, &mut f, 30.0);
+    assert_eq!(status, FollowStatus::Arrived, "at {:?}", ch.pos);
+    assert!(dives > 0, "expected an auto-dive on the 1100 px drop");
+    assert!((ch.pos.x - 500.0).abs() <= 6.0 && ch.pos.y == FLOOR, "{:?}", ch.pos);
+}
+
+#[test]
+fn no_dive_mid_climb() {
+    let t = desktop(vec![primary()], vec![win(1, 1000, 300, 1400, 1400)]);
+    let ch = knight(&t, 300.0, FLOOR);
+    let g = NavGraph::build(&t, &ch);
+    let goal = NavGoal::OnWindow(1);
+    let f = PathFollower::new(g.plan(&ch, goal, TravelStyle::Normal).expect("route"), goal, TravelStyle::Normal);
+    assert_eq!(f.current_move(), Some(MoveKind::WallJump));
+    assert!(!f.dive_ok());
+}
+
+#[test]
+fn a_hop_that_keeps_slipping_is_retried_then_given_up() {
+    // Plan with the window's top in place, then follow on a terrain where it vanished (same
+    // generation, so only the landing checks notice): every climb ends back on the floor.
+    // The follower retries, then avoids and excludes the failing hops and reports Failed
+    // instead of looping forever.
+    let planned = desktop(vec![primary()], vec![win(1, 1000, 300, 1400, 1400)]);
+    let mut real = planned.clone();
+    real.ledges.retain(|l| l.owner != Some(1));
+    let mut ch = knight(&planned, 300.0, FLOOR);
+    let g = NavGraph::build(&planned, &ch);
+    let goal = NavGoal::OnWindow(1);
+    let mut f = PathFollower::new(g.plan(&ch, goal, TravelStyle::Normal).expect("route"), goal, TravelStyle::Normal);
+    let (status, _) = drive(&g, &real, &mut ch, &mut f, 120.0);
+    assert_eq!(status, FollowStatus::Failed, "at {:?}", ch.pos);
+    assert!(f.replans() >= 3, "a slip is retried before giving up ({} re-plans)", f.replans());
+}
+
+#[test]
+fn climb_edges_have_their_walls_and_draw_distinctly() {
+    let t = desktop(vec![primary()], vec![win(1, 600, 300, 900, 1400), win(2, 1000, 300, 1300, 1400)]);
+    let ch = knight(&t, 950.0, FLOOR);
+    let g = NavGraph::build(&t, &ch);
+    let climbs: Vec<&Edge> = g.edges().iter().filter(|e| e.kind == MoveKind::WallJump).collect();
+    assert!(!climbs.is_empty());
+    for e in &climbs {
+        let c = e.climb.expect("climb edges carry their wall");
+        let p = edge_path(e, g.surfaces()[e.from].y, false);
+        assert!(p.climb);
+        assert_eq!(p.points.first().map(|q| q.x), Some(e.takeoff));
+        assert_eq!(p.points.last().copied(), Some(e.land));
+        let contacts: Vec<Vec2> = p.wall_contacts().collect();
+        assert!(contacts.len() >= 2, "{contacts:?}");
+        assert!(contacts.iter().all(|q| q.x == c.wall.x && q.y >= c.wall.y0 - 0.5));
+    }
+    // Ordinary edges are not drawn as climbs.
+    assert!(g.edges().iter().filter(|e| e.climb.is_none()).all(|e| !edge_path(e, g.surfaces()[e.from].y, false).climb));
 }

@@ -80,6 +80,7 @@ fn main() {
         return;
     }
     let mut build_ms = Vec::new();
+    let mut dives = 0usize;
     for seed in 1..=desktops {
         let mut rng = Rng(seed * 7919);
         let desk = desktop(&mut rng, n);
@@ -129,6 +130,13 @@ fn main() {
                         }
                         FollowStatus::Moving => {}
                     }
+                    // Like the app: dive on big straight drops (excited on odd seeds).
+                    let mut input = input;
+                    if f.dive_ok() && let Some(dark) = ch.auto_dive(&t, &input, seed % 2 == 1) {
+                        input.dive_pressed = true;
+                        input.dive_dark = dark;
+                        dives += 1;
+                    }
                     ev.clear();
                     ch.step(&input, &t, DT, &mut ev);
                     if std::env::var("SOAK_TICKS").ok().as_deref() == Some(&format!("{seed}:{}:{style:?}", w.id)) && f.route().moves.len() == 1 {
@@ -138,6 +146,7 @@ fn main() {
                 entry[result] += 1;
                 if result != 1 {
                     let what = if result == 2 { "failed" } else { "timeout" };
+                    if std::env::var("SOAK_VERBOSE").is_ok() { println!("  replan now: {:?} surface {:?}", g.plan(&ch, goal, style).map(|r| r.moves), g.surface_at(&ch)); }
                     *failing.entry(format!("{what} during {:?}", last_kind.unwrap_or(MoveKind::Walk))).or_default() += 1;
                     if std::env::var("SOAK_VERBOSE").is_ok() {
                         println!("seed {seed} {style:?} -> window {} {:?}: {what} at {:?} ({:?}) during {last_kind:?}, {} re-plans, route {:?}", w.id, w.rect, ch.pos, ch.state, f.replans(), planned);
@@ -156,6 +165,7 @@ fn main() {
     for (what, n) in &failing {
         println!("  {what}: {n}");
     }
+    println!("auto-dives during routes: {dives}");
     build_ms.sort_by(f32::total_cmp);
     if let (Some(med), Some(max)) = (build_ms.get(build_ms.len() / 2), build_ms.last()) {
         println!("graph build: median {med:.2} ms, max {max:.2} ms over {} desktops", build_ms.len());
