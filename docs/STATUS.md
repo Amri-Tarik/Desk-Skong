@@ -1,6 +1,6 @@
 # Desk-Skong — status & roadmap
 
-_Last updated 2026-11-19 (midday): all parked work merged; no open PRs._
+_Last updated 2026-11-19: Sly the tutor on branch `npc_feat-sly-tutor`._
 
 ## Done (merged to `master`)
 
@@ -15,6 +15,7 @@ _Last updated 2026-11-19 (midday): all parked work merged; no open PRs._
 | Props & world | Benches (tray, Ctrl+Alt+B), perching on any window/content edge, seated pose tuned; discoveries in windows (benches, geo deposits, per app, persisted) | #18 #21 #41 |
 | Stakes | Death, the Shade (persisted, clamped, fights back), respawn, Geo coins + wallet (tray tooltip), shattered closed windows, Geo showers, Loot behaviour, spells & nail arts, panel "Stakes" buttons | #40 |
 | Living world (day 2) | NPC visitors (Cornifer, Quirrel, Zote, Elderbug, Hornet) with original lines, speech/thought bubbles, subtle dust-puff portals, Dream Nail on windows/visitors (never mid-talk); discoveries v2 with shared occupancy (no overlaps; coins hop out of props), no hot springs, finds on platforms that lasted ≥ 30 s | #42 #46 |
+| Training (day 3) | **Great Nailsage Sly** visits after the knight has fought (rarer than the others), talks, then runs a short lesson: he draws his nail, announces and demonstrates drills with his own clips (data-driven `demos`), the knight practises (`Train` behaviour: slashes / up / down slashes, jumps, dashes, Great / Cyclone / Dash Slash), Sly praises or corrects, closes and bows out; ends politely when the user types, leaves, or a fullscreen app comes up; mid-air slashes now render | — |
 | Behaviour (day 2) | Priority tiers (Urgent > Engagement: Shade, Geo, fights, NPC talks > Needs > Ambient), graceful exits (get up, put the map away); seated life (calm breathing idle, map checks, leaning, dozing; minimum holds only where they make sense; mood-driven pace; all seated frames on one seat line); silent knight emote icons (zzz, Geo, !, ?) | #44 #45 #48 |
 | Climbing (day 2) | Explicit wall-climb planning along any wall, shafts, content walls, monitor seams; robust replays and slip memory; 100 % arrival in 300-desktop soak | #43 |
 | Input & safety | Grab-and-throw, clicks/pokes, idle & typing-rate sensing (counts only), single instance, **fullscreen games**: knight moves to a free monitor or vanishes (no CPU) | #22 #26 #36 |

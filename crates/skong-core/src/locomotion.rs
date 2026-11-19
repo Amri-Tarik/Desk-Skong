@@ -34,6 +34,9 @@ struct Clips {
     double_jump: ClipId,
     wall_slide: ClipId,
     wall_slash: ClipId,
+    slash: ClipId,
+    up_slash: ClipId,
+    down_slash: ClipId,
     walljump: ClipId,
     dash: ClipId,
     dash_to_idle: ClipId,
@@ -79,6 +82,9 @@ impl Clips {
             double_jump: id("Double Jump")?,
             wall_slide: id("Wall Slide")?,
             wall_slash: id("Wall Slash")?,
+            slash: id("Slash")?,
+            up_slash: id("UpSlash")?,
+            down_slash: id("DownSlash")?,
             walljump: id("Walljump")?,
             dash: id("Dash")?,
             dash_to_idle: id("Dash To Idle")?,
@@ -253,7 +259,7 @@ impl Locomotion {
         if let Some(a) = self.one_shot {
             let grounded_accent =
                 [c.land, c.run_to_idle, c.dash_to_idle, c.hard_land, c.dash_down_land, c.quake_land, c.quake_land_2].contains(&a);
-            let air_accent = [c.double_jump, c.walljump, c.sd_air_brake].contains(&a);
+            let air_accent = [c.double_jump, c.walljump, c.sd_air_brake, c.slash, c.up_slash, c.down_slash].contains(&a);
             let dash_accent =
                 [c.dash, c.shadow_dash, c.shadow_dash_sharp, c.dash_down, c.shadow_dash_down, c.shadow_dash_down_sharp].contains(&a);
             let ok = match ch.state {
@@ -324,6 +330,17 @@ impl Locomotion {
     /// character is on a wall.
     pub fn wall_slash(&mut self) {
         self.accent(Some(self.clips.wall_slash));
+    }
+
+    /// Slash in mid-air (`Slash` / `UpSlash` / `DownSlash`); dropped on landing.
+    pub fn air_slash(&mut self, dir: crate::ai::AttackDir) {
+        let c = &self.clips;
+        let clip = match dir {
+            crate::ai::AttackDir::Up => c.up_slash,
+            crate::ai::AttackDir::Down => c.down_slash,
+            crate::ai::AttackDir::Forward => c.slash,
+        };
+        self.accent(Some(clip));
     }
 
     /// The facing was flipped from outside the controller while standing (the AI turning
@@ -533,5 +550,21 @@ mod tests {
         assert_eq!(loco.update(&on_wall, &[], &[AnimEvent::Finished(lib.id("Wall Slash").unwrap())], 0.01).clip, lib.id("Wall Slide").unwrap());
         loco.wall_slash();
         assert_ne!(loco.update(&ch, &[], &[], 0.01).clip, lib.id("Wall Slash").unwrap());
+    }
+
+    #[test]
+    fn air_slashes_play_in_the_air_only() {
+        use crate::ai::AttackDir;
+        let (lib, mut loco, ch, _) = setup();
+        let mut air = ch.clone();
+        air.state = MoveState::Airborne;
+        loco.air_slash(AttackDir::Down);
+        assert_eq!(loco.update(&air, &[], &[], 0.01).clip, lib.id("DownSlash").unwrap());
+        loco.air_slash(AttackDir::Up);
+        assert_eq!(loco.update(&air, &[], &[], 0.01).clip, lib.id("UpSlash").unwrap());
+        // Landed: the slash is dropped.
+        let mut ground = ch.clone();
+        ground.state = MoveState::Grounded;
+        assert_ne!(loco.update(&ground, &[], &[], 0.01).clip, lib.id("UpSlash").unwrap());
     }
 }

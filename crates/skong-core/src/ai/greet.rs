@@ -22,6 +22,8 @@ pub enum VisitorState {
     Waiting,
     /// Talking with the knight.
     Talking,
+    /// Teaching the knight after the talk (see [`Visitor::lesson`]).
+    Teaching,
     Leaving,
 }
 
@@ -46,6 +48,8 @@ pub struct Visitor {
     pub excitement: f32,
     /// Horizontal distance to stand from their feet point (px); 0 = default.
     pub stand_off: f32,
+    /// While teaching: the drill and what the knight should be doing.
+    pub lesson: Option<super::train::LessonCue>,
 }
 
 /// Chance (at curiosity 0.5) that the knight dream-nails a visitor after their talk.
@@ -209,7 +213,7 @@ impl Greet {
                 }
                 ctx.out.waiting = false;
                 if !talking && act.is_none() {
-                    if v.greeted && !self.dream_decided {
+                    if v.greeted && !self.dream_decided && v.state != VisitorState::Teaching {
                         // Afterwards, sometimes: dream-nail them to hear what they really think.
                         self.dream_decided = true;
                         let chance = DREAM_NAIL_CHANCE * (0.5 + ctx.mind.personality.curiosity);
@@ -253,7 +257,7 @@ fn act_name<'c>(ctx: &'c Ctx, w: &ActWait) -> &'c str {
 }
 
 /// First act among `a|b|c` that can start here.
-fn startable(ctx: &Ctx, alternatives: &str) -> Option<ActWait> {
+pub(crate) fn startable(ctx: &Ctx, alternatives: &str) -> Option<ActWait> {
     let (grounded, sit) = (ctx.grounded(), ctx.senses.can_sit());
     alternatives
         .split('|')
@@ -265,7 +269,7 @@ fn startable(ctx: &Ctx, alternatives: &str) -> Option<ActWait> {
 
 /// Where to stand: beside the visitor on the knight's side of them, on their ledge (the
 /// other side when the ledge ends too soon).
-fn stand_point(ctx: &Ctx, v: &Visitor) -> Vec2 {
+pub(crate) fn stand_point(ctx: &Ctx, v: &Visitor) -> Vec2 {
     let k = ctx.p.knight;
     let off = stand_off(ctx, v);
     let side = if k.pos.x >= v.pos.x { 1.0 } else { -1.0 };
@@ -286,7 +290,7 @@ fn stand_off(ctx: &Ctx, v: &Visitor) -> f32 {
     if v.stand_off > 0.0 { v.stand_off } else { STAND_OFF_UNITS * ctx.p.knight.params.px_per_unit }
 }
 
-fn beside(ctx: &Ctx, v: &Visitor, goal: Vec2) -> bool {
+pub(crate) fn beside(ctx: &Ctx, v: &Visitor, goal: Vec2) -> bool {
     let k = ctx.p.knight;
     let off = stand_off(ctx, v);
     let dx = (k.pos.x - v.pos.x).abs();

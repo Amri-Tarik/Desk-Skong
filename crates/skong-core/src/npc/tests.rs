@@ -66,7 +66,13 @@ fn real_npcs_resolve_and_reacts_exist() {
         for c in &def.conversations {
             assert!((2..=4).contains(&c.len()), "{}: 2-4 lines per conversation", def.name);
         }
-        let reacts = def.conversations.iter().flatten().filter_map(|l| l.react()).chain(def.greet_react.as_deref());
+        let lesson_lines = def.lesson.iter().flat_map(|l| l.praise.iter().chain(&l.critique).chain(&l.closing));
+        let reacts = def.conversations.iter().flatten().chain(lesson_lines).filter_map(|l| l.react()).chain(def.greet_react.as_deref());
+        // Drills are built-in moves or knight acts.
+        for d in def.lesson.iter().flat_map(|l| &l.drills) {
+            let builtin = ["slash", "up_slash", "down_slash", "dash", "jump"].contains(&d.drill.as_str());
+            assert!(builtin || acts.id(&d.drill).is_some(), "{}: unknown drill '{}'", def.name, d.drill);
+        }
         for r in reacts {
             for name in r.split('|') {
                 assert!(acts.id(name.trim()).is_some(), "{}: unknown react act '{name}'", def.name);
@@ -211,4 +217,92 @@ fn placement_avoids_the_knight_and_perches_on_windows() {
         let perch = plan_placement(Arrival::Perch, &footings, Vec2::new(100.0, 1040.0), &desk(500).monitors, &mut rng, &mut |_| true).expect("perch");
         assert_eq!(perch.owner, Some(7), "perches on a window top");
     }
+}
+
+/// Sly arrives, talks, then teaches: announce → (demo) → practice; the knight's report gets
+/// feedback; after the closing line he bows and fades away.
+#[test]
+fn teacher_runs_a_lesson_after_the_talk() {
+    use crate::ai::LessonStage;
+    let s = set();
+    let t = Terrain::from_desktop(&desk(500), &TerrainOptions::default());
+    let id = s.id("sly").expect("sly");
+    let def = &s.defs[id];
+    let lesson_def = def.lesson.as_ref().expect("sly teaches");
+    let mut npc = Npc::new(1, id, &s, Placement { feet: Vec2::new(800.0, 500.0), owner: Some(7), walk_to: None }, 3, 64.0);
+    npc.attach(&env(&t));
+    let mut ev = Vec::new();
+    run(&mut npc, &s, &t, 1.0, &mut ev);
+    let ctx = TalkContext::from_desktop(&desk(500), Some(10.0));
+    let mut rng = Rng::new(4);
+    let lesson = Lesson::plan(lesson_def, &ctx, &mut rng).expect("lesson");
+    let drills = lesson.drills.len();
+    assert!(drills >= 4 && lesson.drills[0].drill == "slash", "{:?}", lesson.drills);
+    npc.set_lesson(lesson);
+    let lines = ctx.pick(&def.conversations, &mut rng).expect("lines");
+    assert!(npc.begin_talk(lines, 700.0, &s, &mut ev));
+    run(&mut npc, &s, &t, 30.0, &mut ev);
+    assert!(ev.contains(&NpcEvent::ConversationOver));
+    assert_eq!(npc.phase(), NpcPhase::Teaching);
+    let p = npc.percept(&s, 64.0);
+    assert_eq!(p.state, VisitorState::Teaching);
+    assert!(p.greeted, "the talk is over: no second greeting");
+
+    // Each drill: wait for the knight's turn, report it, hear the feedback.
+    let mut served = Vec::new();
+    for _ in 0..(120.0 / DT) as usize {
+        npc.tick(DT, &s, &env(&t), &mut ev);
+        let p = npc.percept(&s, 64.0);
+        if let Some(cue) = &p.lesson
+            && cue.stage == LessonStage::Practice
+            && !served.contains(&cue.serial)
+        {
+            served.push(cue.serial);
+            npc.drilled(cue.serial, true, &s, &mut ev);
+            let p = npc.percept(&s, 64.0);
+            assert_eq!(p.lesson.as_ref().map(|c| c.stage), Some(LessonStage::Feedback));
+            assert!(p.react.is_some(), "feedback carries the knight's answer");
+            // A stale report changes nothing.
+            npc.drilled(cue.serial, false, &s, &mut ev);
+        }
+        if npc.phase() == NpcPhase::Gone {
+            break;
+        }
+    }
+    assert_eq!(served, (1..=drills as u32).collect::<Vec<_>>(), "every drill in turn");
+    assert!(ev.contains(&NpcEvent::LessonOver { finished: true }));
+    assert_eq!(ev.last(), Some(&NpcEvent::Gone), "bowed and faded away");
+}
+
+#[test]
+fn a_lesson_cut_short_says_goodbye_and_an_ignored_one_ends() {
+    let s = set();
+    let t = Terrain::from_desktop(&desk(500), &TerrainOptions::default());
+    let id = s.id("sly").expect("sly");
+    let start = |seed: u32| {
+        let mut npc = Npc::new(1, id, &s, Placement { feet: Vec2::new(800.0, 500.0), owner: Some(7), walk_to: None }, seed, 64.0);
+        let mut ev = Vec::new();
+        run(&mut npc, &s, &t, 1.0, &mut ev);
+        let mut rng = Rng::new(seed);
+        npc.set_lesson(Lesson::plan(s.defs[id].lesson.as_ref().unwrap(), &TalkContext::default(), &mut rng).unwrap());
+        assert!(npc.begin_talk(vec![("Hm.".into(), None)], 700.0, &s, &mut ev));
+        run(&mut npc, &s, &t, 3.0, &mut ev);
+        assert_eq!(npc.phase(), NpcPhase::Teaching);
+        npc
+    };
+    // Stopped by the knight's side: a parting word, then he leaves.
+    let mut npc = start(5);
+    let mut ev = Vec::new();
+    npc.end_lesson(&mut ev);
+    assert!(ev.contains(&NpcEvent::LessonOver { finished: false }));
+    assert!(ev.iter().any(|e| matches!(e, NpcEvent::Say { .. })), "says goodbye");
+    run(&mut npc, &s, &t, 12.0, &mut ev);
+    assert_eq!(npc.phase(), NpcPhase::Gone);
+
+    // Nobody practises: after two unanswered drills he gives up.
+    let mut npc = start(6);
+    let mut ev = Vec::new();
+    run(&mut npc, &s, &t, 90.0, &mut ev);
+    assert!(ev.contains(&NpcEvent::LessonOver { finished: false }), "gave up on an absent student");
+    assert_eq!(npc.phase(), NpcPhase::Gone);
 }

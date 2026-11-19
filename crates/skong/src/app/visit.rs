@@ -46,8 +46,14 @@ impl Pet {
             hour: monitor::local_hour(),
             game_monitors: &self.games.game_monitors,
             occupancy: &self.occupancy,
+            since_fight: self.brain.since_fight(),
         };
         f(v, &world, &mut self.fx);
+    }
+
+    /// The brain's side of a lesson (drill done / stop) for the teaching visitor.
+    pub(super) fn lesson_signal(&mut self, r: skong_core::ai::LessonReport) {
+        self.with_visitors(|v, w, _| v.lesson(r, w));
     }
 
     /// The brain stands beside a visitor and wants to talk.

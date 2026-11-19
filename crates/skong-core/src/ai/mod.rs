@@ -46,6 +46,7 @@ pub mod rng;
 mod shade_hunt;
 mod spots;
 mod stakes;
+mod train;
 mod watch;
 #[cfg(test)]
 mod tests;
@@ -60,6 +61,7 @@ pub use battle::{BattleScore, Outcome};
 pub use behaviours::{BehaviourKind, Tier};
 pub use config::{BattleConfig, BoredomConfig, BrainConfig, CompanionConfig, NeedRates, Personality, TierConfig, WatchConfig};
 pub use greet::{STAND_OFF_UNITS, Visitor, VisitorState};
+pub use train::{LessonCue, LessonReport, LessonSignal, LessonStage};
 pub use interest::{InterestMap, Poi, PoiKey, PoiKind, PoiTarget, ScoredPoi};
 pub use navigator::{GraphNavigator, NavStatus, Navigator, Reach};
 pub use needs::{Emotions, MOOD_TAGS, Mind, Needs};
@@ -153,6 +155,8 @@ pub struct Intent {
     pub greet: Option<u32>,
     /// The dream nail just requested is aimed at this visitor (their inner thoughts).
     pub dream_visitor: Option<u32>,
+    /// Lesson traffic for a teaching visitor (drill done, or stop the lesson).
+    pub lesson: Option<LessonReport>,
     /// "reason | mood + needs | top-3 utilities", for an overlay.
     pub debug: String,
     /// Discovery traffic for the app (explored a new window, used / struck a found place).
@@ -267,6 +271,8 @@ pub struct Brain {
     /// Highest tier with an eligible behaviour at the last evaluation.
     top_tier: Tier,
     oscillations: u32,
+    /// Last time he fought (the cursor, the Shade) or swung his nail in earnest.
+    last_fight_at: f32,
 }
 
 impl Brain {
@@ -309,12 +315,19 @@ impl Brain {
             pester_ready_at: 0.0,
             top_tier: Tier::Ambient,
             oscillations: 0,
+            last_fight_at: f32::NEG_INFINITY,
             cfg,
         }
     }
 
     pub fn behaviour(&self) -> BehaviourKind {
         self.active.kind()
+    }
+
+    /// Seconds since he last fought (cursor battles and pestering, the Shade, spells and
+    /// nail arts; training drills don't count). Infinite if never.
+    pub fn since_fight(&self) -> f32 {
+        self.now - self.last_fight_at
     }
 
     pub fn mind(&self) -> &Mind {
@@ -463,6 +476,12 @@ impl Brain {
             Motion::Navigate { style: TravelStyle::Normal, .. } => 0.3,
             Motion::Navigate { style: TravelStyle::Stroll, .. } => 0.1,
         };
+        let kind = self.active.kind();
+        let fighting = matches!(kind, BehaviourKind::Battle | BehaviourKind::Pester | BehaviourKind::ShadeHunt)
+            || (kind != BehaviourKind::Train && (out.attack.is_some() || out.stakes.iter().any(|e| matches!(e, StakeEvent::Cast { .. }))));
+        if fighting {
+            self.last_fight_at = self.now;
+        }
         self.maybe_request_event(p, &mut out);
         self.last_motion = out.motion;
         out.behaviour = Some(self.active.kind());
@@ -775,6 +794,14 @@ impl Brain {
         {
             self.visitors.snub(g.id, self.now + 90.0);
         }
+        if let Active::Train(t) = &self.active
+            && !t.ended
+            && self.senses.visitors.iter().any(|v| v.id == t.id && v.state == VisitorState::Teaching)
+        {
+            // Called away mid-lesson: let the teacher know.
+            out.lesson = Some(LessonReport { visitor: t.id, signal: LessonSignal::Stop });
+        }
+        let teacher = train::teacher(&self.senses.visitors).cloned();
         let visitor = self.visitors.target(&self.senses.visitors, p.knight.pos, self.now).cloned();
         nav.stop();
         if reason == SwitchReason::Preempted {
@@ -817,6 +844,10 @@ impl Brain {
             BehaviourKind::Recover => Active::Recover(Recover::start(&mut ctx)),
             BehaviourKind::Greet => match &visitor {
                 Some(v) => Active::Greet(Box::new(greet::Greet::start(&mut ctx, v))),
+                None => Active::Idle(Idle::start(&mut ctx)),
+            },
+            BehaviourKind::Train => match &teacher {
+                Some(v) => Active::Train(Box::new(train::Train::start(&mut ctx, v))),
                 None => Active::Idle(Idle::start(&mut ctx)),
             },
             BehaviourKind::Dead => {
@@ -1049,6 +1080,12 @@ impl Brain {
             Some(v) if !s.fullscreen => (0.86 + 0.08 * v.excitement + 0.04 * e.excitement).min(0.97),
             _ => 0.0,
         };
+        // A lesson: nothing short of an emergency interrupts it, but the user needing the
+        // screen ends it.
+        let train = match train::teacher(&s.visitors) {
+            Some(_) if !s.user_busy && !s.user_away && !s.fullscreen => 0.98,
+            _ => 0.0,
+        };
         let visit = self.visit_utility();
         let visit = if visit > 0.0 { (visit + 0.25 * bored).min(1.1) } else { 0.0 };
 
@@ -1067,6 +1104,7 @@ impl Brain {
             (BehaviourKind::KnockedOut, knocked),
             (BehaviourKind::Recover, recover),
             (BehaviourKind::Greet, greet),
+            (BehaviourKind::Train, train),
             (BehaviourKind::Visit, visit),
         ];
         u.extend(self.stakes_utilities(p));

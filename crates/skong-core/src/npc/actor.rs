@@ -1,6 +1,7 @@
-//! One live visitor: footing, animation and the arrive → wait → talk → leave cycle.
+//! One live visitor: footing, animation and the arrive → wait → talk (→ teach) → leave
+//! cycle.
 use crate::ai::rng::Rng;
-use crate::ai::{Visitor, VisitorState};
+use crate::ai::{LessonCue, LessonStage, Visitor, VisitorState};
 use crate::anim::{Animator, ClipId, ClipLibrary, WrapMode};
 use crate::assets::SpriteKey;
 use crate::desktop::WindowId;
@@ -8,6 +9,7 @@ use crate::geom::{RectF, Vec2};
 use crate::props::ledge_below;
 use crate::terrain::Terrain;
 
+use super::lesson::Lesson;
 use super::{Arrival, Faces, Leave, NpcSet};
 
 /// Where a visitor appears (computed by the app from terrain / nav / monitors).
@@ -29,6 +31,8 @@ pub enum NpcEvent {
     LineDone,
     /// The conversation with the knight ended.
     ConversationOver,
+    /// The lesson after the conversation ended (`finished`: every drill was taught).
+    LessonOver { finished: bool },
     /// Open a dream portal here (portal departures).
     OpenPortal(Vec2),
     /// Fully gone: drop the visitor.
@@ -41,6 +45,7 @@ pub enum NpcPhase {
     Arriving,
     Waiting,
     Talking,
+    Teaching,
     Leaving,
     Gone,
 }
@@ -60,10 +65,76 @@ enum State {
     Landing { step: usize },
     Waiting { left: f32, hum_in: f32 },
     Talking { lines: Vec<(String, Option<String>)>, i: usize, t: f32, stage: Stage },
+    /// The lesson after the conversation.
+    Teaching(Box<Teach>),
     /// After the conversation: a moment before leaving.
     Lingering { left: f32 },
-    Exit { to_x: Option<f32> },
+    /// `hold`: seconds of the leave clip still to play before moving / fading.
+    Exit { to_x: Option<f32>, hold: f32 },
     Gone,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TeachStage {
+    /// The lesson's opening demo (drawing the nail), step by step.
+    Open { step: usize },
+    /// Announcing the drill.
+    Instruct,
+    /// Showing how it's done, step by step.
+    Demo { step: usize },
+    /// Watching the knight do it.
+    Practice,
+    /// Praise or a correction.
+    Feedback,
+    /// A breath before the next drill.
+    Gap,
+    /// The last word.
+    Closing,
+}
+
+/// A lesson in progress.
+#[derive(Clone, Debug)]
+struct Teach {
+    lesson: Lesson,
+    /// Current drill.
+    i: usize,
+    stage: TeachStage,
+    t: f32,
+    /// Length of the current stage (line reading time, demo step, practice patience).
+    len: f32,
+    /// Drills in a row the knight never did.
+    misses: u32,
+    /// The knight's answer to the line being said.
+    react: Option<String>,
+    /// The demo being played (Open / Demo stages).
+    demo: Vec<(ClipId, Option<f32>)>,
+}
+
+impl Teach {
+    fn placeholder() -> Self {
+        let lesson = Lesson { drills: vec![], praise: vec![], critique: vec![], closing: vec![], abandon: vec![], open_demo: None, practice_secs: 1.0 };
+        Self { lesson, i: 0, stage: TeachStage::Gap, t: 0.0, len: 0.0, misses: 0, react: None, demo: vec![] }
+    }
+
+    /// Drill number (1-based) — what the knight reports back.
+    fn serial(&self) -> u32 {
+        self.i as u32 + 1
+    }
+
+    fn react(&self) -> Option<String> {
+        matches!(self.stage, TeachStage::Feedback | TeachStage::Closing).then(|| self.react.clone()).flatten()
+    }
+
+    fn cue(&self) -> Option<LessonCue> {
+        let stage = match self.stage {
+            TeachStage::Open { .. } | TeachStage::Instruct | TeachStage::Demo { .. } => LessonStage::Instruct,
+            TeachStage::Practice => LessonStage::Practice,
+            TeachStage::Feedback | TeachStage::Gap => LessonStage::Feedback,
+            TeachStage::Closing => LessonStage::Closing,
+        };
+        let drill = self.lesson.drills.get(self.i).map_or_else(String::new, |d| d.drill.clone());
+        Some(LessonCue { serial: self.serial(), drill, stage })
+    }
 }
 
 /// Context for one tick.
@@ -97,11 +168,17 @@ pub struct Npc {
     rng: Rng,
     /// The knight is to the right (talk clips by side).
     knight_right: bool,
+    /// A lesson to teach once the conversation is over.
+    lesson: Option<Lesson>,
 }
 
 const FADE_IN: f32 = 0.4;
 const FADE_OUT: f32 = 0.9;
 const GAP: f32 = 0.5;
+/// Pause between drills.
+const DRILL_GAP: f32 = 0.6;
+/// A lesson ends after this many drills in a row the knight never did.
+const MAX_MISSES: u32 = 2;
 
 impl Npc {
     pub fn new(id: u32, def: usize, set: &NpcSet, at: Placement, seed: u32, ppu: f32) -> Self {
@@ -131,6 +208,7 @@ impl Npc {
             state: State::Enter { to_x: at.walk_to },
             rng,
             knight_right: false,
+            lesson: None,
         }
     }
 
@@ -139,6 +217,7 @@ impl Npc {
             State::Enter { .. } | State::Landing { .. } => NpcPhase::Arriving,
             State::Waiting { .. } | State::Lingering { .. } => NpcPhase::Waiting,
             State::Talking { .. } => NpcPhase::Talking,
+            State::Teaching(_) => NpcPhase::Teaching,
             State::Exit { .. } => NpcPhase::Leaving,
             State::Gone => NpcPhase::Gone,
         }
@@ -186,10 +265,15 @@ impl Npc {
         true
     }
 
+    /// Teach this lesson once the conversation (not yet started) is over.
+    pub fn set_lesson(&mut self, lesson: Lesson) {
+        self.lesson = Some(lesson);
+    }
+
     /// Leave now (e.g. nobody can reach us, or the app shuts visits off).
     pub fn leave(&mut self, set: &NpcSet, env: &NpcEnv, events: &mut Vec<NpcEvent>) {
         if !matches!(self.state, State::Exit { .. } | State::Gone) {
-            if matches!(self.state, State::Talking { .. }) {
+            if matches!(self.state, State::Talking { .. } | State::Teaching(_)) {
                 events.push(NpcEvent::LineDone);
             }
             self.state = self.start_exit(set, env, events);
@@ -204,6 +288,7 @@ impl Npc {
                 let react = (*stage == Stage::Speaking).then(|| lines.get(*i).and_then(|l| l.1.clone())).flatten();
                 (VisitorState::Talking, Some(*i), react)
             }
+            State::Teaching(t) => (VisitorState::Teaching, None, t.react()),
             _ => {
                 let s = match self.phase() {
                     NpcPhase::Arriving => VisitorState::Arriving,
@@ -224,6 +309,10 @@ impl Npc {
             greeted: self.greeted,
             excitement: d.excitement,
             stand_off: d.stand_off * ppu,
+            lesson: match &self.state {
+                State::Teaching(t) => t.cue(),
+                _ => None,
+            },
         }
     }
 
@@ -300,13 +389,23 @@ impl Npc {
                 }
             }
             State::Talking { lines, i, t, stage } => self.talk_tick(lines, i, t + dt, stage, set, events),
+            State::Teaching(teach) => self.teach_tick(teach, dt, set, env, events),
             State::Lingering { left } => {
                 if near_knight {
                     self.looking_right = env.knight.x > self.pos.x;
                 }
                 if left - dt <= 0.0 { self.start_exit(set, env, events) } else { State::Lingering { left: left - dt } }
             }
-            State::Exit { to_x } => match to_x {
+            State::Exit { to_x, hold } if hold > 0.0 => {
+                // The leave clip (a bow...) plays first.
+                let hold = hold - dt;
+                if hold <= 0.0 && to_x.is_some() {
+                    self.anim.play(lib, c.walk.unwrap_or(c.idle), true);
+                    self.looking_right = to_x.is_some_and(|x| x > self.pos.x);
+                }
+                State::Exit { to_x, hold }
+            }
+            State::Exit { to_x, .. } => match to_x {
                 Some(x) => {
                     let step = d.walk_speed * env.ppu * dt;
                     self.looking_right = x > self.pos.x;
@@ -315,11 +414,11 @@ impl Npc {
                     if !env.area.contains(Vec2::new(self.pos.x, env.area.top + 1.0)) {
                         self.alpha -= dt / FADE_OUT;
                     }
-                    if (x - self.pos.x).abs() <= step || self.alpha <= 0.0 { self.gone(events) } else { State::Exit { to_x } }
+                    if (x - self.pos.x).abs() <= step || self.alpha <= 0.0 { self.gone(events) } else { State::Exit { to_x, hold: 0.0 } }
                 }
                 None => {
                     self.alpha -= dt / FADE_OUT;
-                    if self.alpha <= 0.0 { self.gone(events) } else { State::Exit { to_x } }
+                    if self.alpha <= 0.0 { self.gone(events) } else { State::Exit { to_x, hold: 0.0 } }
                 }
             },
             State::Gone => State::Gone,
@@ -344,23 +443,30 @@ impl Npc {
         let d = &set.defs[self.def];
         let c = &set.clips[self.def];
         let lib = set.lib(self.def);
+        // A leave clip (a bow) plays first, then they walk / fade.
+        let hold = c.leave.map_or(0.0, |l| once_secs(lib, l).max(0.05));
+        let rest = c.leave.unwrap_or(c.idle);
         match d.leave {
             Leave::Walk => {
                 let left_edge = self.pos.x - env.area.left <= env.area.right - self.pos.x;
                 let margin = 3.0 * env.ppu;
                 let to = if left_edge { env.area.left - margin } else { env.area.right + margin };
-                self.anim.play(lib, c.walk.unwrap_or(c.idle), true);
-                self.looking_right = to > self.pos.x;
-                State::Exit { to_x: Some(to) }
+                if hold <= 0.0 {
+                    self.anim.play(lib, c.walk.unwrap_or(c.idle), true);
+                    self.looking_right = to > self.pos.x;
+                } else {
+                    self.anim.play(lib, rest, true);
+                }
+                State::Exit { to_x: Some(to), hold }
             }
             Leave::Fade => {
-                self.anim.play(lib, c.idle, false);
-                State::Exit { to_x: None }
+                self.anim.play(lib, rest, c.leave.is_some());
+                State::Exit { to_x: None, hold }
             }
             Leave::Portal => {
-                self.anim.play(lib, c.idle, false);
+                self.anim.play(lib, rest, c.leave.is_some());
                 events.push(NpcEvent::OpenPortal(self.pos));
-                State::Exit { to_x: None }
+                State::Exit { to_x: None, hold }
             }
         }
     }
@@ -422,10 +528,164 @@ impl Npc {
                 } else {
                     self.greeted = true;
                     events.push(NpcEvent::ConversationOver);
-                    State::Lingering { left: self.rng.range(3.0, 6.0) }
+                    match self.lesson.take() {
+                        Some(lesson) => self.start_lesson(lesson, set, events),
+                        None => State::Lingering { left: self.rng.range(3.0, 6.0) },
+                    }
                 }
             }
         }
+    }
+
+    /// The knight finished drill `serial` (`clean`: every repetition done).
+    pub fn drilled(&mut self, serial: u32, clean: bool, set: &NpcSet, events: &mut Vec<NpcEvent>) {
+        let State::Teaching(t) = &mut self.state else { return };
+        if t.stage != TeachStage::Practice || t.serial() != serial {
+            return;
+        }
+        t.misses = 0;
+        let mut t = std::mem::replace(t, Box::new(Teach::placeholder()));
+        self.feedback(&mut t, clean, set, events);
+        self.state = State::Teaching(t);
+    }
+
+    /// Cut the lesson short (the knight was called away, the user needs the screen): a
+    /// short parting word, then leave as usual.
+    pub fn end_lesson(&mut self, events: &mut Vec<NpcEvent>) {
+        let State::Teaching(t) = &self.state else { return };
+        let line = (!t.lesson.abandon.is_empty()).then(|| t.lesson.abandon[self.rng.next_u32() as usize % t.lesson.abandon.len()].clone());
+        events.push(NpcEvent::LineDone);
+        events.push(NpcEvent::LessonOver { finished: false });
+        let mut left = self.rng.range(1.5, 3.0);
+        if let Some(text) = line {
+            let secs = crate::bubble::read_secs(&text);
+            left += secs;
+            events.push(NpcEvent::Say { text, secs });
+        }
+        self.state = State::Lingering { left };
+    }
+
+    fn start_lesson(&mut self, lesson: Lesson, set: &NpcSet, events: &mut Vec<NpcEvent>) -> State {
+        let mut t = Box::new(Teach { lesson, i: 0, stage: TeachStage::Instruct, t: 0.0, len: 0.0, misses: 0, react: None, demo: Vec::new() });
+        let open = t.lesson.open_demo.as_ref().and_then(|n| set.clips[self.def].demos.get(n)).cloned().unwrap_or_default();
+        if open.is_empty() {
+            self.instruct(&mut t, set, events);
+        } else {
+            t.demo = open;
+            self.demo_step(&mut t, TeachStage::Open { step: 0 }, set);
+        }
+        State::Teaching(t)
+    }
+
+    fn stance(&self, set: &NpcSet) -> ClipId {
+        let c = &set.clips[self.def];
+        c.stance.unwrap_or(c.idle)
+    }
+
+    /// Say a line in the stance (or the given clip) for its reading time.
+    fn teach_say(&mut self, t: &mut Teach, stage: TeachStage, text: String, react: Option<String>, set: &NpcSet, events: &mut Vec<NpcEvent>) {
+        self.anim.play(set.lib(self.def), self.stance(set), false);
+        t.stage = stage;
+        t.t = 0.0;
+        t.len = crate::bubble::read_secs(&text);
+        t.react = react;
+        events.push(NpcEvent::Say { secs: t.len, text });
+    }
+
+    fn instruct(&mut self, t: &mut Teach, set: &NpcSet, events: &mut Vec<NpcEvent>) {
+        let text = t.lesson.drills[t.i].say.clone();
+        self.teach_say(t, TeachStage::Instruct, text, None, set, events);
+    }
+
+    /// Play step `stage` of `t.demo` (Open / Demo stages).
+    fn demo_step(&mut self, t: &mut Teach, stage: TeachStage, set: &NpcSet) {
+        let (TeachStage::Open { step } | TeachStage::Demo { step }) = stage else { return };
+        let Some(&(clip, secs)) = t.demo.get(step) else { return };
+        let lib = set.lib(self.def);
+        self.anim.play(lib, clip, true);
+        t.stage = stage;
+        t.t = 0.0;
+        t.len = secs.unwrap_or_else(|| once_secs(lib, clip)).max(0.05);
+        t.react = None;
+    }
+
+    fn practice(&mut self, t: &mut Teach, set: &NpcSet) {
+        self.anim.play(set.lib(self.def), self.stance(set), false);
+        t.stage = TeachStage::Practice;
+        t.t = 0.0;
+        t.len = t.lesson.practice_secs;
+        t.react = None;
+    }
+
+    fn feedback(&mut self, t: &mut Teach, clean: bool, set: &NpcSet, events: &mut Vec<NpcEvent>) {
+        // A strict teacher: even good work gets a correction now and then.
+        let praise = if clean { !self.rng.chance(0.25) } else { self.rng.chance(0.15) };
+        let pool = if praise { &t.lesson.praise } else { &t.lesson.critique };
+        let (text, react) = pool[self.rng.next_u32() as usize % pool.len()].clone();
+        self.teach_say(t, TeachStage::Feedback, text, react, set, events);
+    }
+
+    fn teach_tick(&mut self, mut t: Box<Teach>, dt: f32, set: &NpcSet, env: &NpcEnv, events: &mut Vec<NpcEvent>) -> State {
+        t.t += dt;
+        // Face the knight, except while demonstrating (the nail swings into the open air).
+        let knight_right = env.knight.x > self.pos.x;
+        self.looking_right = if matches!(t.stage, TeachStage::Open { .. } | TeachStage::Demo { .. }) { !knight_right } else { knight_right };
+        if t.t < t.len {
+            return State::Teaching(t);
+        }
+        match t.stage {
+            TeachStage::Open { step } | TeachStage::Demo { step } if step + 1 < t.demo.len() => {
+                let next = if matches!(t.stage, TeachStage::Open { .. }) { TeachStage::Open { step: step + 1 } } else { TeachStage::Demo { step: step + 1 } };
+                self.demo_step(&mut t, next, set);
+            }
+            TeachStage::Open { .. } => self.instruct(&mut t, set, events),
+            TeachStage::Demo { .. } => self.practice(&mut t, set),
+            TeachStage::Instruct => {
+                events.push(NpcEvent::LineDone);
+                let demo = t.lesson.drills[t.i].demo.as_ref().and_then(|n| set.clips[self.def].demos.get(n)).cloned().unwrap_or_default();
+                if demo.is_empty() {
+                    self.practice(&mut t, set);
+                } else {
+                    t.demo = demo;
+                    self.demo_step(&mut t, TeachStage::Demo { step: 0 }, set);
+                }
+            }
+            TeachStage::Practice => {
+                // The knight never did it.
+                t.misses += 1;
+                if t.misses >= MAX_MISSES {
+                    self.state = State::Teaching(t);
+                    self.end_lesson(events);
+                    return std::mem::replace(&mut self.state, State::Gone);
+                }
+                self.feedback(&mut t, false, set, events);
+            }
+            TeachStage::Feedback => {
+                events.push(NpcEvent::LineDone);
+                self.anim.play(set.lib(self.def), self.stance(set), false);
+                t.stage = TeachStage::Gap;
+                t.t = 0.0;
+                t.len = DRILL_GAP;
+                t.react = None;
+            }
+            TeachStage::Gap => {
+                t.i += 1;
+                if t.i < t.lesson.drills.len() {
+                    self.instruct(&mut t, set, events);
+                } else {
+                    let pool = &t.lesson.closing;
+                    let (text, react) = pool[self.rng.next_u32() as usize % pool.len()].clone();
+                    self.teach_say(&mut t, TeachStage::Closing, text, react, set, events);
+                }
+            }
+            TeachStage::Closing => {
+                events.push(NpcEvent::LineDone);
+                events.push(NpcEvent::LessonOver { finished: true });
+                self.anim.play(set.lib(self.def), self.stance(set), false);
+                return State::Lingering { left: self.rng.range(2.5, 4.0) };
+            }
+        }
+        State::Teaching(t)
     }
 
     /// Ride the owner window; fall onto the next ledge when unsupported.
@@ -436,7 +696,7 @@ impl Npc {
             self.pos = Vec2::new(r.left, r.top) + self.rel;
         }
         let supported = env.terrain.ledges.iter().any(|l| (l.y - self.pos.y).abs() < 1.5 && l.x0 - 1.0 <= self.pos.x && self.pos.x <= l.x1 + 1.0);
-        let walking_off = matches!(self.state, State::Exit { to_x: Some(_) }) && !env.area.contains(Vec2::new(self.pos.x, env.area.top + 1.0));
+        let walking_off = matches!(self.state, State::Exit { to_x: Some(_), .. }) && !env.area.contains(Vec2::new(self.pos.x, env.area.top + 1.0));
         if supported || walking_off || matches!(self.state, State::Gone) {
             if self.vy.take().is_some() {
                 self.land(env);

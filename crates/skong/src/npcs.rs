@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::Result;
-use skong_core::ai::Visitor;
+use skong_core::ai::{LessonReport, LessonSignal, Visitor};
 use skong_core::ai::rng::Rng;
 use skong_core::assets::{Frame, Skin, SpriteBank, SpriteKey};
 use skong_core::bubble::BubbleStyle;
@@ -18,7 +18,7 @@ use skong_core::desktop::{DesktopSnapshot, WindowInfo};
 use skong_core::geom::{RectF, RectI, Vec2};
 use skong_core::nav::{NavGoal, NavGraph, TravelStyle};
 use skong_core::occupancy::{ClaimKey, ClaimKind, Occupancy};
-use skong_core::npc::{Arrival, Npc, NpcEnv, NpcEvent, NpcPhase, NpcSet, Placement, TalkContext, VisitConditions, VisitScheduler, plan_placement};
+use skong_core::npc::{Arrival, Lesson, Npc, NpcEnv, NpcEvent, NpcPhase, NpcSet, Placement, TalkContext, VisitConditions, VisitScheduler, plan_placement};
 use skong_core::portal::{Footing, Portal, PortalPhase, PortalSpot, PortalStyle, SpotOptions, pick_spot};
 use skong_core::terrain::Terrain;
 use skong_win::sprite_window::SpriteWindow;
@@ -64,6 +64,8 @@ pub struct World<'a> {
     pub game_monitors: &'a [RectI],
     /// Props and other things already standing somewhere: don't arrive on top of them.
     pub occupancy: &'a Occupancy,
+    /// Seconds since the knight last fought (some visitors only come after a fight).
+    pub since_fight: f32,
 }
 
 /// Space a visitor (or a portal arrival) needs around its feet `p`, scaled by `ppu`.
@@ -203,11 +205,27 @@ impl Visitors {
         let ctx = TalkContext::from_desktop(w.desk, Some(w.hour));
         let def = self.live[i].npc.def;
         let Some(lines) = ctx.pick(&self.set.defs[def].conversations, &mut self.rng) else { return };
+        if let Some(l) = &self.set.defs[def].lesson
+            && let Some(lesson) = Lesson::plan(l, &ctx, &mut self.rng)
+        {
+            self.live[i].npc.set_lesson(lesson);
+        }
         let mut events = Vec::new();
         if self.live[i].npc.begin_talk(lines, w.knight.pos.x, &self.set, &mut events) {
             log::info!("visitor: {} talks with the knight", self.set.defs[def].display);
             self.handle_events(i, events, w);
         }
+    }
+
+    /// The knight's side of a lesson (a drill done, or he has to stop).
+    pub fn lesson(&mut self, r: LessonReport, w: &World) {
+        let Some(i) = self.live.iter().position(|l| l.npc.id == r.visitor) else { return };
+        let mut events = Vec::new();
+        match r.signal {
+            LessonSignal::Drilled { serial, clean } => self.live[i].npc.drilled(serial, clean, &self.set, &mut events),
+            LessonSignal::Stop => self.live[i].npc.end_lesson(&mut events),
+        }
+        self.handle_events(i, events, w);
     }
 
     /// Hide everything (games on every monitor); the next tick shows it again.
@@ -363,7 +381,7 @@ impl Visitors {
 
     /// A visitor is talking (no dream nails, no unrelated acts meanwhile).
     pub fn conversing(&self) -> bool {
-        self.live.iter().any(|l| l.npc.phase() == NpcPhase::Talking)
+        self.live.iter().any(|l| matches!(l.npc.phase(), NpcPhase::Talking | NpcPhase::Teaching))
     }
 
     /// The brain aimed its dream nail at visitor `id`.
@@ -386,8 +404,11 @@ impl Visitors {
         let def = match name.and_then(|n| self.set.id(n)) {
             Some(d) => d,
             None => {
-                let items: Vec<(usize, f32)> =
-                    self.set.defs.iter().enumerate().map(|(i, d)| (i, if Some(i) == self.last_def && self.set.defs.len() > 1 { 0.0 } else { d.weight })).collect();
+                // Not the same visitor twice in a row; fight-minded ones only after a fight.
+                let eligible = |i: usize, d: &skong_core::npc::NpcDef| {
+                    !(Some(i) == self.last_def && self.set.defs.len() > 1) && d.after_fight.is_none_or(|s| w.since_fight <= s)
+                };
+                let items: Vec<(usize, f32)> = self.set.defs.iter().enumerate().map(|(i, d)| (i, if eligible(i, d) { d.weight } else { 0.0 })).collect();
                 match self.rng.pick_weighted(&items) {
                     Some(d) => d,
                     None => return,
@@ -460,6 +481,10 @@ impl Visitors {
                     }
                 }
                 NpcEvent::ConversationOver => log::info!("visitor: conversation with {} over", self.set.defs[self.live[i].npc.def].display),
+                NpcEvent::LessonOver { finished } => {
+                    let who = &self.set.defs[self.live[i].npc.def].display;
+                    log::info!("visitor: {who}'s lesson {}", if finished { "is over" } else { "was cut short" });
+                }
                 NpcEvent::OpenPortal(at) => {
                     self.portals.push(OpenPortal { portal: Portal::open(PortalSpot { at, owner: None }, self.set.portal_style), guest: None });
                     self.pending_fx.push(at);
@@ -573,7 +598,7 @@ impl Visitors {
     /// The dream-nailed visitor's inner thought (never over their own speech bubble).
     fn visitor_thought(&mut self, i: usize, w: &World) {
         let l = &self.live[i];
-        if l.npc.phase() == NpcPhase::Talking || l.bubble.is_some_and(|b| self.bubbles.is_open(b)) {
+        if matches!(l.npc.phase(), NpcPhase::Talking | NpcPhase::Teaching) || l.bubble.is_some_and(|b| self.bubbles.is_open(b)) {
             return;
         }
         let d = &self.set.defs[l.npc.def];

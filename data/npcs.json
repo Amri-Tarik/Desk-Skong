@@ -1,5 +1,5 @@
 {
-  "$comment": "NPC visitors. Clips come from the exported vanilla libraries in data/hk/animations (NPC art is always vanilla: skins/Vanilla). `faces`: left|right (side-view art, mirrored to face the knight) or front (never mirrored; use talk/talk_right for direction). `arrive`: walk (in from the knight's monitor edge along the bottom), perch (sitting on a window edge), portal (steps out of a dream portal anywhere on the desktop), drop (falls out of a portal). `leave`: walk|fade|portal. `origin_above_feet` (game units) overrides the feet line measured from the idle frame (perched visitors: the seat line). `stand_off`: where the knight stands to talk (game units from the visitor). Lines are plain strings or {say, react}; `react` names knight acts from acts.json, `a|b` = first one that can start. Placeholders: {title} (a visible window title), {app} (a running app), {daypart}. `portal_style`: dust (small dust puffs + quick fade-in, default) or dream (dream-gate glow + ripple). `dream_thoughts`: what a visitor thinks when the knight dream-nails them after their talk (sometimes, never mid-conversation). `dream`: the knight's dream-nail thoughts per window (match = lowercase substrings of process name or title; an empty match is the generic pool). All lines are original writing.",
+  "$comment": "NPC visitors. Clips come from the exported vanilla libraries in data/hk/animations (NPC art is always vanilla: skins/Vanilla). `faces`: left|right (side-view art, mirrored to face the knight) or front (never mirrored; use talk/talk_right for direction). `arrive`: walk (in from the knight's monitor edge along the bottom), perch (sitting on a window edge), portal (steps out of a dream portal anywhere on the desktop), drop (falls out of a portal). `leave`: walk|fade|portal. `origin_above_feet` (game units) overrides the feet line measured from the idle frame (perched visitors: the seat line). `stand_off`: where the knight stands to talk (game units from the visitor). Lines are plain strings or {say, react}; `react` names knight acts from acts.json, `a|b` = first one that can start. Placeholders: {title} (a visible window title), {app} (a running app), {daypart}. `portal_style`: dust (small dust puffs + quick fade-in, default) or dream (dream-gate glow + ripple). `dream_thoughts`: what a visitor thinks when the knight dream-nails them after their talk (sometimes, never mid-conversation). `dream`: the knight's dream-nail thoughts per window (match = lowercase substrings of process name or title; an empty match is the generic pool). `clips.leave`: a clip played once before leaving (a bow). `weight`: relative chance to be the next visitor (default 1). `after_fight` (s): only visits that soon after the knight fought (cursor battles, pestering, the Shade, spells; invitations by name ignore it). `demos`: named clip sequences the visitor can perform (a clip name, or {clip, secs} for looping clips). `lesson` (teachers, e.g. Sly): after the conversation a training session follows: `open_demo` once, then `count` drills from `drills` (the first always, the rest at random in listed order); each drill is announced (`say`, one picked), shown (`demo`), practised by the knight (`drill`: slash, up_slash, down_slash, dash, jump, or a knight act name such as great_slash), then answered from `praise` or `critique`; `closing` ends it, `abandon` is said when it is cut short; `stance` is the clip held while teaching, `practice_secs` how long the teacher waits for a drill. Feedback and closing lines may carry a `react` like conversation lines. All lines are original writing.",
   "portal_style": "dust",
   "visits": {
     "enabled": true,
@@ -170,6 +170,81 @@
           "Farewell, little ghost."
         ]
       ]
+    },
+    {
+      "name": "sly",
+      "display": "Great Nailsage Sly",
+      "library": "Sly Boss Anim",
+      "faces": "left",
+      "clips": { "idle": "Docile", "talk": "Docile", "leave": "Bow" },
+      "arrive": "portal",
+      "leave": "fade",
+      "weight": 0.7,
+      "after_fight": 900,
+      "stay": [120, 200],
+      "stand_off": 2.6,
+      "excitement": 0.95,
+      "idle_lines": ["Hm. Where has my student got to?", "Patience is also a technique.", "Tch. Stiff knees. Old knees."],
+      "idle_every": [14, 26],
+      "greet_react": "look_up",
+      "dream_thoughts": ["...not bad, for one so small. Not bad at all.", "Did I ever stand that stiffly? Surely not.", "Hm. I may have been too strict. No. Just strict enough."],
+      "conversations": [
+        [
+          "So. The little one who picks fights with cursors.",
+          { "say": "I watched you. Brave, yes. Tidy, no.", "react": "look_down" },
+          { "say": "Come. Let us see what your nail remembers.", "react": "challenge" }
+        ],
+        [
+          "There you are. I felt the air stir three windows away.",
+          { "say": "Spirit you have plenty of. Form is another matter.", "react": "look_down" },
+          { "say": "A short lesson, then. Pay attention.", "react": "challenge" }
+        ],
+        [
+          "Good {daypart}, young one. Your stance gave you away before you did.",
+          { "say": "Even out here among the {app} windows, an idle nail grows dull.", "react": "look_up" },
+          { "say": "Draw it. We practise.", "react": "challenge" }
+        ]
+      ],
+      "demos": {
+        "draw": [{ "clip": "Nail Call", "secs": 0.7 }, "Nail Catch"],
+        "combo": ["Attack1 S1", "Attack1 S2", "Attack1 S3", "Slash Recover"],
+        "great": ["Attack2 Antic", "Attack2 S1", "Attack2 S2", "Attack2 S3", "Attack2 S4"],
+        "cyclone": [{ "clip": "Cyclone", "secs": 1.0 }, "Slash Recover"]
+      },
+      "lesson": {
+        "open_demo": "draw",
+        "stance": "Idle",
+        "count": [4, 6],
+        "practice_secs": 14,
+        "drills": [
+          { "drill": "slash", "demo": "combo", "say": ["Three cuts at the empty air. Clean, not fast.", "Strike the air before you. Three times. Mind your feet."] },
+          { "drill": "up_slash", "say": ["Now upward. Cut what hangs above you.", "Up. As if a lantern-fly dared to hover there."] },
+          { "drill": "down_slash", "say": ["Leap, and strike downward on the way back to earth.", "Jump. Cut beneath you before you land."] },
+          { "drill": "jump", "say": ["Jump. Then again from the air, if your wings allow.", "Show me your leaps. High, and land softly."] },
+          { "drill": "dash", "say": ["Dash out and back. Short, sharp, no stumbling.", "Cover the ground. Out, then back to me."] },
+          { "drill": "great_slash", "demo": "great", "say": ["Gather your strength, then spend it in one great cut.", "The great slash. Hold... and release."] },
+          { "drill": "cyclone_slash", "demo": "cyclone", "say": ["Spin, and let the nail carry you round.", "The cyclone. Do not let it make you dizzy."] },
+          { "drill": "dash_slash", "say": ["Charge, lunge, cut. All one motion.", "The dash slash. Close the distance before they blink."] }
+        ],
+        "praise": [
+          { "say": "Hm. Better than I expected.", "react": "collect_happy|look_up" },
+          { "say": "Good. Your nail remembers more than you do.", "react": "collect_happy|look_up" },
+          { "say": "Clean. Keep that.", "react": "look_up" },
+          { "say": "Yes. Just so.", "react": "look_up" }
+        ],
+        "critique": [
+          { "say": "Too eager. The nail leads, not your feet.", "react": "look_down" },
+          { "say": "Sloppy. A mosscreep would laugh at that.", "react": "look_down" },
+          { "say": "You flinched. Again, and do not flinch.", "react": "look_down" },
+          { "say": "Hm. We will call that a beginning.", "react": "look_down" }
+        ],
+        "closing": [
+          { "say": "Enough for today. Practise while the screen sleeps.", "react": "challenge" },
+          { "say": "That will do. A nail is sharpened by use, not by talk.", "react": "challenge" },
+          { "say": "Go on, then. And keep your eyes open when you fight cursors.", "react": "challenge" }
+        ],
+        "abandon": ["Ah. You are needed elsewhere. Another time.", "Hm. The screen calls. We stop here."]
+      }
     }
   ],
   "dream": [

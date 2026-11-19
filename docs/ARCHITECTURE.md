@@ -30,7 +30,7 @@ default scale 0.6).
 | `terrain` | Collision model: every window is a platform box (top = one-way ledge, sides = walls blocking from outside, bottom passable), occlusion-clipped, work-area clipped; monitor ground + outer walls; no window walls on monitor edges (seams stay open). Content ledges/walls from vision (`LedgeKind::Content`, `WallKind::Content`) stay solid while the knight is inside their window. |
 | `vision` | Pure detection on luma: top surfaces and vertical content walls (adaptive contrast, works on dark themes), persistent `SurfaceMap` with dirty-rect rescans, hysteresis, freeze-under-our-windows; screen-activity heat map (`Activity` spots). |
 | `nav` | Surface graph built by simulating the controller (cached per surface pair, incremental rebuilds), A* with `TravelStyle` (Stroll / Normal / Hurry), `PathFollower` replaying validated input scripts with re-planning; `nav::debug` for the overlay. |
-| `ai` | The brain: percepts → needs/emotions/personality → interest map → utility-scored behaviours with commitment/hysteresis (priority tiers in flight) → `Intent` (motion, acts, signals, attacks, facing, reason). Behaviours: companion, watch activity, explore, rest/nap/visit, battle, shade hunt, loot, flee, hide, ride, recover, death… Anti-ping-pong: reachable targets only (`Navigator::reach`), failure cooldowns, oscillation guard. |
+| `ai` | The brain: percepts → needs/emotions/personality → interest map → utility-scored behaviours with commitment/hysteresis (priority tiers in flight) → `Intent` (motion, acts, signals, attacks, facing, reason). Behaviours: companion, watch activity, explore, rest/nap/visit, battle, shade hunt, loot, flee, hide, ride, recover, death, greet and train (NPC visitors and their lessons)… Anti-ping-pong: reachable targets only (`Navigator::reach`), failure cooldowns, oscillation guard. |
 | `effects` | Hero effect definitions (`data/effects.json`, offsets/scales/rotations from the Knight prefab) + placement/mirroring. |
 | `props` | Benches: placement on ledges, riding windows, dropping when the window goes. |
 | `discovery` | Things found inside windows (benches, geo deposits) per app, deterministic rolls, window-relative placement, persistence. |
@@ -76,6 +76,7 @@ Key app files: `app.rs` (Pet + tick + commands + tray), `app/panel.rs` (status/I
 |---|---|
 | `hk/collections/*.json`, `hk/animations/*.json` | Exported tk2d metadata (geometry, clips). Regenerate with the exporter. |
 | `acts.json`, `acts/*.json` | Behaviour choreographies (any `data/acts/*.json` is merged in). |
+| `npcs.json` | NPC visitors: art clips, arrival / leave, lines, demos and lessons (schema in its `$comment`). |
 | `effects.json` | Hero effects with prefab offsets/scales/rotations. |
 | `props.json` | Bench styles (sprite, seat height) and discovery art. |
 
