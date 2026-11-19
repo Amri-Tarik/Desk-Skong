@@ -6,5 +6,9 @@
     { "name": "Hive bed", "sprite": "guardian_bench", "seat": 0.57 },
     { "name": "Fungal sofa", "sprite": "fung_bench_new", "seat": 0.40 },
     { "name": "Tram seat", "sprite": "tram_interior_bench", "seat": 0.38 }
-  ]
+  ],
+  "discoveries": {
+    "$comment": "Art for things found in windows (crates/skong/src/discoveries.rs), exported like the benches. Geo deposit: a rock (geo is drawn on).",
+    "deposit_rock": "mines_small_rock"
+  }
 }

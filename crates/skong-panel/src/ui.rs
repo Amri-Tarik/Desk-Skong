@@ -162,6 +162,19 @@ impl Panel {
                     }
                 });
                 ui.end_row();
+
+                ui.label("Discover");
+                ui.horizontal_wrapped(|ui| {
+                    for (i, name) in ["Bench", "Geo deposit"].into_iter().enumerate() {
+                        if ui.button(name).on_hover_text("reveal one in the window the knight stands on").clicked() {
+                            self.cmd(Command::Discover(i as u8));
+                        }
+                    }
+                    if ui.button("Forget all").clicked() {
+                        self.cmd(Command::ForgetDiscoveries);
+                    }
+                });
+                ui.end_row();
             });
 
             ui.separator();
@@ -177,6 +190,12 @@ impl Panel {
                 }
                 if ui.button("Next skin  [S]").clicked() {
                     self.cmd(Command::NextSkin);
+                }
+                if ui.button("Invite a visitor").on_hover_text("an NPC drops by; the knight runs over to talk").clicked() {
+                    self.cmd(Command::InviteVisitor);
+                }
+                if ui.button("Dream nail").on_hover_text("dream-nail the window he stands on").clicked() {
+                    self.cmd(Command::DreamNail);
                 }
             });
             ui.horizontal_wrapped(|ui| {

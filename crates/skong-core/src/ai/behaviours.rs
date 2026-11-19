@@ -18,7 +18,8 @@ use super::interest::{InterestMap, Poi, PoiKind, PoiTarget};
 use super::navigator::{NavStatus, Navigator};
 use super::needs::Mind;
 use super::percept::{Percepts, Senses};
-use super::repertoire::Repertoire;
+use super::places::{DiscoveryEvent, Visit, favourite_bench};
+use super::repertoire::{ActInfo, Repertoire};
 use super::rng::Rng;
 use super::spots::{self, View};
 use super::watch::WatchSpot;
@@ -26,6 +27,33 @@ use super::death::Dead;
 use super::shade_hunt::{Loot, ShadeHunt};
 use super::stakes::StakesMind;
 use super::{Intent, Motion};
+
+/// Priority tier of a behaviour. The best eligible behaviour of the highest non-empty
+/// tier wins, and a higher tier preempts a lower one at once (no commitment wait);
+/// within a tier the usual utility / commitment / hysteresis rules apply.
+/// Ordered lowest to highest.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Tier {
+    /// Pastimes: keeping company, watching, exploring, visiting, sitting, fidgets.
+    Ambient,
+    /// A genuinely critical need (exhausted, badly hurt).
+    Needs,
+    /// Something worth dropping everything for: loot, the Shade, a fight, an NPC.
+    Engagement,
+    /// Safety and fate: fleeing, hiding, knocked out, dying.
+    Urgent,
+}
+
+impl Tier {
+    pub fn label(self) -> &'static str {
+        match self {
+            Tier::Ambient => "ambient",
+            Tier::Needs => "needs",
+            Tier::Engagement => "engagement",
+            Tier::Urgent => "urgent",
+        }
+    }
+}
 
 /// What the knight is up to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -54,16 +82,20 @@ pub enum BehaviourKind {
     KnockedOut,
     /// Hurt: nurse it, then focus to heal.
     Recover,
+    /// A visitor (NPC) showed up: hurry over and talk.
+    Greet,
     /// Died: death act, gone, respawn at a bench / safe ledge.
     Dead,
     /// Go fight the Shade to get the Geo back.
     ShadeHunt,
     /// Walk over loose Geo to pick it up.
     Loot,
+    /// Use a place found in a window (bench, geo deposit).
+    Visit,
 }
 
 impl BehaviourKind {
-    pub const ALL: [BehaviourKind; 15] = [
+    pub const ALL: [BehaviourKind; 17] = [
         BehaviourKind::Idle,
         BehaviourKind::Companion,
         BehaviourKind::Watch,
@@ -76,9 +108,11 @@ impl BehaviourKind {
         BehaviourKind::Ride,
         BehaviourKind::KnockedOut,
         BehaviourKind::Recover,
+        BehaviourKind::Greet,
         BehaviourKind::Dead,
         BehaviourKind::ShadeHunt,
         BehaviourKind::Loot,
+        BehaviourKind::Visit,
     ];
 
     pub fn label(self) -> &'static str {
@@ -95,9 +129,27 @@ impl BehaviourKind {
             BehaviourKind::Ride => "ride",
             BehaviourKind::KnockedOut => "knocked out",
             BehaviourKind::Recover => "recover",
+            BehaviourKind::Greet => "greet",
             BehaviourKind::Dead => "dead",
             BehaviourKind::ShadeHunt => "shade hunt",
             BehaviourKind::Loot => "loot",
+            BehaviourKind::Visit => "visit",
+        }
+    }
+
+    /// Base priority tier. The brain refines it by context (see `Brain::tier_of`): Rest,
+    /// Nap and Recover only reach [`Tier::Needs`] when the need is critical, and Loot /
+    /// ShadeHunt step down while a critical need waits, unless the prize is right there.
+    ///
+    /// Extension point: a new engagement (e.g. the NPC `Greet`) is one line here.
+    pub fn tier(self) -> Tier {
+        match self {
+            BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead => Tier::Urgent,
+            BehaviourKind::Battle | BehaviourKind::ShadeHunt | BehaviourKind::Loot | BehaviourKind::Greet => Tier::Engagement,
+            BehaviourKind::Nap | BehaviourKind::Rest | BehaviourKind::Recover => Tier::Needs,
+            BehaviourKind::Idle | BehaviourKind::Companion | BehaviourKind::Watch | BehaviourKind::Explore | BehaviourKind::Ride | BehaviourKind::Visit => {
+                Tier::Ambient
+            }
         }
     }
 
@@ -456,6 +508,8 @@ impl Idle {
                 ctx.seated_act()
             } else if ctx.senses.dark && ctx.rng.chance(0.3) {
                 ActWait::named(ctx, "lantern_patrol")
+            } else if ctx.senses.support_owner.is_some() && ctx.rng.chance(0.06 * ctx.mind.personality.curiosity) {
+                ActWait::named(ctx, "dream_nail") // what is this window dreaming about?
             } else {
                 ctx.fidget()
             };
@@ -530,13 +584,19 @@ impl Explore {
     fn arrive(&mut self, ctx: &mut Ctx) {
         let novelty = self.poi.novelty;
         ctx.interest.visit(self.poi.target, ctx.now, ctx.p.desktop);
+        if let (PoiKind::NewWindow | PoiKind::Unvisited, PoiTarget::Window(id)) = (self.poi.kind, self.poi.target) {
+            ctx.out.discovery = Some(DiscoveryEvent::Explored(id)); // the app may reveal what lives there
+        }
         ctx.mind.adjust(|n| &mut n.boredom, -(0.15 + 0.45 * novelty));
         let small = match self.poi.target {
             PoiTarget::Window(id) => ctx.p.desktop.window(id).is_some_and(|w| w.rect.width() * w.rect.height() <= 420 * 320),
             PoiTarget::Spot(_) => false,
         };
+        // Curious about a big new window: dream-nail it to hear what it thinks.
+        let dream = !small && matches!(self.poi.target, PoiTarget::Window(_)) && ctx.rng.chance(0.1 + 0.3 * ctx.mind.personality.curiosity);
         let (what, name) = match self.poi.kind {
             PoiKind::NewWindow if small => ("found a small new thing", "pick_up_trinket"),
+            PoiKind::NewWindow | PoiKind::Unvisited if dream => ("dream-nailing a window", "dream_nail"),
             PoiKind::NewWindow | PoiKind::Unvisited if ctx.senses.can_sit() => ("mapping a new window", "read_map"),
             PoiKind::NewWindow | PoiKind::Unvisited => ("mapping a new window", "map_stroll"),
             PoiKind::ActiveWindow => {
@@ -651,7 +711,8 @@ impl Nap {
             NapPhase::Seated(ActWait::named(ctx, "nap"))
         } else {
             let k = ctx.p.knight;
-            match find_seat(ctx, k.pos, Self::SEAT_RANGE) {
+            // A favourite found bench is worth a longer walk.
+            match favourite_bench(ctx, Self::SEAT_RANGE).or_else(|| find_seat(ctx, k.pos, Self::SEAT_RANGE)) {
                 Some((s, style)) => NapPhase::ToSeat(Travel::exact(ctx, s, style, SEAT_TOL)),
                 None => NapPhase::Deep(ActWait::named(ctx, "bow_down")),
             }
@@ -900,9 +961,11 @@ pub(crate) enum Active {
     Ride(Ride),
     KnockedOut(KnockedOut),
     Recover(Recover),
+    Greet(Box<super::greet::Greet>),
     Dead(Dead),
     ShadeHunt(Box<ShadeHunt>),
     Loot(Loot),
+    Visit(Visit),
 }
 
 impl Active {
@@ -920,9 +983,11 @@ impl Active {
             Active::Ride(_) => BehaviourKind::Ride,
             Active::KnockedOut(_) => BehaviourKind::KnockedOut,
             Active::Recover(_) => BehaviourKind::Recover,
+            Active::Greet(_) => BehaviourKind::Greet,
             Active::Dead(_) => BehaviourKind::Dead,
             Active::ShadeHunt(_) => BehaviourKind::ShadeHunt,
             Active::Loot(_) => BehaviourKind::Loot,
+            Active::Visit(_) => BehaviourKind::Visit,
         }
     }
 
@@ -940,9 +1005,11 @@ impl Active {
             Active::Ride(b) => b.tick(ctx),
             Active::KnockedOut(b) => b.tick(ctx),
             Active::Recover(b) => b.tick(ctx),
+            Active::Greet(b) => b.tick(ctx),
             Active::Dead(b) => b.tick(ctx),
             Active::ShadeHunt(b) => b.tick(ctx),
             Active::Loot(b) => b.tick(ctx),
+            Active::Visit(b) => b.tick(ctx),
         }
     }
 
@@ -961,9 +1028,24 @@ impl Active {
             Active::Ride(_) => "ride: window moving".into(),
             Active::KnockedOut(_) => "knocked out: huge fall".into(),
             Active::Recover(b) => b.reason(),
+            Active::Greet(b) => b.reason(ctx),
             Active::Dead(b) => b.reason(),
             Active::ShadeHunt(b) => b.reason(),
             Active::Loot(b) => b.reason(),
+            Active::Visit(b) => b.reason(),
         }
+    }
+}
+
+/// Short act that ends `act` gracefully when another behaviour takes over (getting up from
+/// a seat, lowering the head, turning back from the screen) instead of snapping to idle.
+pub(crate) fn exit_act_for(act: &ActInfo) -> Option<&'static str> {
+    match act.name.as_str() {
+        "look_up" => Some("look_up_end"),
+        "look_down" => Some("look_down_end"),
+        "gaze_into_screen" => Some("turn_from_screen"),
+        "map_stroll" => Some("put_map_away"),
+        _ if act.requires == crate::acts::Requirement::Seat => Some("get_up"),
+        _ => None,
     }
 }

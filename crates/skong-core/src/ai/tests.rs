@@ -13,6 +13,8 @@ use crate::desktop::{DesktopSnapshot, Monitor, WindowId, WindowInfo};
 use crate::geom::RectI;
 use crate::terrain::{LedgeKind, Terrain, TerrainOptions};
 
+mod greet;
+
 const DT: f32 = 1.0 / 30.0;
 const FLOOR: f32 = 1040.0;
 
@@ -1025,3 +1027,85 @@ fn oscillation_guard_calms_a_dithering_knight() {
     sim.run(6.0);
     assert_eq!(sim.brain.behaviour(), BehaviourKind::Companion, "back to normal afterwards");
 }
+
+// --- Found places (discoveries) ---------------------------------------------------------
+
+fn place(id: PlaceId, kind: PlaceKind, at: Vec2, favour: f32, fresh: bool) -> KnownPlace {
+    KnownPlace { id, kind, at, center: at, favour, fresh }
+}
+
+fn discoveries(sim: &Sim) -> Vec<DiscoveryEvent> {
+    sim.intents.iter().filter_map(|i| i.discovery).collect()
+}
+
+#[test]
+fn exploring_a_new_window_reveals_and_he_reacts_then_sits() {
+    let mut sim = calm(BrainConfig::default());
+    sim.brain.mind_mut().needs.energy = 0.6;
+    sim.run(1.0);
+    sim.open(window(10, RectI::new(300, 500, 900, 900), "paint.exe"));
+    assert!(sim.run_until(3.0, BehaviourKind::Explore));
+    assert!(sim.run_while(8.0, |s| !discoveries(s).contains(&DiscoveryEvent::Explored(10))), "arrival asks the app to reveal the room");
+    // The app reveals a bench on the title bar (and lists it as a bench).
+    let bench = place(5, PlaceKind::Bench, Vec2::new(420.0, 500.0), 0.0, true);
+    sim.benches.push(bench.at);
+    sim.brain.set_places(&[bench]);
+    assert!(sim.run_until(1.0, BehaviourKind::Visit), "reacts at once: {}", sim.last_reason());
+    assert!(sim.last_reason().contains("found a bench"), "{}", sim.last_reason());
+    sim.brain.set_places(&[KnownPlace { fresh: false, ..bench }]);
+    assert!(sim.run_while(8.0, |s| s.act.as_ref().is_none_or(|a| s.act_name(a.act.id) != "lean_back")), "acts: {:?} / {}", sim.started, sim.last_reason());
+    assert_eq!(sim.knight.pos, bench.at, "on the bench");
+    assert!(discoveries(&sim).contains(&DiscoveryEvent::Used(5)));
+    // Then he gets up and moves on.
+    assert!(sim.run_while(60.0, |s| s.brain.behaviour() == BehaviourKind::Visit));
+}
+
+#[test]
+fn tired_knight_prefers_a_found_bench_to_a_perch() {
+    let mut sim = with_window(calm(BrainConfig::default()));
+    sim.brain.mind_mut().needs.energy = 0.32;
+    let bench = Vec2::new(1350.0, FLOOR);
+    sim.benches.push(bench); // the app lists found benches as benches too
+    sim.brain.set_places(&[place(9, PlaceKind::Bench, bench, 0.0, false)]);
+    assert!(sim.run_until(3.0, BehaviourKind::Visit), "{}", sim.last_reason());
+    sim.step();
+    assert_eq!(sim.nav.gos.last().map(|g| g.0), Some(NavGoal::Point(bench)));
+    sim.run(5.0);
+    assert!(sim.started.iter().any(|a| a == "rest"), "acts: {:?}", sim.started);
+    assert!(discoveries(&sim).contains(&DiscoveryEvent::Used(9)));
+    assert_eq!(sim.knight.pos, bench);
+}
+
+#[test]
+fn sleepy_knight_naps_on_his_favourite_bench() {
+    let mut sim = sleepy_with_bench(); // plain bench at 1300
+    let fav = Vec2::new(500.0, FLOOR);
+    sim.benches.push(fav);
+    sim.brain.set_places(&[place(3, PlaceKind::Bench, fav, 0.8, false)]);
+    assert!(sim.run_until(3.0, BehaviourKind::Nap), "{}", sim.last_reason());
+    sim.step();
+    assert_eq!(sim.nav.gos.last().map(|g| g.0), Some(NavGoal::Point(fav)), "longer walk, but it's the Paint bench");
+}
+
+#[test]
+fn playful_knight_mines_a_geo_deposit() {
+    let mut sim = calm(BrainConfig::default());
+    sim.brain.mind_mut().needs.mischief = 0.8;
+    let rock = KnownPlace { center: Vec2::new(1250.0, FLOOR), ..place(4, PlaceKind::Deposit, Vec2::new(1200.0, FLOOR), 0.0, false) };
+    sim.brain.set_places(&[rock]);
+    assert!(sim.run_until(3.0, BehaviourKind::Visit), "{}", sim.last_reason());
+    sim.run(6.0);
+    let strikes: Vec<&Intent> = sim.intents.iter().filter(|i| i.discovery == Some(DiscoveryEvent::Struck(4))).collect();
+    assert_eq!(strikes.len(), 3, "a few slashes");
+    assert!(strikes.iter().all(|i| i.attack.is_some_and(|a| a.side == Side::Right && a.dir == AttackDir::Forward)));
+    assert!(sim.brain.mind().needs.mischief < 0.5, "got it out of his system");
+}
+
+#[test]
+fn rested_calm_knight_leaves_found_seats_alone() {
+    let mut sim = calm(BrainConfig::default());
+    sim.brain.set_places(&[place(1, PlaceKind::Bench, Vec2::new(1300.0, FLOOR), 0.5, false), place(2, PlaceKind::Deposit, Vec2::new(600.0, FLOOR), 0.5, false)]);
+    let kinds = sim.run(20.0);
+    assert!(!kinds.contains(&BehaviourKind::Visit));
+}
+

@@ -1,0 +1,440 @@
+{
+  "name": "Zote",
+  "clips": [
+    {
+      "name": "Fall",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Zote",
+          "sprite_id": 8,
+          "sprite": "fall000"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 7,
+          "sprite": "fall001"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 6,
+          "sprite": "fall002"
+        }
+      ]
+    },
+    {
+      "name": "Land",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Zote",
+          "sprite_id": 4,
+          "sprite": "bounce000"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 0,
+          "sprite": "bounce001"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 5,
+          "sprite": "bounce002"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 2,
+          "sprite": "bounce003"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 3,
+          "sprite": "bounce004"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 1,
+          "sprite": "bounce005"
+        }
+      ]
+    },
+    {
+      "name": "Stand",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Zote",
+          "sprite_id": 17,
+          "sprite": "stand000"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 16,
+          "sprite": "stand001"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 14,
+          "sprite": "stand002"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 20,
+          "sprite": "stand003"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 15,
+          "sprite": "stand004"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 18,
+          "sprite": "stand005"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 19,
+          "sprite": "stand006"
+        }
+      ]
+    },
+    {
+      "name": "Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Zote",
+          "sprite_id": 10,
+          "sprite": "idle000"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 13,
+          "sprite": "idle001"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 9,
+          "sprite": "idle002"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 12,
+          "sprite": "idle003"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 11,
+          "sprite": "idle004"
+        }
+      ]
+    },
+    {
+      "name": "Look Left",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Zote",
+          "sprite_id": 69,
+          "sprite": "look_left0005"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 22,
+          "sprite": "look_left0000"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 21,
+          "sprite": "look_left0001"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 24,
+          "sprite": "look_left0002"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 25,
+          "sprite": "look_left0003"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 23,
+          "sprite": "look_left0004"
+        }
+      ]
+    },
+    {
+      "name": "Look Right",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Zote",
+          "sprite_id": 70,
+          "sprite": "look_right_0005"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 26,
+          "sprite": "look_right0000"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 28,
+          "sprite": "look_right0001"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 29,
+          "sprite": "look_right0002"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 27,
+          "sprite": "look_right0003"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 30,
+          "sprite": "look_right0004"
+        }
+      ]
+    },
+    {
+      "name": "Talk",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Zote",
+          "sprite_id": 32,
+          "sprite": "talk0000"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 33,
+          "sprite": "talk0001"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 35,
+          "sprite": "talk0002"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 31,
+          "sprite": "talk0003"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 34,
+          "sprite": "talk0004"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 36,
+          "sprite": "talk0005"
+        }
+      ]
+    },
+    {
+      "name": "Talk R",
+      "fps": 12,
+      "loop_start": 9,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Zote",
+          "sprite_id": 40,
+          "sprite": "talk_left0000"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 41,
+          "sprite": "talk_left0001"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 38,
+          "sprite": "talk_left0002"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 39,
+          "sprite": "talk_left0003"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 37,
+          "sprite": "talk_left0004"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 55,
+          "sprite": "talk_left0005"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 48,
+          "sprite": "talk_left0006"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 52,
+          "sprite": "talk_left0007"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 53,
+          "sprite": "talk_left0008"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 49,
+          "sprite": "talk_left0009"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 47,
+          "sprite": "talk_left0010"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 54,
+          "sprite": "talk_left0011"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 50,
+          "sprite": "talk_left0012"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 51,
+          "sprite": "talk_left0013"
+        }
+      ]
+    },
+    {
+      "name": "Talk L",
+      "fps": 12,
+      "loop_start": 9,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Zote",
+          "sprite_id": 43,
+          "sprite": "talk_right0000"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 42,
+          "sprite": "talk_right0001"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 46,
+          "sprite": "talk_right0002"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 45,
+          "sprite": "talk_right0003"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 44,
+          "sprite": "talk_right0004"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 63,
+          "sprite": "talk_right0005"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 59,
+          "sprite": "talk_right0006"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 58,
+          "sprite": "talk_right0007"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 56,
+          "sprite": "talk_right0008"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 60,
+          "sprite": "talk_right0009"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 64,
+          "sprite": "talk_right0010"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 61,
+          "sprite": "talk_right0011"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 57,
+          "sprite": "talk_right0012"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 62,
+          "sprite": "talk_right0013"
+        }
+      ]
+    },
+    {
+      "name": "Deepnest Distress",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Zote",
+          "sprite_id": 65,
+          "sprite": "deepnest_distress000"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 66,
+          "sprite": "deepnest_distress001"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 67,
+          "sprite": "deepnest_distress002"
+        },
+        {
+          "collection": "Zote",
+          "sprite_id": 68,
+          "sprite": "deepnest_distress003"
+        }
+      ]
+    }
+  ]
+}

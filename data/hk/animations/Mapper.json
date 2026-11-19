@@ -1,0 +1,429 @@
+{
+  "name": "Mapper",
+  "clips": [
+    {
+      "name": "Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 8,
+          "sprite": "mapper0000"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 6,
+          "sprite": "mapper0001"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 1,
+          "sprite": "mapper0002"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 0,
+          "sprite": "mapper0003"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 2,
+          "sprite": "mapper0004"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 5,
+          "sprite": "mapper0005"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 4,
+          "sprite": "mapper0006"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 7,
+          "sprite": "mapper0007"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 3,
+          "sprite": "mapper0008"
+        }
+      ]
+    },
+    {
+      "name": "Talk R",
+      "fps": 12,
+      "loop_start": 4,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 11,
+          "sprite": "idle_to_talk0000"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 9,
+          "sprite": "idle_to_talk0001"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 12,
+          "sprite": "idle_to_talk0002"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 10,
+          "sprite": "idle_to_talk0003"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 17,
+          "sprite": "talk0000"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 19,
+          "sprite": "talk0001"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 18,
+          "sprite": "talk0002"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 14,
+          "sprite": "talk0003"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 13,
+          "sprite": "talk0004"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 16,
+          "sprite": "talk0005"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 15,
+          "sprite": "talk0006"
+        }
+      ]
+    },
+    {
+      "name": "Talk R End",
+      "fps": 12,
+      "loop_start": 4,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 12,
+          "sprite": "idle_to_talk0002"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 9,
+          "sprite": "idle_to_talk0001"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 11,
+          "sprite": "idle_to_talk0000"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 8,
+          "sprite": "mapper0000"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 6,
+          "sprite": "mapper0001"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 1,
+          "sprite": "mapper0002"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 0,
+          "sprite": "mapper0003"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 2,
+          "sprite": "mapper0004"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 5,
+          "sprite": "mapper0005"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 4,
+          "sprite": "mapper0006"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 7,
+          "sprite": "mapper0007"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 3,
+          "sprite": "mapper0008"
+        }
+      ]
+    },
+    {
+      "name": "Talk L",
+      "fps": 12,
+      "loop_start": 4,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 28,
+          "sprite": "idle_to_talk_left0000"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 29,
+          "sprite": "idle_to_talk_left0001"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 26,
+          "sprite": "idle_to_talk_left0002"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 27,
+          "sprite": "idle_to_talk_left0003"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 23,
+          "sprite": "talk_left0000"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 22,
+          "sprite": "talk_left0001"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 25,
+          "sprite": "talk_left0002"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 21,
+          "sprite": "talk_left0003"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 24,
+          "sprite": "talk_left0004"
+        }
+      ]
+    },
+    {
+      "name": "Talk L End",
+      "fps": 12,
+      "loop_start": 4,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 26,
+          "sprite": "idle_to_talk_left0002"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 29,
+          "sprite": "idle_to_talk_left0001"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 28,
+          "sprite": "idle_to_talk_left0000"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 8,
+          "sprite": "mapper0000"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 6,
+          "sprite": "mapper0001"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 1,
+          "sprite": "mapper0002"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 0,
+          "sprite": "mapper0003"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 2,
+          "sprite": "mapper0004"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 5,
+          "sprite": "mapper0005"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 4,
+          "sprite": "mapper0006"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 7,
+          "sprite": "mapper0007"
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 3,
+          "sprite": "mapper0008"
+        }
+      ]
+    },
+    {
+      "name": "DP Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "PingPong",
+      "frames": [
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 30,
+          "sprite": ""
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 31,
+          "sprite": ""
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 32,
+          "sprite": ""
+        }
+      ]
+    },
+    {
+      "name": "DP Emerge",
+      "fps": 12,
+      "loop_start": 4,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 33,
+          "sprite": ""
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 34,
+          "sprite": ""
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 35,
+          "sprite": ""
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 36,
+          "sprite": ""
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 37,
+          "sprite": ""
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 38,
+          "sprite": ""
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 39,
+          "sprite": ""
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 40,
+          "sprite": ""
+        }
+      ]
+    },
+    {
+      "name": "DP Hide",
+      "fps": 12,
+      "loop_start": 4,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 36,
+          "sprite": ""
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 35,
+          "sprite": ""
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 34,
+          "sprite": ""
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 33,
+          "sprite": ""
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 32,
+          "sprite": ""
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 31,
+          "sprite": ""
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 30,
+          "sprite": ""
+        },
+        {
+          "collection": "Cornifer Cln",
+          "sprite_id": 31,
+          "sprite": ""
+        }
+      ]
+    }
+  ]
+}

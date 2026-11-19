@@ -93,6 +93,12 @@ impl Stakes {
         }
     }
 
+    /// Geo coins bursting out at `at` (e.g. a broken geo deposit).
+    pub fn burst(&mut self, at: Vec2, amount: u32, scale: f32) {
+        self.geo.scale = scale;
+        self.geo.burst(at, amount);
+    }
+
     /// Fullscreen games on these monitors: hide our sprites there, keep Geo off them.
     pub fn hide_on(&mut self, monitors: &[RectI]) {
         self.games = monitors.to_vec();
@@ -248,11 +254,17 @@ impl Pet {
         let s = self.brain.senses();
         // Showers fall on one (game-free) monitor.
         let sky = if st.areas.is_empty() { self.terrain.bounds } else { st.areas[seed() as usize % st.areas.len()] };
-        if let Some(d) = st.sources.tick(dt, !s.user_away, s.fullscreen || s.user_busy, loose, sky) {
+        if let Some(mut d) = st.sources.tick(dt, !s.user_away, s.fullscreen || s.user_busy, loose, sky) {
             log::info!("a geo shower: {} geo", d.amount);
+            // Through a portal at a reachable spot (see `npcs::Visitors::arrival_spot`).
+            let graph = self.nav.graph().map(|g| g.as_ref());
+            if let Some(p) = self.visitors.as_mut().and_then(|v| v.arrival_spot((&self.terrain, desk, &self.games.game_monitors, &self.occupancy), &self.ch, graph, &mut self.fx)) {
+                d.rect = crate::npcs::shower_rect(p, d.rect.width(), scale);
+            }
             st.geo.spill(&d);
         }
         st.geo.step(dt, &self.terrain, &st.areas);
+        st.geo.evict_from(&self.occupancy);
         if !st.dead {
             let got: u32 = st.geo.collect(self.ch.body()).iter().map(|p| p.value).sum();
             if got > 0 {
@@ -350,7 +362,12 @@ impl Pet {
                 let st = &mut self.stakes;
                 st.geo.scale = self.settings.scale;
                 let sky = if st.areas.is_empty() { self.terrain.bounds } else { st.areas[seed() as usize % st.areas.len()] };
-                let d: GeoDrop = st.sources.shower(sky);
+                let mut d: GeoDrop = st.sources.shower(sky);
+                let graph = self.nav.graph().map(|g| g.as_ref());
+                let desk = self.watcher.snapshot();
+                if let Some(p) = self.visitors.as_mut().and_then(|v| v.arrival_spot((&self.terrain, desk, &self.games.game_monitors, &self.occupancy), &self.ch, graph, &mut self.fx)) {
+                    d.rect = crate::npcs::shower_rect(p, d.rect.width(), self.settings.scale);
+                }
                 st.geo.spill(&d);
             }
             StakesCommand::DropGeo => {
