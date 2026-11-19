@@ -13,10 +13,15 @@ use super::behaviours::{ActWait, Beat, Ctx, SEAT_TOL, Status, Travel, TravelStep
 use super::interest::PoiTarget;
 use super::spots;
 
+/// Minimum seconds between two pacing strolls.
+const PACE_GAP: f32 = 12.0;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Doing {
     Following,
     Settling,
+    /// Nothing to do near a resting cursor: stroll over to its other side.
+    Pacing,
     Attending,
     Staying,
 }
@@ -33,6 +38,7 @@ pub(crate) struct Companion {
     rest_until: f32,
     beat: Beat,
     last_stare: f32,
+    last_pace: f32,
     last_gaze: f32,
     doing: Doing,
     /// Last act's reason.
@@ -50,6 +56,7 @@ impl Companion {
             rest_until: 0.0,
             beat: Beat::new(gap),
             last_stare: f32::NEG_INFINITY,
+            last_pace: f32::NEG_INFINITY,
             last_gaze: f32::NEG_INFINITY,
             doing: Doing::Attending,
             why: "",
@@ -70,7 +77,14 @@ impl Companion {
         let (comfort, beside) = Self::radii(ctx);
         let proj = spots::project(ctx.p.terrain, c.pos).unwrap_or(c.pos);
         let side = if k.pos.x >= proj.x { 1.0 } else { -1.0 };
-        let want = Vec2::new(proj.x + side * beside, proj.y);
+        let mut want = Vec2::new(proj.x + side * beside, proj.y);
+        // Stay on the cursor's monitor: never "beside" it across a monitor edge.
+        if let Some(m) = ctx.p.desktop.monitor_at(c.pos.x as i32, c.pos.y as i32) {
+            let r = m.rect.to_f();
+            if want.x < r.left + 20.0 || want.x > r.right - 20.0 {
+                want.x = (proj.x - side * beside).clamp(r.left + 20.0, (r.right - 20.0).max(r.left + 21.0));
+            }
+        }
         let off = want - k.pos;
         // Being on another level counts extra: a ledge 300 px up is a real trip.
         let dist = off.x.abs() + 1.5 * off.y.abs();
@@ -162,9 +176,9 @@ impl Companion {
         }
 
         let parked = c.still_for >= cfg.settle_secs;
-        let (act, why): (Option<ActWait>, &'static str) = if parked && ctx.senses.can_sit() {
+        let (act, why): (Option<ActWait>, &'static str) = if parked && ctx.senses.can_sit() && ctx.may_sit() {
             (ctx.seated_act(), "settling down near you")
-        } else if parked && may_move {
+        } else if parked && may_move && ctx.may_sit() {
             let proj = spots::project(ctx.p.terrain, c.pos).unwrap_or(c.pos);
             match find_seat(ctx, proj, cfg.seat_range) {
                 Some((seat, style)) => {
@@ -179,9 +193,37 @@ impl Companion {
         } else {
             self.contextual(ctx)
         };
+        if act.is_none() && parked && may_move && self.pace(ctx) {
+            return Status::Running;
+        }
         self.why = why;
         self.beat.play(ctx, act, cfg.gap);
         Status::Running
+    }
+
+    /// Nothing fits and he may not sit again yet: move instead of standing around:
+    /// stroll to the cursor's other side (if a stroll really gets there).
+    fn pace(&mut self, ctx: &mut Ctx) -> bool {
+        let Some(c) = ctx.senses.cursor else { return false };
+        if ctx.now - self.last_pace < PACE_GAP {
+            return false;
+        }
+        self.last_pace = ctx.now;
+        let k = ctx.p.knight;
+        let (_, beside) = Self::radii(ctx);
+        let proj = spots::project(ctx.p.terrain, c.pos).unwrap_or(c.pos);
+        let side = if k.pos.x >= proj.x { -1.0 } else { 1.0 };
+        let to = Vec2::new(proj.x + side * beside.max(80.0), proj.y);
+        let same_monitor = ctx.p.desktop.monitor_at(to.x as i32, (to.y - 1.0) as i32).map(|m| m.rect)
+            == ctx.p.desktop.monitor_at(c.pos.x as i32, c.pos.y as i32).map(|m| m.rect);
+        if !same_monitor || ctx.interest.is_blocked(PoiTarget::Spot(to)) || !ctx.nav.reaches(k, to, TravelStyle::Stroll, 40.0) {
+            return false;
+        }
+        self.travel = Some(Travel::to(ctx, to, TravelStyle::Stroll));
+        self.goal = to;
+        self.goal_set_at = ctx.now;
+        self.doing = Doing::Pacing;
+        true
     }
 
     /// The act that fits where the cursor is.
@@ -206,7 +248,7 @@ impl Companion {
         if ctx.senses.dark && ctx.rng.chance(0.2) {
             return (ActWait::named(ctx, "lantern_patrol"), "it's dark");
         }
-        if ctx.senses.can_sit() && c.still_for > 2.0 {
+        if ctx.senses.can_sit() && c.still_for > 2.0 && ctx.may_sit() {
             return (ctx.seated_act(), "sitting with you");
         }
         if c.still_for >= cfg.settle_secs && c.dist() < 350.0 && ctx.now - self.last_gaze >= 10.0 {
@@ -224,6 +266,7 @@ impl Companion {
         match self.doing {
             Doing::Following => format!("companion: following cursor @ ({:.0},{:.0})", at.x, at.y),
             Doing::Settling => "companion: going to sit near you".into(),
+            Doing::Pacing => "companion: strolling to your other side".into(),
             Doing::Staying => "companion: you're typing, staying put".into(),
             Doing::Attending => match self.beat.doing_name(ctx) {
                 Some(n) => format!("companion: {n} ({})", self.why),

@@ -803,7 +803,7 @@ fn riding_a_moving_window_is_fun() {
 // --- Balance & stability ----------------------------------------------------------------
 
 /// Acts the knight may start with nobody doing anything special.
-const QUIET_ACTS: [&str; 9] = ["gaze_into_screen", "look_up", "look_down", "stare_at_user", "rest", "lean_back", "read_map", "map_stroll", "pick_up_trinket"];
+const QUIET_ACTS: [&str; 10] = ["dream_nail", "gaze_into_screen", "look_up", "look_down", "stare_at_user", "rest", "lean_back", "read_map", "map_stroll", "pick_up_trinket"];
 
 #[test]
 fn quiet_five_minutes_are_mostly_purposeful() {
@@ -1109,3 +1109,85 @@ fn rested_calm_knight_leaves_found_seats_alone() {
     assert!(!kinds.contains(&BehaviourKind::Visit));
 }
 
+
+// --- Sit loop / boredom regressions --------------------------------------------------------
+
+fn seated_starts(sim: &Sim) -> usize {
+    sim.started.iter().filter(|a| matches!(a.as_str(), "lean_back" | "rest")).count()
+}
+
+fn requests(sim: &Sim) -> Vec<(f32, WorldEvent)> {
+    sim.intents.iter().enumerate().filter_map(|(i, it)| it.request.map(|r| ((i + 1) as f32 * DT, r))).collect()
+}
+
+/// Run `secs` keeping boredom pinned at the maximum (the live state of the bug).
+fn run_bored(sim: &mut Sim, secs: f32) {
+    for _ in 0..(secs / DT) as usize {
+        sim.brain.mind_mut().needs.boredom = 1.0;
+        sim.user.idle_secs = 1.0;
+        sim.step();
+    }
+}
+
+#[test]
+fn bored_stiff_with_a_parked_cursor_goes_exploring_instead_of_sitting() {
+    let mut sim = with_window(calm(BrainConfig::default()));
+    sim.open(window(2, RectI::new(1100, 600, 1700, 1000), "browser.exe"));
+    sim.place(Vec2::new(500.0, 400.0)); // perched on window 1's title bar
+    sim.cursor = Some(Cursor { pos: Vec2::new(560.0, 330.0), ..Default::default() });
+    run_bored(&mut sim, 120.0);
+    let explored = sim.switches.iter().any(|s| s.to == BehaviourKind::Explore);
+    assert!(explored || !requests(&sim).is_empty(), "no exploring and no event request");
+    assert!(seated_starts(&sim) <= 2, "sat {} times in 2 min: {:?}", seated_starts(&sim), sim.started);
+}
+
+#[test]
+fn bored_with_nothing_around_asks_for_a_world_event_rate_limited() {
+    let mut sim = calm(BrainConfig::default());
+    sim.park_cursor(Vec2::new(150.0, -40.0));
+    run_bored(&mut sim, 200.0);
+    let req = requests(&sim);
+    assert!(!req.is_empty(), "never asked for anything");
+    assert!(req.len() <= 2, "{req:?}");
+    for w in req.windows(2) {
+        assert!(w[1].0 - w[0].0 >= BoredomConfig::default().event_gap - 0.1, "{req:?}");
+    }
+    // Never while the user is typing.
+    let mut sim = calm(BrainConfig::default());
+    sim.park_cursor(Vec2::new(150.0, -40.0));
+    sim.user.keys_per_sec = 5.0;
+    for _ in 0..(120.0 / DT) as usize {
+        sim.brain.mind_mut().needs.boredom = 1.0;
+        sim.step();
+    }
+    assert!(requests(&sim).is_empty());
+}
+
+#[test]
+fn companion_target_stays_on_the_cursors_monitor() {
+    let mut sim = calm(BrainConfig::default());
+    // 1920x1080 monitor left of a 2560x1440 primary.
+    sim.desk.monitors = vec![
+        Monitor { rect: RectI::new(-1920, 0, 0, 1080), work: RectI::new(-1920, 0, 0, 1040), primary: false, scale_milli: 1000 },
+        Monitor { rect: RectI::new(0, 0, 2560, 1440), work: RectI::new(0, 0, 2560, 1400), primary: true, scale_milli: 1000 },
+    ];
+    sim.desktop_changed();
+    sim.place(Vec2::new(-684.0, FLOOR));
+    sim.cursor = Some(Cursor { pos: Vec2::new(60.0, 1200.0), ..Default::default() });
+    sim.run(8.0);
+    let goals: Vec<Vec2> = sim.nav.gos.iter().map(|g| sim.goal_point(g.0)).collect();
+    assert!(!goals.is_empty(), "follows the cursor to its monitor");
+    for g in &goals {
+        assert!(g.x >= 20.0 && (g.x - 60.0).abs() <= 450.0, "goal {g:?} must be beside the cursor, on its monitor");
+    }
+}
+
+#[test]
+fn no_re_sit_right_after_getting_up() {
+    let mut sim = with_window(calm(BrainConfig::default()));
+    sim.brain.mind_mut().needs.boredom = 0.2;
+    sim.place(Vec2::new(500.0, 400.0));
+    sim.cursor = Some(Cursor { pos: Vec2::new(560.0, 330.0), ..Default::default() });
+    sim.run(70.0);
+    assert!(seated_starts(&sim) <= 1, "re-sat within the cooldown: {:?}", sim.started);
+}

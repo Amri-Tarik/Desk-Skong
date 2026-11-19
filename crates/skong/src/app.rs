@@ -782,6 +782,9 @@ impl Pet {
         if let Some(ev) = intent.discovery {
             self.on_discovery(ev);
         }
+        if let Some(ev) = intent.request {
+            self.on_world_request(ev);
+        }
         self.pokes.clear();
         self.brain_events.clear();
         self.stakes_events(&intent.stakes);

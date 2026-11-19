@@ -82,7 +82,9 @@ impl Mind {
             n.energy -= r.energy_drain * (1.0 + 2.0 * act.exertion) * stamina * per_min;
         }
         if !act.asleep {
-            n.boredom += r.boredom_rise * (0.4 + p.curiosity) * per_min;
+            // Sitting around is the most boring thing of all.
+            let idle_bonus = if act.seated { 1.5 } else { 1.0 };
+            n.boredom += r.boredom_rise * (0.4 + p.curiosity) * idle_bonus * per_min;
         }
         if act.with_user {
             n.loneliness -= r.loneliness_relief * per_min;
