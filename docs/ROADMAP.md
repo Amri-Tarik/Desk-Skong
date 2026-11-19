@@ -21,6 +21,11 @@ _Working list, last updated 2026-11-19 (night). Reorder freely and add notes und
       back (non-lethal by default), die and burst Geo. "Send an enemy" in the tray / panel.
       Zote may challenge him to a spar after a talk. Tuning: `data/enemies.json`, Zote's
       `spar`.
+- [x] **Gauntlet**: an arena event: "!" and his `challenge`, 3 waves of 2–4 enemies (each
+      after the last is cleared and a breather), a 40–60 Geo burst and his `victory`. Ends
+      gracefully on hard typing, fullscreen apps, visitors, or when he's badly hurt. Rare on
+      its own (after several single kills), or "Start a gauntlet" in the tray / panel.
+      Tuning: the `gauntlet` section of `data/enemies.json`.
 - [x] **Geo showers through the subtle portal**, settled ledges only; "Geo shower" in the
       tray / panel.
 - [x] **Dream Gate fallback**: no route to a prize (visitors, the Shade, Geo, deposits,
@@ -64,6 +69,8 @@ Checked in tests only (unless noted). Note anything that looks off:
 - [ ] Fatal falls → Shade
 - [ ] Enemies: feet line and facing, arrivals, hit flash, death and corpse fade, how often
       they bump him; Zote's spar. _(One Vengefly fight verified in the live logs.)_
+- [ ] Gauntlet: the announcement, wave pacing and breathers, drop-in dust puffs, the reward
+      burst and his `victory`; how often he finishes one
 - [ ] Dream Gate: gate size, glow, warp timing
 - [ ] Crystal dash: charge → launch on long runs and off walls; particles (dust, shards)
 - [ ] Unn slug crawl speed and turns; highlighted-text curiosity with real apps

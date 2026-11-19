@@ -92,6 +92,8 @@ pub struct Enemy {
     since_struck: f32,
     /// Pixels per game unit at the last tick.
     ppu: f32,
+    /// Sent away (a gauntlet ended early): it wanders off and is no foe any more.
+    dismissed: bool,
 }
 
 const FADE_IN: f32 = 0.4;
@@ -143,7 +145,22 @@ impl Enemy {
             paused: 0.0,
             since_struck: f32::INFINITY,
             ppu,
+            dismissed: false,
         }
+    }
+
+    /// Stay at least `secs` before wandering off on its own (gauntlet waves wait for him).
+    pub fn hold(&mut self, secs: f32) {
+        self.stay = self.stay.max(secs);
+    }
+
+    /// Wander off now (from its next tick), harmless and ignored by the knight.
+    pub fn dismiss(&mut self) {
+        self.dismissed = true;
+    }
+
+    pub fn dismissed(&self) -> bool {
+        self.dismissed
     }
 
     /// Call once after creation so an enemy placed on a window rides it.
@@ -180,7 +197,7 @@ impl Enemy {
 
     /// The brain's view of this enemy (alive only).
     pub fn foe(&self, set: &EnemySet, ppu: f32) -> Option<Foe> {
-        if !self.alive() || self.phase == EnemyPhase::Leaving && self.alpha < 0.5 {
+        if !self.alive() || self.dismissed || self.phase == EnemyPhase::Leaving && self.alpha < 0.5 {
             return None;
         }
         let d = &set.defs[self.def];
@@ -274,6 +291,10 @@ impl Enemy {
         let dist = to_knight.map_or(f32::INFINITY, |v| v.length());
         let level = knight.is_some_and(|k| (k.bottom - self.pos.y).abs() < 0.8 * ppu && k.center().x > self.span.0 - 2.0 * ppu && k.center().x < self.span.1 + 2.0 * ppu);
         let notices = d.aggro > 0.0 && dist < d.aggro * ppu && (flying || level);
+        // Sent away: off it goes as soon as it has footing (or wings).
+        if self.dismissed && self.alive() && self.phase != EnemyPhase::Leaving && (flying || !self.airborne) {
+            self.leave(set, env);
+        }
 
         match self.phase {
             EnemyPhase::Arriving => {

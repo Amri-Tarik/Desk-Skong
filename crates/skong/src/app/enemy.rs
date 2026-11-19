@@ -5,7 +5,7 @@ use skong_core::ai::{BehaviourKind, FoeKind, FoeStrike};
 use skong_win::{input, monitor};
 
 use super::{Pet, vanilla_of};
-use crate::enemies::Enemies;
+use crate::enemies::{Enemies, KnightState};
 use crate::npcs::World;
 
 impl Pet {
@@ -31,6 +31,8 @@ impl Pet {
             hits += v.take_knight_hits();
         }
         self.brain.see_foes(foes, hits);
+        let cue = self.enemies.as_ref().and_then(|e| e.gauntlet_cue());
+        self.brain.see_gauntlet(cue);
     }
 
     /// The brain's blows that landed: hit markers, knockback, kills (Geo bursts).
@@ -91,9 +93,40 @@ impl Pet {
         let knight = (self.brain.behaviour() != BehaviourKind::Dead).then(|| self.ch.body());
         let (discoveries, terrain) = (&self.discoveries, &self.terrain);
         let settled = |f: &skong_core::portal::Footing| discoveries.settled(terrain, f.owner, f.y, f.x0, f.x1);
-        let news = e.tick(dt, &self.world(&settled, keys), knight, visiting);
+        let behaviour = self.brain.behaviour();
+        let ks = KnightState {
+            fighting: matches!(behaviour, BehaviourKind::Fight | BehaviourKind::Train),
+            down: behaviour == BehaviourKind::Dead,
+            hurt: self.brain.mind().emotions.hurt,
+            backed_off: self.brain.fight_backed_off(),
+        };
+        let news = e.tick(dt, &self.world(&settled, keys), knight, visiting, ks);
         self.enemy_hits += news.hits;
         self.enemies = Some(e);
+        // Gauntlet: arrivals dropping in through a subtle dust portal, the reward burst.
+        for at in &news.puffs {
+            self.fx.spawn("arrive_puff", *at, false);
+            self.fx.spawn("arrive_puff_side", *at, false);
+            self.fx.spawn("arrive_puff_side", *at, true);
+        }
+        if let Some(geo) = news.reward {
+            let at = self.ch.body().center();
+            self.stakes.burst(at, geo, self.settings.scale);
+        }
+        for ev in &news.gauntlet {
+            // Stable names (`gauntlet_started`, `gauntlet_wave_cleared`, `gauntlet_completed`,
+            // `gauntlet_aborted`, ...): achievements and the logs key on them.
+            log::info!("event: {} {ev:?}", ev.name());
+        }
+    }
+
+    /// The tray / panel: start a gauntlet.
+    pub(super) fn start_gauntlet(&mut self) {
+        match self.enemies.as_mut().map(|e| e.start_gauntlet()) {
+            Some(true) => log::info!("gauntlet: requested (starts at the next good moment)"),
+            Some(false) => log::warn!("gauntlet: unavailable (see the enemies.json `gauntlet` section)"),
+            None => log::warn!("enemies: not loaded"),
+        }
     }
 
     /// The bored knight (or the menu) asks for an enemy.

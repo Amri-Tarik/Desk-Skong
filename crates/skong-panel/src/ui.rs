@@ -197,6 +197,9 @@ impl Panel {
                 if ui.button("Send an enemy").on_hover_text("a crawlid, vengefly or husk wanders in; the knight fights it").clicked() {
                     self.cmd(Command::SendEnemy);
                 }
+                if ui.button("Start a gauntlet").on_hover_text("three waves of enemies, then a big Geo reward; ends early if you type or go fullscreen").clicked() {
+                    self.cmd(Command::StartGauntlet);
+                }
                 if ui.button("Dream nail").on_hover_text("dream-nail the window he stands on").clicked() {
                     self.cmd(Command::DreamNail);
                 }

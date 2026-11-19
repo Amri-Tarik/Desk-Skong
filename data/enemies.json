@@ -1,5 +1,5 @@
 {
-  "$comment": "Enemies that wander in for the knight to fight. Clips come from the exported vanilla libraries in data/hk/animations (enemy art is always vanilla: skins/Vanilla; every enemy's art faces left and is mirrored to face right). `moves`: ground (walks / crawls along ledges, walks in from a monitor edge when its ledge reaches one, else drops in) or fly (flies in from the nearer side edge to hover `hover` units over a ledge). Clips: idle, move, turn (once, then mirrored), startle (once, on noticing the knight), chase (default: move), antic + attack + recover (a lunge that moves `lunge` units/s), fall (dropping in), death_air (struck dead, thrown back), death_land (lying dead; fades after a moment). `hp`: blows it takes (spells count more). `speed` / `chase_speed`: game units/s. `aggro`: notices the knight this close (game units; 0 = never, a harmless crawler that only bumps into him). `reach`: starts its attack this close. `size`: body [w, h] in game units (blows, contact, where the knight stands). `geo`: [min, max] burst when killed. `stay`: seconds it roams before wandering off if nobody fights it. `schedule`: like npcs.json `visits` (presence-time countdown; never during fullscreen apps, fast typing, or while a visitor is around). `rules`: `max_alive` at once, a visit brings `group` [min, max] of them, `stagger` seconds apart. The bored knight can also ask for one (world event).",
+  "$comment": "Enemies that wander in for the knight to fight. Clips come from the exported vanilla libraries in data/hk/animations (enemy art is always vanilla: skins/Vanilla; every enemy's art faces left and is mirrored to face right). `moves`: ground (walks / crawls along ledges, walks in from a monitor edge when its ledge reaches one, else drops in) or fly (flies in from the nearer side edge to hover `hover` units over a ledge). Clips: idle, move, turn (once, then mirrored), startle (once, on noticing the knight), chase (default: move), antic + attack + recover (a lunge that moves `lunge` units/s), fall (dropping in), death_air (struck dead, thrown back), death_land (lying dead; fades after a moment). `hp`: blows it takes (spells count more). `speed` / `chase_speed`: game units/s. `aggro`: notices the knight this close (game units; 0 = never, a harmless crawler that only bumps into him). `reach`: starts its attack this close. `size`: body [w, h] in game units (blows, contact, where the knight stands). `geo`: [min, max] burst when killed. `stay`: seconds it roams before wandering off if nobody fights it. `schedule`: like npcs.json `visits` (presence-time countdown; never during fullscreen apps, fast typing, or while a visitor is around). `rules`: `max_alive` at once, a visit brings `group` [min, max] of them, `stagger` seconds apart. The bored knight can also ask for one (world event). `gauntlet`: the arena event, waves of enemies and a reward (see its own `$comment`).",
   "schedule": {
     "enabled": true,
     "first": [240, 720],
@@ -9,6 +9,27 @@
     "retry": 30
   },
   "rules": { "max_alive": 2, "group": [1, 2], "stagger": 5 },
+  "gauntlet": {
+    "$comment": "An arena event on the knight's monitor (like the game's arenas / Colosseum trials): the knight readies himself (\"!\" and his `challenge` bow) for `announce` s, then `waves` arrive one after another, each only once the previous one is cleared and after a `breather` [min, max] s. A wave brings `count` [min, max] enemies picked from `mix` (enemy name: weight), `stagger` s apart, arriving like any enemy (settled, reachable ledges; never on a game's monitor); they don't wander off for `hold` s. Completed: a `reward` [min, max] Geo burst by the knight and his `victory` (`cheer` s). It ends early (the enemies wander off, nothing is lost) when the user types at least `busy_keys_per_sec` for `busy_secs`, a fullscreen app or a visitor appears, the knight dies or is hurt above `hurt` (0..1) or backs off, a wave takes over `max_wave_secs`, or there is no room for an arrival for `no_room_secs`. It never starts during another fight, a visitor, a fullscreen app or fast typing; a gauntlet that can't start waits up to `wait` s. `natural`: on its own once he has beaten `after_kills` single enemies, each further kill rolls `chance`; at most once per `cooldown` s. Or on request: \"Start a gauntlet\" in the tray / panel.",
+    "waves": [
+      { "count": [2, 2], "mix": { "crawlid": 2.0, "husk": 1.0 } },
+      { "count": [2, 3], "mix": { "crawlid": 1.0, "vengefly": 1.5, "husk": 1.0 } },
+      { "count": [3, 4], "mix": { "crawlid": 0.5, "vengefly": 1.0, "husk": 1.5 } }
+    ],
+    "announce": 3.0,
+    "breather": [4, 6],
+    "stagger": 1.2,
+    "hold": 300,
+    "max_wave_secs": 150,
+    "no_room_secs": 12,
+    "reward": [40, 60],
+    "cheer": 3.0,
+    "busy_keys_per_sec": 2.5,
+    "busy_secs": 2.0,
+    "hurt": 0.6,
+    "wait": 180,
+    "natural": { "enabled": true, "after_kills": 5, "chance": 0.35, "cooldown": 3600 }
+  },
   "enemies": [
     {
       "name": "crawlid",
