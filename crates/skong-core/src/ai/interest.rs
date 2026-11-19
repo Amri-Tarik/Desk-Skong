@@ -24,10 +24,6 @@ pub enum PoiKind {
     Unvisited,
     /// The highest ledge around.
     HighLedge,
-    /// A screen corner (bottom of a monitor's work area).
-    Corner,
-    /// A placed bench: somewhere to sit (bench acts) when tired or calm.
-    Bench,
 }
 
 impl PoiKind {
@@ -38,8 +34,6 @@ impl PoiKind {
             PoiKind::ActiveWindow => "active window",
             PoiKind::Unvisited => "unvisited window",
             PoiKind::HighLedge => "high ledge",
-            PoiKind::Corner => "corner",
-            PoiKind::Bench => "bench",
         }
     }
 }
@@ -101,8 +95,6 @@ impl Poi {
             PoiKind::ActiveWindow => 1.2 * n.mischief + 0.3 * n.loneliness,
             PoiKind::Unvisited => 0.9 * curious,
             PoiKind::HighLedge => 0.5 * curious + 0.4 * p.boldness,
-            PoiKind::Corner => 0.6 * curious,
-            PoiKind::Bench => 0.7 * mind.tiredness() + 0.3 * (1.0 - mind.arousal()),
         }
     }
 
@@ -186,8 +178,8 @@ impl InterestMap {
     }
 
     /// Everything currently worth considering, novelty already reduced by familiarity.
-    pub(crate) fn candidates(&self, now: f32, knight: &Character, world: (&DesktopSnapshot, &Terrain, &[Vec2]), cfg: &BrainConfig) -> Vec<Poi> {
-        let (desk, terrain, benches) = world;
+    pub(crate) fn candidates(&self, now: f32, knight: &Character, world: (&DesktopSnapshot, &Terrain), cfg: &BrainConfig) -> Vec<Poi> {
+        let (desk, terrain) = world;
         let support = knight.support.and_then(|s| s.owner);
         let mut out: Vec<Poi> = self.events.clone();
         let has = |out: &[Poi], t: PoiTarget| out.iter().any(|p| p.target == t);
@@ -213,19 +205,6 @@ impl InterestMap {
         if let Some(l) = high {
             out.push(Poi { kind: PoiKind::HighLedge, target: PoiTarget::Spot(Vec2::new((l.x0 + l.x1) * 0.5, l.y)), novelty: 0.3 });
         }
-        for m in &desk.monitors {
-            let y = m.work.bottom as f32;
-            for x in [m.work.left as f32 + 48.0, m.work.right as f32 - 48.0] {
-                out.push(Poi { kind: PoiKind::Corner, target: PoiTarget::Spot(Vec2::new(x, y)), novelty: 0.2 });
-            }
-        }
-
-        for &b in benches {
-            if b.distance(knight.pos) > super::percept::BENCH_REACH {
-                out.push(Poi { kind: PoiKind::Bench, target: PoiTarget::Spot(b), novelty: 0.6 });
-            }
-        }
-
         out.retain(|p| !self.blocked.contains_key(&p.target.key()));
         for p in &mut out {
             p.novelty *= 1.0 - self.familiarity(p.target.key(), now, cfg);
@@ -244,6 +223,11 @@ impl InterestMap {
             self.processes.insert(w.process.clone(), now);
         }
         self.events.retain(|e| e.target.key() != key);
+    }
+
+    /// Is this target (or a spot within 64 px of it) temporarily unreachable?
+    pub fn is_blocked(&self, target: PoiTarget) -> bool {
+        self.blocked.contains_key(&target.key())
     }
 
     /// Skip this target for a while (no route).

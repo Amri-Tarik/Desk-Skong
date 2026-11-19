@@ -14,7 +14,7 @@ use skong_core::effects::EffectSet;
 
 use crate::fx::Fx;
 use skong_core::controller::{Abilities, Character, CharacterParams, MoveEvent, MoveInput, MoveState, Side};
-use skong_core::ai::{ActCatalog, AttackDir, Brain, BrainConfig, Cursor, GraphNavigator, Motion, Percepts, Poke, RunningAct, UserActivity};
+use skong_core::ai::{ActCatalog, Activity, AttackDir, Brain, BrainConfig, Cursor, GraphNavigator, Motion, Percepts, Poke, RunningAct, UserActivity};
 use skong_win::input::{self, UserInput};
 
 use crate::grab::Grab;
@@ -138,6 +138,10 @@ struct Pet {
     user_input: UserInput,
     /// Controller events not yet seen by the brain.
     brain_events: Vec<MoveEvent>,
+    /// Input applied on the last physics step (the brain notices walking into walls).
+    last_input: MoveInput,
+    /// Screen activity for the brain (empty until the vision feed provides it).
+    activity: Activity,
     /// Last brain debug line (behaviour, mood, top utilities).
     brain_debug: String,
     keyboard: Keyboard,
@@ -235,6 +239,8 @@ pub fn run(args: &Args) -> Result<()> {
         navb,
         user_input: UserInput::new()?,
         brain_events: Vec::new(),
+        last_input: MoveInput::default(),
+        activity: Activity::default(),
         brain_debug: String::new(),
         keyboard: Keyboard::default(),
         manual: false,
@@ -363,6 +369,7 @@ impl Pet {
             self.ch.state = MoveState::Airborne;
         } else {
             self.ch.step(&input, &self.terrain, dt, &mut self.move_events);
+            self.last_input = input;
         }
         if self.act.is_some() && !self.ch.is_grounded() {
             self.act = None; // knocked off / fell: acts are grounded choreography
@@ -484,6 +491,10 @@ impl Pet {
             benches: &benches,
             perch: seat.is_some(),
             move_events: &self.brain_events,
+            activity: &self.activity,
+            last_input: self.last_input,
+            local_hour: None,
+            dark: false,
         };
         let intent = self.brain.tick(&percepts, &mut self.nav);
         self.pokes.clear();

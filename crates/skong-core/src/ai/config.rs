@@ -131,6 +131,75 @@ impl Default for BattleConfig {
     }
 }
 
+/// Cursor-companion tuning (the default behaviour when nothing else is going on).
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct CompanionConfig {
+    /// Comfortable distance from the cursor's projection at `bother_level` 1 (px).
+    pub comfort: f32,
+    /// ... and at `bother_level` 0: keeps a polite distance.
+    pub polite_comfort: f32,
+    /// Stand this far beside the projection rather than right under the cursor (bother 1 / 0).
+    pub beside: f32,
+    pub polite_beside: f32,
+    /// The cursor must stay out of comfort range this long before he follows (s).
+    pub drift_secs: f32,
+    /// Hurry (instead of stroll) when the goal is farther than this (px).
+    pub hurry_beyond: f32,
+    /// Seconds between contextual acts while keeping company.
+    pub gap: [f32; 2],
+    /// Cursor resting this long → settle down and sit nearby (s).
+    pub settle_secs: f32,
+    /// Look for a seat within this distance of the cursor projection when settling (px).
+    pub seat_range: f32,
+    /// Minimum seconds between two `stare_at_user`.
+    pub stare_cooldown: f32,
+    /// Chance that a gap ends in a plain fidget instead of a contextual act.
+    pub fidget_chance: f32,
+}
+
+impl Default for CompanionConfig {
+    fn default() -> Self {
+        Self {
+            comfort: 240.0,
+            polite_comfort: 450.0,
+            beside: 70.0,
+            polite_beside: 220.0,
+            drift_secs: 0.6,
+            hurry_beyond: 900.0,
+            gap: [1.0, 3.0],
+            settle_secs: 5.0,
+            seat_range: 500.0,
+            stare_cooldown: 25.0,
+            fidget_chance: 0.5,
+        }
+    }
+}
+
+/// Activity-watching tuning.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct WatchConfig {
+    /// Watching time for a barely interesting / very interesting spot (s); satiation
+    /// fills over this budget.
+    pub min_secs: f32,
+    pub max_secs: f32,
+    /// Spot quiet this long ends the watch (s).
+    pub quiet_secs: f32,
+    /// Sit down (when perched / at a bench) once a long-lived spot was watched this long (s).
+    pub sit_after: f32,
+    /// Seconds between watching acts.
+    pub gap: [f32; 2],
+    /// Spots weaker than this are ignored.
+    pub min_intensity: f32,
+}
+
+impl Default for WatchConfig {
+    fn default() -> Self {
+        Self { min_secs: 4.0, max_secs: 15.0, quiet_secs: 1.5, sit_after: 5.0, gap: [0.3, 1.0], min_intensity: 0.2 }
+    }
+}
+
 /// All brain tunables.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(default)]
@@ -149,6 +218,10 @@ pub struct BrainConfig {
     pub urgent: f32,
     pub needs: NeedRates,
     pub battle: BattleConfig,
+    pub companion: CompanionConfig,
+    pub watch: WatchConfig,
+    /// Seconds of plain standing between purposeful actions when idle.
+    pub idle_gap: [f32; 2],
     /// User idle this long = away (pet naps, stops bothering).
     pub user_away_secs: f32,
     /// Keyboard rate at or above this means the user is busy typing (keys/s).
@@ -174,6 +247,9 @@ impl Default for BrainConfig {
             urgent: 1.0,
             needs: NeedRates::default(),
             battle: BattleConfig::default(),
+            companion: CompanionConfig::default(),
+            watch: WatchConfig::default(),
+            idle_gap: [1.0, 3.0],
             user_away_secs: 300.0,
             typing_busy_rate: 1.5,
             novelty_half_life: 90.0,

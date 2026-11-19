@@ -4,11 +4,12 @@
 use std::collections::BTreeMap;
 
 use crate::acts::ActId;
-use crate::controller::{Character, MoveEvent};
+use crate::controller::{Character, MoveEvent, MoveInput};
 use crate::desktop::{DesktopSnapshot, WindowId};
 use crate::geom::{RectI, Vec2};
 use crate::terrain::Terrain;
 
+use super::activity::Activity;
 use super::config::BrainConfig;
 
 /// Everything the brain perceives this tick. Built by the app; borrowed, cheap.
@@ -39,6 +40,15 @@ pub struct Percepts<'a> {
     pub perch: bool,
     /// Controller events since the previous brain tick (incl. `on_terrain_rebuilt`).
     pub move_events: &'a [MoveEvent],
+    /// Where things are changing on screen (vision). Pass an empty one when unknown.
+    pub activity: &'a Activity,
+    /// The input actually applied on the previous physics step (after acts zeroed it).
+    /// Lets the brain notice "pressing but not moving" (walking into a wall).
+    pub last_input: MoveInput,
+    /// Local time of day in hours (0..24), if known. Night = lantern time.
+    pub local_hour: Option<f32>,
+    /// The knight's surroundings are dark (dark-themed window behind him, dimmed screen).
+    pub dark: bool,
 }
 
 /// Cursor state in virtual-desktop pixels.
@@ -173,7 +183,10 @@ impl CursorSense {
 }
 
 /// Horizontal distance from a bench that counts as "at" it (px).
-pub const BENCH_REACH: f32 = 24.0;
+pub const BENCH_REACH: f32 = 6.0;
+
+/// Pressing a direction while grounded but not moving for this long = stuck (s).
+pub const STUCK_SECS: f32 = 0.25;
 
 /// What the brain knows beyond the raw percepts.
 #[derive(Clone, Debug, Default)]
@@ -203,6 +216,16 @@ pub struct Senses {
     pub perch: bool,
     /// Something woke the knight this tick (poke, user returned). Set by reflexes.
     pub woken: bool,
+    /// Seconds spent pressing a direction while grounded without moving.
+    pub push_for: f32,
+    /// Became stuck this tick (`push_for` crossed [`STUCK_SECS`]).
+    pub stuck: bool,
+    /// Started sliding down a wall this tick.
+    pub wall_slide: bool,
+    /// Night (local time) or dark surroundings.
+    pub dark: bool,
+    /// Brain clock time the user last came back after being away.
+    pub returned_at: Option<f32>,
 }
 
 impl Senses {
@@ -248,6 +271,9 @@ impl Senses {
         let away = p.user.idle_secs >= cfg.user_away_secs;
         self.user_returned = self.user_away && !away;
         self.user_away = away;
+        if self.user_returned {
+            self.returned_at = Some(now);
+        }
         let k = p.knight;
         self.at_bench = p
             .benches
@@ -256,6 +282,13 @@ impl Senses {
             .find(|b| k.is_grounded() && (b.x - k.pos.x).abs() <= BENCH_REACH && (b.y - k.pos.y).abs() <= 8.0);
         self.perch = p.perch && k.is_grounded();
         self.woken = false;
+        let pressing = k.is_grounded() && p.act.is_none() && p.last_input.x.abs() > 0.1 && k.vel.x.abs() < 8.0;
+        let before = self.push_for;
+        self.push_for = if pressing { self.push_for + p.dt } else { 0.0 };
+        self.stuck = before < STUCK_SECS && self.push_for >= STUCK_SECS;
+        self.wall_slide = p.move_events.iter().any(|e| matches!(e, MoveEvent::WallSlideStart { .. }));
+        let night = p.local_hour.is_some_and(|h| !(6.5..20.5).contains(&h));
+        self.dark = p.dark || night;
     }
 
     /// A seat is available right here: at a bench, or perched on a ledge edge.
