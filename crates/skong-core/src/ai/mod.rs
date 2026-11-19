@@ -38,6 +38,7 @@ mod interest;
 mod navigator;
 mod needs;
 mod percept;
+mod places;
 mod repertoire;
 mod rng;
 mod shade_hunt;
@@ -60,6 +61,7 @@ pub use interest::{InterestMap, Poi, PoiKey, PoiKind, PoiTarget, ScoredPoi};
 pub use navigator::{GraphNavigator, NavStatus, Navigator, Reach};
 pub use needs::{Emotions, MOOD_TAGS, Mind, Needs};
 pub use percept::{ClosedWindow, Cursor, CursorSense, DesktopChanges, Percepts, Poke, RunningAct, STUCK_SECS, Senses, UserActivity};
+pub use places::{DiscoveryEvent, KnownPlace, PlaceId, PlaceKind, PlaceMemory};
 pub use repertoire::{ActCatalog, ActInfo};
 pub use spots::{Vantage, View};
 pub use stakes::{Lethality, ShadeSense, StakeEvent, StakesConfig, StakesSense};
@@ -142,6 +144,8 @@ pub struct Intent {
     pub waiting: bool,
     /// "reason | mood + needs | top-3 utilities", for an overlay.
     pub debug: String,
+    /// Discovery traffic for the app (explored a new window, used / struck a found place).
+    pub discovery: Option<DiscoveryEvent>,
 }
 
 /// Why the last behaviour switch happened.
@@ -569,6 +573,7 @@ impl Brain {
     fn think(&mut self, p: &Percepts, nav: &mut dyn Navigator, out: &mut Intent, finished: bool) {
         self.best_poi = self.score_pois(p, nav);
         self.best_spot = self.score_spots(p, nav, finished);
+        self.score_places(p, nav);
         self.utilities = self.score_behaviours(p);
         let current = self.active.kind();
         let Some(&(best, best_u)) = self.utilities.first() else { return };
@@ -606,6 +611,7 @@ impl Brain {
         nav.stop();
         let poi = self.best_poi.map(|s| s.poi);
         let spot = self.best_spot;
+        let place = self.interest.places.best;
         let flee_from = if kind == BehaviourKind::Flee { self.flee_from.take().unwrap_or(p.knight.pos) } else { p.knight.pos };
         let death = if kind == BehaviourKind::Dead { self.stakes.pending_death.take() } else { None };
         let mut ctx = self.ctx(p, nav, out);
@@ -634,6 +640,10 @@ impl Brain {
             }
             BehaviourKind::ShadeHunt => Active::ShadeHunt(Box::new(ShadeHunt::start(&mut ctx))),
             BehaviourKind::Loot => Active::Loot(Loot::start(&mut ctx)),
+            BehaviourKind::Visit => match place {
+                Some(c) => Active::Visit(places::Visit::start(&mut ctx, c)),
+                None => Active::Idle(Idle::start(&mut ctx)),
+            },
         };
         let kind = active.kind();
         log::debug!("brain: {} -> {} ({reason:?})", from.label(), kind.label());
@@ -820,6 +830,7 @@ impl Brain {
         let ride = if s.since_carried(self.now) < 0.6 && p.knight.is_grounded() { 0.65 + 0.2 * e.excitement } else { 0.0 };
         let knocked = if self.knocked_out { 1.25 } else { 0.0 };
         let recover = if e.hurt > 0.35 { (0.5 + 0.4 * e.hurt).min(0.9) } else { 0.0 };
+        let visit = self.visit_utility();
 
         let mut u = vec![
             (BehaviourKind::Idle, idle),
@@ -834,6 +845,7 @@ impl Brain {
             (BehaviourKind::Ride, ride),
             (BehaviourKind::KnockedOut, knocked),
             (BehaviourKind::Recover, recover),
+            (BehaviourKind::Visit, visit),
         ];
         u.extend(self.stakes_utilities(p));
         let calm = self.now < self.calm_until;

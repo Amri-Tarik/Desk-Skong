@@ -35,11 +35,13 @@ use crate::Args;
 use crate::keyboard::Keyboard;
 use crate::settings::{BOTHER, SCALES, Settings};
 use crate::benches::{Benches, SEAT_BELOW_ORIGIN};
+use crate::discoveries::Discoveries;
 use crate::navbuild::NavBuilder;
 use crate::control::ControlServer;
 use crate::overlay::PetOverlay;
 use skong_ipc::Command;
 
+mod discover;
 mod panel;
 mod stakes;
 
@@ -132,6 +134,8 @@ struct Pet {
     /// Seat line (screen y) while a seated act plays.
     seat_y: Option<f32>,
     benches: Benches,
+    /// Things found in windows (benches, hot springs, geo deposits).
+    discoveries: Discoveries,
     fx: Fx,
     /// Keeps the knight off monitors running a fullscreen game.
     games: GameGuard,
@@ -229,6 +233,7 @@ pub fn run(args: &Args) -> Result<()> {
     win.set_click_through(settings.click_through);
     let tray = Tray::new("Desk-Skong", &tray_icon(&data, &look))?;
     let benches = Benches::load(&args.data.join("../props.json"), data.vanilla().map(|s| s.dir.as_path()), settings.scale)?;
+    let discoveries = Discoveries::load(&args.data.join("../props.json"), data.vanilla().map(|s| s.dir.as_path()), settings.scale);
 
     let mut brain = Brain::new(BrainConfig::default(), ActCatalog::from_library(&data.acts), seed());
     brain.set_bother_level(settings.bother);
@@ -251,6 +256,7 @@ pub fn run(args: &Args) -> Result<()> {
         act,
         seat_y: None,
         benches,
+        discoveries,
         fx,
         games: GameGuard::new(),
         game_hidden: false,
@@ -284,6 +290,7 @@ pub fn run(args: &Args) -> Result<()> {
     pet.control.set_hello(pet.hello());
 
     pet.benches.capturable = args.capturable;
+    pet.discoveries.capturable = args.capturable;
     if args.panel.unwrap_or(pet.settings.open_panel) {
         pet.apply(Command::OpenPanel)?;
     }
@@ -330,7 +337,9 @@ pub fn run(args: &Args) -> Result<()> {
         if last_housekeeping.elapsed().as_secs() >= 2 {
             last_housekeeping = Instant::now();
             pet.benches.raise_all();
+            pet.discoveries.raise_backs();
             pet.win.raise();
+            pet.discoveries.raise_fronts();
             log::debug!(
                 "knight at ({:.0},{:.0}) {:?} clip '{}' act {:?} | brain: {}",
                 pet.ch.pos.x,
@@ -359,6 +368,7 @@ impl Pet {
         if games_changed {
             self.benches.hide_on(&self.games.game_monitors);
             self.stakes.hide_on(&self.games.game_monitors);
+            self.discoveries.hide_on(&self.games.game_monitors);
         }
         if self.content.poll(self.watcher.snapshot(), desk_changed) || desk_changed || games_changed {
             let mut new = self.content.terrain(self.watcher.snapshot(), &self.topts);
@@ -486,6 +496,7 @@ impl Pet {
         self.stakes_tick(dt)?;
         self.draw()?;
         self.trigger_fx();
+        self.discoveries_tick(dt);
         let origin = self.knight_origin();
         self.fx.update(dt, origin, self.ch.facing == Side::Right, self.ch.params.px_per_unit)
     }
@@ -666,8 +677,8 @@ impl Pet {
 
     fn think(&mut self, dt: f32) -> MoveInput {
         self.stakes_sense();
-        let seat = self.benches.seat_here(&self.ch, &self.terrain);
-        let benches: Vec<Vec2> = self.benches.placed.iter().map(|(b, _)| b.pos).collect();
+        let mut benches: Vec<Vec2> = self.benches.placed.iter().map(|(b, _)| b.pos).collect();
+        let seat = self.discovery_percepts(&mut benches).or_else(|| self.benches.seat_here(&self.ch, &self.terrain));
         let (left, right) = input::mouse_buttons();
         let cursor = monitor::cursor_pos().map(|(x, y)| Cursor { pos: Vec2::new(x as f32, y as f32), left, right });
         let user = UserActivity { idle_secs: input::idle_secs(), keys_per_sec: self.user_input.keys_per_sec() };
@@ -691,6 +702,9 @@ impl Pet {
             dark: false,
         };
         let intent = self.brain.tick(&percepts, &mut self.nav);
+        if let Some(ev) = intent.discovery {
+            self.on_discovery(ev);
+        }
         self.pokes.clear();
         self.brain_events.clear();
         self.stakes_events(&intent.stakes);
@@ -821,6 +835,7 @@ impl Pet {
                 self.ch = Character::new(params, self.ch.abilities, self.ch.pos);
                 self.loco = Locomotion::new(&self.data.lib, &params)?;
                 self.benches.rescale(s);
+                self.discoveries.rescale(s);
                 self.navb.reset(&self.terrain, &self.ch);
                 self.settings.save();
             }
@@ -849,6 +864,7 @@ impl Pet {
                 self.place_bench(style, at);
             }
             Command::ClearBenches => self.benches.clear(),
+            Command::Discover(_) | Command::ForgetDiscoveries => return self.apply_discovery(c),
             Command::Quit => return Ok(Flow::Quit),
             Command::Stakes(c) => self.apply_stakes(c),
             Command::SetManual(_) | Command::ToggleVision | Command::ToggleDebugOverlay | Command::SetOverlayLayers(_) | Command::OpenPanel => return self.apply_panel(c),
@@ -903,6 +919,7 @@ impl Pet {
             MenuItem::sub("Mischief", bother),
             MenuItem::sub("Place bench", self.benches.styles.iter().enumerate().map(|(i, s)| MenuItem::Action { id: ID_BENCH0 + i as u32, label: s.name.clone(), checked: false, enabled: self.benches.available(i) }).collect()),
             MenuItem::action(ID_CLEAR_BENCHES, "Remove benches"),
+            discover::menu(),
             MenuItem::Separator,
             MenuItem::action(ID_ACT, "Do something!"),
             MenuItem::action(ID_RESPAWN, "Come here (respawn at cursor)"),
@@ -934,7 +951,7 @@ impl Pet {
             i if (ID_SKIN0..ID_SKIN0 + self.data.skins.len() as u32).contains(&i) => Command::SetSkin((i - ID_SKIN0) as usize),
             i if (ID_SCALE0..ID_SCALE0 + SCALES.len() as u32).contains(&i) => Command::SetScale(SCALES[(i - ID_SCALE0) as usize].1),
             i if (ID_BOTHER0..ID_BOTHER0 + BOTHER.len() as u32).contains(&i) => Command::SetBother(BOTHER[(i - ID_BOTHER0) as usize].1),
-            _ => return None,
+            _ => return discover::menu_command(id),
         })
     }
 }

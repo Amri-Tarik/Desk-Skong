@@ -60,6 +60,11 @@ impl Benches {
         Ok(b)
     }
 
+    /// Art of a style at the current scale (None if not exported).
+    pub fn art(&self, style: usize) -> Option<&Image> {
+        self.scaled.get(style)?.as_ref()
+    }
+
     pub fn available(&self, style: usize) -> bool {
         self.src.get(style).is_some_and(|s| s.is_some())
     }
