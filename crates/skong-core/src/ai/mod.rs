@@ -39,6 +39,7 @@ mod interest;
 mod navigator;
 mod needs;
 mod percept;
+mod pester;
 mod places;
 mod repertoire;
 pub mod rng;
@@ -259,6 +260,10 @@ pub struct Brain {
     next_event_at: f32,
     /// A requested cursor chase invites a battle until then.
     chase_until: f32,
+    /// Asked to pester the cursor until then (a bored-knight world event).
+    pester_until: f32,
+    /// No pestering again before this time.
+    pester_ready_at: f32,
     /// Highest tier with an eligible behaviour at the last evaluation.
     top_tier: Tier,
     oscillations: u32,
@@ -300,6 +305,8 @@ impl Brain {
             bored_for: 0.0,
             next_event_at: 0.0,
             chase_until: f32::NEG_INFINITY,
+            pester_until: f32::NEG_INFINITY,
+            pester_ready_at: 0.0,
             top_tier: Tier::Ambient,
             oscillations: 0,
             cfg,
@@ -429,6 +436,10 @@ impl Brain {
             if status == Status::Running {
                 break;
             }
+            if self.active.kind() == BehaviourKind::Pester {
+                // Before re-thinking, or it would pick pestering again straight away.
+                self.pester_over();
+            }
             if status == Status::Failed {
                 // Don't re-pick what just failed (e.g. the same unreachable seat) at once.
                 let kind = self.active.kind();
@@ -482,12 +493,24 @@ impl Brain {
         let Some(ev) = self.rng.pick_weighted(&options) else { return };
         log::info!("brain: bored stiff with nothing going on; asking the world for {ev:?}");
         if ev == WorldEvent::CursorChase {
-            self.chase_until = self.now + 20.0;
+            // A proper fight, or just buzzing around it showing off.
+            if self.rng.chance(0.5) {
+                self.chase_until = self.now + 20.0;
+            } else {
+                self.pester_until = self.now + 20.0;
+            }
             self.mind.excite(0.3);
         }
         out.request = Some(ev);
         self.next_event_at = self.now + b.event_gap;
         self.bored_for = 0.0;
+    }
+
+    /// Pestering ended (done, or something else took over): the invitation is used up and
+    /// he leaves the cursor alone for a while.
+    fn pester_over(&mut self) {
+        self.pester_until = f32::NEG_INFINITY;
+        self.pester_ready_at = self.pester_ready_at.max(self.now + 120.0 / self.cfg.bother_level.max(0.05));
     }
 
     /// Sleeping: the seated "nap" act, or deep sleep ("bow_down") during a nap.
@@ -500,7 +523,7 @@ impl Brain {
     /// Immediate reactions that bypass deliberation.
     fn reflexes(&mut self, p: &Percepts, out: &mut Intent) {
         let napping = self.asleep(p);
-        let fighting = matches!(self.active, Active::Battle(_));
+        let fighting = matches!(self.active, Active::Battle(_) | Active::Pester(_));
         let mut woken = false;
 
         self.recent_clicks.retain(|t| self.now - *t < 2.0);
@@ -738,6 +761,9 @@ impl Brain {
             let after = if b.outcome() == Some(Outcome::GaveUp) { base * 0.5 } else { base };
             self.battle_ready_at = self.now + after;
         }
+        if from == BehaviourKind::Pester {
+            self.pester_over();
+        }
         if from == BehaviourKind::Nap {
             self.nap_ready_at = self.nap_ready_at.max(self.now + 30.0);
         }
@@ -783,6 +809,7 @@ impl Brain {
             BehaviourKind::Rest => Active::Rest(Rest::start(&mut ctx)),
             BehaviourKind::Nap => Active::Nap(Nap::start(&mut ctx)),
             BehaviourKind::Battle => Active::Battle(Box::new(Battle::start(&mut ctx))),
+            BehaviourKind::Pester => Active::Pester(Box::new(pester::Pester::start(&mut ctx))),
             BehaviourKind::Flee => Active::Flee(Flee::start(&mut ctx, flee_from)),
             BehaviourKind::Hide => Active::Hide(Hide::start(&mut ctx)),
             BehaviourKind::Ride => Active::Ride(Ride::start(&mut ctx)),
@@ -986,6 +1013,30 @@ impl Brain {
             _ => 0.0,
         };
 
+        // Pestering: a playful cursor nearby, or he was bored stiff and asked for it.
+        let pester = match s.cursor {
+            Some(c)
+                if cfg.bother_level > 0.0
+                    && self.now >= self.pester_ready_at
+                    && !s.user_busy
+                    && !s.user_away
+                    && !s.fullscreen
+                    && n.energy > 0.35
+                    && e.startle < 0.4
+                    && e.hurt < 0.3 =>
+            {
+                let invite = if self.now < self.pester_until {
+                    1.0
+                } else if c.near_for > 1.5 && c.speed() > 80.0 && c.speed() < 600.0 {
+                    0.6 // drifting around near him: fair game
+                } else {
+                    0.15
+                };
+                let drive = 0.7 * n.mischief + 0.3 * e.excitement + 0.2 * pers.playfulness;
+                (drive * invite * (0.6 + 0.4 * cfg.bother_level)).min(0.92)
+            }
+            _ => 0.0,
+        };
         let flee = if self.flee_from.is_some() && e.startle > 0.3 { 1.2 } else { 0.0 };
         let hide = if s.fullscreen { 1.3 } else { 0.0 };
         let ride = if s.since_carried(self.now) < 0.6 && p.knight.is_grounded() { 0.65 + 0.2 * e.excitement } else { 0.0 };
@@ -1009,6 +1060,7 @@ impl Brain {
             (BehaviourKind::Rest, rest),
             (BehaviourKind::Nap, nap),
             (BehaviourKind::Battle, battle),
+            (BehaviourKind::Pester, pester),
             (BehaviourKind::Flee, flee),
             (BehaviourKind::Hide, hide),
             (BehaviourKind::Ride, ride),

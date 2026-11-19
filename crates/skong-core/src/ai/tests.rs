@@ -1191,3 +1191,40 @@ fn no_re_sit_right_after_getting_up() {
     sim.run(70.0);
     assert!(seated_starts(&sim) <= 1, "re-sat within the cooldown: {:?}", sim.started);
 }
+
+// --- Pestering -----------------------------------------------------------------------------
+
+#[test]
+fn asked_to_pester_he_shows_off_around_the_cursor_then_stops() {
+    let mut sim = parked_cursor_sim(BrainConfig::default());
+    sim.brain.pester_until = 1e9;
+    sim.brain.battle_ready_at = 1e9;
+    assert!(sim.run_until(4.0, BehaviourKind::Pester), "{}", sim.last_reason());
+    let kinds = sim.run(30.0);
+    let jumps = sim.intents.iter().filter(|i| matches!(i.motion, Motion::Direct(m) if m.jump_pressed)).count();
+    assert!(jumps >= 3, "jumps {jumps}");
+    assert!(sim.intents.iter().all(|i| i.attack.is_none_or(|a| !a.hit)), "never lands a hit");
+    assert!(kinds.iter().any(|k| *k != BehaviourKind::Pester), "never stopped: {kinds:?}");
+}
+
+#[test]
+fn a_click_ends_the_pestering_without_a_fright() {
+    let mut sim = parked_cursor_sim(BrainConfig::default());
+    sim.brain.pester_until = 1e9;
+    sim.brain.battle_ready_at = 1e9;
+    assert!(sim.run_until(4.0, BehaviourKind::Pester));
+    sim.run(1.0);
+    sim.pokes.push(Poke::Click { pos: sim.body_center() });
+    let kinds = sim.run(4.0);
+    assert!(!kinds.contains(&BehaviourKind::Flee), "{kinds:?}");
+    assert!(sim.started.iter().any(|a| a == "recoil"), "acts: {:?}", sim.started);
+    assert_ne!(sim.brain.behaviour(), BehaviourKind::Pester);
+}
+
+#[test]
+fn bother_level_zero_never_pesters() {
+    let mut sim = parked_cursor_sim(BrainConfig { bother_level: 0.0, ..Default::default() });
+    sim.brain.pester_until = 1e9;
+    let kinds = sim.run(60.0);
+    assert!(!kinds.contains(&BehaviourKind::Pester));
+}

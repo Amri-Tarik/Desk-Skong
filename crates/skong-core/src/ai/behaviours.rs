@@ -86,6 +86,8 @@ pub enum BehaviourKind {
     Greet,
     /// Died: death act, gone, respawn at a bench / safe ledge.
     Dead,
+    /// Show off around the cursor (hops, loops, dash-bys): mischief without a fight.
+    Pester,
     /// Go fight the Shade to get the Geo back.
     ShadeHunt,
     /// Walk over loose Geo to pick it up.
@@ -95,7 +97,7 @@ pub enum BehaviourKind {
 }
 
 impl BehaviourKind {
-    pub const ALL: [BehaviourKind; 17] = [
+    pub const ALL: [BehaviourKind; 18] = [
         BehaviourKind::Idle,
         BehaviourKind::Companion,
         BehaviourKind::Watch,
@@ -113,6 +115,7 @@ impl BehaviourKind {
         BehaviourKind::ShadeHunt,
         BehaviourKind::Loot,
         BehaviourKind::Visit,
+        BehaviourKind::Pester,
     ];
 
     pub fn label(self) -> &'static str {
@@ -134,6 +137,7 @@ impl BehaviourKind {
             BehaviourKind::ShadeHunt => "shade hunt",
             BehaviourKind::Loot => "loot",
             BehaviourKind::Visit => "visit",
+            BehaviourKind::Pester => "pester",
         }
     }
 
@@ -145,7 +149,7 @@ impl BehaviourKind {
     pub fn tier(self) -> Tier {
         match self {
             BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead => Tier::Urgent,
-            BehaviourKind::Battle | BehaviourKind::ShadeHunt | BehaviourKind::Loot | BehaviourKind::Greet => Tier::Engagement,
+            BehaviourKind::Battle | BehaviourKind::Pester | BehaviourKind::ShadeHunt | BehaviourKind::Loot | BehaviourKind::Greet => Tier::Engagement,
             BehaviourKind::Nap | BehaviourKind::Rest | BehaviourKind::Recover => Tier::Needs,
             BehaviourKind::Idle | BehaviourKind::Companion | BehaviourKind::Watch | BehaviourKind::Explore | BehaviourKind::Ride | BehaviourKind::Visit => {
                 Tier::Ambient
@@ -155,7 +159,7 @@ impl BehaviourKind {
 
     /// Exclusive behaviours end themselves; only urgent challengers may interrupt.
     pub fn exclusive(self) -> bool {
-        matches!(self, BehaviourKind::Nap | BehaviourKind::Battle | BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead | BehaviourKind::ShadeHunt | BehaviourKind::Loot)
+        matches!(self, BehaviourKind::Nap | BehaviourKind::Battle | BehaviourKind::Pester | BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead | BehaviourKind::ShadeHunt | BehaviourKind::Loot)
     }
 }
 
@@ -961,6 +965,7 @@ pub(crate) enum Active {
     Rest(Rest),
     Nap(Nap),
     Battle(Box<Battle>),
+    Pester(Box<super::pester::Pester>),
     Flee(Flee),
     Hide(Hide),
     Ride(Ride),
@@ -983,6 +988,7 @@ impl Active {
             Active::Rest(_) => BehaviourKind::Rest,
             Active::Nap(_) => BehaviourKind::Nap,
             Active::Battle(_) => BehaviourKind::Battle,
+            Active::Pester(_) => BehaviourKind::Pester,
             Active::Flee(_) => BehaviourKind::Flee,
             Active::Hide(_) => BehaviourKind::Hide,
             Active::Ride(_) => BehaviourKind::Ride,
@@ -1005,6 +1011,7 @@ impl Active {
             Active::Rest(b) => b.tick(ctx),
             Active::Nap(b) => b.tick(ctx),
             Active::Battle(b) => b.tick(ctx),
+            Active::Pester(b) => b.tick(ctx),
             Active::Flee(b) => b.tick(ctx),
             Active::Hide(b) => b.tick(ctx),
             Active::Ride(b) => b.tick(ctx),
@@ -1028,6 +1035,7 @@ impl Active {
             Active::Rest(b) => b.reason(),
             Active::Nap(b) => b.reason(ctx),
             Active::Battle(b) => format!("battle: {}", b.detail()),
+            Active::Pester(b) => b.reason(),
             Active::Flee(_) => "flee: startled".into(),
             Active::Hide(_) => "hide: fullscreen app in front".into(),
             Active::Ride(_) => "ride: window moving".into(),
