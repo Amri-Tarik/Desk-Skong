@@ -13,9 +13,10 @@ _Working list, last updated 2026-11-19. Reorder freely and add notes under any i
       leaving it later is always graceful.)_ If the brain switches behaviour right after he sits, he gets up
       and sits straight back down. Fix: keep a running seated act when the next behaviour
       wants to sit too.
-- [ ] **Crystal dash on long runs.** Today the planner only uses it as a last resort
-      (1–2 edges per graph), so he never visibly chooses it. Hurry should prefer it on
-      long level stretches.
+- [x] **Crystal dash on long runs.** _(Hurry crystal dashes along level runs longer than
+      ~15 units ≈ 576 px at scale 0.6, the break-even with sprinting. If it feels too
+      eager, add a margin in `superdash_break_even`. Follow-ups: wall-launched charge,
+      runs to slightly higher ledges.)_
 
 ## 2. Reasons to move around
 
