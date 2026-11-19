@@ -34,6 +34,31 @@ impl Character {
         q.find_ledge(body, 0.0, f32::MAX, |_| true).map(|l| l.y - self.pos.y)
     }
 
+    /// Planner-less dive decision for this tick's `input`: dive when already falling
+    /// straight (no real sideways steering, so the dive lands where the fall would) with at
+    /// least [`AUTO_DIVE_UNITS`] of air below ([`AUTO_DIVE_EXCITED_UNITS`] when `excited`).
+    /// Returns `Some(dark)`: Descending Dark when excited or the drop is huge.
+    pub fn auto_dive(&self, terrain: &Terrain, input: &MoveInput, excited: bool) -> Option<bool> {
+        let falling = self.state == MoveState::Airborne && self.vel.y > 0.0 && self.timers.jump_hold <= 0.0;
+        let quiet = input.x.abs() < 0.25 && !input.jump_pressed && !input.dash_pressed && !input.superdash_held;
+        if !(self.abilities.dive && falling && quiet) {
+            return None;
+        }
+        let units = self.drop_below(terrain)? / self.params.px_per_unit;
+        let need = if excited { AUTO_DIVE_EXCITED_UNITS } else { AUTO_DIVE_UNITS };
+        (units >= need).then_some(excited || units >= AUTO_DIVE_DARK_UNITS)
+    }
+}
+
+/// Free fall (game units) below a straight drop that makes the knight dive.
+pub const AUTO_DIVE_UNITS: f32 = 5.0;
+/// Same when the brain is excited.
+pub const AUTO_DIVE_EXCITED_UNITS: f32 = 3.0;
+/// Drops this deep use Descending Dark.
+pub const AUTO_DIVE_DARK_UNITS: f32 = 12.0;
+
+impl Character {
+
     pub(super) fn start_dive(&mut self, dark: bool, events: &mut Vec<MoveEvent>) {
         let t = &mut self.timers;
         t.dive = self.params.dive_antic_time;
@@ -267,6 +292,29 @@ mod tests {
         let mut c = knight(1500.0, 100.0);
         let ev = run(&mut c, &t, MoveInput::default(), 3.0, DT);
         assert!(ev.contains(&MoveEvent::Landed { hard: true }) && !ev.contains(&MoveEvent::SuperHardLanded), "{ev:?}");
+    }
+
+    #[test]
+    fn auto_dive_only_on_long_straight_drops() {
+        let t = world(1080.0);
+        let quiet = MoveInput::default();
+        // Falling at x=1500 from y=200: 840 px (13 units) to the floor.
+        let mut c = knight(1500.0, 200.0);
+        assert_eq!(c.auto_dive(&t, &quiet, false), None, "not falling yet");
+        run(&mut c, &t, quiet, 0.1, DT);
+        assert_eq!(c.auto_dive(&t, &quiet, false), Some(true), "huge drop: dark");
+        assert_eq!(c.auto_dive(&t, &MoveInput { x: 1.0, ..quiet }, false), None, "steering sideways");
+        // Above the window: 400 px = 6 units.
+        let mut c = knight(600.0, 200.0);
+        run(&mut c, &t, quiet, 0.1, DT);
+        assert_eq!(c.auto_dive(&t, &quiet, false), Some(false));
+        // Short drop (~3.5 units): only when excited.
+        let mut c = knight(600.0, 370.0);
+        run(&mut c, &t, quiet, 0.05, DT);
+        assert_eq!(c.auto_dive(&t, &quiet, false), None);
+        assert_eq!(c.auto_dive(&t, &quiet, true), Some(true));
+        c.abilities.dive = false;
+        assert_eq!(c.auto_dive(&t, &quiet, true), None);
     }
 
     #[test]

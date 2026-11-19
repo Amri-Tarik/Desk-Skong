@@ -40,7 +40,15 @@ impl Fx {
         (0..self.set.defs.len()).map(|i| (self.set.sprite_keys(i), self.set.defs[i].raster_scale())).collect()
     }
 
-    pub fn install_frames(&mut self, frames: Vec<HashMap<SpriteKey, Frame>>) {
+    /// Install rasterized frames; rotated / squashed effects get their transform baked here.
+    pub fn install_frames(&mut self, mut frames: Vec<HashMap<SpriteKey, Frame>>) {
+        for (def, map) in self.set.defs.iter().zip(frames.iter_mut()) {
+            if def.baked() {
+                for f in map.values_mut() {
+                    *f = def.bake(f);
+                }
+            }
+        }
         self.frames = frames;
         for l in &mut self.live {
             l.drawn = None;
