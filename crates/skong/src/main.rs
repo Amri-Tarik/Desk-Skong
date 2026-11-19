@@ -23,13 +23,15 @@ pub struct Args {
     pub clip: String,
     pub browse: bool,
     pub capturable: bool,
+    /// `--panel` / `--no-panel`: override the "open the control panel on start" setting.
+    pub panel: Option<bool>,
     /// Live content terrain (screen capture). Off with `--no-vision`.
     pub vision: bool,
     pub sit_test: bool,
     pub fx_test: bool,
 }
 
-const USAGE: &str = "usage: skong [--browse] [--capturable] [--no-vision] [--capture-stats] [--data DIR] [--skins DIR] [--skin NAME] [--scale F] [--clip NAME]";
+const USAGE: &str = "usage: skong [--browse] [--capturable] [--panel|--no-panel] [--no-vision] [--capture-stats] [--data DIR] [--skins DIR] [--skin NAME] [--scale F] [--clip NAME]";
 
 fn parse_args() -> Result<Args> {
     let mut a = Args {
@@ -40,6 +42,7 @@ fn parse_args() -> Result<Args> {
         clip: "Idle".into(),
         browse: false,
         capturable: false,
+        panel: None,
         vision: true,
         sit_test: false,
         fx_test: false,
@@ -55,6 +58,8 @@ fn parse_args() -> Result<Args> {
             "--clip" => a.clip = v()?,
             "--browse" => a.browse = true,
             "--capturable" => a.capturable = true,
+            "--panel" => a.panel = Some(true),
+            "--no-panel" => a.panel = Some(false),
             "--no-vision" => a.vision = false,
             "--capture-stats" => skong_win::capture::set_stats_logging(true),
             "--sit-test" => a.sit_test = true,

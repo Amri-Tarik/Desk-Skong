@@ -16,6 +16,8 @@ const LETTERS: &[(Key, Command, &str)] = &[
     (Key::A, Command::RandomAct, "do something"),
     (Key::W, Command::Wake, "wake"),
     (Key::R, Command::RespawnAtCursor, "come here (cursor)"),
+    (Key::G, Command::GoToCursor { hurry: false }, "walk to cursor"),
+    (Key::H, Command::GoToCursor { hurry: true }, "hurry to cursor"),
     (Key::S, Command::NextSkin, "next skin"),
     (Key::B, Command::PlaceBenchNearKnight(0), "bench near knight"),
     (Key::C, Command::ToggleClickThrough, "click-through"),
