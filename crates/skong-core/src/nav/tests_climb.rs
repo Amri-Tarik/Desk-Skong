@@ -323,3 +323,45 @@ fn a_stroll_climbs_walls_but_never_dashes() {
         assert!(!moves.iter().any(|m| matches!(m, MoveKind::Dash | MoveKind::ShadowDash | MoveKind::Superdash)), "{moves:?}");
     }
 }
+
+#[test]
+fn hurry_crystal_dashes_off_a_wall_to_a_high_far_ledge() {
+    // A small window high up (1100 px above the floor, its sides too short to climb) and,
+    // 500 px away, a window as tall as the screen: no way onto the high one but to climb the
+    // tall one's side to its height, charge a crystal dash clinging there and fly across.
+    let t = desktop(vec![primary()], vec![win(1, 1900, 0, 2300, 1400), win(2, 1100, 300, 1400, 420)]);
+    let goal = NavGoal::OnWindow(2);
+    for style in [TravelStyle::Stroll, TravelStyle::Normal] {
+        let ch = knight(&t, 1600.0, FLOOR);
+        assert!(NavGraph::build(&t, &ch).plan(&ch, goal, style).is_none(), "{style:?} reaches it");
+    }
+    let mut ch = knight(&t, 1600.0, FLOOR);
+    let g = NavGraph::build(&t, &ch);
+    let launches: Vec<&Edge> = g.edges().iter().filter(|e| e.kind == MoveKind::Superdash && e.climb.is_some()).collect();
+    assert!(!launches.is_empty(), "no wall-launched crystal dash");
+    assert!(launches.iter().all(|e| !TravelStyle::Normal.allows(e) && !TravelStyle::Stroll.allows(e)));
+    let route = g.plan(&ch, goal, TravelStyle::Hurry).expect("hurry route");
+    assert_eq!(route.moves, vec![MoveKind::Superdash]);
+    let wall = route.edges().next().and_then(|e| e.climb).map(|c| c.wall.x);
+    assert_eq!(wall, Some(1900.0), "launched from the tall window's side");
+    let mut f = PathFollower::new(route, goal, TravelStyle::Hurry);
+    let (mut ev, mut wall_charge, mut status) = (vec![], false, FollowStatus::Moving);
+    for _ in 0..(30.0 / DT) as usize {
+        let (input, s) = f.next_input(&ch, &g, &t, DT);
+        status = s;
+        if status != FollowStatus::Moving {
+            break;
+        }
+        // Nothing the app layers on top of the follower interrupts the climb or the charge.
+        assert!(!(f.dive_ok(&ch) && ch.auto_dive(&t, &input, true).is_some()), "auto-dive at {:?}", ch.pos);
+        assert!(!ch.hard_landing_ahead(&t), "emergency dive at {:?} ({:?})", ch.pos, ch.state);
+        ev.clear();
+        ch.step(&input, &t, DT, &mut ev);
+        wall_charge |= matches!(ch.state, MoveState::SuperdashCharge { wall: Some(crate::controller::Side::Right) });
+        assert!(!ev.iter().any(|e| matches!(e, crate::controller::MoveEvent::Landed { hard: true })), "hard landing at {:?}", ch.pos);
+    }
+    assert_eq!(status, FollowStatus::Arrived, "ended at {:?} ({:?}), {} re-plans", ch.pos, ch.state, f.replans());
+    assert_eq!(ch.support.and_then(|s| s.owner), Some(2), "ended at {:?}", ch.pos);
+    assert!(wall_charge, "charged clinging to the wall");
+    assert_eq!(f.replans(), 0);
+}
