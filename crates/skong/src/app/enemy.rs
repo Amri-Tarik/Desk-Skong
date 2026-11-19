@@ -117,6 +117,9 @@ impl Pet {
             // Stable names (`gauntlet_started`, `gauntlet_wave_cleared`, `gauntlet_completed`,
             // `gauntlet_aborted`, ...): achievements and the logs key on them.
             log::info!("event: {} {ev:?}", ev.name());
+            if matches!(ev, skong_core::enemy::GauntletEvent::Completed { .. }) {
+                self.achievements.gauntlets_cleared += 1;
+            }
         }
     }
 

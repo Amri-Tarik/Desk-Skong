@@ -4,14 +4,17 @@
 //! * Transport: `\\.\pipe\desk-skong`, byte mode, local clients only ([`pipe`]).
 //! * Framing: one JSON document per line (`serde_json` never emits raw newlines).
 //! * Panel → pet: [`PanelMsg`]. Pet → panel: [`PetMsg`] — a [`Hello`] on connect, the log
-//!   backlog, then [`Status`] ~4 Hz and new [`LogLine`]s as they are produced.
+//!   backlog, then [`Status`] ~4 Hz and new [`LogLine`]s as they are produced, plus
+//!   [`AchievementsInfo`] on connect and whenever an achievement unlocks.
 //!
 //! Any number of panels may connect; the pet keeps running when one goes away.
 use serde::{Deserialize, Serialize};
 
+pub mod achievements;
 pub mod pipe;
 pub mod stakes;
 
+pub use achievements::{AchievementEntry, AchievementsInfo, UnlockedAchievement};
 pub use pipe::{ClientId, Connection, PIPE_NAME, Server, ServerEvent, connect};
 pub use stakes::{SPELLS, StakesCommand, StakesInfo};
 
@@ -63,6 +66,8 @@ pub enum Command {
     GoToCursor { hurry: bool },
     /// Death / Shade / Geo / spell triggers.
     Stakes(StakesCommand),
+    /// Forget every unlocked achievement and all progress (debug).
+    ResetAchievements,
     Quit,
 }
 
@@ -163,6 +168,8 @@ pub enum PetMsg {
     Hello(Hello),
     Status(Box<Status>),
     Logs(Vec<LogLine>),
+    /// Hidden achievements: on connect and whenever one unlocks (not in the status).
+    Achievements(AchievementsInfo),
 }
 
 /// Static information, sent once per connection.
@@ -330,6 +337,7 @@ mod tests {
             Command::SetOverlayLayers(OverlayLayers { terrain: false, nav: true, route: true }),
             Command::ToggleDebugOverlay,
             Command::StartGauntlet,
+            Command::ResetAchievements,
             Command::Quit,
         ] {
             round_trip(PanelMsg::Command(c));
@@ -347,6 +355,27 @@ mod tests {
         s.nav = Some(NavInfo { surfaces: 4, edges: vec![("Walk".into(), 3)], motion: Some(MotionInfo { goal: "window".into(), moves: vec!["Jump".into()], ..Default::default() }), ..Default::default() });
         round_trip(PetMsg::Status(Box::new(s)));
         round_trip(PetMsg::Logs(vec![LogLine { seq: 1, t: 0.5, level: LogLevel::Warn, target: "skong::app".into(), msg: "multi\nline \"quoted\"".into() }]));
+    }
+
+    #[test]
+    fn achievements_round_trip_and_hide_locked_ones() {
+        let unlocked = UnlockedAchievement { id: "pogo".into(), title: "Bounce".into(), description: "sprang\noff \"it\"".into(), at: 1_763_500_000 };
+        let info = AchievementsInfo {
+            entries: vec![
+                AchievementEntry { hint: Some("the nail".into()), unlocked: Some(unlocked) },
+                AchievementEntry { hint: Some("a visitor".into()), unlocked: None },
+                AchievementEntry { hint: None, unlocked: None },
+            ],
+        };
+        assert_eq!((info.unlocked(), info.total()), (1, 3));
+        round_trip(PetMsg::Achievements(info.clone()));
+        // A locked entry is a hint and nothing else on the wire.
+        let line = encode(&PetMsg::Achievements(info));
+        assert!(line.contains(r#"{"hint":"a visitor","unlocked":null}"#), "{line}");
+        assert_eq!(encode(&PanelMsg::Command(Command::ResetAchievements)), "{\"Command\":\"ResetAchievements\"}\n");
+        // Missing fields default.
+        let e: AchievementsInfo = decode("{}").unwrap();
+        assert_eq!(e.total(), 0);
     }
 
     #[test]

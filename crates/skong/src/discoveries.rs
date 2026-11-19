@@ -250,7 +250,12 @@ pub struct Discoveries {
     /// Clock of the last check for broken deposits due to turn up elsewhere.
     relocate_checked: f32,
     pub capturable: bool,
+    /// Regions ([`REGIONS`] index) of the Geo rocks broken since the pet last looked.
+    pub mined: Vec<usize>,
 }
+
+/// How many regions Geo rocks come from.
+pub const REGION_COUNT: usize = REGIONS.len();
 
 fn world_path() -> Option<PathBuf> {
     std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join("Desk-Skong").join("world.json"))
@@ -334,6 +339,7 @@ impl Discoveries {
             game_monitors: Vec::new(),
             relocate_checked: 0.0,
             capturable: false,
+            mined: Vec::new(),
         };
         d.rescale(scale);
         d
@@ -594,6 +600,19 @@ impl Discoveries {
         }
     }
 
+    /// The style of found bench `id` (`None`: not a bench, or gone).
+    pub fn bench_style(&self, id: FindId) -> Option<usize> {
+        match self.world.find(id)?.kind {
+            FindKind::Bench { style } => Some(style),
+            FindKind::Deposit => None,
+        }
+    }
+
+    /// Bench styles that can turn up in windows (rolled at all, with art to show).
+    pub fn bench_style_count(&self, benches: &Benches) -> usize {
+        self.rules.bench_styles.iter().enumerate().filter(|&(i, w)| *w > 0.0 && benches.available(i)).count()
+    }
+
     pub fn used(&mut self, id: FindId) {
         self.world.used(id);
         self.save();
@@ -608,9 +627,10 @@ impl Discoveries {
             return None;
         }
         p.shake = 0.25;
-        let at = p.shown.pos;
+        let (at, region) = (p.shown.pos, p.region);
         let drop = self.world.strike(id, at, now_unix(), &self.rules);
         if let Some(d) = drop {
+            self.mined.push(region);
             fx.spawn(REVEAL_FX, at, knight.pos.x < at.x);
             log::info!("geo deposit broken at ({:.0},{:.0}): {} geo", d.at.x, d.at.y, d.geo);
         }

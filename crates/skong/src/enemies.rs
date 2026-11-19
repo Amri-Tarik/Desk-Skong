@@ -77,9 +77,16 @@ pub struct Enemies {
     hidden: bool,
     /// Gauntlets (waves of enemies, a reward).
     gauntlet: Option<GauntletDirector>,
+    /// Enemies beaten since the pet last looked: (id, definition name).
+    pub killed: Vec<(u32, String)>,
 }
 
 impl Enemies {
+    /// Every kind of enemy that may wander in (definition names).
+    pub fn kinds(&self) -> Vec<String> {
+        self.set.defs.iter().map(|d| d.name.clone()).collect()
+    }
+
     pub fn load(data_dir: &Path, vanilla: Option<&Skin>, scale: f32, seed: u32) -> Result<Enemies> {
         let meta = SpriteBank::load_metadata(data_dir)?;
         let set = EnemySet::load(&data_dir.join("../enemies.json"), &data_dir.join("animations"), &meta)?;
@@ -115,6 +122,7 @@ impl Enemies {
             forced: false,
             hidden: false,
             gauntlet,
+            killed: Vec::new(),
         };
         e.rescale(vanilla, scale)?;
         Ok(e)
@@ -193,6 +201,7 @@ impl Enemies {
         let d = &self.set.defs[l.enemy.def];
         let amount = d.geo[0] + self.rng.next_u32() % (d.geo[1] - d.geo[0] + 1);
         log::info!("enemy: {} is beaten ({amount} geo)", d.display);
+        self.killed.push((id, d.name.clone()));
         if let Some(g) = self.gauntlet.as_mut() {
             g.on_kill(id, &mut self.rng);
         }

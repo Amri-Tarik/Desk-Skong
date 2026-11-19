@@ -39,6 +39,7 @@ default scale 0.6).
 | `dreamgate` | Dream Gate fallback travel: gate spots (settled ledge, headroom) and the app-side `GateRuntime` (gate glow, the jump as the warp act ends). The brain side (`ai::dream_gate`) picks an unreachable engagement prize, with a cooldown. |
 | `stakes` | Shade simulation, Geo coins/physics/wallet, spellbook (soul, spells, nail arts), sources (battles, shattered windows, showers). |
 | `enemy` | Enemies (`data/enemies.json`): arrival planning (walk in from a monitor edge, drop onto a settled ledge, fly in), the sim (ride windows, patrol / hover, notice, chase, wind-up + lunge, recoil + flash, death clip, corpse fade), contact bumps; seen by the brain as `Foe`s (`ai::fight`, the `Fight` behaviour). Zote's spar lives in `npc::spar` + the visitor actor. `enemy::gauntlet`: the gauntlet director (triggers, start rules, waves, reward, aborts; pure, driven by `enemies.rs`), seen by the brain as a `GauntletCue` (`ai::gauntlet`, the `Gauntlet` ceremony behaviour). |
+| `achievements` | Hidden achievements (`data/achievements.json`): the `Tracker` consumes a small `AchievementEvent` stream and holds every criterion (counts, "every region", "never touched the floor"); progress saves as `AchievementSave`. |
 | `canvas`, `geom`, `desktop` | Premultiplied BGRA images, rects/vectors, desktop snapshot types. |
 
 ### `skong-win` modules
@@ -71,7 +72,8 @@ Background threads: nav graph builder (coalesces bursts, incremental), one captu
 per monitor, pipe server threads for panels. The tick only does non-blocking hand-offs.
 
 Key app files: `app.rs` (Pet + tick + commands + tray), `app/panel.rs` (status/IPC glue),
-`app/stakes.rs`, `app/discover.rs` (discoveries + shinies), `enemies.rs` + `app/enemy.rs` (enemies, strikes, spar glue), `benches.rs`, `shinies.rs`, `fx.rs` (pooled effect windows),
+`app/stakes.rs`, `app/discover.rs` (discoveries + shinies), `app/achievements.rs` (the one place
+events become achievement events; announce, save, panel copy), `enemies.rs` + `app/enemy.rs` (enemies, strikes, spar glue), `benches.rs`, `shinies.rs`, `fx.rs` (pooled effect windows),
 `gameguard.rs`, `navbuild.rs`, `grab.rs`, `control.rs` (pipe server), `logring.rs`
 (logger + ring buffer for panels), `settings.rs`, `keyboard.rs`, `browser.rs` (`--browse`).
 
@@ -85,9 +87,10 @@ Key app files: `app.rs` (Pet + tick + commands + tray), `app/panel.rs` (status/I
 | `enemies.json` | Enemies: clips, movement, hp, speeds, aggro, size, Geo, schedule and group rules (schema in its `$comment`). |
 | `effects.json` | Hero effects with prefab offsets/scales/rotations. |
 | `props.json` | Bench styles (sprite, seat height), discovery art, and shiny rates (`shinies`). |
+| `achievements.json` | Hidden achievements: id, title + description (shown once unlocked), vague hint, `goal` (schema in its `$comment`). |
 
 Local, git-ignored: `skins/Vanilla/` (exported atlases, `props/` sprites), community skins
-under `skins/`, `%APPDATA%\Desk-Skong\{settings,world}.json`.
+under `skins/`, `%APPDATA%\Desk-Skong\{settings,world,achievements}.json`.
 
 ## Debug flags & tools
 

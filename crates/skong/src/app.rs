@@ -45,6 +45,7 @@ use crate::control::ControlServer;
 use crate::overlay::PetOverlay;
 use skong_ipc::Command;
 
+mod achievements;
 mod discover;
 mod dreamgate;
 mod enemy;
@@ -258,6 +259,8 @@ struct Pet {
     /// Enemies wandering in (None if their data is missing) and the bumps they gave him.
     enemies: Option<crate::enemies::Enemies>,
     enemy_hits: u32,
+    /// Hidden achievements (all event mapping lives in `app/achievements.rs`).
+    achievements: achievements::Achievements,
 }
 
 pub fn run(args: &Args) -> Result<()> {
@@ -381,9 +384,11 @@ pub fn run(args: &Args) -> Result<()> {
         visitors: None,
         enemies: None,
         enemy_hits: 0,
+        achievements: achievements::Achievements::load(&args.data),
     };
     pet.visitors = pet.load_visitors(args.capturable);
     pet.enemies = pet.load_enemies(args.capturable);
+    pet.achievements_setup();
     if let (Some(v), Some(name)) = (pet.visitors.as_mut(), &args.visit) {
         v.invite((name != "any").then(|| name.clone()));
     }
@@ -526,6 +531,7 @@ impl Pet {
         if self.game_step() {
             self.hide_visitors();
             self.hide_enemies();
+            self.achievements_tick(dt); // he hid from a game: that counts
             return Ok(()); // hidden while games cover every monitor
         }
         // Screen activity for the brain (the feed updates it at <= 10 Hz).
@@ -651,6 +657,7 @@ impl Pet {
         let origin = self.knight_origin();
         self.tick_visitors(dt);
         self.tick_enemies(dt);
+        self.achievements_tick(dt);
         self.emote_tick(dt, origin)?;
         self.fx.update(dt, origin, self.ch.facing == Side::Right, self.ch.params.px_per_unit)
     }
@@ -975,6 +982,7 @@ impl Pet {
         self.pokes.clear();
         self.brain_events.clear();
         self.stakes_events(&intent.stakes);
+        self.achievements_intent(&intent);
         if intent.debug != self.brain_debug {
             self.brain_debug = intent.debug;
         }
@@ -1093,7 +1101,11 @@ impl Pet {
     /// Clicks on the knight poke him; press-and-drag picks him up; release throws him.
     fn handle_mouse(&mut self) {
         for ev in self.win.take_mouse() {
-            match self.grab.on_event(ev, self.ch.pos) {
+            let poke = self.grab.on_event(ev, self.ch.pos);
+            if let Some(p) = &poke {
+                self.achievements_poke(p);
+            }
+            match poke {
                 Some(Poke::Grab) => {
                     self.act = None;
                     self.pokes.push(Poke::Grab);
@@ -1217,6 +1229,7 @@ impl Pet {
             Command::Discover(_) | Command::ForgetDiscoveries => return self.apply_discovery(c),
             Command::Quit => return Ok(Flow::Quit),
             Command::Stakes(c) => self.apply_stakes(c),
+            Command::ResetAchievements => self.reset_achievements(),
             Command::SetManual(_) | Command::ToggleVision | Command::ToggleDebugOverlay | Command::SetOverlayLayers(_) | Command::OpenPanel => return self.apply_panel(c),
         }
         Ok(Flow::Continue)
