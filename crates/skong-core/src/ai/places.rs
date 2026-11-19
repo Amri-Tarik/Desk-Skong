@@ -224,6 +224,8 @@ impl Brain {
                     r.eta
                 };
                 let travel = if fresh { 0.0 } else { self.cfg.travel_cost_per_sec * eta };
+                // Geo is worth a long walk: a far rock must not sink below the engagements.
+                let travel = if place.kind == PlaceKind::Deposit { travel.min(0.15) } else { travel };
                 Some(PlaceChoice { place, score: w - travel, fresh })
             })
             .max_by(|a, b| a.score.total_cmp(&b.score));
