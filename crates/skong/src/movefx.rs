@@ -2,6 +2,7 @@
 //! plus the `--move-test` script (dive + turn transitions, for screenshots).
 use skong_core::controller::{Character, MoveEvent, MoveInput, MoveState};
 use skong_core::geom::Vec2;
+use skong_core::particles as pt;
 
 use crate::fx::Fx;
 
@@ -40,6 +41,39 @@ pub fn spawn(fx: &mut Fx, events: &[MoveEvent], ch: &Character, origin: Vec2) {
             MoveEvent::DiveEnded | MoveEvent::LostSupport => stop_trails(fx),
             _ => {}
         }
+    }
+    particles(fx, events, ch);
+}
+
+/// The game's particle bits (procedural, `skong_core::particles`) next to the sprite
+/// effects: dust from the feet on landings, jumps, grounded dashes, wall jumps and fast
+/// runs; crystal shards while charging, launching and breaking a superdash.
+fn particles(fx: &mut Fx, events: &[MoveEvent], ch: &Character) {
+    let ppu = ch.params.px_per_unit;
+    let dir = ch.facing.sign();
+    let feet = ch.pos;
+    let body = ch.body();
+    for e in events {
+        match e {
+            MoveEvent::Landed { hard } => fx.particles(if *hard { pt::HARD_LAND_DUST } else { pt::LAND_DUST }, feet, dir, ppu),
+            MoveEvent::Jumped => fx.particles(pt::JUMP_DUST, feet, dir, ppu),
+            MoveEvent::DashStarted { shadow: false } if ch.is_grounded() && !ch.dashing_down() => fx.particles(pt::DASH_DUST, feet, dir, ppu),
+            MoveEvent::WallJumped { wall } => {
+                let x = if wall.sign() < 0.0 { body.left } else { body.right };
+                fx.particles(pt::WALL_DUST, Vec2::new(x, body.bottom - 0.3 * body.height()), -wall.sign(), ppu);
+            }
+            MoveEvent::SuperdashLaunched => fx.particles(pt::SD_BURST_SHARDS, body.center(), dir, ppu),
+            MoveEvent::SuperdashHitWall => {
+                let front = if dir > 0.0 { body.right } else { body.left };
+                fx.particles(pt::SD_BREAK_SHARDS, Vec2::new(front, body.center().y), dir, ppu);
+            }
+            _ => {}
+        }
+    }
+    match ch.state {
+        MoveState::SuperdashCharge { .. } => fx.stream("sd_charge", pt::SD_CHARGE_SHARDS, body.center(), dir, ppu),
+        MoveState::Grounded if ch.vel.x.abs() >= 0.95 * ch.params.px(ch.params.run_speed) => fx.stream("run_dust", pt::RUN_DUST, feet, ch.vel.x.signum(), ppu),
+        _ => {}
     }
 }
 
