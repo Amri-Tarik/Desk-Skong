@@ -232,7 +232,11 @@ impl Bubbles {
                 }
             }
             BubbleStyle::Thought => match &self.art.dream_box {
-                Some(d) => img.blit_over(&stretched(d, bw, bh), bx, by, false),
+                Some(d) => {
+                    let mut cloud = stretched(d, bw, bh);
+                    feather(&mut cloud, (lh * 0.7) as u32);
+                    img.blit_over(&cloud, bx, by, false)
+                }
                 None => paint_box(&mut img, bx, by, bw, bh, (lh * 0.8) as i32),
             },
         }
@@ -313,4 +317,24 @@ pub fn faded(img: &Image, alpha: u8) -> Image {
         })
         .collect();
     Image { width: img.width, height: img.height, px }
+}
+
+/// Fade the outer `px` pixels of an image to transparent (soft cloud edges).
+fn feather(img: &mut Image, px: u32) {
+    let px = px.max(1) as f32;
+    let (w, h) = (img.width, img.height);
+    for y in 0..h {
+        for x in 0..w {
+            let d = x.min(w - 1 - x).min(y).min(h - 1 - y) as f32;
+            if d >= px {
+                continue;
+            }
+            let t = d / px;
+            let k = (t * t * (3.0 - 2.0 * t) * 255.0) as u32;
+            let i = (y * w + x) as usize;
+            let p = img.px[i];
+            let ch = |s: u32| ((((p >> s) & 0xff) * k + 127) / 255) << s;
+            img.px[i] = ch(24) | ch(16) | ch(8) | ch(0);
+        }
+    }
 }

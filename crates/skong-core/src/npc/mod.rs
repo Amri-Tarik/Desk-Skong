@@ -124,6 +124,9 @@ pub struct NpcDef {
     /// frame's bottom edge (feet at the bottom of the art).
     #[serde(default)]
     pub origin_above_feet: Option<f32>,
+    /// The talk clips face the other way than the idle art (Hornet points to the right).
+    #[serde(default)]
+    pub talk_mirrored: bool,
     /// How thrilled the knight is to see this one (0..1).
     #[serde(default = "one")]
     pub excitement: f32,

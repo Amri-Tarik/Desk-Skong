@@ -125,7 +125,7 @@ impl Npc {
             rel: Vec2::ZERO,
             vy,
             looking_right,
-            alpha: if d.arrive == Arrival::Drop { 1.0 } else { 0.0 },
+            alpha: 0.0,
             greeted: false,
             anim,
             state: State::Enter { to_x: at.walk_to },
@@ -155,11 +155,17 @@ impl Npc {
 
     /// Mirror the (left-facing) art this frame.
     pub fn flipped(&self, set: &NpcSet) -> bool {
-        match set.defs[self.def].faces {
+        let d = &set.defs[self.def];
+        let c = &set.clips[self.def];
+        let clip = self.anim.clip();
+        // Some talk clips are drawn facing the other way than the rest of the art.
+        let talk = clip == c.talk || Some(clip) == c.talk_end;
+        let base = match d.faces {
             Faces::Left => self.looking_right,
             Faces::Right => !self.looking_right,
             Faces::Front => false,
-        }
+        };
+        base != (talk && d.talk_mirrored && d.faces != Faces::Front)
     }
 
     /// Can a conversation start now?
