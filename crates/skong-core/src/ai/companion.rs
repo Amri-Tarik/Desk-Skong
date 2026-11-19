@@ -9,7 +9,7 @@
 use crate::geom::Vec2;
 use crate::nav::{NavGoal, TravelStyle};
 
-use super::behaviours::{ActWait, Beat, Ctx, Status, Travel, TravelStep, find_seat};
+use super::behaviours::{ActWait, Beat, Ctx, SEAT_TOL, Status, Travel, TravelStep, find_seat};
 use super::interest::PoiTarget;
 use super::spots;
 
@@ -122,12 +122,22 @@ impl Companion {
                 } else {
                     TravelStyle::Stroll
                 };
-                self.travel = Some(Travel::to(ctx, want, style));
-                self.goal = want;
-                self.goal_set_at = ctx.now;
-                self.doing = Doing::Following;
                 self.drift = 0.0;
-                return Status::Running;
+                // Only follow if the route really ends near the cursor (not, say, under a
+                // ledge this style cannot mount); otherwise keep company from here.
+                let ends_near = ctx.nav.reach(k, NavGoal::Point(want), style).is_some_and(|r| {
+                    r.end.is_none_or(|e| (e.x - want.x).abs() + 1.5 * (e.y - want.y).abs() <= comfort)
+                });
+                if !ends_near {
+                    ctx.interest.block(PoiTarget::Spot(want), ctx.now + 20.0);
+                    self.rest_until = ctx.now + 5.0;
+                } else {
+                    self.travel = Some(Travel::to(ctx, want, style));
+                    self.goal = want;
+                    self.goal_set_at = ctx.now;
+                    self.doing = Doing::Following;
+                    return Status::Running;
+                }
             }
         } else {
             self.drift = 0.0;
@@ -157,8 +167,8 @@ impl Companion {
         } else if parked && may_move {
             let proj = spots::project(ctx.p.terrain, c.pos).unwrap_or(c.pos);
             match find_seat(ctx, proj, cfg.seat_range) {
-                Some(seat) => {
-                    self.travel = Some(Travel::to(ctx, seat, TravelStyle::Stroll));
+                Some((seat, style)) => {
+                    self.travel = Some(Travel::exact(ctx, seat, style, SEAT_TOL));
                     self.goal = seat;
                     self.goal_set_at = ctx.now;
                     self.doing = Doing::Settling;
