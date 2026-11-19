@@ -1,0 +1,59 @@
+{
+  "name": "Geo Rock City",
+  "clips": [
+    {
+      "name": "Broken 1",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "City_Geo_Rock",
+          "sprite_id": 4,
+          "sprite": "geo_rock_ruins0005"
+        }
+      ]
+    },
+    {
+      "name": "Gleam 1",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "City_Geo_Rock",
+          "sprite_id": 0,
+          "sprite": "geo_rock_ruins0001"
+        },
+        {
+          "collection": "City_Geo_Rock",
+          "sprite_id": 3,
+          "sprite": "geo_rock_ruins0002"
+        },
+        {
+          "collection": "City_Geo_Rock",
+          "sprite_id": 1,
+          "sprite": "geo_rock_ruins0003"
+        },
+        {
+          "collection": "City_Geo_Rock",
+          "sprite_id": 5,
+          "sprite": "geo_rock_ruins0004"
+        }
+      ]
+    },
+    {
+      "name": "Idle 1",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "City_Geo_Rock",
+          "sprite_id": 2,
+          "sprite": "geo_rock_ruins0000"
+        }
+      ]
+    }
+  ]
+}
