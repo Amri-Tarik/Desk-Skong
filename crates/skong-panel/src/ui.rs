@@ -215,6 +215,9 @@ impl Panel {
                 if ui.button("Start a gauntlet").on_hover_text("three waves of enemies, then a big Geo reward; ends early if you type or go fullscreen").clicked() {
                     self.cmd(Command::StartGauntlet);
                 }
+                if ui.button("Light a scarlet flame").on_hover_text("a dim flame near the knight; striking it summons the troupe master").clicked() {
+                    self.cmd(Command::SummonGrimm { lantern: true });
+                }
                 if ui.button("Dream nail").on_hover_text("dream-nail the window he stands on").clicked() {
                     self.cmd(Command::DreamNail);
                 }
