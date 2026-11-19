@@ -231,7 +231,7 @@ pub fn run(args: &Args) -> Result<()> {
 
     let watcher = DesktopWatcher::new()?;
     let topts = TerrainOptions::default();
-    let content = ContentFeed::new(args.vision, watcher.snapshot());
+    let mut content = ContentFeed::new(args.vision, watcher.snapshot());
     let terrain = content.terrain(watcher.snapshot(), &topts);
     log::info!("terrain: {} ledges, {} walls, {} windows", terrain.ledges.len(), terrain.walls.len(), terrain.windows.len());
 
@@ -243,6 +243,12 @@ pub fn run(args: &Args) -> Result<()> {
     let act = data.acts.id("wake_up").map(|id| ActPlayer::start(&data.acts, &data.lib, &mut anim, id, seed()));
 
     let win = SpriteWindow::new()?;
+    // Only the knight freezes the content under him (so his sprite never erases his own
+    // ledge); coins, props and visitors must fall / vanish when their line goes away. With
+    // --capturable every window of ours stays frozen (capture would see them).
+    if !args.capturable {
+        content.freeze_only(vec![win.hwnd()]);
+    }
     if args.capturable {
         win.set_capturable(true);
         if args.vision {
