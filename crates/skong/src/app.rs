@@ -168,6 +168,8 @@ struct Pet {
     brain: Brain,
     nav: GraphNavigator,
     navb: NavBuilder,
+    /// Ledge last found missing from the nav graph (rebuild requested for it once).
+    nav_missing: Option<skong_core::controller::Support>,
     user_input: UserInput,
     /// Controller events not yet seen by the brain.
     brain_events: Vec<MoveEvent>,
@@ -288,6 +290,7 @@ pub fn run(args: &Args) -> Result<()> {
         brain,
         nav: GraphNavigator::new(),
         navb,
+        nav_missing: None,
         user_input: UserInput::new()?,
         brain_events: Vec::new(),
         last_input: MoveInput::default(),
@@ -388,6 +391,16 @@ impl Pet {
         self.move_events.clear();
         if let Some(g) = self.navb.poll() {
             self.nav.set_graph(g);
+        }
+        // Standing on a ledge the graph doesn't have (a small content ledge trimmed from the
+        // planner's terrain): no route can start there, so rebuild with it, once per ledge.
+        if let Some(s) = self.ch.support
+            && self.nav_missing != Some(s)
+            && self.nav.graph().is_some_and(|g| g.surface_at(&self.ch).is_none())
+        {
+            self.nav_missing = Some(s);
+            log::debug!("nav: standing on a ledge the planner doesn't know; rebuilding with it");
+            self.navb.request(&self.terrain, &self.ch, false);
         }
 
         // 1. World: rebuild terrain only when the desktop or the on-screen content changed.
