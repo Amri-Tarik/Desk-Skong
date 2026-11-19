@@ -252,7 +252,7 @@ impl Shinies {
 
     /// Shinies on screen (before collisions, see [`settle`]). Old ones and those whose
     /// window closed are dropped; one whose ledge is covered or scrolled away hides.
-    pub fn shown(&mut self, desk: &DesktopSnapshot, terrain: &Terrain, rules: &ShinyRules, width: f32) -> Vec<ShownShiny> {
+    pub fn shown(&mut self, desk: &DesktopSnapshot, terrain: &Terrain, rules: &ShinyRules, width: f32, settled: &dyn Fn(&crate::terrain::Ledge) -> bool) -> Vec<ShownShiny> {
         let clock = self.clock;
         self.list.retain(|s| {
             let alive = clock - s.born < rules.lifetime_secs;
@@ -265,7 +265,7 @@ impl Shinies {
         self.list
             .iter()
             .filter_map(|s| {
-                let (pos, span) = resolve(terrain, s.spot, width)?;
+                let (pos, span) = resolve(terrain, s.spot, width, settled)?;
                 Some(ShownShiny { id: s.id, pos, span, age: clock - s.born })
             })
             .collect()
@@ -284,9 +284,9 @@ fn spot_pos(terrain: &Terrain, spot: Spot) -> Option<Vec2> {
 }
 
 /// Where a shiny `width` px wide rests right now, with its ledge span.
-pub fn resolve(terrain: &Terrain, spot: Spot, width: f32) -> Option<(Vec2, (f32, f32))> {
+pub fn resolve(terrain: &Terrain, spot: Spot, width: f32, settled: &dyn Fn(&crate::terrain::Ledge) -> bool) -> Option<(Vec2, (f32, f32))> {
     match spot {
-        Spot::Window { id, anchor } => discovery::resolve(terrain, id, terrain.window_rect(id)?, anchor, width),
+        Spot::Window { id, anchor } => discovery::resolve(terrain, id, terrain.window_rect(id)?, anchor, width, settled),
         Spot::Ground { pos } => {
             let half = width * 0.5;
             terrain
@@ -462,12 +462,12 @@ mod tests {
         let rules = ShinyRules::default();
         let mut sh = Shinies::new(1, &rules);
         let id = sh.add(Spot::Window { id: 1, anchor: Anchor { fx: 0.5, dy: 0.0 } });
-        let s = sh.shown(&d, &t, &rules, 20.0);
+        let s = sh.shown(&d, &t, &rules, 20.0, &|_| true);
         assert_eq!(s[0].pos, Vec2::new(750.0, 400.0));
         let (d2, t2) = desk(vec![win(1, RectI::new(400, 300, 1300, 800))]);
-        assert_eq!(sh.shown(&d2, &t2, &rules, 20.0)[0].pos, Vec2::new(850.0, 300.0), "rides along");
+        assert_eq!(sh.shown(&d2, &t2, &rules, 20.0, &|_| true)[0].pos, Vec2::new(850.0, 300.0), "rides along");
         let (d3, t3) = desk(vec![]);
-        assert!(sh.shown(&d3, &t3, &rules, 20.0).is_empty());
+        assert!(sh.shown(&d3, &t3, &rules, 20.0, &|_| true).is_empty());
         assert!(sh.get(id).is_none(), "gone with its window");
     }
 
@@ -494,9 +494,9 @@ mod tests {
         spawned += step(&mut sh, 100.0, true);
         spawned += step(&mut sh, 100.0, true);
         assert_eq!(spawned, 2, "at most two at once");
-        assert_eq!(sh.shown(&d, &t, &rules, 20.0).len(), 2);
+        assert_eq!(sh.shown(&d, &t, &rules, 20.0, &|_| true).len(), 2);
         step(&mut sh, 300.0, false);
-        assert!(sh.shown(&d, &t, &rules, 20.0).is_empty(), "left alone, they fade away");
+        assert!(sh.shown(&d, &t, &rules, 20.0, &|_| true).is_empty(), "left alone, they fade away");
     }
 
     #[test]

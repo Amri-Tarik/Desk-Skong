@@ -62,7 +62,9 @@ impl Pet {
             let up = Vec2::new(0.0, 20.0 * self.settings.scale);
             self.stakes.burst(at - up, geo, self.settings.scale);
         }
-        if self.shinies.update(self.watcher.snapshot(), &self.terrain, &mut self.occupancy) {
+        let (discoveries, terrain) = (&self.discoveries, &self.terrain);
+        let settled = |l: &skong_core::terrain::Ledge| discoveries.ledge_settled(terrain, l);
+        if self.shinies.update(self.watcher.snapshot(), &self.terrain, &mut self.occupancy, &settled) {
             self.win.raise(); // the knight stays in front of the glint
         }
     }

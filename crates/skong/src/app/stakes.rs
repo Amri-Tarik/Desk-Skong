@@ -66,6 +66,11 @@ pub struct Stakes {
 }
 
 impl Stakes {
+    /// Where resting Geo lies (to keep its ledges in the planner's terrain).
+    pub fn resting_coins(&self) -> Vec<Vec2> {
+        self.geo.resting().map(|c| c.pos).collect()
+    }
+
     pub fn new(data: &Path, save: StakesSave, capturable: bool, cfg: &skong_core::ai::StakesConfig) -> Self {
         let view = View::load(data, capturable).map_err(|e| log::warn!("stakes art unavailable: {e:#}")).ok();
         let shade = save.shade.map(|s| Shade::new(s.pos(), s.geo, false, seed()));

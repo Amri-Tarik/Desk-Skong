@@ -23,6 +23,8 @@ pub struct NavBuilder {
     jobs: Option<Sender<Job>>,
     graphs: Receiver<Arc<NavGraph>>,
     thread: Option<JoinHandle<()>>,
+    /// Points whose content ledges the planner must keep (see `nav_terrain`).
+    keep: Arc<std::sync::Mutex<Vec<skong_core::geom::Vec2>>>,
 }
 
 /// Minimum spacing between builds, so a window drag doesn't rebuild every tick.
@@ -39,10 +41,13 @@ const NAV_MAX_CONTENT_LEDGES: usize = 40;
 /// The terrain the planner sees: everything, minus the least useful content *ledges*, except
 /// the one the knight stands on: without it no route can start, and every plan from that
 /// ledge fails (he got stuck on a little prompt-box ledge, unable to go anywhere).
-fn nav_terrain(t: &Terrain, standing: Option<skong_core::controller::Support>) -> Terrain {
+/// Also kept: content ledges carrying something he wants (`keep`: a deposit's stand spot, a
+/// shiny, resting Geo). Trimmed, those were unreachable and he ignored them.
+fn nav_terrain(t: &Terrain, standing: Option<skong_core::controller::Support>, keep: &[skong_core::geom::Vec2]) -> Terrain {
     use skong_core::terrain::{Ledge, LedgeKind};
     let mut t = t.clone();
-    let under = |l: &Ledge| standing.is_some_and(|s| s.kind == l.kind && s.y == l.y && s.x0 == l.x0 && s.x1 == l.x1);
+    let carries = |l: &Ledge| keep.iter().any(|p| (l.y - p.y).abs() <= 2.0 && l.x0 - 2.0 <= p.x && p.x <= l.x1 + 2.0);
+    let under = |l: &Ledge| standing.is_some_and(|s| s.kind == l.kind && s.y == l.y && s.x0 == l.x0 && s.x1 == l.x1) || carries(l);
     let mut content: Vec<_> = t.ledges.iter().filter(|l| l.kind == LedgeKind::Content && l.x1 - l.x0 >= NAV_CONTENT_MIN_LEN && !under(l)).copied().collect();
     content.sort_by(|a, b| (b.x1 - b.x0).total_cmp(&(a.x1 - a.x0)));
     content.truncate(NAV_MAX_CONTENT_LEDGES);
@@ -56,6 +61,8 @@ impl NavBuilder {
     pub fn new() -> Self {
         let (job_tx, job_rx) = channel::<Job>();
         let (graph_tx, graph_rx) = channel();
+        let keep = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let keep_worker = keep.clone();
         let thread = std::thread::Builder::new()
             .name("nav-builder".into())
             .spawn(move || {
@@ -93,7 +100,8 @@ impl NavBuilder {
                         }
                     }
                     let (Job::Build(t, ch, _) | Job::Reset(t, ch)) = job;
-                    let t = nav_terrain(&t, ch.support);
+                    let keep = keep_worker.lock().map(|k| k.clone()).unwrap_or_default();
+                    let t = nav_terrain(&t, ch.support, &keep);
                     last_build = Some(Instant::now());
                     let start = Instant::now();
                     let g = match prev.as_ref().filter(|_| !reset) {
@@ -113,7 +121,19 @@ impl NavBuilder {
         if thread.is_none() {
             log::error!("could not start the navigation thread; the knight will stay on his platform");
         }
-        Self { jobs: Some(job_tx), graphs: graph_rx, thread }
+        Self { jobs: Some(job_tx), graphs: graph_rx, thread, keep }
+    }
+
+    /// Points of interest (deposit stand spots, shinies, resting Geo) whose content ledges
+    /// the planner must keep. Returns `true` when the set changed (request a rebuild).
+    pub fn set_keep(&self, mut points: Vec<skong_core::geom::Vec2>) -> bool {
+        points.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+        let Ok(mut k) = self.keep.lock() else { return false };
+        let changed = *k != points;
+        if changed {
+            *k = points;
+        }
+        changed
     }
 
     /// `lazy`: only screen content changed (throttled); window/desktop changes are urgent.
@@ -180,11 +200,11 @@ mod tests {
         }
         assert_eq!(ch.pos.y, 1300.0, "standing on the short ledge");
         let goal = NavGoal::Point(Vec2::new(1500.0, 1400.0));
-        let trimmed = NavGraph::build(&nav_terrain(&t, None), &ch);
+        let trimmed = NavGraph::build(&nav_terrain(&t, None, &[]), &ch);
         // The bug: no surface under him (plans started from the floor below, where he isn't, and
         // following failed at once).
         assert!(trimmed.surface_at(&ch).is_none());
-        let kept = NavGraph::build(&nav_terrain(&t, ch.support), &ch);
+        let kept = NavGraph::build(&nav_terrain(&t, ch.support, &[]), &ch);
         assert!(kept.surface_at(&ch).is_some());
         assert!(kept.plan(&ch, goal, TravelStyle::Normal).is_some());
     }
