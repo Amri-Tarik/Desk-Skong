@@ -886,7 +886,7 @@ impl Pet {
     }
 
     fn place_bench(&mut self, style: usize, at: Vec2) {
-        match self.benches.place(style, at, &self.terrain) {
+        match self.benches.place(style, at, &self.terrain, &self.occupancy) {
             Ok(()) => self.win.raise(), // keep the knight in front of his furniture
             Err(e) => log::warn!("bench: {e:#}"),
         }

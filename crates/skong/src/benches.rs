@@ -79,9 +79,20 @@ impl Benches {
         }
     }
 
-    pub fn place(&mut self, style: usize, at: Vec2, terrain: &Terrain) -> Result<()> {
+    /// Place a bench on the ledge below `at`, sliding it along that ledge to the nearest
+    /// spot not taken by another prop (`occ`); refuses when the ledge has no room.
+    pub fn place(&mut self, style: usize, at: Vec2, terrain: &Terrain, occ: &skong_core::occupancy::Occupancy) -> Result<()> {
         let img = self.scaled.get(style).and_then(|i| i.as_ref()).context("bench art not exported (run the exporter with --export-sprites)")?;
-        let bench = Bench::place(style, at, terrain).context("no surface below the cursor")?;
+        let mut bench = Bench::place(style, at, terrain).context("no surface below the cursor")?;
+        let (w, h) = (img.width as f32, img.height as f32);
+        let rect = skong_core::geom::RectF::new(bench.pos.x - w * 0.5, bench.pos.y - h, bench.pos.x + w * 0.5, bench.pos.y);
+        let span = terrain
+            .ledges
+            .iter()
+            .find(|l| (l.y - bench.pos.y).abs() < 1.0 && l.x0 <= bench.pos.x && bench.pos.x <= l.x1)
+            .map_or((rect.left, rect.right), |l| (l.x0, l.x1));
+        let dx = occ.nudge(rect, span.0, span.1, None, 8.0).context("no free room on that ledge (another bench or find is there)")?;
+        bench.pos.x += dx;
         let mut w = SpriteWindow::new()?;
         w.set_capturable(self.capturable);
         present(&mut w, img, &bench)?;

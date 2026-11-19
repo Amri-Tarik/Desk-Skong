@@ -259,6 +259,7 @@ impl Pet {
             st.geo.spill(&d);
         }
         st.geo.step(dt, &self.terrain, &st.areas);
+        st.geo.evict_from(&self.occupancy);
         if !st.dead {
             let got: u32 = st.geo.collect(self.ch.body()).iter().map(|p| p.value).sum();
             if got > 0 {
