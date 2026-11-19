@@ -587,14 +587,22 @@ impl Brain {
         self.score_places(p, nav);
         self.utilities = self.score_behaviours(p);
         let eligible = self.cfg.tiers.eligible;
-        let tiered: Vec<(BehaviourKind, f32, Tier)> = self.utilities.iter().map(|&(k, u)| (k, u, self.tier_of(k, p))).collect();
+        let tiered: Vec<(BehaviourKind, f32, Tier)> = self.utilities.iter().map(|&(k, u)| (k, u, self.tier_at(k, u, p))).collect();
         let top = tiered.iter().filter(|t| t.1 > eligible).map(|t| t.2).max();
         // Utilities are sorted best first, so the first of the top tier is its best.
         let Some(&(best, best_u, best_tier)) = tiered.iter().find(|t| Some(t.2) == top).or(tiered.first()) else { return };
         let current = self.active.kind();
         let (cur_u, cur_tier) = tiered.iter().find(|t| t.0 == current).map_or((0.0, Tier::Ambient), |t| (t.1, t.2));
-        // A current behaviour that is no longer eligible holds no tier.
-        let cur_tier = if cur_u > eligible { cur_tier } else { Tier::Ambient };
+        // A current behaviour that is no longer eligible holds no tier — except a running
+        // Urgent one (flee, hide…), whose trigger is spent once it starts: it keeps its tier
+        // until it finishes.
+        let cur_tier = if current.tier() == Tier::Urgent {
+            Tier::Urgent
+        } else if cur_u > eligible {
+            cur_tier
+        } else {
+            Tier::Ambient
+        };
         self.top_tier = top.unwrap_or(Tier::Ambient);
 
         let reason = if finished {
@@ -615,6 +623,17 @@ impl Brain {
         if let Some(reason) = reason {
             self.switch_to(best, reason, p, nav, out);
         }
+    }
+
+    /// Tier at utility `u`: high tiers need a minimum score, otherwise it competes as Ambient.
+    fn tier_at(&self, kind: BehaviourKind, u: f32, p: &Percepts) -> Tier {
+        let t = self.tier_of(kind, p);
+        let min = match t {
+            Tier::Engagement => self.cfg.tiers.engagement_min,
+            Tier::Needs => self.cfg.tiers.needs_min,
+            _ => 0.0,
+        };
+        if u >= min { t } else { Tier::Ambient }
     }
 
     /// The tier `kind` competes in right now (its base tier refined by context).
