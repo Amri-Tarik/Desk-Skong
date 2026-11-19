@@ -24,7 +24,8 @@ _Working list, last updated 2026-11-19. Reorder freely and add notes under any i
       level files). Zote as a sparring partner. Fights are his top priority, so this pays
       off the most.
 - [ ] **Geo showers through the subtle portal**, plus a tray/panel trigger for visits.
-- [ ] **Dream Gate fallback.** When no route exists, he warps instead of giving up.
+- [x] **Dream Gate fallback.** When no route exists, he warps instead of giving up.
+      (Visitors, the Shade, Geo, deposits, shinies; settled ledges only; 90 s cooldown.)
 - [ ] **Hazards.** The spike/acid death acts exist but nothing triggers them. Needs a
       design: what counts as spikes or acid on a desktop?
 - [ ] **Regional Geo rocks.** The game has City, Green, Fungal, Deep and Grave variants

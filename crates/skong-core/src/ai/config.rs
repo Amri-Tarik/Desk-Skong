@@ -302,6 +302,8 @@ pub struct BrainConfig {
     pub battle: BattleConfig,
     /// Death, the Shade, Geo and spells.
     pub stakes: super::stakes::StakesConfig,
+    /// Warping to a prize no route reaches.
+    pub dream_gate: super::dream_gate::DreamGateConfig,
     pub companion: CompanionConfig,
     pub watch: WatchConfig,
     /// The Unn slug's serene crawl.
@@ -337,6 +339,7 @@ impl Default for BrainConfig {
             needs: NeedRates::default(),
             battle: BattleConfig::default(),
             stakes: super::stakes::StakesConfig::default(),
+            dream_gate: super::dream_gate::DreamGateConfig::default(),
             companion: CompanionConfig::default(),
             watch: WatchConfig::default(),
             serene: SereneConfig::default(),

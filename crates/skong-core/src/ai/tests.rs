@@ -13,6 +13,7 @@ use crate::desktop::{DesktopSnapshot, Monitor, WindowId, WindowInfo};
 use crate::geom::RectI;
 use crate::terrain::{LedgeKind, Terrain, TerrainOptions};
 
+mod dream_gate;
 mod greet;
 mod highlight;
 mod shiny;
@@ -137,6 +138,8 @@ struct Sim {
     shinies: Vec<KnownShiny>,
     /// Shinies picked up.
     picked: Vec<u64>,
+    /// The app's side of the Dream Gate.
+    gate: crate::dreamgate::GateRuntime,
 }
 
 fn window(id: WindowId, rect: RectI, process: &str) -> WindowInfo {
@@ -202,6 +205,7 @@ impl Sim {
             t: 0.0,
             shinies: vec![],
             picked: vec![],
+            gate: Default::default(),
         }
     }
 
@@ -331,6 +335,7 @@ impl Sim {
                 self.act = None;
             }
         }
+        self.dream_gate(intent.gate);
 
         // Every route arrives after `trip` seconds (unless a wall is in the way).
         if self.nav.status == NavStatus::Moving && !self.wall {
@@ -351,6 +356,29 @@ impl Sim {
         }
         self.intents.push(intent.clone());
         intent
+    }
+
+    /// Like the app: the gate glows until the warp act ends, then he is moved to it and
+    /// reappears (`dreamgate_in`). The warp act's last 0.3 s stand in for its `DG Warp` step.
+    fn dream_gate(&mut self, ev: Option<crate::dreamgate::GateEvent>) {
+        use crate::dreamgate::{ARRIVE_ACT, GateAction};
+        let mut out = Vec::new();
+        if let Some(ev) = ev {
+            self.gate.event(ev, &mut out);
+        }
+        let running = self.act.as_ref().map(|a| (self.act_name(a.act.id), usize::from(a.left < 0.3)));
+        self.gate.tick(DT, running.as_ref().map(|(n, s)| (n.as_str(), *s)), |_| true, &mut out);
+        for a in out {
+            if let GateAction::WarpTo(at) = a {
+                self.place(at);
+            }
+            if matches!(a, GateAction::WarpTo(_) | GateAction::Reappear)
+                && let Some(id) = self.catalog.id(ARRIVE_ACT)
+            {
+                self.started.push(ARRIVE_ACT.into());
+                self.act = Some(PlayingAct { act: RunningAct { id, interruptible: false }, left: 0.4 });
+            }
+        }
     }
 
     fn run(&mut self, secs: f32) -> Vec<BehaviourKind> {

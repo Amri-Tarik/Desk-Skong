@@ -245,4 +245,9 @@ impl InterestMap {
     pub(crate) fn block(&mut self, target: PoiTarget, until: f32) {
         self.blocked.insert(target.key(), until);
     }
+
+    /// Reachable again (he got there by other means: a Dream Gate).
+    pub(crate) fn unblock(&mut self, target: PoiTarget) {
+        self.blocked.remove(&target.key());
+    }
 }

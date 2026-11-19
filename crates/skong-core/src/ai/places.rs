@@ -104,6 +104,11 @@ impl PlaceMemory {
         self.places.iter().find(|p| p.id == id).copied()
     }
 
+    /// Score again at the next think (something changed: he warped next to a place).
+    pub(crate) fn rescore(&mut self) {
+        self.scored_at = None;
+    }
+
     fn cooling(&self, p: &KnownPlace, now: f32) -> bool {
         self.used.get(&p.id).is_some_and(|t| now - t < p.kind.cooldown())
     }

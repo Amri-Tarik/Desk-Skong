@@ -46,6 +46,7 @@ use crate::overlay::PetOverlay;
 use skong_ipc::Command;
 
 mod discover;
+mod dreamgate;
 mod panel;
 mod visit;
 mod stakes;
@@ -166,6 +167,8 @@ struct Pet {
     game_hidden: bool,
     /// Warping off a game monitor: destination work area, once the gate act ends.
     leaving_for: Option<RectI>,
+    /// A Dream Gate the brain planted at a prize no route reaches (glow + the jump).
+    gate: skong_core::dreamgate::GateRuntime,
     /// Vision state to restore after a game.
     vision_before_game: bool,
     /// A user-requested trip (go to cursor) is being followed instead of the brain.
@@ -307,6 +310,7 @@ pub fn run(args: &Args) -> Result<()> {
         games: GameGuard::new(),
         game_hidden: false,
         leaving_for: None,
+        gate: Default::default(),
         vision_before_game: false,
         forced_nav: false,
         act_blocked: 0.0,
@@ -596,6 +600,7 @@ impl Pet {
         }
 
         self.stakes_tick(dt)?;
+        self.dream_gate_tick(dt);
         self.draw()?;
         self.trigger_fx();
         self.discoveries_tick(dt);
@@ -914,6 +919,9 @@ impl Pet {
         }
         if let Some(ev) = intent.request {
             self.on_world_request(ev);
+        }
+        if let Some(ev) = intent.gate {
+            self.on_gate_event(ev);
         }
         self.pokes.clear();
         self.brain_events.clear();

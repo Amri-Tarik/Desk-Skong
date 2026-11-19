@@ -381,20 +381,30 @@ impl Loot {
                         ctx.out.motion = Motion::Direct(MoveInput { x: dx.signum(), gait: Gait::Walk, ..Default::default() });
                     }
                     if k.distance(self.target) > 40.0 {
-                        ctx.interest.block(PoiTarget::Spot(self.target), ctx.now + 120.0);
-                        ctx.out.stakes.push(StakeEvent::AbandonCoin { at: self.target });
+                        Self::leave(ctx, self.target);
                         self.travel = None;
                     }
                 }
                 TravelStep::Failed => {
                     // Unreachable: leave it (it fades), try the next one.
-                    ctx.interest.block(PoiTarget::Spot(self.target), ctx.now + 120.0);
-                    ctx.out.stakes.push(StakeEvent::AbandonCoin { at: self.target });
+                    Self::leave(ctx, self.target);
                     self.travel = None;
                 }
             }
         }
         Status::Running
+    }
+
+    /// Give up on a coin he can't get to: it fades, unless a Dream Gate could take him
+    /// there (then it is only skipped for now, and kept for the gate).
+    fn leave(ctx: &mut Ctx, coin: Vec2) {
+        if super::dream_gate::may_take(ctx, coin) {
+            log::debug!("loot: no way to the coin at ({:.0},{:.0}); keeping it for a dream gate", coin.x, coin.y);
+            ctx.interest.block(PoiTarget::Spot(coin), ctx.now + 30.0);
+            return;
+        }
+        ctx.interest.block(PoiTarget::Spot(coin), ctx.now + 120.0);
+        ctx.out.stakes.push(StakeEvent::AbandonCoin { at: coin });
     }
 
     /// Done gathering: a happy act after a big haul.

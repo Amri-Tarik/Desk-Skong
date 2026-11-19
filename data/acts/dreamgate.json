@@ -1,0 +1,9 @@
+{
+  "$comment": "Dream Gate fallback travel (loaded after acts.json): no route reaches a prize, so he plants a gate by it (`dreamgate_set`; the app shows the gate on the target ledge as the act starts), charges and vanishes (`dreamgate_warp`; the app moves him to the gate the moment it ends) and reappears there (`dreamgate_in`, in acts.json, shared with the game-monitor escape). All weight 0: the brain starts them by name (crates/skong-core/src/ai/dream_gate.rs).",
+  "acts": [
+    { "name": "dreamgate_set", "tags": ["travel"], "requires": "grounded", "weight": 0.0, "cooldown": 0,
+      "steps": [ { "clip": "DG Set Charge", "hold": [0.6, 0.8] }, { "clip": "DG Set End" } ] },
+    { "name": "dreamgate_warp", "tags": ["travel"], "requires": "grounded", "weight": 0.0, "cooldown": 0,
+      "steps": [ { "clip": "DG Warp Charge", "hold": [0.8, 1.1], "interruptible": false }, { "clip": "DG Warp", "interruptible": false } ] }
+  ]
+}
