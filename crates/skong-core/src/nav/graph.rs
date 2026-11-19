@@ -15,7 +15,7 @@ use super::script::{Exec, Outcome, Recipe, Script, Stage, Start};
 use super::surface::{Surface, SurfaceId, all_walls};
 use crate::controller::{Abilities, Character, CharacterParams, Gait, MoveEvent, MoveInput, MoveState, Side};
 use crate::geom::{RectF, Vec2};
-use crate::terrain::{Facing, LedgeKind, Terrain, Wall};
+use crate::terrain::{Facing, LedgeKind, Terrain, Wall, WallKind};
 
 /// Fixed step used to validate edges (the app ticks at 120 Hz).
 pub(crate) const SIM_DT: f32 = 1.0 / 120.0;
@@ -531,7 +531,7 @@ impl Builder<'_> {
         // of the endpoints cannot be passed (except a window wall by a shadow dash).
         let floor = s.y.max(t.y) - r.step;
         let walled = |apex: f32, shadow: bool| {
-            self.walls_between(jdir, jtakeoff, jtx).any(|w| w.y0 < apex && w.y1 >= floor && !(shadow && w.owner.is_some()))
+            self.walls_between(jdir, jtakeoff, jtx).any(|w| w.y0 < apex && w.y1 >= floor && !(shadow && w.kind != WallKind::Monitor))
         };
         let (single_apex, double_apex) = (s.y - r.jump, s.y - r.jump - r.double);
         let shadow = ab.shadow_dash;
@@ -557,7 +557,7 @@ impl Builder<'_> {
         let clears_double =
             self.walls_between(jdir, jtakeoff, jtx).any(|w| reachable(w) && w.y0 < single_apex + 8.0 && w.y0 > double_apex - 8.0);
         let too_tall =
-            shadow && self.walls_between(jdir, jtakeoff, jtx).any(|w| w.owner.is_some() && reachable(w) && w.y0 <= double_apex - 8.0);
+            shadow && self.walls_between(jdir, jtakeoff, jtx).any(|w| w.kind != WallKind::Monitor && reachable(w) && w.y0 <= double_apex - 8.0);
         if ab.dash && rise <= r.step && within(gap, dash + r.walk_off(v, rise)) {
             let dir = sep.unwrap_or(jdir);
             let takeoff = edge_x(s, dir, r.half) - dir.sign() * (r.half + 2.0);
@@ -626,7 +626,7 @@ impl Builder<'_> {
     /// leading side sweeps the span) and overlap the height band `(top, bottom)`?
     /// `windows_only`: only walls a shadow dash passes.
     fn wall_between(&self, dir: Side, a: f32, b: f32, (top, bottom): (f32, f32), windows_only: bool) -> bool {
-        self.walls_between(dir, a, b).any(|w| w.y0 < bottom && top < w.y1 && (!windows_only || w.owner.is_some()))
+        self.walls_between(dir, a, b).any(|w| w.y0 < bottom && top < w.y1 && (!windows_only || w.kind != WallKind::Monitor))
     }
 
     /// Local walls blocking travel in `dir` that the body's leading side meets between feet

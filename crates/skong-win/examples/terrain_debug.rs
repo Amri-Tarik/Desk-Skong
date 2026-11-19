@@ -1,7 +1,8 @@
 //! Terrain debug overlay: draws the live window + content terrain over the whole virtual
 //! desktop.
 //!
-//! OneWay ledges green, Ground blue, content ledges magenta, walls orange. Click-through,
+//! OneWay ledges green, Ground blue, content ledges magenta, walls orange, content walls
+//! purple, activity hotspots outlined yellow. Click-through,
 //! never takes focus, excluded from screen capture (so it never detects itself). Redraws
 //! when the desktop snapshot or the detected content changes, and prints per-update
 //! content timings (frames, dirty area, analysis time, frame-to-ledges latency).
@@ -10,18 +11,20 @@
 //! `--verbose` prints every ledge/wall on each change, `--no-vision` disables content
 //! capture, `--wallpaper` keeps content ledges on the desktop wallpaper, `--no-overlay`
 //! runs headless (timings and CPU only), `--repaint-hz N` re-presents the overlay N times
-//! a second.
+//! a second. `--capture-stats` logs per-second capture counters.
 //!
 //! ```text
 //! cargo run -p skong-win --example terrain_debug --release
 //! ```
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use skong_core::desktop::DesktopSnapshot;
-use skong_core::terrain::{LedgeKind, Terrain, TerrainOptions};
+use skong_core::geom::Vec2;
+use skong_core::terrain::{LedgeKind, Terrain, TerrainOptions, WallKind};
+use skong_core::vision::Activity;
 use skong_win::capture::{CaptureStats, ContentFeed};
-use skong_win::debug_overlay::{DebugOverlay, Scene};
+use skong_win::debug_overlay::{DebugLine, DebugOverlay, Scene};
 use skong_win::desktop::{DesktopWatcher, enable_per_monitor_dpi};
 use windows::Win32::Foundation::{FILETIME, WAIT_FAILED};
 use windows::Win32::System::Threading::{GetCurrentProcess, GetProcessTimes};
@@ -32,9 +35,23 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 const HOTKEY_QUIT: i32 = 1;
 
-/// Terrain layer of the shared debug overlay (the pet can also draw the nav graph).
-fn scene(terrain: &Terrain) -> Scene<'_> {
-    Scene { terrain: Some(terrain), legend: true, ..Default::default() }
+/// Terrain layer of the shared debug overlay (the pet can also draw the nav graph), plus
+/// activity hotspots outlined in yellow.
+fn scene<'a>(terrain: &'a Terrain, spots: &'a [DebugLine]) -> Scene<'a> {
+    Scene { terrain: Some(terrain), lines: spots, legend: true, ..Default::default() }
+}
+
+/// Rect outlines for activity spots.
+fn spot_lines(a: &Activity) -> Vec<DebugLine> {
+    let mut out = Vec::new();
+    for s in &a.spots {
+        let r = s.rect.to_f();
+        let c = [Vec2::new(r.left, r.top), Vec2::new(r.right, r.top), Vec2::new(r.right, r.bottom), Vec2::new(r.left, r.bottom)];
+        for i in 0..4 {
+            out.push(DebugLine { a: c[i], b: c[(i + 1) % 4], rgb: (255, 230, 40), width: 2 });
+        }
+    }
+    out
 }
 
 fn main() -> Result<()> {
@@ -42,7 +59,9 @@ fn main() -> Result<()> {
     let args = Args::parse();
     enable_per_monitor_dpi();
     // SAFETY: thread-level hotkey; WM_HOTKEY arrives in this thread's queue.
-    unsafe { RegisterHotKey(None, HOTKEY_QUIT, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, u32::from(b'Q')) }.context("RegisterHotKey Ctrl+Alt+Q")?;
+    if let Err(e) = unsafe { RegisterHotKey(None, HOTKEY_QUIT, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, u32::from(b'Q')) } {
+        eprintln!("Ctrl+Alt+Q unavailable ({e}); use --seconds");
+    }
 
     let mut watcher = DesktopWatcher::new()?;
     let opts = TerrainOptions { include_wallpaper_content: args.wallpaper, ..TerrainOptions::default() };
@@ -55,7 +74,7 @@ fn main() -> Result<()> {
 
     let mut overlay = if args.overlay {
         let mut o = DebugOverlay::new(terrain.bounds)?;
-        o.draw(&scene(&terrain));
+        o.draw(&scene(&terrain, &[]));
         o.present()?;
         println!("overlay up; Ctrl+Alt+Q to quit");
         Some(o)
@@ -66,6 +85,7 @@ fn main() -> Result<()> {
     let mut summary = Summary::default();
     let started = Instant::now();
     let mut last_repaint = Instant::now();
+    let mut last_activity = Activity::default();
 
     let deadline = args.seconds.map(|s| Instant::now() + Duration::from_secs_f64(s));
     let (mut changes, mut updates) = (0u32, 0u32);
@@ -95,7 +115,14 @@ fn main() -> Result<()> {
                 s.surfaces
             );
         }
-        if !desk_changed && !content_changed {
+        let activity_changed = *feed.activity() != last_activity;
+        if activity_changed {
+            last_activity = feed.activity().clone();
+            for s in &last_activity.spots {
+                println!("  activity: {:?} intensity {:.2} for {:.1} s, owner {:?}", s.rect, s.intensity, s.age_secs, s.owner);
+            }
+        }
+        if !desk_changed && !content_changed && !activity_changed {
             continue;
         }
         if desk_changed {
@@ -105,14 +132,15 @@ fn main() -> Result<()> {
         terrain = build_timed(watcher.snapshot(), &feed, &opts, desk_changed);
         if content_changed {
             let n = terrain.ledges.iter().filter(|l| l.kind == LedgeKind::Content).count();
-            println!("  -> {n} content ledges in terrain");
+            let m = terrain.walls.iter().filter(|w| w.kind == WallKind::Content).count();
+            println!("  -> {n} content ledges, {m} content walls in terrain");
         }
         print_terrain(&terrain, args.verbose);
         if let Some(o) = overlay.as_mut() {
             if terrain.bounds != o.bounds() {
                 *o = DebugOverlay::new(terrain.bounds)?;
             }
-            o.draw(&scene(&terrain));
+            o.draw(&scene(&terrain, &spot_lines(&last_activity)));
             o.present()?;
         }
     }
@@ -146,6 +174,7 @@ impl Args {
                 "--no-vision" => args.vision = false,
                 "--wallpaper" => args.wallpaper = true,
                 "--no-overlay" => args.overlay = false,
+                "--capture-stats" => skong_win::capture::set_stats_logging(true),
                 "--repaint-hz" => args.repaint_hz = it.next().and_then(|s| s.parse().ok()),
                 other => eprintln!("ignoring unknown argument {other}"),
             }

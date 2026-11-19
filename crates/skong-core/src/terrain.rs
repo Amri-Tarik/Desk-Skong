@@ -9,9 +9,10 @@
 //! Parts of edges hidden behind higher windows are removed. Monitor work-area bottoms
 //! (taskbar tops) are solid ground; monitor outer edges are inward-facing walls.
 //!
-//! On top of that, **content ledges** ([`LedgeKind::Content`]) come from what is drawn on
-//! screen ([`crate::vision`]): one-way platforms owned by the front-most window showing
-//! them, usable even from inside that window. See [`content`] and
+//! On top of that, **content ledges** ([`LedgeKind::Content`]) and **content walls**
+//! ([`WallKind::Content`]) come from what is drawn on screen ([`crate::vision`]): one-way
+//! platforms and walls owned by the front-most window showing them, solid even from
+//! inside that window. See [`content`] and
 //! [`Terrain::from_desktop_and_content`].
 use crate::desktop::{DesktopSnapshot, WindowId};
 use crate::geom::RectF;
@@ -45,7 +46,7 @@ pub struct Ledge {
 }
 
 /// Which way the wall's solid face points.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Facing {
     /// Face points to -x: blocks things moving right (+x) that start left of it.
     Left,
@@ -61,6 +62,20 @@ pub struct Wall {
     pub y1: f32,
     pub face: Facing,
     pub owner: Option<WindowId>,
+    pub kind: WallKind,
+}
+
+/// Where a wall comes from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum WallKind {
+    /// Side of a monitor work area (or the terrain bounds).
+    Monitor,
+    /// Side of a window.
+    Window,
+    /// A vertical boundary in what is drawn on screen (column border, divider, stroke).
+    /// Like content ledges it is solid even from inside its owner window, and a shadow
+    /// dash passes through it.
+    Content,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -94,8 +109,14 @@ pub struct TerrainOptions {
     /// Content ledges within this many px of a window-top / ground ledge are dropped
     /// where they overlap it (the window frame itself is visible content too).
     pub content_dedupe_px: f32,
-    /// Keep content ledges on the desktop wallpaper (owner `None`).
+    /// Keep content ledges / walls on the desktop wallpaper (owner `None`).
     pub include_wallpaper_content: bool,
+    /// Content walls shorter than this after clipping are dropped (px).
+    pub min_content_wall_len: f32,
+    /// Where a right-facing content wall and a left-facing one to its right leave an
+    /// opening narrower than this (px), both are cut there: the knight could neither
+    /// fit nor escape. Set it a bit wider than his hitbox.
+    pub min_content_gap: f32,
 }
 
 impl Default for TerrainOptions {
@@ -107,6 +128,8 @@ impl Default for TerrainOptions {
             min_content_len: 32.0,
             content_dedupe_px: 3.0,
             include_wallpaper_content: false,
+            min_content_wall_len: 48.0,
+            min_content_gap: 40.0,
         }
     }
 }
@@ -118,19 +141,20 @@ impl Terrain {
 
     /// Build terrain from a desktop snapshot. See module docs for the model.
     pub fn from_desktop(desk: &DesktopSnapshot, opts: &TerrainOptions) -> Self {
-        build::build(desk, &[], opts)
+        build::build(desk, &[], &[], opts)
     }
 
-    /// [`Self::from_desktop`] plus content ledges (virtual-desktop pixels, owners as
-    /// assigned by [`ContentLayer`]). Content is clipped to work areas, hidden behind
+    /// [`Self::from_desktop`] plus content ledges and walls (virtual-desktop pixels, owners
+    /// as assigned by [`ContentLayer`]). Content is clipped to work areas, hidden behind
     /// windows in front of its owner, dropped inside fullscreen windows (and on the
-    /// wallpaper unless enabled), and de-duplicated against window tops.
-    pub fn from_desktop_and_content(desk: &DesktopSnapshot, content: &[ContentLedge], opts: &TerrainOptions) -> Self {
-        build::build(desk, content, opts)
+    /// wallpaper unless enabled), de-duplicated against window edges, and walls leaving
+    /// openings narrower than `min_content_gap` are cut.
+    pub fn from_desktop_and_content(desk: &DesktopSnapshot, ledges: &[ContentLedge], walls: &[ContentWallSeg], opts: &TerrainOptions) -> Self {
+        build::build(desk, ledges, walls, opts)
     }
 }
 
 mod build;
 pub mod content;
 
-pub use content::{ContentLayer, ContentLedge};
+pub use content::{ContentLayer, ContentLedge, ContentWallSeg};

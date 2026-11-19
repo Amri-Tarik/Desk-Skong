@@ -84,7 +84,7 @@ mod tests {
     use super::*;
     use crate::controller::{Abilities, Character, CharacterParams};
     use crate::geom::RectF;
-    use crate::terrain::{Facing, Ledge, LedgeKind, Terrain, Wall};
+    use crate::terrain::{Facing, Ledge, LedgeKind, Terrain, Wall, WallKind};
 
     fn terrain() -> Terrain {
         let ledges = vec![
@@ -92,8 +92,8 @@ mod tests {
             Ledge { x0: 700.0, x1: 1100.0, y: 800.0, kind: LedgeKind::OneWay, owner: None },
         ];
         let walls = vec![
-            Wall { x: 0.0, y0: 0.0, y1: 1040.0, face: Facing::Right, owner: None },
-            Wall { x: 1920.0, y0: 0.0, y1: 1040.0, face: Facing::Left, owner: None },
+            Wall { x: 0.0, y0: 0.0, y1: 1040.0, face: Facing::Right, owner: None, kind: WallKind::Monitor },
+            Wall { x: 1920.0, y0: 0.0, y1: 1040.0, face: Facing::Left, owner: None, kind: WallKind::Monitor },
         ];
         Terrain { generation: 1, windows: vec![], ledges, walls, bounds: RectF::new(0.0, 0.0, 1920.0, 1080.0) }
     }

@@ -2,7 +2,7 @@
 //! on them, so walking along one surface never runs into a wall.
 use crate::controller::{Character, Side, Support};
 use crate::desktop::WindowId;
-use crate::terrain::{Facing, Ledge, LedgeKind, Terrain, Wall};
+use crate::terrain::{Facing, Ledge, LedgeKind, Terrain, Wall, WallKind};
 
 /// Index into [`NavGraph::surfaces`](super::NavGraph::surfaces).
 pub type SurfaceId = usize;
@@ -94,8 +94,8 @@ pub(super) fn all_walls(terrain: &Terrain) -> impl Iterator<Item = Wall> + '_ {
     let b = terrain.bounds;
     let sides = (b.width() > 0.0 && b.height() > 0.0).then_some(b).into_iter().flat_map(|b| {
         [
-            Wall { x: b.left, y0: b.top, y1: b.bottom, face: Facing::Right, owner: None },
-            Wall { x: b.right, y0: b.top, y1: b.bottom, face: Facing::Left, owner: None },
+            Wall { x: b.left, y0: b.top, y1: b.bottom, face: Facing::Right, owner: None, kind: WallKind::Monitor },
+            Wall { x: b.right, y0: b.top, y1: b.bottom, face: Facing::Left, owner: None, kind: WallKind::Monitor },
         ]
     });
     terrain.walls.iter().copied().chain(sides)

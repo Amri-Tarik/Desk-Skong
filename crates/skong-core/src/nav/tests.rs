@@ -6,7 +6,7 @@ use super::*;
 use crate::controller::{Abilities, CharacterParams, MoveInput, MoveState};
 use crate::desktop::{DesktopSnapshot, Monitor, WindowInfo};
 use crate::geom::{RectF, RectI};
-use crate::terrain::{Facing, Ledge, LedgeKind, TerrainOptions, Wall, WindowBox};
+use crate::terrain::{Facing, Ledge, LedgeKind, TerrainOptions, Wall, WallKind, WindowBox};
 
 const DT: f32 = 1.0 / 120.0;
 const PPU: f32 = 64.0;
@@ -20,8 +20,8 @@ fn world_sized(w: f32, h: f32) -> Terrain {
         windows: vec![],
         ledges: vec![Ledge { x0: 0.0, x1: w, y: floor, kind: LedgeKind::Ground, owner: None }],
         walls: vec![
-            Wall { x: 0.0, y0: 0.0, y1: floor, face: Facing::Right, owner: None },
-            Wall { x: w, y0: 0.0, y1: floor, face: Facing::Left, owner: None },
+            Wall { x: 0.0, y0: 0.0, y1: floor, face: Facing::Right, owner: None, kind: WallKind::Monitor },
+            Wall { x: w, y0: 0.0, y1: floor, face: Facing::Left, owner: None, kind: WallKind::Monitor },
         ],
         bounds: RectF::new(0.0, 0.0, w, h),
     }
@@ -36,8 +36,8 @@ fn add_window(t: &mut Terrain, id: WindowId, r: RectF) {
     t.windows.push(WindowBox { id, rect: r });
     t.ledges.push(Ledge { x0: r.left, x1: r.right, y: r.top, kind: LedgeKind::OneWay, owner: Some(id) });
     let y1 = r.bottom.min(FLOOR);
-    t.walls.push(Wall { x: r.left, y0: r.top, y1, face: Facing::Left, owner: Some(id) });
-    t.walls.push(Wall { x: r.right, y0: r.top, y1, face: Facing::Right, owner: Some(id) });
+    t.walls.push(Wall { x: r.left, y0: r.top, y1, face: Facing::Left, owner: Some(id), kind: WallKind::Window });
+    t.walls.push(Wall { x: r.right, y0: r.top, y1, face: Facing::Right, owner: Some(id), kind: WallKind::Window });
 }
 
 fn with_windows(mut t: Terrain, windows: &[(WindowId, RectF)]) -> Terrain {

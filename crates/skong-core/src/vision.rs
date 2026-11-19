@@ -1,53 +1,98 @@
-//! Screen-content surfaces: horizontal boundaries on screen the knight can stand on
-//! (a line drawn in Paint, a table border, a toolbar edge...).
+//! Screen-content terrain: horizontal boundaries the knight can stand on (a line drawn
+//! in Paint, a table separator, a toolbar edge...) and vertical ones that block him
+//! (column borders, panel dividers, a vertical stroke).
 //!
 //! Pure and platform-independent: the platform layer hands in BGRA pixels plus the
 //! rectangles that changed, this module keeps a persistent per-output [`SurfaceMap`].
 //!
 //! # Detection
 //!
-//! Pixel `(x, y)` is a **top-edge pixel** when the row above looks like air and the pixel
-//! contrasts with it:
+//! `d(a, b)` is the largest per-channel (B, G, R) absolute difference, so colours of
+//! equal luminance still separate. Let `H[y][x] = d(P[y][x], P[y][x+1])` and
+//! `V[y][x] = d(P[y][x], P[y-1][x])`. A boundary pixel needs a step `c >= edge_contrast`
+//! into it from a two-pixel-deep **air** band on one side, whose own variation `noise`
+//! (along the band and across its two rows/columns) satisfies `noise <= air_tolerance`
+//! and `2 * noise <= c`. The relative test is what makes dark themes work (a `#30363d`
+//! separator on `#0d1117` is a step of ~20 on a perfectly flat background) while
+//! gradients and anti-aliasing fringes are rejected. The boundary must also be smooth
+//! along its own length (variation to at least one neighbour along it at most half the
+//! step, so line ends still count), which a drawn line
+//! or a border is and the tops of a word are not.
 //!
-//! * `contrast = d(P[y][x], P[y-1][x]) >= edge_contrast`,
-//! * `noise = max(d(P[y-1][x], P[y-1][x±1]), d(P[y-1][x], P[y-2][x])) <= air_tolerance`,
-//! * `2 * noise <= contrast` (rejects gradients, tolerates anti-aliasing),
+//! * **Ledge** (top edge) at `(x, y)`: `c = V[y][x]`, air = rows `y-1..=y-3` (three rows
+//!   deep, so underlines and strike-throughs right under text don't count).
+//! * **Left-facing wall** (solid starts at column `x`, air at `x-1`, `x-2`) and
+//!   **right-facing wall** (solid ends at `x`, air at `x+1`, `x+2`; the wall line is at
+//!   `x + 1`). A 1 px vertical line therefore yields both, blocking from both sides. A
+//!   boundary between two flat areas (a panel edge) has air on both sides and blocks
+//!   from both sides too.
 //!
-//! where `d` is the largest per-channel (B, G, R) absolute difference, so colours of
-//! equal luminance still separate. Edge pixels of one row are joined into runs
-//! (gaps up to `max_gap` px), runs shorter than `min_run` are dropped (text), and a
-//! run within `merge_rows` rows below an already kept run is suppressed where they
-//! overlap, so a 1–5 px stroke yields one surface at its top.
+//! Boundary pixels are joined into runs (gaps up to `max_gap` / `max_wall_gap` px); runs shorter than
+//! `min_run` (ledges) / `min_wall_run` (walls), or less than `min_fill` solid, are
+//! dropped, which removes text, icons and avatars. Near-duplicates are merged: a ledge within `merge_rows` rows below a
+//! kept one is cut where they overlap (a 1–5 px stroke gives one ledge, at its top),
+//! and a wall within `merge_cols` columns *inside* a kept one of the same facing too.
 //!
 //! # Incremental updates and hysteresis
 //!
-//! [`SurfaceMap::rescan`] recomputes the edge mask only inside dirty rects (plus the two
-//! rows below each, which depend on them) and re-joins runs only for touched rows.
-//! [`SurfaceMap::update`] then applies hysteresis: a new surface (or a new stretch of an
-//! existing one) is reported only after it was seen in two updates at least
-//! `persist_secs` apart; anything that disappears is dropped immediately.
+//! [`SurfaceMap::scan`] recomputes the boundary masks only around dirty rects (grow
+//! them by [`MARGIN`] before reading pixels) and [`SurfaceMap::finish`] re-joins runs
+//! only for touched rows / columns. [`SurfaceMap::update`] then applies hysteresis: a
+//! new ledge or wall (or a new stretch of one) is reported only after it was seen in two
+//! updates at least `persist_secs` apart; anything that disappears is dropped
+//! immediately.
 use crate::geom::RectI;
+use crate::terrain::Facing;
+
+mod activity;
+
+pub use activity::{Activity, ActivityGrid, ActivityParams, ActivitySpot};
+
+/// Pixels needed around a dirty rect to re-detect everything it can affect.
+pub const MARGIN: i32 = 4;
 
 /// Detection tuning. See module docs.
 #[derive(Clone, Debug, PartialEq)]
 pub struct VisionParams {
-    /// Minimum colour step from the air row to the surface row (0–255).
-    pub edge_contrast: u32,
-    /// Maximum colour variation inside the air row (0–255).
-    pub air_tolerance: u32,
-    /// Minimum surface length in px.
+    /// Minimum colour step from the air band into the boundary (0–255).
+    pub edge_contrast: u8,
+    /// Maximum colour variation inside the air band (0–255); also at most half the step.
+    pub air_tolerance: u8,
+    /// Minimum ledge length in px.
     pub min_run: u32,
-    /// Gaps up to this many px inside a run are bridged.
+    /// Minimum wall length in px.
+    pub min_wall_run: u32,
+    /// Minimum fraction of a run's pixels that must be boundary pixels: real lines are
+    /// solid, the bridged tops of a word are not.
+    pub min_fill: f32,
+    /// Gaps up to this many px inside a ledge run are bridged.
     pub max_gap: u32,
-    /// A surface this many rows (or fewer) below a kept one is merged into it.
+    /// Gaps up to this many px inside a wall run are bridged (a line crossing a wall
+    /// spoils its air band for 3 rows).
+    pub max_wall_gap: u32,
+    /// A ledge this many rows (or fewer) below a kept one is merged into it.
     pub merge_rows: u32,
-    /// A new surface must persist this long (and over two updates) before being reported.
+    /// A wall this many columns (or fewer) inside a kept one of the same facing is merged.
+    pub merge_cols: u32,
+    /// A new ledge / wall must persist this long (and over two updates) before being
+    /// reported.
     pub persist_secs: f64,
 }
 
 impl Default for VisionParams {
     fn default() -> Self {
-        Self { edge_contrast: 40, air_tolerance: 32, min_run: 48, max_gap: 2, merge_rows: 6, persist_secs: 0.06 }
+        Self {
+            edge_contrast: 14,
+            air_tolerance: 32,
+            min_run: 48,
+            min_wall_run: 48,
+            max_gap: 2,
+            max_wall_gap: 4,
+            min_fill: 0.85,
+            merge_rows: 6,
+            merge_cols: 3,
+            persist_secs: 0.06,
+        }
     }
 }
 
@@ -74,6 +119,31 @@ impl Surface {
     }
 }
 
+/// A vertical content boundary: wall line at `x`, rows `y0..y1`, solid on the side
+/// opposite to `face` (same convention as [`crate::terrain::Wall`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ContentWall {
+    pub x: i32,
+    pub y0: i32,
+    pub y1: i32,
+    pub face: Facing,
+}
+
+impl ContentWall {
+    pub fn new(x: i32, y0: i32, y1: i32, face: Facing) -> Self {
+        Self { x, y0, y1, face }
+    }
+    pub fn len(&self) -> i32 {
+        self.y1 - self.y0
+    }
+    pub fn is_empty(&self) -> bool {
+        self.y1 <= self.y0
+    }
+    pub fn translated(&self, dx: i32, dy: i32) -> Self {
+        Self { x: self.x + dx, y0: self.y0 + dy, y1: self.y1 + dy, face: self.face }
+    }
+}
+
 /// Borrowed 32-bit BGRA image (alpha ignored). `stride` is in pixels.
 #[derive(Clone, Copy, Debug)]
 pub struct PixelView<'a> {
@@ -81,276 +151,209 @@ pub struct PixelView<'a> {
     pub width: usize,
     pub height: usize,
     pub stride: usize,
+    /// Map coordinates of the view's top-left pixel (a view may cover only a region).
+    pub x0: usize,
+    pub y0: usize,
 }
 
 impl<'a> PixelView<'a> {
     /// `None` when `px` is too short for the given geometry.
     pub fn new(px: &'a [u32], width: usize, height: usize, stride: usize) -> Option<Self> {
         let need = if height == 0 { 0 } else { (height - 1) * stride + width };
-        (stride >= width && px.len() >= need).then_some(Self { px, width, height, stride })
+        (stride >= width && px.len() >= need).then_some(Self { px, width, height, stride, x0: 0, y0: 0 })
     }
 
-    fn row(&self, y: usize) -> &'a [u32] {
-        &self.px[y * self.stride..y * self.stride + self.width]
+    /// The same pixels placed at map position `(x0, y0)`.
+    pub fn at(self, x0: usize, y0: usize) -> Self {
+        Self { x0, y0, ..self }
+    }
+
+    /// Map row `y`, map columns `x0..x1` (must lie inside the view).
+    fn seg(&self, y: usize, x0: usize, x1: usize) -> &'a [u32] {
+        let r = (y - self.y0) * self.stride;
+        &self.px[r + x0 - self.x0..r + x1 - self.x0]
     }
 }
 
 /// Largest per-channel absolute difference of two BGRA pixels (alpha ignored).
 #[inline(always)]
-fn cdiff(a: u32, b: u32) -> u32 {
+fn cdiff(a: u32, b: u32) -> u8 {
     let d = |s: u32| ((a >> s) & 0xff).abs_diff((b >> s) & 0xff);
-    d(0).max(d(8)).max(d(16))
+    d(0).max(d(8)).max(d(16)) as u8
 }
 
-/// Persistent surface detector for one screen (output).
-pub struct SurfaceMap {
-    params: VisionParams,
-    width: usize,
-    height: usize,
-    /// 1 where a top-edge pixel was found, row-major.
-    mask: Vec<u8>,
-    /// Joined runs per row (`x0..x1`, length >= `min_run`).
-    runs: Vec<Vec<(u32, u32)>>,
-    /// Merged surfaces from the current mask, sorted. Before hysteresis.
-    raw: Vec<Surface>,
-    /// Reported surfaces, sorted.
-    confirmed: Vec<Surface>,
-    pending: Vec<Pending>,
+/// One bit per pixel, row-major, rows padded to whole bytes (bit `x % 8` of byte `x / 8`).
+#[derive(Clone, Debug)]
+struct BitPlane {
+    row_bytes: usize,
+    bits: Vec<u8>,
 }
 
-#[derive(Clone, Copy, Debug)]
-struct Pending {
-    s: Surface,
-    since: f64,
-    seen: u32,
-}
-
-impl SurfaceMap {
-    pub fn new(width: usize, height: usize, params: VisionParams) -> Self {
-        Self {
-            params,
-            width,
-            height,
-            mask: vec![0; width * height],
-            runs: vec![Vec::new(); height],
-            raw: Vec::new(),
-            confirmed: Vec::new(),
-            pending: Vec::new(),
-        }
+impl BitPlane {
+    fn new(width: usize, height: usize) -> Self {
+        let row_bytes = width.div_ceil(8);
+        Self { row_bytes, bits: vec![0; row_bytes * height] }
     }
 
-    pub fn width(&self) -> usize {
-        self.width
-    }
-    pub fn height(&self) -> usize {
-        self.height
-    }
-    pub fn params(&self) -> &VisionParams {
-        &self.params
+    fn row(&self, y: usize) -> &[u8] {
+        &self.bits[y * self.row_bytes..(y + 1) * self.row_bytes]
     }
 
-    /// Surfaces reported after hysteresis (local pixel coords), sorted by `(y, x0)`.
-    pub fn surfaces(&self) -> &[Surface] {
-        &self.confirmed
-    }
-
-    /// Surfaces in the current image, before hysteresis.
-    pub fn raw_surfaces(&self) -> &[Surface] {
-        &self.raw
-    }
-
-    /// When the next pending surface may be promoted (call [`Self::update`] then even if
-    /// nothing changed on screen).
-    pub fn next_deadline(&self) -> Option<f64> {
-        self.pending.iter().map(|p| p.since + self.params.persist_secs).reduce(f64::min)
-    }
-
-    /// Re-detect inside `dirty` (local coords; clipped). `img` must be the whole current
-    /// screen with this map's size; returns `false` (and does nothing) otherwise.
-    pub fn rescan(&mut self, img: &PixelView, dirty: &[RectI]) -> bool {
-        if img.width != self.width || img.height != self.height {
-            return false;
+    /// Store `vals` (0/1 bytes; `vals[i]` is column `ax0 + i`, `ax0 = x0 & !7`) for
+    /// columns `x0..x1` of row `y`, leaving the other bits alone.
+    fn store(&mut self, y: usize, x0: usize, x1: usize, vals: &[u8]) {
+        let ax0 = x0 & !7;
+        let row = &mut self.bits[y * self.row_bytes..(y + 1) * self.row_bytes];
+        for (bi, byte) in row.iter_mut().enumerate().take(x1.div_ceil(8)).skip(ax0 / 8) {
+            let base = bi * 8 - ax0;
+            let mut chunk = [0u8; 8];
+            let avail = vals.len().saturating_sub(base).min(8);
+            chunk[..avail].copy_from_slice(&vals[base..base + avail]);
+            // Eight 0/1 bytes → eight bits, byte i → bit i.
+            let packed = (u64::from_le_bytes(chunk).wrapping_mul(0x0102_0408_1020_4080) >> 56) as u8;
+            let lo = x0.max(bi * 8) - bi * 8;
+            let hi = x1.min(bi * 8 + 8) - bi * 8;
+            let sel = ((1u16 << hi) - (1u16 << lo)) as u8;
+            *byte = (*byte & !sel) | (packed & sel);
         }
-        let (w, h) = (self.width as i32, self.height as i32);
-        let mut touched = vec![false; self.height];
-        for r in dirty {
-            // Edges on row y depend on rows y-2..=y and columns x-1..=x+1.
-            let x0 = (r.left - 1).max(1);
-            let x1 = (r.right + 1).min(w - 1);
-            let y0 = r.top.max(2);
-            let y1 = (r.bottom + 2).min(h);
-            if x0 >= x1 || y0 >= y1 {
-                continue;
-            }
-            self.scan_rect(img, x0 as usize, x1 as usize, y0 as usize, y1 as usize);
-            touched[y0 as usize..y1 as usize].iter_mut().for_each(|t| *t = true);
-        }
-        for (y, _) in touched.iter().enumerate().filter(|(_, t)| **t) {
-            self.runs[y] = self.join_runs(y);
-        }
-        self.raw = self.merge_rows();
-        true
-    }
-
-    fn scan_rect(&mut self, img: &PixelView, x0: usize, x1: usize, y0: usize, y1: usize) {
-        let (t, a) = (self.params.edge_contrast, self.params.air_tolerance);
-        let avx2 = has_avx2();
-        for y in y0..y1 {
-            let up_row = img.row(y - 1);
-            let rows = Rows {
-                cur: &img.row(y)[x0..x1],
-                up: &up_row[x0..x1],
-                ul: &up_row[x0 - 1..x1 - 1],
-                ur: &up_row[x0 + 1..x1 + 1],
-                up2: &img.row(y - 2)[x0..x1],
-            };
-            let m = &mut self.mask[y * self.width + x0..y * self.width + x1];
-            #[cfg(target_arch = "x86_64")]
-            if avx2 {
-                // SAFETY: AVX2 support was verified at runtime by `has_avx2`.
-                unsafe { edge_row_avx2(&rows, m, t, a) };
-                continue;
-            }
-            let _ = avx2;
-            edge_row(&rows, m, t, a);
-        }
-    }
-
-    /// Runs of edge pixels on row `y`, gaps bridged, short ones dropped.
-    fn join_runs(&self, y: usize) -> Vec<(u32, u32)> {
-        let row = &self.mask[y * self.width..(y + 1) * self.width];
-        let (gap, min) = (self.params.max_gap as usize, self.params.min_run as usize);
-        let mut out = Vec::new();
-        let mut cur: Option<(usize, usize)> = None;
-        let mut x = 0;
-        while x < row.len() {
-            // Skip zero bytes 8 at a time.
-            if let Some(chunk) = row.get(x..x + 8)
-                && u64::from_ne_bytes(chunk.try_into().unwrap_or([1; 8])) == 0
-            {
-                x += 8;
-                continue;
-            }
-            if row[x] != 0 {
-                cur = match cur {
-                    Some((s, e)) if x <= e + gap => Some((s, x + 1)),
-                    Some((s, e)) => {
-                        if e - s >= min {
-                            out.push((s as u32, e as u32));
-                        }
-                        Some((x, x + 1))
-                    }
-                    None => Some((x, x + 1)),
-                };
-            }
-            x += 1;
-        }
-        if let Some((s, e)) = cur
-            && e - s >= min
-        {
-            out.push((s as u32, e as u32));
-        }
-        out
-    }
-
-    /// Keep the topmost of near-duplicate rows: a run is cut where a kept surface lies
-    /// at most `merge_rows` rows above it.
-    fn merge_rows(&self) -> Vec<Surface> {
-        let merge = self.params.merge_rows as i32;
-        let min = self.params.min_run as i32;
-        let mut out: Vec<Surface> = Vec::new();
-        // Index into `out` of the first surface that may still be within `merge` rows.
-        let mut window_start = 0;
-        for (y, runs) in self.runs.iter().enumerate() {
-            if runs.is_empty() {
-                continue;
-            }
-            let y = y as i32;
-            while window_start < out.len() && out[window_start].y < y - merge {
-                window_start += 1;
-            }
-            let row_start = out.len();
-            for &(a, b) in runs {
-                let mut pieces = vec![(a as i32, b as i32)];
-                for k in &out[window_start..row_start] {
-                    pieces = pieces.into_iter().flat_map(|p| subtract(p, (k.x0, k.x1))).collect();
-                }
-                out.extend(pieces.into_iter().filter(|(a, b)| b - a >= min).map(|(a, b)| Surface::new(a, b, y)));
-            }
-        }
-        out
-    }
-
-    /// Hysteresis step at time `now` (seconds, monotonic). Returns `true` when
-    /// [`Self::surfaces`] changed.
-    pub fn update(&mut self, now: f64) -> bool {
-        let mut confirmed: Vec<Surface> = Vec::new();
-        let mut pending: Vec<Pending> = Vec::new();
-        for c in &self.raw {
-            let same_row = row_of(&self.confirmed, c.y, |k| k.y).iter();
-            // Still-present parts of reported surfaces stay, immediately.
-            confirmed.extend(same_row.clone().filter_map(|k| {
-                let (a, b) = (k.x0.max(c.x0), k.x1.min(c.x1));
-                (a < b).then_some(Surface::new(a, b, c.y))
-            }));
-            let mut fresh = vec![(c.x0, c.x1)];
-            for k in same_row {
-                fresh = fresh.into_iter().flat_map(|p| subtract(p, (k.x0, k.x1))).collect();
-            }
-            for (a, b) in fresh {
-                let s = Surface::new(a, b, c.y);
-                let prev = row_of(&self.pending, s.y, |p| p.s.y).iter().filter(|p| p.s.x0 < s.x1 && s.x0 < p.s.x1);
-                let (since, seen) = prev.fold((now, 0), |(t, n), p| (t.min(p.since), n.max(p.seen)));
-                let seen = seen + 1;
-                if seen >= 2 && now - since >= self.params.persist_secs - 1e-9 {
-                    confirmed.push(s);
-                } else {
-                    pending.push(Pending { s, since, seen });
-                }
-            }
-        }
-        confirmed.sort_unstable();
-        // Re-join pieces of one surface that were confirmed at different times.
-        let mut joined: Vec<Surface> = Vec::with_capacity(confirmed.len());
-        for s in confirmed {
-            match joined.last_mut() {
-                Some(l) if l.y == s.y && s.x0 <= l.x1 + self.params.max_gap as i32 => l.x1 = l.x1.max(s.x1),
-                _ => joined.push(s),
-            }
-        }
-        self.pending = pending;
-        let changed = joined != self.confirmed;
-        self.confirmed = joined;
-        changed
     }
 }
 
-/// The five pixel rows (same length) one mask row depends on.
-struct Rows<'a> {
-    cur: &'a [u32],
-    up: &'a [u32],
-    ul: &'a [u32],
-    ur: &'a [u32],
-    up2: &'a [u32],
+/// Ring of per-row difference buffers used while scanning one rect.
+struct Diffs {
+    /// `H` of rows `r` at index `r % 8`, `V` likewise; columns `cx0..cx0 + n`.
+    h: [Vec<u8>; 8],
+    v: [Vec<u8>; 8],
+    cx0: usize,
+    n: usize,
 }
 
-/// Edge test for one row segment; written branch-free so it auto-vectorizes.
+impl Diffs {
+    fn new(cx0: usize, n: usize) -> Self {
+        Self { h: std::array::from_fn(|_| vec![0; n]), v: std::array::from_fn(|_| vec![0; n]), cx0, n }
+    }
+
+    #[inline(always)]
+    fn compute_h(&mut self, img: &PixelView, y: usize) {
+        let p = img.seg(y, self.cx0, self.cx0 + self.n);
+        let n = self.n;
+        let h = &mut self.h[y % 8][..n];
+        let (a, b) = (&p[..n - 1], &p[1..n]);
+        for i in 0..n - 1 {
+            h[i] = cdiff(a[i], b[i]);
+        }
+        h[n - 1] = 0;
+    }
+
+    #[inline(always)]
+    fn compute_v(&mut self, img: &PixelView, y: usize) {
+        let (p, q) = (img.seg(y, self.cx0, self.cx0 + self.n), img.seg(y - 1, self.cx0, self.cx0 + self.n));
+        let n = self.n;
+        let (v, p, q) = (&mut self.v[y % 8][..n], &p[..n], &q[..n]);
+        for i in 0..n {
+            v[i] = cdiff(p[i], q[i]);
+        }
+    }
+}
+
+/// Boundary tests for one row: writes 0/1 into `ledge`, `left`, `right` (`len` = pixels,
+/// index `i` ↔ difference index `i + 2`).
+struct RowTest<'a> {
+    h0: &'a [u8], // H[y]
+    h1: &'a [u8], // H[y-1]
+    h2: &'a [u8], // H[y-2]
+    h3: &'a [u8], // H[y-3]
+    v0: &'a [u8], // V[y]
+    v1: &'a [u8], // V[y-1]
+    v2: &'a [u8], // V[y-2]
+    vn: &'a [u8], // V[y+1]
+}
+
+/// One rect to scan: rows `y0..y1`, columns `x0..x1` (map coords).
+struct ScanJob<'a, 'b> {
+    img: &'a PixelView<'b>,
+    x0: usize,
+    x1: usize,
+    y0: usize,
+    y1: usize,
+    t: u8,
+    a: u8,
+}
+
+/// Difference rows, boundary tests and bit packing for one rect; everything inlined
+/// so the AVX2 wrapper compiles all of it with AVX2.
 #[inline(always)]
-fn edge_row(r: &Rows, m: &mut [u8], t: u32, a: u32) {
-    let n = m.len();
-    let (cur, up, ul, ur, up2) = (&r.cur[..n], &r.up[..n], &r.ul[..n], &r.ur[..n], &r.up2[..n]);
-    for i in 0..n {
-        let contrast = cdiff(cur[i], up[i]);
-        let noise = cdiff(up[i], ul[i]).max(cdiff(up[i], ur[i])).max(cdiff(up[i], up2[i]));
-        m[i] = ((contrast >= t) & (noise <= a) & (2 * noise <= contrast)) as u8;
+fn scan_rows(job: &ScanJob, planes: [&mut BitPlane; 3], scratch: &mut [Vec<u8>; 3]) {
+    let ScanJob { img, x0, x1, y0, y1, t, a } = *job;
+    let n = x1 - x0;
+    let ax0 = x0 & !7;
+    let mut d = Diffs::new(x0 - 2, n + 4);
+    for y in y0 - 3..y0 {
+        d.compute_h(img, y);
+    }
+    for y in y0 - 2..=y0 {
+        d.compute_v(img, y);
+    }
+    let [ledge, left, right] = planes;
+    for y in y0..y1 {
+        d.compute_h(img, y);
+        d.compute_v(img, y + 1);
+        let r = RowTest {
+            h0: &d.h[y % 8],
+            h1: &d.h[(y + 7) % 8],
+            h2: &d.h[(y + 6) % 8],
+            h3: &d.h[(y + 5) % 8],
+            v0: &d.v[y % 8],
+            v1: &d.v[(y + 7) % 8],
+            v2: &d.v[(y + 6) % 8],
+            vn: &d.v[(y + 1) % 8],
+        };
+        let off = x0 - ax0;
+        let [s0, s1, s2] = scratch;
+        row_test(&r, (&mut s0[off..off + n], &mut s1[off..off + n], &mut s2[off..off + n]), t, a);
+        ledge.store(y, x0, x1, s0);
+        left.store(y, x0, x1, s1);
+        right.store(y, x0, x1, s2);
     }
 }
 
-/// [`edge_row`] compiled for AVX2 (8 pixels per instruction, unsigned 32-bit max/min).
+/// [`scan_rows`] compiled for AVX2.
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx2")]
-fn edge_row_avx2(r: &Rows, m: &mut [u8], t: u32, a: u32) {
-    edge_row(r, m, t, a);
+fn scan_rows_avx2(job: &ScanJob, planes: [&mut BitPlane; 3], scratch: &mut [Vec<u8>; 3]) {
+    scan_rows(job, planes, scratch);
+}
+
+/// Boundary tests for one row: writes 0/1 into `ledge`, `left`, `right` (`len` = pixels,
+/// index `i` ↔ difference index `i + 2`). Every neighbour is pre-sliced so the loop is
+/// free of bounds checks and vectorizes (32 pixels per AVX2 instruction).
+#[inline(always)]
+fn row_test(r: &RowTest, out: (&mut [u8], &mut [u8], &mut [u8]), t: u8, a: u8) {
+    let (ledge, left, right) = out;
+    let n = ledge.len();
+    let (left, right) = (&mut left[..n], &mut right[..n]);
+    // `at(s, k)[i]` is `s[i + k]`, i.e. column offset `k - 2`.
+    fn sl(s: &[u8], k: usize, n: usize) -> &[u8] {
+        &s[k..k + n]
+    }
+    let at = |s, k| sl(s, k, n);
+    let (h0m2, h0m1, h0c, h0p1) = (at(r.h0, 0), at(r.h0, 1), at(r.h0, 2), at(r.h0, 3));
+    let (h1m1, h1c, h2m1, h2c, h3m1, h3c) = (at(r.h1, 1), at(r.h1, 2), at(r.h2, 1), at(r.h2, 2), at(r.h3, 1), at(r.h3, 2));
+    let (v0m2, v0m1, v0c, v0p1, v0p2) = (at(r.v0, 0), at(r.v0, 1), at(r.v0, 2), at(r.v0, 3), at(r.v0, 4));
+    let (v1c, v2c) = (at(r.v1, 2), at(r.v2, 2));
+    let (vnm2, vnm1, vnc, vnp1, vnp2) = (at(r.vn, 0), at(r.vn, 1), at(r.vn, 2), at(r.vn, 3), at(r.vn, 4));
+    let ok = |c: u8, noise: u8| ((c >= t) & (noise <= a) & (noise <= c / 2)) as u8;
+    for i in 0..n {
+        let ln = h1m1[i].max(h1c[i]).max(v1c[i]).max(h2m1[i]).max(h2c[i]).max(v2c[i]).max(h3m1[i]).max(h3c[i]);
+        // The boundary itself must be smooth along its length (on at least one side, so
+        // ends count; a line is, the tops of a word mostly aren't).
+        ledge[i] = ok(v0c[i], ln) & (h0m1[i].min(h0c[i]) <= v0c[i] / 2) as u8;
+        let along = v0c[i].min(vnc[i]);
+        let lw = v0m1[i].max(vnm1[i]).max(h0m2[i]).max(v0m2[i]).max(vnm2[i]);
+        left[i] = ok(h0m1[i], lw) & (along <= h0m1[i] / 2) as u8;
+        let rw = v0p1[i].max(vnp1[i]).max(h0p1[i]).max(v0p2[i]).max(vnp2[i]);
+        right[i] = ok(h0c[i], rw) & (along <= h0c[i] / 2) as u8;
+    }
 }
 
 fn has_avx2() -> bool {
@@ -364,10 +367,453 @@ fn has_avx2() -> bool {
     }
 }
 
-/// The items of `v` (sorted by `key`) whose key equals `y`.
-fn row_of<T>(v: &[T], y: i32, key: impl Fn(&T) -> i32) -> &[T] {
-    let lo = v.partition_point(|e| key(e) < y);
-    let hi = lo + v[lo..].partition_point(|e| key(e) <= y);
+/// A segment on a lane (a row for ledges; a column + facing for walls).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Seg {
+    lane: i64,
+    a: i32,
+    b: i32,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Pending {
+    s: Seg,
+    since: f64,
+    seen: u32,
+}
+
+/// Report-after-persisting, drop-immediately filter over lane segments.
+#[derive(Clone, Debug, Default)]
+struct Hysteresis {
+    confirmed: Vec<Seg>,
+    pending: Vec<Pending>,
+}
+
+impl Hysteresis {
+    fn next_deadline(&self, persist: f64) -> Option<f64> {
+        self.pending.iter().map(|p| p.since + persist).reduce(f64::min)
+    }
+
+    /// `raw` sorted by `(lane, a)`. Returns whether `confirmed` changed.
+    fn update(&mut self, raw: &[Seg], now: f64, persist: f64, gap: i32) -> bool {
+        let mut confirmed: Vec<Seg> = Vec::new();
+        let mut pending: Vec<Pending> = Vec::new();
+        for c in raw {
+            let same = lane_of(&self.confirmed, c.lane, |k| k.lane);
+            // Still-present parts of reported segments stay, immediately.
+            confirmed.extend(same.iter().filter_map(|k| {
+                let (a, b) = (k.a.max(c.a), k.b.min(c.b));
+                (a < b).then_some(Seg { lane: c.lane, a, b })
+            }));
+            let mut fresh = vec![(c.a, c.b)];
+            for k in same {
+                fresh = fresh.into_iter().flat_map(|p| subtract(p, (k.a, k.b))).collect();
+            }
+            for (a, b) in fresh {
+                let s = Seg { lane: c.lane, a, b };
+                let prev = lane_of(&self.pending, s.lane, |p| p.s.lane).iter().filter(|p| p.s.a < s.b && s.a < p.s.b);
+                let (since, seen) = prev.fold((now, 0), |(t, n), p| (t.min(p.since), n.max(p.seen)));
+                let seen = seen + 1;
+                if seen >= 2 && now - since >= persist - 1e-9 {
+                    confirmed.push(s);
+                } else {
+                    pending.push(Pending { s, since, seen });
+                }
+            }
+        }
+        confirmed.sort_unstable();
+        // Re-join pieces of one segment that were confirmed at different times.
+        let mut joined: Vec<Seg> = Vec::with_capacity(confirmed.len());
+        for s in confirmed {
+            match joined.last_mut() {
+                Some(l) if l.lane == s.lane && s.a <= l.b + gap => l.b = l.b.max(s.b),
+                _ => joined.push(s),
+            }
+        }
+        self.pending = pending;
+        let changed = joined != self.confirmed;
+        self.confirmed = joined;
+        changed
+    }
+}
+
+fn surface_seg(s: &Surface) -> Seg {
+    Seg { lane: s.y as i64, a: s.x0, b: s.x1 }
+}
+
+fn seg_surface(s: &Seg) -> Surface {
+    Surface::new(s.a, s.b, s.lane as i32)
+}
+
+fn wall_seg(w: &ContentWall) -> Seg {
+    Seg { lane: w.x as i64 * 2 + (w.face == Facing::Right) as i64, a: w.y0, b: w.y1 }
+}
+
+fn seg_wall(s: &Seg) -> ContentWall {
+    let face = if s.lane.rem_euclid(2) == 1 { Facing::Right } else { Facing::Left };
+    ContentWall::new(s.lane.div_euclid(2) as i32, s.a, s.b, face)
+}
+
+/// Persistent detector for one screen (output).
+pub struct SurfaceMap {
+    params: VisionParams,
+    width: usize,
+    height: usize,
+    /// Ledge, left-facing and right-facing wall boundary pixels.
+    ledge: BitPlane,
+    left: BitPlane,
+    right: BitPlane,
+    /// Rows / columns scanned since the last [`Self::finish`].
+    touched_rows: Vec<bool>,
+    /// Rects (columns x0..x1, rows y0..y1) scanned since the last finish.
+    scanned: Vec<(usize, usize, usize, usize)>,
+    /// Joined runs per row (`x0..x1`, length >= `min_run`).
+    runs: Vec<Vec<(u32, u32)>>,
+    /// Joined runs per column (`y0..y1`, length >= `min_wall_run`), left / right facing.
+    col_runs: [Vec<Vec<(u32, u32)>>; 2],
+    /// Before hysteresis, sorted.
+    raw: Vec<Surface>,
+    raw_walls: Vec<ContentWall>,
+    /// Reported, sorted.
+    surfaces: Vec<Surface>,
+    walls: Vec<ContentWall>,
+    hyst: Hysteresis,
+    hyst_walls: Hysteresis,
+    /// Scratch rows for one scanned row: ledge / left / right test results.
+    scratch: [Vec<u8>; 3],
+}
+
+impl SurfaceMap {
+    pub fn new(width: usize, height: usize, params: VisionParams) -> Self {
+        Self {
+            params,
+            width,
+            height,
+            ledge: BitPlane::new(width, height),
+            left: BitPlane::new(width, height),
+            right: BitPlane::new(width, height),
+            touched_rows: vec![false; height],
+            scanned: Vec::new(),
+            runs: vec![Vec::new(); height],
+            col_runs: [vec![Vec::new(); width], vec![Vec::new(); width]],
+            raw: Vec::new(),
+            raw_walls: Vec::new(),
+            surfaces: Vec::new(),
+            walls: Vec::new(),
+            hyst: Hysteresis::default(),
+            hyst_walls: Hysteresis::default(),
+            scratch: std::array::from_fn(|_| vec![0; width + 16]),
+        }
+    }
+
+    pub fn width(&self) -> usize {
+        self.width
+    }
+    pub fn height(&self) -> usize {
+        self.height
+    }
+    pub fn params(&self) -> &VisionParams {
+        &self.params
+    }
+
+    /// Ledges reported after hysteresis (local pixel coords), sorted by `(y, x0)`.
+    pub fn surfaces(&self) -> &[Surface] {
+        &self.surfaces
+    }
+
+    /// Walls reported after hysteresis (local pixel coords).
+    pub fn walls(&self) -> &[ContentWall] {
+        &self.walls
+    }
+
+    /// Ledges in the current image, before hysteresis.
+    pub fn raw_surfaces(&self) -> &[Surface] {
+        &self.raw
+    }
+
+    /// Walls in the current image, before hysteresis.
+    pub fn raw_walls(&self) -> &[ContentWall] {
+        &self.raw_walls
+    }
+
+    /// When the next pending ledge / wall may be promoted (call [`Self::update`] then
+    /// even if nothing changed on screen).
+    pub fn next_deadline(&self) -> Option<f64> {
+        let p = self.params.persist_secs;
+        match (self.hyst.next_deadline(p), self.hyst_walls.next_deadline(p)) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
+    }
+
+    /// [`Self::scan`] + [`Self::finish`]: re-detect around `dirty` (map coords; clipped).
+    /// Returns `false` (and does nothing) if `img` does not fit in the map.
+    pub fn rescan(&mut self, img: &PixelView, dirty: &[RectI]) -> bool {
+        if !self.scan(img, dirty) {
+            return false;
+        }
+        self.finish();
+        true
+    }
+
+    /// Recompute the boundary masks that pixel changes inside `dirty` (map coords) can
+    /// affect, as far as `img` provides the pixels: to cover a rect completely the view
+    /// must extend [`MARGIN`] px beyond it on every side. Returns `false` (and does
+    /// nothing) if the view lies outside the map. Call [`Self::finish`] afterwards.
+    pub fn scan(&mut self, img: &PixelView, dirty: &[RectI]) -> bool {
+        if img.x0 + img.width > self.width || img.y0 + img.height > self.height {
+            return false;
+        }
+        let (w, h) = (self.width as i32, self.height as i32);
+        let (vx0, vy0) = (img.x0 as i32, img.y0 as i32);
+        let (vx1, vy1) = (vx0 + img.width as i32, vy0 + img.height as i32);
+        for r in dirty {
+            // A changed pixel affects ledges up to 3 rows below / 1 column aside and
+            // walls up to 1 row above or below / 2 columns aside. Testing (x, y) reads
+            // rows y-3..=y+1 and columns x-2..=x+2.
+            let x0 = (r.left - 2).max(2).max(vx0 + 2);
+            let x1 = (r.right + 2).min(w - 2).min(vx1 - 2);
+            let y0 = (r.top - 1).max(3).max(vy0 + 3);
+            let y1 = (r.bottom + 3).min(h - 1).min(vy1 - 1);
+            if x0 >= x1 || y0 >= y1 {
+                continue;
+            }
+            self.scan_rect(img, x0 as usize, x1 as usize, y0 as usize, y1 as usize);
+            self.touched_rows[y0 as usize..y1 as usize].iter_mut().for_each(|t| *t = true);
+            self.scanned.push((x0 as usize, x1 as usize, y0 as usize, y1 as usize));
+        }
+        true
+    }
+
+    fn scan_rect(&mut self, img: &PixelView, x0: usize, x1: usize, y0: usize, y1: usize) {
+        let job = ScanJob { img, x0, x1, y0, y1, t: self.params.edge_contrast, a: self.params.air_tolerance };
+        let planes = [&mut self.ledge, &mut self.left, &mut self.right];
+        #[cfg(target_arch = "x86_64")]
+        if has_avx2() {
+            // SAFETY: AVX2 support was verified at runtime by `has_avx2`.
+            unsafe { scan_rows_avx2(&job, planes, &mut self.scratch) };
+            return;
+        }
+        scan_rows(&job, planes, &mut self.scratch);
+    }
+
+    /// Re-join runs on rows / columns touched by [`Self::scan`] and re-merge.
+    pub fn finish(&mut self) {
+        for y in 0..self.height {
+            if std::mem::take(&mut self.touched_rows[y]) {
+                self.runs[y] = self.join_row(y);
+            }
+        }
+        for (x0, x1, y0, y1) in std::mem::take(&mut self.scanned) {
+            for side in 0..2 {
+                if (y1 - y0) * 4 >= self.height {
+                    // Tall rect: a byte-wise pass over the full height is cheaper.
+                    for (i, r) in self.join_cols(side, x0, x1).into_iter().enumerate() {
+                        self.col_runs[side][x0 + i] = r;
+                    }
+                } else {
+                    for c in x0..x1 {
+                        self.rejoin_col(side, c, y0, y1);
+                    }
+                }
+            }
+        }
+        self.raw = self.merge_rows();
+        self.raw_walls = self.merge_cols();
+    }
+
+    /// Runs of ledge pixels on row `y`, gaps bridged, short ones dropped.
+    fn join_row(&self, y: usize) -> Vec<(u32, u32)> {
+        let row = self.ledge.row(y);
+        let (gap, min) = (self.params.max_gap as usize, self.params.min_run as usize);
+        let mut j = Joiner::new(gap, min, self.params.min_fill);
+        let mut bi = 0;
+        while bi < row.len() {
+            // Skip 64 empty pixels at a time.
+            if let Some(chunk) = row.get(bi..bi + 8)
+                && chunk.iter().all(|&b| b == 0)
+            {
+                bi += 8;
+                continue;
+            }
+            let mut v = row[bi];
+            while v != 0 {
+                j.push(bi * 8 + v.trailing_zeros() as usize);
+                v &= v - 1;
+            }
+            bi += 1;
+        }
+        j.finish()
+    }
+
+    /// Wall runs (`side` 0 = left-facing, 1 = right-facing) of columns `c0..c1` over the
+    /// whole height, reading the plane a byte (8 columns) at a time.
+    fn join_cols(&self, side: usize, c0: usize, c1: usize) -> Vec<Vec<(u32, u32)>> {
+        let plane = if side == 0 { &self.left } else { &self.right };
+        let (gap, min, fill) = (self.params.max_wall_gap as usize, self.params.min_wall_run as usize, self.params.min_fill);
+        let mut js: Vec<Joiner> = (c0..c1).map(|_| Joiner::new(gap, min, fill)).collect();
+        for y in 0..self.height {
+            let row = plane.row(y);
+            for (bi, &bits) in row.iter().enumerate().take(c1.div_ceil(8)).skip(c0 / 8) {
+                let mut v = bits;
+                while v != 0 {
+                    let x = bi * 8 + v.trailing_zeros() as usize;
+                    v &= v - 1;
+                    if (c0..c1).contains(&x) {
+                        js[x - c0].push(y);
+                    }
+                }
+            }
+        }
+        js.into_iter().map(Joiner::finish).collect()
+    }
+
+    /// Re-join the wall runs of column `c` (`side` 0 = left-facing, 1 = right-facing)
+    /// after rows `y0..y1` were rescanned. Only the window between the nearest gaps
+    /// wider than `max_wall_gap` above and below is re-joined: no run can cross such a
+    /// gap, so runs outside the window are unaffected.
+    fn rejoin_col(&mut self, side: usize, c: usize, y0: usize, y1: usize) {
+        let plane = if side == 0 { &self.left } else { &self.right };
+        let bit = |y: usize| plane.bits[y * plane.row_bytes + c / 8] >> (c % 8) & 1 != 0;
+        let gap = self.params.max_wall_gap as usize;
+        let (mut w0, mut zeros, mut y) = (y0, 0, y0);
+        while y > 0 && zeros <= gap {
+            y -= 1;
+            if bit(y) {
+                (w0, zeros) = (y, 0);
+            } else {
+                zeros += 1;
+            }
+        }
+        let (mut w1, mut zeros, mut y) = (y1, 0, y1);
+        while y < self.height && zeros <= gap {
+            if bit(y) {
+                (w1, zeros) = (y + 1, 0);
+            } else {
+                zeros += 1;
+            }
+            y += 1;
+        }
+        let mut j = Joiner::new(gap, self.params.min_wall_run as usize, self.params.min_fill);
+        for y in w0..w1 {
+            if bit(y) {
+                j.push(y);
+            }
+        }
+        let runs = &mut self.col_runs[side][c];
+        runs.retain(|&(a, b)| b as usize <= w0 || a as usize >= w1);
+        runs.extend(j.finish());
+        runs.sort_unstable();
+    }
+
+    /// Keep the topmost of near-duplicate rows: a run is cut where a kept surface lies
+    /// at most `merge_rows` rows above it.
+    fn merge_rows(&self) -> Vec<Surface> {
+        let lanes = self.runs.iter().enumerate().map(|(y, r)| (y as i32, r.as_slice()));
+        merge_lanes(lanes, self.params.merge_rows as i32, self.params.min_run as i32).into_iter().map(|(y, a, b)| Surface::new(a, b, y)).collect()
+    }
+
+    /// Keep the outermost of near-duplicate columns of the same facing (leftmost for
+    /// left-facing walls, rightmost for right-facing ones).
+    fn merge_cols(&self) -> Vec<ContentWall> {
+        let (merge, min) = (self.params.merge_cols as i32, self.params.min_wall_run as i32);
+        let left = self.col_runs[0].iter().enumerate().map(|(x, r)| (x as i32, r.as_slice()));
+        let mut out: Vec<ContentWall> = merge_lanes(left, merge, min).into_iter().map(|(x, a, b)| ContentWall::new(x, a, b, Facing::Left)).collect();
+        // Right-facing: scan right to left (mirror the column index), wall line at x + 1.
+        let w = self.width as i32;
+        let right = self.col_runs[1].iter().enumerate().rev().map(|(x, r)| (w - 1 - x as i32, r.as_slice()));
+        out.extend(merge_lanes(right, merge, min).into_iter().map(|(m, a, b)| ContentWall::new(w - 1 - m + 1, a, b, Facing::Right)));
+        out.sort_unstable_by_key(wall_seg);
+        out
+    }
+
+    /// Hysteresis step at time `now` (seconds, monotonic). Returns `true` when
+    /// [`Self::surfaces`] or [`Self::walls`] changed.
+    pub fn update(&mut self, now: f64) -> bool {
+        let (p, gap) = (self.params.persist_secs, self.params.max_gap as i32);
+        let raw: Vec<Seg> = self.raw.iter().map(surface_seg).collect();
+        let a = self.hyst.update(&raw, now, p, gap);
+        let raw_w: Vec<Seg> = self.raw_walls.iter().map(wall_seg).collect();
+        let b = self.hyst_walls.update(&raw_w, now, p, self.params.max_wall_gap as i32);
+        if a {
+            self.surfaces = self.hyst.confirmed.iter().map(seg_surface).collect();
+        }
+        if b {
+            self.walls = self.hyst_walls.confirmed.iter().map(seg_wall).collect();
+        }
+        a || b
+    }
+}
+
+/// Joins increasing positions into runs, bridging gaps up to `gap` and keeping runs of
+/// at least `min` that are at least `fill` solid.
+struct Joiner {
+    gap: usize,
+    min: usize,
+    fill: f32,
+    /// Current run `(start, end, pixels)`.
+    cur: Option<(usize, usize, usize)>,
+    out: Vec<(u32, u32)>,
+}
+
+impl Joiner {
+    fn new(gap: usize, min: usize, fill: f32) -> Self {
+        Self { gap, min, fill, cur: None, out: Vec::new() }
+    }
+
+    fn close(&mut self, (s, e, n): (usize, usize, usize)) {
+        if e - s >= self.min && n as f32 >= self.fill * (e - s) as f32 {
+            self.out.push((s as u32, e as u32));
+        }
+    }
+
+    fn push(&mut self, p: usize) {
+        self.cur = match self.cur {
+            Some((s, e, n)) if p <= e + self.gap => Some((s, p + 1, n + 1)),
+            Some(run) => {
+                self.close(run);
+                Some((p, p + 1, 1))
+            }
+            None => Some((p, p + 1, 1)),
+        };
+    }
+
+    fn finish(mut self) -> Vec<(u32, u32)> {
+        if let Some(run) = self.cur.take() {
+            self.close(run);
+        }
+        self.out
+    }
+}
+
+/// Lanes in increasing order with their runs; a run is cut where a kept run lies at
+/// most `merge` lanes before it. Returns `(lane, a, b)` pieces of length >= `min`.
+fn merge_lanes<'a>(lanes: impl Iterator<Item = (i32, &'a [(u32, u32)])>, merge: i32, min: i32) -> Vec<(i32, i32, i32)> {
+    let mut out: Vec<(i32, i32, i32)> = Vec::new();
+    let mut window_start = 0;
+    for (lane, runs) in lanes {
+        if runs.is_empty() {
+            continue;
+        }
+        while window_start < out.len() && out[window_start].0 < lane - merge {
+            window_start += 1;
+        }
+        let lane_start = out.len();
+        for &(a, b) in runs {
+            let mut pieces = vec![(a as i32, b as i32)];
+            for k in &out[window_start..lane_start] {
+                pieces = pieces.into_iter().flat_map(|p| subtract(p, (k.1, k.2))).collect();
+            }
+            out.extend(pieces.into_iter().filter(|(a, b)| b - a >= min).map(|(a, b)| (lane, a, b)));
+        }
+    }
+    out
+}
+
+/// The items of `v` (sorted by `key`) whose key equals `lane`.
+fn lane_of<T>(v: &[T], lane: i64, key: impl Fn(&T) -> i64) -> &[T] {
+    let lo = v.partition_point(|e| key(e) < lane);
+    let hi = lo + v[lo..].partition_point(|e| key(e) <= lane);
     &v[lo..hi]
 }
 
@@ -624,11 +1070,163 @@ mod tests {
         }
     }
 
+
+    /// Copy of `r` grown by [`MARGIN`] px (clipped), as a separate buffer placed at its position:
+    /// what the capture layer reads back from the GPU for one dirty rect.
+    fn region(img: &Img, r: RectI) -> (Vec<u32>, RectI) {
+        let g = RectI::new(r.left - MARGIN, r.top - MARGIN, r.right + MARGIN, r.bottom + MARGIN).intersect(&img.full());
+        let mut buf = Vec::new();
+        for y in g.top..g.bottom {
+            let row = y as usize * img.w;
+            buf.extend_from_slice(&img.px[row + g.left as usize..row + g.right as usize]);
+        }
+        (buf, g)
+    }
+
+    #[test]
+    fn region_views_match_full_rescans() {
+        let mut img = Img::new(500, 300, WHITE);
+        img.fill(50, 50, 450, 52, BLACK);
+        let mut m = SurfaceMap::new(500, 300, VisionParams::default());
+        m.rescan(&img.view(), &[img.full()]);
+
+        // Change two regions, rescan each from its own small buffer.
+        img.fill(100, 120, 400, 123, bgra(200, 20, 20));
+        img.fill(0, 248, 500, 300, BLACK);
+        img.fill(300, 50, 450, 52, WHITE);
+        let dirty = [RectI::new(100, 120, 400, 123), RectI::new(0, 248, 500, 300), RectI::new(300, 50, 450, 52)];
+        for r in dirty {
+            let (buf, g) = region(&img, r);
+            let view = PixelView::new(&buf, g.width() as usize, g.height() as usize, g.width() as usize).expect("view");
+            assert!(m.scan(&view.at(g.left as usize, g.top as usize), &[r]));
+        }
+        m.finish();
+        let mut full = SurfaceMap::new(500, 300, VisionParams::default());
+        full.rescan(&img.view(), &[img.full()]);
+        assert_eq!(m.raw_surfaces(), full.raw_surfaces());
+        assert_eq!(m.raw_surfaces().len(), 3, "{:?}", m.raw_surfaces());
+    }
+
+    fn hex(rgb: u32) -> u32 {
+        0xff00_0000 | rgb
+    }
+
+    /// Dark-theme list: a box with 1 px low-contrast separators (#30363d on #0d1117),
+    /// bold text, a dotted underline and icons in every row.
+    fn dark_table() -> Img {
+        let (bg, line, text) = (hex(0x0d1117), hex(0x30363d), hex(0xc9d1d9));
+        let mut img = Img::new(900, 560, bg);
+        // Box outline.
+        img.fill(100, 40, 800, 41, line);
+        img.fill(100, 40, 101, 540, line);
+        img.fill(799, 40, 800, 540, line);
+        img.fill(100, 539, 800, 540, line);
+        for row in 0..7 {
+            let top = 40 + row * 70;
+            if row > 0 {
+                img.fill(101, top, 799, top + 1, line); // separator
+            }
+            // A line of bold glyphs (dense, 1 px apart) with uneven tops 22 px below.
+            let mut x = 140;
+            let mut k = 0;
+            while x < 600 {
+                let w = 5 + k % 3;
+                let t = top + 22 + (k * 5 % 3);
+                img.fill(x, t, x + w, top + 33, text);
+                x += w + 1 + (k % 2);
+                k += 1;
+            }
+            // Dotted underline 3 px under the text, then an icon.
+            for x in (140..260).step_by(2) {
+                img.fill(x, top + 36, x + 1, top + 37, text);
+            }
+            img.fill(110, top + 25, 124, top + 39, hex(0x8b949e));
+        }
+        img
+    }
+
+    #[test]
+    fn dark_theme_separators_found_text_ignored() {
+        let img = dark_table();
+        let mut m = SurfaceMap::new(img.w, img.h, VisionParams::default());
+        m.rescan(&img.view(), &[img.full()]);
+        let ys: Vec<i32> = m.raw_surfaces().iter().map(|s| s.y).collect();
+        // Box top, 6 separators, box bottom; nothing from text, underlines or icons.
+        assert_eq!(ys, vec![40, 110, 180, 250, 320, 390, 460, 539], "{:?}", m.raw_surfaces());
+        assert!(m.raw_surfaces()[1..7].iter().all(|s| s.x0 <= 102 && s.x1 >= 798), "{:?}", m.raw_surfaces());
+        // The box sides are walls on both faces, continuous across the separators.
+        let walls = m.raw_walls();
+        for (x, face) in [(100, Facing::Left), (101, Facing::Right), (799, Facing::Left), (800, Facing::Right)] {
+            assert!(walls.iter().any(|w| w.x == x && w.face == face && w.y0 <= 45 && w.y1 >= 535), "wall {x} {face:?} in {walls:?}");
+        }
+        assert_eq!(walls.len(), 4, "text stems must not make walls: {walls:?}");
+    }
+
+    #[test]
+    fn vertical_line_blocks_from_both_sides() {
+        let mut img = Img::new(300, 300, WHITE);
+        img.fill(150, 40, 152, 260, BLACK);
+        let mut m = SurfaceMap::new(300, 300, VisionParams::default());
+        m.rescan(&img.view(), &[img.full()]);
+        assert_eq!(m.raw_walls(), &[ContentWall::new(150, 40, 260, Facing::Left), ContentWall::new(152, 40, 260, Facing::Right)]);
+        assert!(m.raw_surfaces().is_empty(), "a 2 px wide top is too short for a ledge");
+    }
+
+    #[test]
+    fn panel_boundaries_block_from_both_sides() {
+        let mut img = Img::new(400, 300, WHITE);
+        img.fill(100, 80, 300, 280, hex(0x335577));
+        let mut m = SurfaceMap::new(400, 300, VisionParams::default());
+        m.rescan(&img.view(), &[img.full()]);
+        assert_eq!(m.raw_surfaces()[0], Surface::new(100, 300, 80));
+        // Both sides of each boundary are flat (air), so each blocks from both sides.
+        assert_eq!(
+            m.raw_walls(),
+            &[
+                ContentWall::new(100, 80, 280, Facing::Left),
+                ContentWall::new(100, 81, 279, Facing::Right),
+                ContentWall::new(300, 81, 279, Facing::Left),
+                ContentWall::new(300, 80, 280, Facing::Right),
+            ]
+        );
+    }
+
+    #[test]
+    fn short_vertical_strokes_are_not_walls() {
+        let mut img = Img::new(300, 200, WHITE);
+        for x in (20..280).step_by(9) {
+            img.fill(x, 50, x + 2, 50 + 14 + (x % 20), BLACK); // glyph stems
+        }
+        let mut m = SurfaceMap::new(300, 200, VisionParams::default());
+        m.rescan(&img.view(), &[img.full()]);
+        assert!(m.raw_walls().is_empty(), "{:?}", m.raw_walls());
+    }
+
+    #[test]
+    fn walls_have_hysteresis_and_incremental_updates() {
+        let mut img = Img::new(300, 300, WHITE);
+        let mut m = SurfaceMap::new(300, 300, VisionParams::default());
+        m.rescan(&img.view(), &[img.full()]);
+        m.update(0.0);
+        img.fill(100, 20, 103, 280, BLACK);
+        m.rescan(&img.view(), &[RectI::new(100, 20, 103, 280)]);
+        assert!(!m.update(1.0));
+        assert!(m.walls().is_empty());
+        assert!(m.update(1.1));
+        assert_eq!(m.walls().len(), 2);
+        // Erase the lower half through a small dirty rect: the walls shrink immediately.
+        img.fill(100, 150, 103, 280, WHITE);
+        m.rescan(&img.view(), &[RectI::new(100, 150, 103, 280)]);
+        assert!(m.update(1.11));
+        assert!(m.walls().iter().all(|w| w.y0 == 20 && w.y1 == 150), "{:?}", m.walls());
+    }
     #[test]
     fn rescan_rejects_wrong_size() {
         let img = Img::new(10, 10, WHITE);
-        let mut m = SurfaceMap::new(20, 10, VisionParams::default());
+        let mut m = SurfaceMap::new(5, 10, VisionParams::default());
         assert!(!m.rescan(&img.view(), &[img.full()]));
+        let mut m = SurfaceMap::new(20, 20, VisionParams::default());
+        assert!(!m.rescan(&img.view().at(15, 0), &[img.full()]));
         assert!(PixelView::new(&img.px, 10, 11, 10).is_none());
         assert!(PixelView::new(&img.px, 10, 10, 9).is_none());
     }

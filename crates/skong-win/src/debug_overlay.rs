@@ -6,14 +6,14 @@
 //! a premultiplied DIB and [`DebugOverlay::present`] hands it to the compositor once. Nothing
 //! runs between changes; dropping the overlay frees the window and its pixels.
 //!
-//! Colours: Ground ledges blue, OneWay green, Content magenta, walls orange; nav surfaces
+//! Colours: Ground ledges blue, OneWay green, Content magenta, walls orange, content walls purple; nav surfaces
 //! (standable spans) cyan; edges per [`MoveKind`] (see [`move_color`]), the current route
 //! thicker and opaque. A legend sits in the primary monitor's top-right corner.
 use anyhow::{Context, Result, bail};
 use skong_core::canvas::premul;
 use skong_core::geom::{RectF, Vec2};
 use skong_core::nav::{DebugPath, DebugSpan, MoveKind};
-use skong_core::terrain::{Facing, LedgeKind, Terrain};
+use skong_core::terrain::{Facing, LedgeKind, Terrain, WallKind};
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, SIZE, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     AC_SRC_ALPHA, AC_SRC_OVER, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BLENDFUNCTION, CreateCompatibleDC, CreateDIBSection,
@@ -73,6 +73,7 @@ const GROUND: (u8, u8, u8) = (40, 120, 255);
 const ONE_WAY: (u8, u8, u8) = (40, 230, 60);
 const CONTENT: (u8, u8, u8) = (255, 40, 220);
 const WALL: (u8, u8, u8) = (255, 140, 20);
+const CONTENT_WALL: (u8, u8, u8) = (150, 60, 255);
 const SURFACE: (u8, u8, u8) = (0, 230, 230);
 
 /// Display changes re-trigger desktop enumeration; everything else is default.
@@ -155,7 +156,8 @@ impl DebugOverlay {
                     Facing::Left => wall.x,
                     Facing::Right => wall.x - LINE as f32,
                 };
-                c.rect(x0, wall.y0, x0 + LINE as f32, wall.y1, argb(WALL, 230));
+                let rgb = if wall.kind == WallKind::Content { CONTENT_WALL } else { WALL };
+                c.rect(x0, wall.y0, x0 + LINE as f32, wall.y1, argb(rgb, 230));
             }
         }
         for s in scene.spans {
@@ -192,6 +194,7 @@ impl DebugOverlay {
             ("one-way".to_string(), ONE_WAY),
             ("content".to_string(), CONTENT),
             ("wall".to_string(), WALL),
+            ("content wall".to_string(), CONTENT_WALL),
         ]);
         let work = monitor::primary_work_area();
         let (row_h, box_w) = (16, 150);
