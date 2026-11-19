@@ -208,7 +208,9 @@ impl Brain {
         };
 
         let k = p.knight.pos;
-        let near_coin = st.sense.coins.iter().any(|c| c.distance(k) < cfg.loot_range);
+        // Only coins he may go for (not skipped for now: unreachable, kept for a Dream Gate),
+        // or Loot starts, finds nothing and finishes every tick.
+        let near_coin = st.sense.coins.iter().any(|c| c.distance(k) < cfg.loot_range && !self.interest.is_blocked(super::interest::PoiTarget::Spot(*c)));
         let pile = if st.sense.coins.len() >= 8 { 0.1 } else { 0.0 };
         let cheering = matches!(&self.active, Active::Loot(l) if l.cheering());
         // Strict: loose Geo is always wanted (mid-jump included — a jump used to zero it and

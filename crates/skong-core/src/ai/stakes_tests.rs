@@ -560,3 +560,23 @@ fn coins_on_both_sides_are_not_dithering_and_a_calm_down_never_blocks_geo() {
     sim.coins = vec![Vec2::new(1300.0, FLOOR)];
     assert!(sim.run_until(1.0, |s| s.brain.behaviour() == BehaviourKind::Loot), "Geo during a calm-down");
 }
+
+#[test]
+fn coins_he_may_not_go_for_dont_restart_loot_every_tick() {
+    // Live: every coin was skipped for now (unreachable / kept for a Dream Gate); Loot
+    // started, found nothing and finished — every tick.
+    let mut sim = Sim::new();
+    sim.coins = vec![Vec2::new(1300.0, FLOOR)];
+    sim.brain.interest.block(PoiTarget::Spot(Vec2::new(1300.0, FLOOR)), sim.brain.now + 100.0);
+    let mut switches = 0;
+    let mut last = sim.brain.behaviour();
+    for _ in 0..(3.0 / DT) as usize {
+        sim.step();
+        if sim.brain.behaviour() != last {
+            switches += 1;
+            last = sim.brain.behaviour();
+        }
+    }
+    assert!(switches <= 2, "behaviour churned {switches} times");
+    assert_ne!(sim.brain.behaviour(), BehaviourKind::Loot);
+}

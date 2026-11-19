@@ -463,6 +463,11 @@ impl Loot {
 
     /// Done gathering: a happy act after a big haul.
     fn wrap_up(&mut self, ctx: &mut Ctx) -> Status {
+        if self.picked == 0 {
+            // Nothing he could go for after all: a short breather before Loot is tried again
+            // (it must never restart every tick).
+            ctx.stakes.loot_ready_at = ctx.stakes.loot_ready_at.max(ctx.now + 2.0);
+        }
         if self.picked >= BIG_HAUL && ctx.grounded() {
             ctx.mind.adjust(|n| &mut n.boredom, -0.2);
             ctx.mind.excite(0.2);
