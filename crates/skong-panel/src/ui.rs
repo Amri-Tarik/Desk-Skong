@@ -1,8 +1,8 @@
 //! The panel window (egui). Left: controls mirroring the tray + live status. Right: logs.
 //!
 //! While the window is focused (and no text field has focus): arrows / Up jump / Shift dash /
-//! Ctrl superdash / Z walk / X sprint drive the knight (if "Drive with keyboard" is on), and
-//! the plain letters K A W R S B C P D trigger the same actions as Ctrl+Alt+letter.
+//! Ctrl superdash / Z walk / X sprint drive the knight while the pet is in manual mode (a toggle,
+//! off by default — the panel never turns it on by itself), and the plain letters K A W R G H S B C P D trigger the same actions as Ctrl+Alt+letter.
 use std::time::Duration;
 
 use eframe::egui::{self, Color32, Key, RichText, TextWrapMode};
@@ -199,7 +199,7 @@ impl Panel {
                     self.cmd(Command::SetOverlayLayers(l));
                 }
             });
-            ui.checkbox(&mut self.drive, "Drive with keyboard while focused").on_hover_text(
+            ui.checkbox(&mut self.drive, "Keys drive the knight in manual mode").on_hover_text(
                 "arrows move, Up jumps, Shift dashes, Ctrl charges a superdash, Z walk, X sprint.\nManual mode is switched on while this window has focus.",
             );
             ui.horizontal(|ui| {

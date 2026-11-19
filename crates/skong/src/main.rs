@@ -29,6 +29,7 @@ pub struct Args {
     pub vision: bool,
     pub sit_test: bool,
     pub fx_test: bool,
+    pub goto_test: bool,
 }
 
 const USAGE: &str = "usage: skong [--browse] [--capturable] [--panel|--no-panel] [--no-vision] [--capture-stats] [--data DIR] [--skins DIR] [--skin NAME] [--scale F] [--clip NAME]";
@@ -46,6 +47,7 @@ fn parse_args() -> Result<Args> {
         vision: true,
         sit_test: false,
         fx_test: false,
+        goto_test: false,
     };
     let mut it = std::env::args().skip(1);
     while let Some(k) = it.next() {
@@ -64,6 +66,7 @@ fn parse_args() -> Result<Args> {
             "--capture-stats" => skong_win::capture::set_stats_logging(true),
             "--sit-test" => a.sit_test = true,
             "--fx-test" => a.fx_test = true,
+            "--goto-test" => a.goto_test = true,
             "-h" | "--help" => {
                 println!("{USAGE}");
                 std::process::exit(0);
