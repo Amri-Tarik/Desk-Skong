@@ -12,6 +12,8 @@ use skong_core::nav::{FollowStatus, MoveKind, NavGoal, NavGraph, PathFollower, T
 use skong_core::terrain::{Terrain, TerrainOptions};
 
 const DT: f32 = 1.0 / 120.0;
+/// Point goals on the monitor floors per desktop (on top of every window top).
+const FLOOR_GOALS: usize = 3;
 
 struct Rng(u64);
 
@@ -80,6 +82,10 @@ fn main() {
         return;
     }
     let mut build_ms = Vec::new();
+    let mut superdash_edges = Vec::new();
+    let mut superdash_routes: BTreeMap<String, usize> = BTreeMap::new();
+    // Total seconds to arrival per style (arrived routes only).
+    let mut travel: BTreeMap<String, f32> = BTreeMap::new();
     let mut dives = 0usize;
     let mut hard_landings = 0usize;
     for seed in 1..=desktops {
@@ -90,18 +96,30 @@ fn main() {
         let Some(ch0) = settle(&t, Character::new(params, Abilities::default(), Vec2::new(start_x, 0.0))) else { continue };
         let g = NavGraph::build(&t, &ch0);
         build_ms.push(g.stats().millis);
-        for w in &desk.windows {
+        superdash_edges.push(g.edge_counts()[MoveKind::ALL.iter().position(|k| *k == MoveKind::Superdash).unwrap_or(0)]);
+        // Window tops, plus a few points on the floors (long level runs: where a hurry
+        // should crystal dash).
+        let mut goals: Vec<(NavGoal, &str, Option<u64>)> = desk.windows.iter().map(|w| (NavGoal::OnWindow(w.id), "", Some(w.id))).collect();
+        for _ in 0..FLOOR_GOALS {
+            let (x, floor) = if rng.next(0, 2) == 0 { (rng.next(-1880, -40), 1080.0) } else { (rng.next(40, 2520), 1392.0) };
+            goals.push((NavGoal::Point(Vec2::new(x as f32, floor)), " floor", None));
+        }
+        for (gi, &(goal, label, win)) in goals.iter().enumerate() {
+            // Trace / tick dump id: the window id, or 100 + index for a floor point.
+            let case = win.unwrap_or(100 + gi as u64);
             for style in [TravelStyle::Normal, TravelStyle::Hurry] {
-                let goal = NavGoal::OnWindow(w.id);
-                let visible = t.ledges.iter().any(|l| l.owner == Some(w.id) && l.y - 50.0 * scale / 0.6 > t.bounds.top);
+                let visible = win.is_some_and(|id| t.ledges.iter().any(|l| l.owner == Some(id) && l.y - 50.0 * scale / 0.6 > t.bounds.top));
                 let Some(route) = g.plan(&ch0, goal, style) else {
                     if visible {
                         *tally.entry(format!("{style:?} unreachable (visible top)")).or_insert([0; 4]).first_mut().unwrap_or(&mut 0) += 1;
-                        if std::env::var("SOAK_UNREACH").is_ok() { println!("seed {seed} {style:?}: no route from {:?} to window {} {:?}", ch0.pos, w.id, w.rect); }
+                        if std::env::var("SOAK_UNREACH").is_ok() { println!("seed {seed} {style:?}: no route from {:?} to {goal:?}", ch0.pos); }
                     }
                     continue;
                 };
-                let key = format!("{style:?}");
+                let key = format!("{style:?}{label}");
+                if route.moves.contains(&MoveKind::Superdash) {
+                    *superdash_routes.entry(key.clone()).or_default() += 1;
+                }
                 let entry = tally.entry(key).or_insert([0; 4]);
                 entry[0] += 1;
                 let mut ch = ch0.clone();
@@ -111,9 +129,12 @@ fn main() {
                 let mut result = 3;
                 let mut last_kind = None;
                 let mut trace_moves: Option<Vec<MoveKind>> = None;
-                for _ in 0..(60.0 / DT) as usize {
+                for tick in 0..(60.0 / DT) as usize {
                     let (input, status) = f.next_input(&ch, &g, &t, DT);
-                    if std::env::var("SOAK_TRACE").ok().as_deref() == Some(&format!("{seed}:{}:{style:?}", w.id)) && (Some(f.route().moves.clone()) != trace_moves || f.current_move() != last_kind) {
+                    if status == FollowStatus::Arrived {
+                        *travel.entry(format!("{style:?}{label}")).or_default() += tick as f32 * DT;
+                    }
+                    if std::env::var("SOAK_TRACE").ok().as_deref() == Some(&format!("{seed}:{case}:{style:?}")) && (Some(f.route().moves.clone()) != trace_moves || f.current_move() != last_kind) {
                         trace_moves = Some(f.route().moves.clone());
                         println!("  t {:.2} at {:?} {:?} route {:?} step {:?} eta {:.2} end {:?} edges {:?}", 0.0, ch.pos, ch.state, f.route().moves, f.current_move(), f.route().eta, f.route().end, f.route().edges().map(|e| (e.takeoff, e.land, e.kind)).collect::<Vec<_>>());
                     }
@@ -145,7 +166,7 @@ fn main() {
                     ev.clear();
                     ch.step(&input, &t, DT, &mut ev);
                     hard_landings += ev.iter().filter(|e| matches!(e, skong_core::controller::MoveEvent::Landed { hard: true })).count();
-                    if std::env::var("SOAK_TICKS").ok().as_deref() == Some(&format!("{seed}:{}:{style:?}", w.id)) && f.route().moves.len() == 1 {
+                    if std::env::var("SOAK_TICKS").ok().as_deref() == Some(&format!("{seed}:{case}:{style:?}")) && f.route().moves.len() == 1 {
                         println!("    x {:.1} y {:.1} v {:.0},{:.0} in {:.2} j{} d{} dn{} {:?} {:?}", ch.pos.x, ch.pos.y, ch.vel.x, ch.vel.y, input.x, u8::from(input.jump_pressed), u8::from(input.dash_pressed), u8::from(input.down), ch.state, ev);
                     }
                 }
@@ -155,7 +176,7 @@ fn main() {
                     if std::env::var("SOAK_VERBOSE").is_ok() { println!("  replan now: {:?} surface {:?}", g.plan(&ch, goal, style).map(|r| r.moves), g.surface_at(&ch)); }
                     *failing.entry(format!("{what} during {:?}", last_kind.unwrap_or(MoveKind::Walk))).or_default() += 1;
                     if std::env::var("SOAK_VERBOSE").is_ok() {
-                        println!("seed {seed} {style:?} -> window {} {:?}: {what} at {:?} ({:?}) during {last_kind:?}, {} re-plans, route {:?}", w.id, w.rect, ch.pos, ch.state, f.replans(), planned);
+                        println!("seed {seed} {style:?} -> {goal:?} (case {case}): {what} at {:?} ({:?}) during {last_kind:?}, {} re-plans, route {:?}", ch.pos, ch.state, f.replans(), planned);
                     }
                 }
                 let _ = f.replans();
@@ -163,10 +184,16 @@ fn main() {
         }
     }
     for (style, [planned, arrived, failed, timeout]) in &tally {
+        let sd = superdash_routes.get(style).copied().unwrap_or(0);
+        let mean = travel.get(style).copied().unwrap_or(0.0) / (*arrived).max(1) as f32;
         println!(
-            "{style}: {arrived}/{planned} arrived ({:.1}%), {failed} failed, {timeout} timed out",
+            "{style}: {arrived}/{planned} arrived ({:.1}%), {failed} failed, {timeout} timed out; {sd} routes crystal dash; mean arrival {mean:.2} s",
             100.0 * *arrived as f32 / (*planned).max(1) as f32
         );
+    }
+    superdash_edges.sort_unstable();
+    if let (Some(med), Some(max)) = (superdash_edges.get(superdash_edges.len() / 2), superdash_edges.last()) {
+        println!("superdash edges per graph: median {med}, max {max}");
     }
     for (what, n) in &failing {
         println!("  {what}: {n}");

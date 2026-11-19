@@ -28,6 +28,10 @@ const CLIMB_STALL: f32 = 1.1;
 /// Slowest take-off speed (fraction of the gait speed) a perturbed run uses; just above what
 /// the follower's approach accepts.
 const RUN_FRACTION_MIN: f32 = 0.82;
+/// Crystal dashes along level runs land at "stations" at least this far apart (units)...
+const STATION_UNITS: f32 = 4.0;
+/// ...and at most this many per run (wider apart on longer runs).
+const MAX_STATIONS: usize = 12;
 
 /// A validated traversal from one surface to another.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -130,12 +134,24 @@ struct Reach {
     double: f32,
     apex_time: f32,
     dash: f32,
+    /// Superdash flight speed (px/s); shortest level run worth a superdash in a hurry, and
+    /// shortest flight that stops where it is meant to (cancelling needs some time aloft);
+    /// spacing of its landing stations (px).
+    fly: f32,
+    fly_even: f32,
+    fly_min: f32,
+    station: f32,
 }
 
 impl Reach {
     fn new(p: &CharacterParams) -> Self {
         let hit = p.hitbox_px();
+        let fly = p.superdash_speed_px();
         Self {
+            fly,
+            fly_even: super::search::superdash_break_even(p),
+            fly_min: fly * (p.superdash_cancel_time + 3.0 * SIM_DT),
+            station: p.px(STATION_UNITS),
             half: hit.x * 0.5,
             height: hit.y,
             step: p.step_height_px(),
@@ -236,6 +252,13 @@ pub(crate) fn build_edges(
             }
         }
     }
+    if template.abilities.superdash {
+        for from in 0..surfaces.len() {
+            for to in 0..surfaces.len() {
+                b.connect_runs(from, to, &mut edges);
+            }
+        }
+    }
     b.stats.edges = edges.len();
     b.stats.millis = started.elapsed().as_secs_f32() * 1000.0;
     let cache = EdgeCache { fingerprint, map: Arc::new(b.new) };
@@ -279,6 +302,106 @@ impl Builder<'_> {
         }
     }
 
+    /// Crystal dashes along level runs, for hurried routes: from `s` to the far part of `t` at
+    /// the same height, or along `s` itself (`from == to`, both ways), when the run is long
+    /// enough for the charge to pay off.
+    ///
+    /// One validated flight, launched from the far end of `s`, covers every shorter flight
+    /// along the same line (surfaces have no walls across them, and the flight is a straight
+    /// horizontal line), so it yields a fan of edges: one per landing "station" a few units
+    /// apart on `t`, each launched from anywhere on `s` behind it ([`Script::free`]: the
+    /// search takes off right where the knight stands).
+    fn connect_runs(&mut self, from: SurfaceId, to: SurfaceId, edges: &mut Vec<Edge>) {
+        let (s, t) = (self.surfaces[from], self.surfaces[to]);
+        let dirs = match (from == to, separated(&s, &t)) {
+            (true, _) => [Some(Side::Right), Some(Side::Left)],
+            (false, Some(dir)) => [Some(dir), None],
+            (false, None) => return,
+        };
+        let r = self.reach;
+        for dir in dirs.into_iter().flatten() {
+            let Some(script) = self.run_script(&s, &t, dir) else { continue };
+            let (lo, hi) = (script.back.min(script.tx), script.back.max(script.tx));
+            let mx = 2.0 * r.half + 32.0;
+            let region = RectF::new(lo - mx, s.y.min(t.y) - 16.0, hi + mx, s.y.max(t.y) + 1.0);
+            let local_hash = self.fill_local(region);
+            if self.wall_between(dir, script.back, script.tx, (s.y - r.height, s.y - r.step), false) {
+                continue;
+            }
+            self.stats.pairs += 1;
+            let key = {
+                let mut h = DefaultHasher::new();
+                (self.key(&s, &t, local_hash), "run", dir == Side::Right).hash(&mut h);
+                h.finish()
+            };
+            let found = match self.old.get(&key) {
+                Some(found) => {
+                    self.stats.cache_hits += 1;
+                    found[2]
+                }
+                None => self.simulate(script, &s, &t, region, 0).ok().filter(|f| f.kind == MoveKind::Superdash),
+            };
+            self.new.insert(key, [None, None, found]);
+            if let Some(f) = found {
+                self.push_stations(from, to, f, edges);
+            }
+        }
+    }
+
+    /// The validation script of a level run from `s` to `t` in `dir` (purely analytic; `None`
+    /// when not level or too short to pay off): charge at the far end of `s`, fly to the far
+    /// end of `t`. Its `takeoff` is the latest launch point: the end of `s` (or, along one
+    /// surface, a shortest flight before `tx`).
+    fn run_script(&self, s: &Surface, t: &Surface, dir: Side) -> Option<Script> {
+        let r = self.reach;
+        // Flying at `s`'s height: `t` must not be higher (the flight would pass under its top),
+        // and no lower than a step (a stop over it then just settles onto it).
+        let rise = t.y - s.y;
+        if !self.abilities.superdash || !(-1.0..=r.step).contains(&rise) {
+            return None;
+        }
+        let sign = dir.sign();
+        let end = |u: &Surface, d: Side| inset(u, if d == Side::Right { u.hi } else { u.lo }, r.half);
+        let (back, tx) = (end(s, dir.opposite()), end(t, dir));
+        let takeoff = if s == t { tx - sign * r.fly_min } else { s.clamp(edge_x(s, dir, r.half) - sign * r.half) };
+        if (tx - back) * sign < r.fly_even || (takeoff - back) * sign < 0.0 {
+            return None;
+        }
+        let (recipe, start, gait, ty) = (Recipe::Superdash, Start::Stand, Gait::Run, t.y);
+        Some(Script { recipe, start, dir, gait, takeoff, back, tx, ty, needs_shadow: false, climb: None, free: true })
+    }
+
+    /// The edges of a validated level run `f` from `from` to `to`: one per landing station,
+    /// from the far end of `to` back towards the near end, as long as a flight from the far
+    /// end of `from` to it can still pay off.
+    fn push_stations(&self, from: SurfaceId, to: SurfaceId, f: Found, edges: &mut Vec<Edge>) {
+        let r = self.reach;
+        let (sc, t) = (f.script, self.surfaces[to]);
+        let sign = sc.dir.sign();
+        // Time not spent flying (charge, launch, stop), and how far past its target the
+        // validation run stopped.
+        let fixed = (f.duration - (f.land.x - sc.back) * sign / r.fly).max(0.0);
+        let over = f.land.x - sc.tx;
+        let near = if from == to { sc.back } else { near_x(&t, sc.dir, r.half) };
+        let near = if (near - sc.back) * sign >= r.fly_even { near } else { sc.back + sign * r.fly_even };
+        let span = (sc.tx - near) * sign;
+        if span < 0.0 {
+            return;
+        }
+        let step = (span / MAX_STATIONS as f32).max(r.station);
+        for k in 0..=(span / step) as usize {
+            let x = sc.tx - sign * step * k as f32;
+            let takeoff = if sign > 0.0 { sc.takeoff.min(x - r.fly_min) } else { sc.takeoff.max(x + r.fly_min) };
+            if (takeoff - sc.back) * sign < 0.0 {
+                break;
+            }
+            let land = Vec2::new(t.clamp(x + over), f.land.y);
+            let script = Script { takeoff, tx: x, ..sc };
+            let duration = fixed + (land.x - takeoff) * sign / r.fly;
+            edges.push(Edge { from, to, kind: MoveKind::Superdash, gait: sc.gait, takeoff, land, duration, climb: None, script });
+        }
+    }
+
     /// Per tier: could any recipe possibly connect `s` to `t`? (Purely analytic.)
     fn possible_tiers(&self, s: &Surface, t: &Surface) -> [bool; 3] {
         let r = self.reach;
@@ -301,9 +424,11 @@ impl Builder<'_> {
             rise < r.jump - 4.0 && within(gap, r.single(run, rise) + dash)
         };
         let normal = (low_enough && within(gap, r.walk_off(run, rise) + dash)) || normal_jump || (ab.wall_jump && rise > 0.0);
-        // Superdash is the long-range fallback, for gaps a running jump cannot span.
+        // Superdash is the long-range fallback, for gaps a running jump cannot span (unless
+        // the pair is a level run: `connect_runs` covers those, and more).
         let far = !within(gap, r.single(run, rise.min(0.0)));
-        let hurry = ab.superdash && low_enough && far && separated(s, t).is_some();
+        let level_run = separated(s, t).is_some_and(|dir| self.run_script(s, t, dir).is_some());
+        let hurry = ab.superdash && low_enough && far && separated(s, t).is_some() && !level_run;
         [stroll, normal, hurry]
     }
 
@@ -504,7 +629,7 @@ impl Builder<'_> {
                 Start::Stand => takeoff,
                 _ => s.clamp(takeoff - dir.sign() * self.runup(gait)),
             };
-            Script { recipe, start, dir, gait, takeoff, back, tx, ty: t.y, needs_shadow: false, climb: None }
+            Script { recipe, start, dir, gait, takeoff, back, tx, ty: t.y, needs_shadow: false, climb: None, free: false }
         };
         let sep = separated(s, t);
         let overlap = (s.lo.max(t.lo), s.hi.min(t.hi));
@@ -841,8 +966,10 @@ impl Builder<'_> {
             1 => (RUN_FRACTION_MIN, 1.5, -1.5),
             _ => (1.2, 0.35, 1.5),
         };
+        // A free run is validated from the far end of its launch span (covering the rest).
+        let launch = if script.free { script.back } else { script.takeoff };
         let start_x = match script.start {
-            Start::Stand => script.takeoff + nudge,
+            Start::Stand => launch + nudge,
             _ if running => s.clamp(script.takeoff - sign * v_air * speed * SIM_DT * phase),
             _ => script.back,
         };
@@ -861,12 +988,12 @@ impl Builder<'_> {
         if running {
             ch.vel.x = sign * (v_air * speed).min(p.gait_speed_px(Gait::Sprint));
         }
-        let mut exec = Exec::new(script);
+        let mut exec = Exec::new(Script { takeoff: launch, ..script });
         let limit = match script.recipe {
             Recipe::Walk => (script.tx - script.takeoff).abs() / v_air + 2.0,
             // About one wall-jump cycle (~1 s) per double-jump height, plus slack.
             Recipe::Climb => 1.5 + (s.y - t.y) / (r.jump + r.double).max(1.0) * 1.5,
-            Recipe::Superdash => p.superdash_charge_time + 3.0,
+            Recipe::Superdash => p.superdash_charge_time + ((script.tx - launch).abs() / r.fly + 2.0).max(3.0),
             _ => 4.0,
         };
         let approach_limit = 2.0 * (start_x - script.takeoff).abs() / v_air + 2.0;

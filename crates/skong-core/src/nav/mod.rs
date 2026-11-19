@@ -18,7 +18,9 @@
 //!   wall-jump / superdash timing) are forward-simulated against a local copy of the
 //!   terrain; the first that lands on the target becomes the edge. Results are cached by
 //!   the geometry they depend on, so [`NavGraph::rebuild`] after a window drag only
-//!   re-simulates nearby pairs.
+//!   re-simulates nearby pairs. Long level runs (along one surface, or to another at the same
+//!   height) also get crystal dash edges for hurried routes: one validated flight per run,
+//!   landing at stations a few units apart, launched from wherever the knight stands.
 //! * `search`: Dijkstra over landing states (surface + landing x), cost = estimated time
 //!   plus small style penalties.
 //! * `follow`: replays the edge scripts with the same executor the validation used.

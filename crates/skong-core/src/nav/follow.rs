@@ -60,7 +60,9 @@ type EdgeKey = (MoveKind, i32, i32, i32);
 
 fn edge_key(e: &Edge) -> EdgeKey {
     let q = |v: f32| (v / 4.0).round() as i32;
-    (e.kind, q(e.takeoff), q(e.land.x), q(e.land.y))
+    // A free crystal dash takes off wherever the knight stands: key it by its fixed end.
+    let takeoff = if e.script.free { e.script.back } else { e.takeoff };
+    (e.kind, q(takeoff), q(e.land.x), q(e.land.y))
 }
 
 impl PathFollower {
