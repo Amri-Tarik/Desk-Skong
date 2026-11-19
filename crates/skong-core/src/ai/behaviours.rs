@@ -96,10 +96,12 @@ pub enum BehaviourKind {
     Loot,
     /// Use a place found in a window (bench, geo deposit).
     Visit,
+    /// Walk over to a shiny on the ground and pick it up.
+    Shiny,
 }
 
 impl BehaviourKind {
-    pub const ALL: [BehaviourKind; 19] = [
+    pub const ALL: [BehaviourKind; 20] = [
         BehaviourKind::Idle,
         BehaviourKind::Companion,
         BehaviourKind::Watch,
@@ -119,6 +121,7 @@ impl BehaviourKind {
         BehaviourKind::Visit,
         BehaviourKind::Pester,
         BehaviourKind::Train,
+        BehaviourKind::Shiny,
     ];
 
     pub fn label(self) -> &'static str {
@@ -142,6 +145,7 @@ impl BehaviourKind {
             BehaviourKind::Visit => "visit",
             BehaviourKind::Pester => "pester",
             BehaviourKind::Train => "train",
+            BehaviourKind::Shiny => "shiny",
         }
     }
 
@@ -153,7 +157,7 @@ impl BehaviourKind {
     pub fn tier(self) -> Tier {
         match self {
             BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead => Tier::Urgent,
-            BehaviourKind::Battle | BehaviourKind::Pester | BehaviourKind::ShadeHunt | BehaviourKind::Loot | BehaviourKind::Greet | BehaviourKind::Train => Tier::Engagement,
+            BehaviourKind::Battle | BehaviourKind::Pester | BehaviourKind::ShadeHunt | BehaviourKind::Loot | BehaviourKind::Shiny | BehaviourKind::Greet | BehaviourKind::Train => Tier::Engagement,
             BehaviourKind::Nap | BehaviourKind::Rest | BehaviourKind::Recover => Tier::Needs,
             BehaviourKind::Idle | BehaviourKind::Companion | BehaviourKind::Watch | BehaviourKind::Explore | BehaviourKind::Ride | BehaviourKind::Visit => {
                 Tier::Ambient
@@ -988,6 +992,7 @@ pub(crate) enum Active {
     ShadeHunt(Box<ShadeHunt>),
     Loot(Loot),
     Visit(Visit),
+    Shiny(super::shiny::PickShiny),
 }
 
 impl Active {
@@ -1012,6 +1017,7 @@ impl Active {
             Active::ShadeHunt(_) => BehaviourKind::ShadeHunt,
             Active::Loot(_) => BehaviourKind::Loot,
             Active::Visit(_) => BehaviourKind::Visit,
+            Active::Shiny(_) => BehaviourKind::Shiny,
         }
     }
 
@@ -1036,6 +1042,7 @@ impl Active {
             Active::ShadeHunt(b) => b.tick(ctx),
             Active::Loot(b) => b.tick(ctx),
             Active::Visit(b) => b.tick(ctx),
+            Active::Shiny(b) => b.tick(ctx),
         }
     }
 
@@ -1061,6 +1068,7 @@ impl Active {
             Active::ShadeHunt(b) => b.reason(),
             Active::Loot(b) => b.reason(),
             Active::Visit(b) => b.reason(),
+            Active::Shiny(b) => b.reason(),
         }
     }
 }

@@ -1,18 +1,26 @@
 //! Discoveries glue for [`Pet`]: per-tick prop update, what the brain perceives, brain
 //! discovery events, and the debug commands / tray submenu. Kept out of `app.rs`.
+//! Shinies on the ground (`crate::shinies`) live here too: they share the placement rules.
 use anyhow::Result;
-use skong_core::ai::DiscoveryEvent;
+use skong_core::ai::{BehaviourKind, DiscoveryEvent};
 use skong_core::geom::Vec2;
+use skong_core::nav::{NavGoal, TravelStyle};
 use skong_ipc::Command;
 use skong_win::monitor;
 use skong_win::runloop::Flow;
 use skong_win::tray::MenuItem;
 
 use super::Pet;
+use crate::shinies::Where;
 
 const ID_DISCOVER0: u32 = 5000;
 const ID_FORGET: u32 = 5003;
-const KINDS: [&str; 2] = ["Reveal a bench here", "Reveal a geo deposit here"];
+const KINDS: [&str; 3] = ["Reveal a bench here", "Reveal a geo deposit here", "Drop a shiny nearby"];
+/// `Command::Discover` kind that drops a shiny instead of revealing a find.
+const SHINY: u8 = 2;
+/// The pick-up act and the step at which the shiny is in his hand.
+const PICK_ACT: &str = "pick_up_trinket";
+const PICK_CLIP: &str = "Collect Normal 2";
 
 /// Tray submenu: reveal a find on the knight's window (or the one under the cursor).
 pub(super) fn menu() -> MenuItem {
@@ -34,13 +42,55 @@ impl Pet {
     pub(super) fn discoveries_tick(&mut self, dt: f32) {
         self.benches.claim(&mut self.occupancy);
         self.discoveries.update(dt, (self.watcher.snapshot(), &self.terrain), &self.benches, &mut self.occupancy, &mut self.fx, (&self.ch, &self.win));
+        self.shinies_tick(dt);
     }
 
-    /// Before the brain ticks: found benches join `benches`, the brain learns the places,
-    /// and the seat here (found bench / spring water line), if any.
+    /// Shinies: turn up now and then (never while the user types hard, is away, or a
+    /// fullscreen app is up), vanish into his hand at "Collect Normal 2".
+    fn shinies_tick(&mut self, dt: f32) {
+        let s = self.brain.senses();
+        let allowed = !s.user_busy && !s.user_away && !s.fullscreen && self.brain.behaviour() != BehaviourKind::Dead;
+        if self.shinies.due(dt, allowed) {
+            self.spawn_shiny(false);
+        }
+        let in_hand = self.act.as_ref().is_some_and(|p| self.data.acts.get(p.act()).name == PICK_ACT) && self.data.lib.get(self.anim.clip()).name == PICK_CLIP;
+        if in_hand
+            && let Some((at, geo)) = self.shinies.picked()
+            && geo > 0
+        {
+            // A little Geo pops out of it.
+            let up = Vec2::new(0.0, 20.0 * self.settings.scale);
+            self.stakes.burst(at - up, geo, self.settings.scale);
+        }
+        if self.shinies.update(self.watcher.snapshot(), &self.terrain, &mut self.occupancy) {
+            self.win.raise(); // the knight stays in front of the glint
+        }
+    }
+
+    /// Put a shiny somewhere he can get to on his monitor (`debug`: any surface, even a
+    /// fresh one, and beyond the cap). Returns whether one turned up.
+    fn spawn_shiny(&mut self, debug: bool) -> bool {
+        let graph = self.nav.graph().map(|g| g.as_ref());
+        let ch = &self.ch;
+        // A route that really ends on the spot (not merely near it).
+        let reachable = |p: Vec2| {
+            graph.is_none_or(|g| {
+                [TravelStyle::Normal, TravelStyle::Hurry]
+                    .into_iter()
+                    .any(|st| g.plan(ch, NavGoal::Point(p), st).is_some_and(|r| (r.end.x - p.x).abs() <= 12.0 && (r.end.y - p.y).abs() <= 4.0))
+            })
+        };
+        let (ages, now) = self.discoveries.ages();
+        let w = Where { desk: self.watcher.snapshot(), terrain: &self.terrain, ages, now, occupancy: &self.occupancy, knight: ch.pos, reachable: &reachable };
+        self.shinies.spawn(&w, debug).is_some()
+    }
+
+    /// Before the brain ticks: found benches join `benches`, the brain learns the places
+    /// and the shinies, and the seat here (found bench / spring water line), if any.
     pub(super) fn discovery_percepts(&mut self, benches: &mut Vec<Vec2>) -> Option<f32> {
         benches.extend(self.discoveries.bench_spots());
         self.brain.set_places(&self.discoveries.places());
+        self.brain.set_shinies(&self.shinies.percepts());
         self.discoveries.seat_here(&self.ch, &self.benches)
     }
 
@@ -55,11 +105,24 @@ impl Pet {
                     self.stakes.burst(d.at - up, d.geo, self.settings.scale);
                 }
             }
+            DiscoveryEvent::PickUp(id) => self.shinies.picking(id),
+        }
+    }
+
+    /// The bored knight asked for a shiny (a world event).
+    pub(super) fn shiny_requested(&mut self) {
+        if !self.spawn_shiny(false) {
+            log::debug!("bored knight wanted a shiny, but there was no room for one");
         }
     }
 
     pub(super) fn apply_discovery(&mut self, c: Command) -> Result<Flow> {
         match c {
+            Command::Discover(SHINY) => {
+                if !self.spawn_shiny(true) {
+                    log::warn!("shiny: no free, reachable spot on the knight's monitor");
+                }
+            }
             Command::Discover(kind) => {
                 let desk = self.watcher.snapshot();
                 let under_cursor = || {
@@ -71,7 +134,10 @@ impl Pet {
                     None => log::warn!("discover: stand the knight on a window (or point at one) first"),
                 }
             }
-            Command::ForgetDiscoveries => self.discoveries.forget(),
+            Command::ForgetDiscoveries => {
+                self.discoveries.forget();
+                self.shinies.clear();
+            }
             other => return self.apply(other),
         }
         Ok(Flow::Continue)

@@ -130,6 +130,8 @@ pub struct InterestMap {
     pub(crate) ages: crate::lasting::LedgeAges,
     /// Brain clock and terrain generation of the last age update (`None`: never).
     pub(crate) ages_seen: Option<(f32, u64)>,
+    /// Shinies on the ground (see [`super::shiny`]).
+    pub(crate) shinies: super::shiny::ShinyMemory,
 }
 
 impl InterestMap {

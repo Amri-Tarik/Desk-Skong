@@ -44,6 +44,7 @@ mod places;
 mod repertoire;
 pub mod rng;
 mod shade_hunt;
+mod shiny;
 mod spots;
 mod stakes;
 mod train;
@@ -67,6 +68,7 @@ pub use navigator::{GraphNavigator, NavStatus, Navigator, Reach};
 pub use needs::{Emotions, MOOD_TAGS, Mind, Needs};
 pub use percept::{ClosedWindow, Cursor, CursorSense, DesktopChanges, Percepts, Poke, RunningAct, STUCK_SECS, Senses, UserActivity};
 pub use places::{DiscoveryEvent, KnownPlace, PlaceId, PlaceKind, PlaceMemory};
+pub use shiny::{KnownShiny, ShinyMemory};
 pub use repertoire::{ActCatalog, ActInfo};
 pub use spots::{Vantage, View};
 pub use stakes::{Lethality, ShadeSense, StakeEvent, StakesConfig, StakesSense};
@@ -174,6 +176,8 @@ pub enum WorldEvent {
     GeoShower,
     /// Invite an NPC visitor.
     Visitor,
+    /// Let a shiny turn up on the ground for him to find and pick up.
+    Shiny,
     /// A playful chase of the cursor. The brain handles this one itself (it invites a
     /// battle); the app may show a cue.
     CursorChase,
@@ -516,12 +520,13 @@ impl Brain {
             || self.best_spot.is_some()
             || self.visit_utility() > 0.2
             || !self.stakes.sense.coins.is_empty()
+            || self.interest.shinies.best.is_some()
             || matches!(self.active.kind().tier(), Tier::Engagement | Tier::Urgent);
         if interesting || self.bored_for < b.event_after || self.now < self.next_event_at || s.user_busy || s.user_away || s.fullscreen {
             return;
         }
         let chase_ok = self.cfg.bother_level > 0.0 && self.mind.needs.mischief > 0.3 && s.cursor.is_some();
-        let options = [(WorldEvent::GeoShower, 1.0), (WorldEvent::Visitor, 1.0), (WorldEvent::CursorChase, if chase_ok { 1.0 } else { 0.0 })];
+        let options = [(WorldEvent::GeoShower, 1.0), (WorldEvent::Visitor, 1.0), (WorldEvent::Shiny, 1.0), (WorldEvent::CursorChase, if chase_ok { 1.0 } else { 0.0 })];
         let Some(ev) = self.rng.pick_weighted(&options) else { return };
         log::info!("brain: bored stiff with nothing going on; asking the world for {ev:?}");
         if ev == WorldEvent::CursorChase {
@@ -716,6 +721,7 @@ impl Brain {
         self.best_poi = self.score_pois(p, nav);
         self.best_spot = self.score_spots(p, nav, finished);
         self.score_places(p, nav);
+        self.score_shinies(p, nav);
         self.utilities = self.score_behaviours(p);
         let eligible = self.cfg.tiers.eligible;
         let tiered: Vec<(BehaviourKind, f32, Tier)> = self.utilities.iter().map(|&(k, u)| (k, u, self.tier_at(k, u, p))).collect();
@@ -795,6 +801,8 @@ impl Brain {
                 if near && !self.asleep(p) { Tier::Engagement } else { Tier::Ambient }
             }
             BehaviourKind::ShadeHunt if (critical || self.asleep(p)) && !self.stakes.force_hunt => Tier::Ambient,
+            // A shiny can wait for an exhausted knight.
+            BehaviourKind::Shiny if critical => Tier::Ambient,
             _ => kind.tier(),
         }
     }
@@ -846,6 +854,7 @@ impl Brain {
         let poi = self.best_poi.map(|s| s.poi);
         let spot = self.best_spot;
         let place = self.interest.places.best;
+        let shiny = self.interest.shinies.best;
         let flee_from = if kind == BehaviourKind::Flee { self.flee_from.take().unwrap_or(p.knight.pos) } else { p.knight.pos };
         let death = if kind == BehaviourKind::Dead { self.stakes.pending_death.take() } else { None };
         let mut ctx = self.ctx(p, nav, out);
@@ -885,6 +894,10 @@ impl Brain {
             BehaviourKind::Loot => Active::Loot(Loot::start(&mut ctx)),
             BehaviourKind::Visit => match place {
                 Some(c) => Active::Visit(places::Visit::start(&mut ctx, c)),
+                None => Active::Idle(Idle::start(&mut ctx)),
+            },
+            BehaviourKind::Shiny => match shiny {
+                Some(c) => Active::Shiny(shiny::PickShiny::start(&mut ctx, c)),
                 None => Active::Idle(Idle::start(&mut ctx)),
             },
         };
@@ -1133,6 +1146,7 @@ impl Brain {
             (BehaviourKind::Greet, greet),
             (BehaviourKind::Train, train),
             (BehaviourKind::Visit, visit),
+            (BehaviourKind::Shiny, self.shiny_utility(p)),
         ];
         u.extend(self.stakes_utilities(p));
         let calm = self.now < self.calm_until;

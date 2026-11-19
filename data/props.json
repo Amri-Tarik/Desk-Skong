@@ -10,5 +10,14 @@
   "discoveries": {
     "$comment": "Art for things found in windows (crates/skong/src/discoveries.rs), exported like the benches. Geo deposit: a rock (geo is drawn on).",
     "deposit_rock": "mines_small_rock"
+  },
+  "shinies": {
+    "$comment": "Glints on the ground for the knight to pick up (crates/skong/src/shinies.rs, skong_core::shiny). Drawn procedurally, no art. One turns up every `every_secs` [min, max] of time the user is around and not typing hard; at most `max` at once; gone after `lifetime_secs`; picking one up pops out `geo` [min, max] Geo with chance `geo_chance`; never closer than `min_distance` px (at scale 1) to the knight.",
+    "every_secs": [240, 540],
+    "max": 2,
+    "lifetime_secs": 900,
+    "geo_chance": 0.2,
+    "geo": [1, 3],
+    "min_distance": 160
   }
 }

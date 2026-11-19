@@ -14,6 +14,7 @@ use crate::geom::RectI;
 use crate::terrain::{LedgeKind, Terrain, TerrainOptions};
 
 mod greet;
+mod shiny;
 mod train;
 
 const DT: f32 = 1.0 / 30.0;
@@ -125,6 +126,10 @@ struct Sim {
     intents: Vec<Intent>,
     switches: Vec<Switch>,
     t: f32,
+    /// Shinies on the ground (the app's side: one in his hand at the pick-up act is gone).
+    shinies: Vec<KnownShiny>,
+    /// Shinies picked up.
+    picked: Vec<u64>,
 }
 
 fn window(id: WindowId, rect: RectI, process: &str) -> WindowInfo {
@@ -186,6 +191,8 @@ impl Sim {
             intents: vec![],
             switches: vec![],
             t: 0.0,
+            shinies: vec![],
+            picked: vec![],
         }
     }
 
@@ -265,6 +272,7 @@ impl Sim {
             local_hour: None,
             dark: self.dark,
         };
+        self.brain.set_shinies(&self.shinies);
         let intent = self.brain.tick(&p, &mut self.nav);
         self.last_motion = intent.motion;
         self.pokes.clear();
@@ -290,6 +298,14 @@ impl Sim {
             let left = act_secs(&name);
             self.started.push(name);
             self.act = Some(PlayingAct { act: RunningAct { id, interruptible: true }, left });
+        }
+        // The app: the shiny being picked up is gone once the act is under way.
+        if let Some(DiscoveryEvent::PickUp(id)) = intent.discovery
+            && self.act.as_ref().is_some_and(|a| self.catalog.get(a.act.id).is_some_and(|i| i.name == "pick_up_trinket"))
+            && let Some(i) = self.shinies.iter().position(|s| s.id == id)
+        {
+            self.shinies.remove(i);
+            self.picked.push(id);
         }
         if let Some(a) = &mut self.act {
             a.left -= DT;

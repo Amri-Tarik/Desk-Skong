@@ -368,6 +368,7 @@ impl Pet {
                 Some(v) => v.invite(None),
                 None => log::debug!("bored knight wanted a visitor, but visitors are unavailable"),
             },
+            WorldEvent::Shiny => self.shiny_requested(),
             // The brain invites the cursor to a battle itself.
             WorldEvent::CursorChase => {}
         }

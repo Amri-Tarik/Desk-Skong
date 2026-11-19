@@ -68,6 +68,9 @@ pub enum DiscoveryEvent {
     Used(PlaceId),
     /// Slashed this deposit (the attack is in the same intent).
     Struck(PlaceId),
+    /// Picking up this shiny (`pick_up_trinket` plays): the app removes it at the act's
+    /// "Collect Normal 2" step. Repeated every tick until the act is over.
+    PickUp(u64),
 }
 
 /// The best place to visit right now.

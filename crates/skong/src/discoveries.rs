@@ -339,6 +339,12 @@ impl Discoveries {
         self.shown.retain(|s| !on_game(s));
     }
 
+    /// How long each surface has lasted, and the clock it is measured on (shinies use the
+    /// same rule).
+    pub fn ages(&self) -> (&LedgeAges, f32) {
+        (&self.ages, self.clock)
+    }
+
     /// Prop windows (call before raising the knight).
     /// Has the ledge at this footing (same owner and height, overlapping) been on screen
     /// long enough to stand a visitor on ([`skong_core::lasting::SETTLED_SECS`])? Floors

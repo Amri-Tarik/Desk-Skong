@@ -11,6 +11,7 @@ mod benches;
 mod bubble;
 mod npcs;
 mod discoveries;
+mod shinies;
 mod emotes;
 mod fx;
 mod gameguard;

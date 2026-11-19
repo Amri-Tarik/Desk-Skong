@@ -20,6 +20,8 @@ pub enum ClaimKind {
     Npc,
     /// The Shade's resting place.
     Shade,
+    /// A shiny glinting on the ground (`crate::shiny`).
+    Shiny,
     Other,
 }
 
