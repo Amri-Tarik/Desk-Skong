@@ -144,7 +144,7 @@
       "library": "Hornet Anim",
       "faces": "left",
       "clips": { "idle": "Idle", "talk": "Point", "talk_end": "Point End", "walk": "Run" },
-      "talk_mirrored": true,
+      "talk_mirrored": false,
       "arrive": "walk",
       "leave": "walk",
       "walk_speed": 9.0,

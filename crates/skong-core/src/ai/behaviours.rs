@@ -218,6 +218,12 @@ impl Ctx<'_, '_> {
         match self.p.act {
             None => true,
             Some(a) if a.interruptible => {
+                // Leave a pose gracefully (get up from a seat, put the map away): ask for its
+                // short exit act and move once it's done, instead of snapping out of it.
+                if let Some(exit) = self.rep.catalog.get(a.id).and_then(exit_act_for).and_then(|n| self.rep.catalog.id(n)) {
+                    self.out.exit_act = Some(exit);
+                    return false;
+                }
                 self.out.cancel_act = true;
                 true
             }
