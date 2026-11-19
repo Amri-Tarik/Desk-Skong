@@ -283,15 +283,15 @@
     }
   ],
   "dream": [
-    { "match": ["code", "devenv", "idea", "rider", "nvim", "vim", "sublime", "zed"], "thoughts": ["...the lines must hold... must hold...", "Built, and broken, and built again...", "...a small mistake... buried so deep...", "We wrote it so it would last. Nothing lasts."] },
-    { "match": ["chrome", "firefox", "msedge", "brave", "opera", "vivaldi"], "thoughts": ["So many doors... none of them home...", "...I wandered too far... the tabs... the tabs...", "'{title}'... I meant to return... I meant to..."] },
-    { "match": ["discord", "slack", "teams", "telegram", "whatsapp", "signal"], "thoughts": ["...voices beyond the wall... calling, calling...", "Someone... is still there...?", "...so many words... and no one listening..."] },
-    { "match": ["spotify", "music", "vlc", "foobar", "winamp"], "thoughts": ["A song... from before the dream...", "...hum it again... so I don't forget...", "...the melody fades... the melody always fades..."] },
-    { "match": ["steam", "epicgames", "battle.net", "gog"], "thoughts": ["...so many worlds... and I can enter none...", "Another kingdom waits... another kingdom falls...", "...one more journey... then rest..."] },
-    { "match": ["explorer"], "thoughts": ["Deeper... the old paths go deeper still...", "...I kept everything... I kept everything...", "...forgotten things, in forgotten places..."] },
-    { "match": ["notepad", "winword", "obsidian", "notion", "onenote", "typora"], "thoughts": ["...the page is pale... and waiting...", "Write it down... before it is lost...", "...words... the last thing to fade..."] },
-    { "match": ["excel", "calc", "sheets"], "thoughts": ["...count them... count them again... still not enough...", "Rows upon rows... like the graves at the edge of town...", "...every number... someone's burden..."] },
-    { "match": ["terminal", "cmd", "powershell", "pwsh", "wsl", "bash"], "thoughts": ["...waiting for the word that wakes...", "The cursor blinks. It remembers.", "...speak... and it obeys... once..."] },
-    { "match": [], "thoughts": ["...don't close me... not yet...", "We were many once. Now only this light remains.", "...so bright... is that... the sun...?", "'{title}'... a name... I once had a name...", "...it is {daypart}... still I keep watch...", "...something small... standing on me... so light..."] }
+    { "match": ["code", "devenv", "idea", "rider", "nvim", "vim", "sublime", "zed"], "thoughts": ["01101000 01100101 01101100 01110000", "// TODO: wake up", "error: expected ';'... always one more ';'...", "0 warnings... 0 errors... is this... peace...?"] },
+    { "match": ["chrome", "firefox", "msedge", "brave", "opera", "vivaldi"], "thoughts": ["404... dream not found...", "Remember this password? [Yes] [Never] [...forever]", "loading... loading... loading...", "'{title}'... cached... kept... forgotten..."] },
+    { "match": ["discord", "slack", "teams", "telegram", "whatsapp", "signal"], "thoughts": ["someone is typing... someone is typing...", "(99+ unread)... I read none of them...", "@everyone ...anyone...?"] },
+    { "match": ["spotify", "music", "vlc", "foobar", "winamp"], "thoughts": ["...hm... hmm-hm... hm...", "shuffle... repeat... shuffle... repeat...", "buffering... 99%... 99%..."] },
+    { "match": ["steam", "epicgames", "battle.net", "gog"], "thoughts": ["PRESS ANY KEY... ...any key...", "compiling shaders... 1 of 48,213...", "CONTINUE? 9... 8... 7..."] },
+    { "match": ["explorer"], "thoughts": ["New Folder (37)", "final_final_v2_REAL.docx", "Recycle Bin... never truly empty..."] },
+    { "match": ["notepad", "winword", "obsidian", "notion", "onenote", "typora"], "thoughts": ["Untitled 14 — not saved", "autosave... autosave... autosave...", "Ctrl+Z... Ctrl+Z... undo it all..."] },
+    { "match": ["excel", "calc", "sheets"], "thoughts": ["#REF! ...#REF! ...", "=SUM(everything)... still not enough...", "#DIV/0! ...too many pieces..."] },
+    { "match": ["terminal", "cmd", "powershell", "pwsh", "wsl", "bash"], "thoughts": ["10011 1101 00111 00101", "$ sudo sleep 999999", "C:\\> _ ...waiting for the word that wakes..."] },
+    { "match": [], "thoughts": ["mail password: **********", "'{title}' (Not Responding)", "battery low... so tired...", "it is {daypart}. uptime: forever.", "...don't close me... not yet...", "unknown device on my title bar...", "installing bitcoin miner... 3%...", "zipbomb planted. ...shh..."] }
   ]
 }
