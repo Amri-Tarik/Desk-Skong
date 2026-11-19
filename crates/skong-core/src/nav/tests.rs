@@ -474,3 +474,8 @@ fn follows_at_a_different_tick_rate() {
     assert_eq!(status, FollowStatus::Arrived, "at {:?}", ch.pos);
     assert_eq!(owner_under(&ch), Some(2));
 }
+
+#[test]
+fn edge_counts_cover_every_move_kind() {
+    assert_eq!(NavGraph::default().edge_counts().len(), MoveKind::ALL.len());
+}
