@@ -1229,3 +1229,22 @@ fn bother_level_zero_never_pesters() {
     let kinds = sim.run(60.0);
     assert!(!kinds.contains(&BehaviourKind::Pester));
 }
+
+#[test]
+fn a_wall_climb_is_not_dithering() {
+    // Climbing kicks left, right, left... in the air: that's the route, not indecision. (The
+    // guard used to cancel every climb a second in, so visitors up a wall were never reached.)
+    let mut sim = calm(BrainConfig::default());
+    sim.cursor = Some(Cursor { pos: Vec2::new(1800.0, 900.0), ..Default::default() });
+    sim.nav.trip = 1e9;
+    assert!(sim.run_while(3.0, |s| !matches!(s.last_motion, Motion::Navigate { .. })), "follows the cursor");
+    let support = sim.knight.support.take();
+    for i in 0..8 {
+        sim.vel_override = Some(if i % 2 == 0 { -150.0 } else { 150.0 });
+        sim.run(0.5);
+    }
+    sim.vel_override = None;
+    sim.knight.support = support;
+    assert_eq!(sim.brain.oscillations(), 0);
+    assert!(matches!(sim.last_motion, Motion::Navigate { .. }), "still travelling");
+}
