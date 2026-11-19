@@ -59,7 +59,8 @@ use windows::Win32::Graphics::Dxgi::{
     IDXGIAdapter1, IDXGIFactory1, IDXGIOutput, IDXGIOutput1, IDXGIOutput5, IDXGIOutputDuplication, IDXGIResource,
 };
 use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
-use windows::Win32::System::Threading::{GetCurrentProcessId, GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_BELOW_NORMAL};
+use windows::Win32::System::ProcessStatus::K32EmptyWorkingSet;
+use windows::Win32::System::Threading::{GetCurrentProcess, GetCurrentProcessId, GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_BELOW_NORMAL};
 use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowRect, GetWindowThreadProcessId, IsWindowVisible};
 use windows::core::{BOOL, Interface};
 
@@ -87,6 +88,11 @@ const OWN_REFRESH: Duration = Duration::from_secs(1);
 /// Own windows larger than this (px²) are not treated as such: they are full-screen
 /// debug overlays, not the knight or his props.
 const MAX_OWN_AREA: i64 = 1024 * 1024;
+/// D3D11 + driver initialisation and the first full-screen scans leave ~30 MB of pages
+/// resident that are never touched again. This long after capture starts, the process
+/// working set is trimmed once: cold pages go to the standby list (still cached, freed
+/// under pressure), hot ones fault straight back in.
+const TRIM_AFTER: Duration = Duration::from_secs(5);
 
 static STATS_LOG: AtomicBool = AtomicBool::new(false);
 
@@ -839,6 +845,8 @@ pub struct ContentFeed {
     /// Latest hotspots per output, and the merged view with owners.
     spots: Vec<(u32, Vec<ActivitySpot>)>,
     activity: Activity,
+    /// When to release the cold pages capture start-up left resident (see [`TRIM_AFTER`]).
+    trim_at: Option<Instant>,
     totals: CaptureTotals,
     /// Content was switched off: the next poll reports a change (terrain loses it).
     cleared: bool,
@@ -871,6 +879,7 @@ impl ContentFeed {
             spots: Vec::new(),
             activity: Activity::default(),
             totals: CaptureTotals::default(),
+            trim_at: None,
             cleared: false,
         };
         if enabled {
@@ -891,6 +900,7 @@ impl ContentFeed {
                 c.set_excluded(&fullscreen_rects(desk));
                 c.set_own(&self.own_rects);
                 self.capture = Some(c);
+                self.trim_at = Some(Instant::now() + TRIM_AFTER);
             }
             Err(e) => log::warn!("content capture disabled: {e:#}"),
         }
@@ -952,6 +962,10 @@ impl ContentFeed {
             }
         }
         self.update_own_rects();
+        if self.trim_at.is_some_and(|t| Instant::now() >= t) {
+            self.trim_at = None;
+            trim_working_set();
+        }
         let Some(cap) = &self.capture else { return cleared };
         let (mut changed, mut activity) = (cleared, desk_changed);
         while let Some(msg) = cap.try_recv() {
@@ -1079,4 +1093,11 @@ fn own_windows() -> Vec<HWND> {
     // SAFETY: the callback only uses `out` through the pointer during this call.
     let _ = unsafe { EnumWindows(Some(collect), LPARAM(&mut out as *mut Vec<HWND> as isize)) };
     out
+}
+
+/// Release cold pages of this process to the standby list (one-shot, see [`TRIM_AFTER`]).
+fn trim_working_set() {
+    // SAFETY: plain call on our own process pseudo-handle.
+    let ok = unsafe { K32EmptyWorkingSet(GetCurrentProcess()) }.as_bool();
+    log::debug!("working set trimmed after capture start-up: {ok}");
 }
