@@ -33,6 +33,7 @@ mod battle;
 mod behaviours;
 mod companion;
 mod config;
+mod greet;
 mod death;
 mod interest;
 mod navigator;
@@ -40,7 +41,7 @@ mod needs;
 mod percept;
 mod places;
 mod repertoire;
-mod rng;
+pub mod rng;
 mod shade_hunt;
 mod spots;
 mod stakes;
@@ -57,6 +58,7 @@ pub use activity::{Activity, ActivitySpot, ActivityTracker, QUIET, TrackedSpot};
 pub use battle::{BattleScore, Outcome};
 pub use behaviours::BehaviourKind;
 pub use config::{BattleConfig, BrainConfig, CompanionConfig, NeedRates, Personality, WatchConfig};
+pub use greet::{STAND_OFF_UNITS, Visitor, VisitorState};
 pub use interest::{InterestMap, Poi, PoiKey, PoiKind, PoiTarget, ScoredPoi};
 pub use navigator::{GraphNavigator, NavStatus, Navigator, Reach};
 pub use needs::{Emotions, MOOD_TAGS, Mind, Needs};
@@ -142,6 +144,10 @@ pub struct Intent {
     pub reason: String,
     /// Plain standing with nothing in mind (a short gap between purposeful actions).
     pub waiting: bool,
+    /// Standing beside this visitor: start the conversation.
+    pub greet: Option<u32>,
+    /// The dream nail just requested is aimed at this visitor (their inner thoughts).
+    pub dream_visitor: Option<u32>,
     /// "reason | mood + needs | top-3 utilities", for an overlay.
     pub debug: String,
     /// Discovery traffic for the app (explored a new window, used / struck a found place).
@@ -215,6 +221,7 @@ pub struct Brain {
     exertion: f32,
     /// Times the knight caught himself pushing into a wall.
     stuck_count: u32,
+    visitors: greet::VisitorMemory,
     stakes: StakesMind,
     /// Behaviours that just failed, and when they may be picked again.
     cooldown: BTreeMap<BehaviourKind, f32>,
@@ -253,6 +260,7 @@ impl Brain {
             last_motion: Motion::Hold,
             exertion: 0.0,
             stuck_count: 0,
+            visitors: Default::default(),
             stakes: StakesMind::new(&cfg.stakes),
             cooldown: BTreeMap::new(),
             reversals: Vec::new(),
@@ -311,6 +319,14 @@ impl Brain {
     /// Times the knight caught himself pushing into a wall.
     pub fn stuck_count(&self) -> u32 {
         self.stuck_count
+    }
+
+    /// The NPC visitors on screen (call before [`Self::tick`]; empty when none).
+    pub fn see_visitors(&mut self, visitors: Vec<Visitor>) {
+        for v in self.visitors.arrivals(&visitors) {
+            self.mind.excite(0.6 * v.excitement);
+        }
+        self.senses.visitors = visitors;
     }
 
     pub fn battle_score(&self) -> Option<BattleScore> {
@@ -473,6 +489,9 @@ impl Brain {
             self.mind.excite(0.3);
             woken |= napping;
         }
+        if std::mem::take(&mut self.visitors.knock) {
+            woken |= napping || matches!(self.active, Active::Nap(_)); // a visitor! up you get
+        }
         if p.move_events.contains(&MoveEvent::Landed { hard: true }) {
             self.knocked_out = true;
         }
@@ -585,7 +604,10 @@ impl Brain {
             None
         } else if best_u >= self.cfg.urgent && best_u > cur_u {
             Some(SwitchReason::Urgent)
-        } else if !current.exclusive() && self.since_switch >= self.cfg.min_commit && best_u > cur_u + self.cfg.hysteresis {
+        } else if !current.exclusive()
+            && (self.since_switch >= self.cfg.min_commit || best == BehaviourKind::Greet) // a visitor: drop everything
+            && best_u > cur_u + self.cfg.hysteresis
+        {
             Some(SwitchReason::Outscored)
         } else {
             None
@@ -608,6 +630,12 @@ impl Brain {
         if kind == BehaviourKind::KnockedOut {
             self.knocked_out = false;
         }
+        if let Active::Greet(g) = &self.active
+            && g.failed
+        {
+            self.visitors.snub(g.id, self.now + 90.0);
+        }
+        let visitor = self.visitors.target(&self.senses.visitors, p.knight.pos, self.now).cloned();
         nav.stop();
         let poi = self.best_poi.map(|s| s.poi);
         let spot = self.best_spot;
@@ -634,6 +662,10 @@ impl Brain {
             BehaviourKind::Ride => Active::Ride(Ride::start(&mut ctx)),
             BehaviourKind::KnockedOut => Active::KnockedOut(KnockedOut::start(&mut ctx)),
             BehaviourKind::Recover => Active::Recover(Recover::start(&mut ctx)),
+            BehaviourKind::Greet => match &visitor {
+                Some(v) => Active::Greet(Box::new(greet::Greet::start(&mut ctx, v))),
+                None => Active::Idle(Idle::start(&mut ctx)),
+            },
             BehaviourKind::Dead => {
                 let (k, cracked) = death.unwrap_or_default();
                 Active::Dead(Dead::start(&mut ctx, k, cracked))
@@ -830,6 +862,13 @@ impl Brain {
         let ride = if s.since_carried(self.now) < 0.6 && p.knight.is_grounded() { 0.65 + 0.2 * e.excitement } else { 0.0 };
         let knocked = if self.knocked_out { 1.25 } else { 0.0 };
         let recover = if e.hurt > 0.35 { (0.5 + 0.4 * e.hurt).min(0.9) } else { 0.0 };
+        // A visitor! Drop (almost) everything and go say hello.
+        let greet = match self.visitors.target(&s.visitors, p.knight.pos, self.now) {
+            // Mid-conversation nothing else (but real emergencies) may cut in.
+            Some(v) if v.state == VisitorState::Talking => 0.99,
+            Some(v) if !s.fullscreen => (0.86 + 0.08 * v.excitement + 0.04 * e.excitement).min(0.97),
+            _ => 0.0,
+        };
         let visit = self.visit_utility();
 
         let mut u = vec![
@@ -845,6 +884,7 @@ impl Brain {
             (BehaviourKind::Ride, ride),
             (BehaviourKind::KnockedOut, knocked),
             (BehaviourKind::Recover, recover),
+            (BehaviourKind::Greet, greet),
             (BehaviourKind::Visit, visit),
         ];
         u.extend(self.stakes_utilities(p));

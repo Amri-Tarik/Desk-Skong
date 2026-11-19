@@ -43,6 +43,7 @@ use skong_ipc::Command;
 
 mod discover;
 mod panel;
+mod visit;
 mod stakes;
 
 const HOTKEYS: &[(i32, vk::VIRTUAL_KEY, Command)] = &[
@@ -70,6 +71,8 @@ const ID_CLEAR_BENCHES: u32 = 6;
 const ID_VISION: u32 = 7;
 const ID_OVERLAY: u32 = 8;
 const ID_PANEL: u32 = 10;
+const ID_INVITE: u32 = 11;
+const ID_DREAM: u32 = 12;
 const ID_QUIT: u32 = 9;
 const ID_SKIN0: u32 = 1000;
 const ID_SCALE0: u32 = 2000;
@@ -136,6 +139,8 @@ struct Pet {
     benches: Benches,
     /// Things found in windows (benches, hot springs, geo deposits).
     discoveries: Discoveries,
+    /// Who stands where: props, NPCs, ... (nothing is placed inside something else).
+    occupancy: skong_core::occupancy::Occupancy,
     fx: Fx,
     /// Keeps the knight off monitors running a fullscreen game.
     games: GameGuard,
@@ -182,6 +187,8 @@ struct Pet {
     /// Control panels (named pipe) and the terrain / nav debug overlay.
     control: ControlServer,
     overlay: PetOverlay,
+    /// NPC visitors, speech bubbles, dream-nail thoughts (None if their data is missing).
+    visitors: Option<crate::npcs::Visitors>,
     /// Death, the Shade, Geo and spell effects.
     stakes: stakes::Stakes,
 }
@@ -257,6 +264,7 @@ pub fn run(args: &Args) -> Result<()> {
         seat_y: None,
         benches,
         discoveries,
+        occupancy: Default::default(),
         fx,
         games: GameGuard::new(),
         game_hidden: false,
@@ -286,7 +294,15 @@ pub fn run(args: &Args) -> Result<()> {
         anim_events: Vec::new(),
         control: ControlServer::start(),
         overlay: PetOverlay::default(),
+        visitors: None,
     };
+    pet.visitors = pet.load_visitors(args.capturable);
+    if let (Some(v), Some(name)) = (pet.visitors.as_mut(), &args.visit) {
+        v.invite((name != "any").then(|| name.clone()));
+    }
+    if let Some(v) = pet.visitors.as_mut().filter(|_| args.dream_test) {
+        v.dream_test = Some(4.0);
+    }
     pet.control.set_hello(pet.hello());
 
     pet.benches.capturable = args.capturable;
@@ -337,9 +353,9 @@ pub fn run(args: &Args) -> Result<()> {
         if last_housekeeping.elapsed().as_secs() >= 2 {
             last_housekeeping = Instant::now();
             pet.benches.raise_all();
-            pet.discoveries.raise_backs();
+            pet.raise_visitors();
+            pet.discoveries.raise_all();
             pet.win.raise();
-            pet.discoveries.raise_fronts();
             log::debug!(
                 "knight at ({:.0},{:.0}) {:?} clip '{}' act {:?} | brain: {}",
                 pet.ch.pos.x,
@@ -383,6 +399,7 @@ impl Pet {
             self.navb.request(&self.terrain, &self.ch);
         }
         if self.game_step() {
+            self.hide_visitors();
             return Ok(()); // hidden while games cover every monitor
         }
         // Screen activity for the brain (the feed updates it at <= 10 Hz).
@@ -498,6 +515,7 @@ impl Pet {
         self.trigger_fx();
         self.discoveries_tick(dt);
         let origin = self.knight_origin();
+        self.tick_visitors(dt);
         self.fx.update(dt, origin, self.ch.facing == Side::Right, self.ch.params.px_per_unit)
     }
 
@@ -701,7 +719,15 @@ impl Pet {
             local_hour: Some(monitor::local_hour()),
             dark: false,
         };
+        let visitors = self.visitor_percepts();
+        self.brain.see_visitors(visitors);
         let intent = self.brain.tick(&percepts, &mut self.nav);
+        if let Some(id) = intent.greet {
+            self.greet_visitor(id);
+        }
+        if let Some(id) = intent.dream_visitor {
+            self.aim_dream_at_visitor(id);
+        }
         if let Some(ev) = intent.discovery {
             self.on_discovery(ev);
         }
@@ -869,6 +895,7 @@ impl Pet {
                 self.place_bench(style, at);
             }
             Command::ClearBenches => self.benches.clear(),
+            Command::InviteVisitor | Command::DreamNail => return self.apply_visit(c),
             Command::Discover(_) | Command::ForgetDiscoveries => return self.apply_discovery(c),
             Command::Quit => return Ok(Flow::Quit),
             Command::Stakes(c) => self.apply_stakes(c),
@@ -889,7 +916,7 @@ impl Pet {
     }
 
     fn place_bench(&mut self, style: usize, at: Vec2) {
-        match self.benches.place(style, at, &self.terrain) {
+        match self.benches.place(style, at, &self.terrain, &self.occupancy) {
             Ok(()) => self.win.raise(), // keep the knight in front of his furniture
             Err(e) => log::warn!("bench: {e:#}"),
         }
@@ -900,6 +927,7 @@ impl Pet {
         self.look = look;
         self.fx.install_frames(fx_frames);
         self.drawn = None;
+        self.rescale_visitors();
         if let Err(e) = self.tray.set_icon(&tray_icon(&self.data, &self.look)) {
             log::warn!("tray icon: {e:#}");
         }
@@ -927,6 +955,8 @@ impl Pet {
             discover::menu(),
             MenuItem::Separator,
             MenuItem::action(ID_ACT, "Do something!"),
+            MenuItem::action(ID_INVITE, "Invite a visitor"),
+            MenuItem::action(ID_DREAM, "Dream-nail a window"),
             MenuItem::action(ID_RESPAWN, "Come here (respawn at cursor)"),
             MenuItem::check(ID_MANUAL, "Manual control", self.manual),
             MenuItem::check(ID_CLICK, "Click-through", self.settings.click_through),
@@ -952,6 +982,8 @@ impl Pet {
             ID_VISION => Command::ToggleVision,
             ID_OVERLAY => Command::ToggleDebugOverlay,
             ID_PANEL => Command::OpenPanel,
+            ID_INVITE => Command::InviteVisitor,
+            ID_DREAM => Command::DreamNail,
             i if (ID_BENCH0..ID_BENCH0 + self.benches.styles.len() as u32).contains(&i) => Command::PlaceBenchNearKnight((i - ID_BENCH0) as usize),
             i if (ID_SKIN0..ID_SKIN0 + self.data.skins.len() as u32).contains(&i) => Command::SetSkin((i - ID_SKIN0) as usize),
             i if (ID_SCALE0..ID_SCALE0 + SCALES.len() as u32).contains(&i) => Command::SetScale(SCALES[(i - ID_SCALE0) as usize].1),

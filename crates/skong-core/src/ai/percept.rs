@@ -226,6 +226,8 @@ pub struct Senses {
     pub dark: bool,
     /// Brain clock time the user last came back after being away.
     pub returned_at: Option<f32>,
+    /// NPC visitors on screen (from [`super::Brain::see_visitors`]).
+    pub visitors: Vec<super::Visitor>,
 }
 
 impl Senses {

@@ -108,6 +108,24 @@ impl GeoField {
         &self.coins
     }
 
+    /// Coins resting inside a claimed prop (bench, find, visitor…) hop out toward the
+    /// nearer side of it, so loot never hides inside furniture.
+    pub fn evict_from(&mut self, occ: &crate::occupancy::Occupancy) {
+        let s = self.scale.max(0.1);
+        for c in self.coins.iter_mut().filter(|c| c.resting) {
+            if let Some(claim) = occ.covering(c.pos, HALF * s * 0.5) {
+                let r = claim.rect;
+                let left = c.pos.x - r.left < r.right - c.pos.x;
+                let dist = if left { c.pos.x - r.left } else { r.right - c.pos.x } + HALF * s * 2.0;
+                // A small hop: enough sideways speed to clear the prop before landing.
+                let speed = (dist * 2.2).max(120.0 * s);
+                c.vel = Vec2::new(if left { -speed } else { speed }, -380.0 * s);
+                c.resting = false;
+                c.bounces = MAX_BOUNCES - 1;
+            }
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.coins.is_empty()
     }

@@ -32,7 +32,7 @@ pub enum Command {
     PlaceBenchAtCursor(usize),
     PlaceBenchNearKnight(usize),
     ClearBenches,
-    /// Reveal a find in the window under the knight: 0 bench, 1 hot spring, 2 geo deposit.
+    /// Reveal a find in the window under the knight: 0 bench, 1 geo deposit.
     Discover(u8),
     /// Forget everything found in windows.
     ForgetDiscoveries,
@@ -45,6 +45,10 @@ pub enum Command {
     SetOverlayLayers(OverlayLayers),
     /// Launch `skong-panel.exe` next to the pet executable.
     OpenPanel,
+    /// Bring an NPC visitor now (debug; visits also happen on their own).
+    InviteVisitor,
+    /// The knight dream-nails the window he stands on (thought bubble).
+    DreamNail,
     /// Path-find to the cursor (Stroll, or Hurry with the full movement kit).
     GoToCursor { hurry: bool },
     /// Death / Shade / Geo / spell triggers.
