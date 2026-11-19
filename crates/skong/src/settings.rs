@@ -13,6 +13,8 @@ pub struct Settings {
     /// 0 = never bothers you, 1 = maximum mischief (cursor battles…).
     pub bother: f32,
     pub click_through: bool,
+    /// Visible in screen shares and screenshots (otherwise excluded from capture).
+    pub share_visible: bool,
     /// Launch the control panel together with the pet.
     pub open_panel: bool,
     /// Wallet and the Shade waiting where the knight last died.
@@ -21,7 +23,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { skin: None, scale: 0.6, bother: 0.5, click_through: false, open_panel: true, stakes: Default::default() }
+        Self { skin: None, scale: 0.6, bother: 0.5, click_through: false, share_visible: false, open_panel: true, stakes: Default::default() }
     }
 }
 

@@ -1095,6 +1095,13 @@ impl ContentFeed {
         self.own_listed = None;
     }
 
+    /// Freeze content under every window of ours (they are visible to capture: screen
+    /// sharing, `--capturable`), so the pet never sees its own sprites as content.
+    pub fn freeze_all(&mut self) {
+        self.freeze_only = None;
+        self.own_listed = None;
+    }
+
     /// Where the screen is busy (all monitors, strongest first, at most 5 spots), with
     /// owners. Updated by [`Self::poll`] at most ~10 times a second; changes under our
     /// own windows and screen-wide flashes are ignored.

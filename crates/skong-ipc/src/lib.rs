@@ -29,6 +29,8 @@ pub enum Command {
     SetScale(f32),
     SetBother(f32),
     ToggleClickThrough,
+    /// Show the pet in screen shares and screenshots (Discord, OBS...); off by default.
+    ToggleShareVisible,
     PlaceBenchAtCursor(usize),
     PlaceBenchNearKnight(usize),
     ClearBenches,
