@@ -382,7 +382,7 @@ impl Builder<'_> {
         }
         // Strolling only uses walk / drop / single jump at walking pace: if running could not
         // connect the pair with those, walking will not either.
-        let basic = |f: &Found| matches!(f.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::DropThrough | MoveKind::Jump);
+        let basic = |f: &Found| matches!(f.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::DropThrough | MoveKind::Jump | MoveKind::Behind);
         if tiers[0] && out[1].as_ref().is_some_and(basic) {
             let hint = out[1].map(|f| f.script.recipe);
             out[0] = self.search(Tier::Stroll, s, t, region, hint, &mut blocked);
@@ -453,7 +453,7 @@ impl Builder<'_> {
             match res {
                 Ok(f) => {
                     let ok = match tier {
-                        Tier::Stroll => matches!(f.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::Jump),
+                        Tier::Stroll => matches!(f.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::Jump | MoveKind::Behind),
                         Tier::Normal => f.kind != MoveKind::Superdash,
                         Tier::Hurry => true,
                     };
@@ -528,6 +528,19 @@ impl Builder<'_> {
             let mid = (overlap.0 + overlap.1) * 0.5;
             if let Some(x) = land(mid).filter(|x| (overlap.0..=overlap.1).contains(x)) {
                 out.push(mk(Recipe::DropThrough, Start::Stand, Side::Right, x, x));
+            }
+        }
+        // Step behind a drawn line onto the next stretch of the same height: quieter than
+        // climbing over it or shadow dashing through, so it is tried first.
+        if let Some(dir) = sep
+            && rise.abs() <= 1.0
+            && gap <= r.half
+        {
+            let (takeoff, tx) = (edge_x(s, dir, r.half), near_x(t, dir, r.half));
+            let band = (s.y - r.height, s.y - 1.0);
+            let mut walls = self.walls_between(dir, takeoff, tx).filter(|w| w.y0 < band.1 && band.0 < w.y1).peekable();
+            if walls.peek().is_some() && walls.all(|w| w.kind == WallKind::Content) {
+                out.push(mk(Recipe::Behind, Start::Stand, dir, takeoff, tx));
             }
         }
         // Walk across / off an edge.
@@ -806,7 +819,7 @@ impl Builder<'_> {
                 Recipe::Jump { double: true, .. } => (s.y - r.jump - r.double, slack),
                 Recipe::Jump { double: false, .. } => (s.y - r.jump, slack),
                 Recipe::Climb => (t.y - r.jump, slack + 128.0),
-                Recipe::Walk | Recipe::DropThrough | Recipe::GroundDash | Recipe::Superdash => (s.y, slack),
+                Recipe::Walk | Recipe::DropThrough | Recipe::GroundDash | Recipe::Superdash | Recipe::Behind => (s.y, slack),
             };
             let top = apex.min(t.y) - 16.0;
             let bottom = s.y.max(t.y) + 1.0;
@@ -917,8 +930,9 @@ impl Builder<'_> {
             }
             still = if (ch.pos.x - old_x).abs() < 0.01 && ch.is_grounded() { still + 1 } else { 0 };
             // Standing still on the ground mid-script (pressed into a wall) never recovers; a
-            // superdash charge is the one legitimate pause.
-            let charging = matches!(ch.state, MoveState::SuperdashCharge { .. });
+            // superdash charge and turning into the screen are the legitimate pauses.
+            let charging = matches!(ch.state, MoveState::SuperdashCharge { .. })
+                || ch.behind_phase() == Some(crate::controller::BehindPhase::TurningIn);
             let stuck = still > 12 && !charging;
             let inside = (region.left..=region.right).contains(&ch.pos.x) && (region.top..=region.bottom).contains(&ch.pos.y);
             // A climb that stops gaining height is going nowhere (sliding / hovering in place).
@@ -933,7 +947,9 @@ impl Builder<'_> {
                 return Err(if exec.finished { Fail::Short } else { Fail::Other });
             }
         }
-        let kind = if superdash {
+        let kind = if script.recipe == Recipe::Behind {
+            MoveKind::Behind
+        } else if superdash {
             MoveKind::Superdash
         } else if shadow {
             MoveKind::ShadowDash
@@ -953,7 +969,8 @@ impl Builder<'_> {
             MoveKind::Walk
         };
         script.needs_shadow = shadow;
-        let duration = exec.t.max(SIM_DT) + if hard { p.hard_landing_time } else { 0.0 };
+        let duration = exec.t.max(SIM_DT) + if hard { p.hard_landing_time } else { 0.0 }
+            + if kind == MoveKind::Behind { crate::controller::BEHIND_RETURN_TIME } else { 0.0 };
         Ok(Found { kind, duration, land: ch.pos, script })
     }
 }

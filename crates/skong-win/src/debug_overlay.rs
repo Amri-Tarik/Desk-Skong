@@ -67,6 +67,7 @@ pub fn move_color(kind: MoveKind) -> (u8, u8, u8) {
         MoveKind::Dash => (170, 255, 90),
         MoveKind::ShadowDash => (255, 150, 210),
         MoveKind::Superdash => (255, 255, 255),
+        MoveKind::Behind => (90, 220, 210),
     }
 }
 

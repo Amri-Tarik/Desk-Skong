@@ -243,3 +243,25 @@ fn climb_edges_have_their_walls_and_draw_distinctly() {
     // Ordinary edges are not drawn as climbs.
     assert!(g.edges().iter().filter(|e| e.climb.is_none()).all(|e| !edge_path(e, g.surfaces()[e.from].y, false).climb));
 }
+
+#[test]
+fn step_behind_a_drawn_line_instead_of_dashing() {
+    // A tall divider drawn in a window (a prompt box border) from near the top to the floor:
+    // too tall to hop. The knight turns into the screen and walks behind it, in every style.
+    let desk = DesktopSnapshot { generation: 1, monitors: vec![primary()], windows: vec![win(1, 200, 100, 1800, 1400)] };
+    let walls = [
+        ContentWallSeg { x: 1000, y0: 200, y1: 1400, face: Facing::Left, owner: Some(1) },
+        ContentWallSeg { x: 1002, y0: 200, y1: 1400, face: Facing::Right, owner: Some(1) },
+    ];
+    let t = Terrain::from_desktop_and_content(&desk, &[], &walls, &TerrainOptions::default());
+    for style in [TravelStyle::Stroll, TravelStyle::Normal] {
+        for (from, to) in [(700.0, 1300.0), (1300.0, 700.0)] {
+            let mut ch = knight(&t, from, FLOOR);
+            let (status, moves) = follow(&t, &mut ch, NavGoal::Point(Vec2::new(to, FLOOR)), style);
+            assert_eq!(status, FollowStatus::Arrived, "{style:?} {from}->{to}: {moves:?} at {:?}", ch.pos);
+            assert!(moves.contains(&MoveKind::Behind), "{style:?} {from}->{to}: {moves:?}");
+            assert!(!moves.iter().any(|m| matches!(m, MoveKind::ShadowDash | MoveKind::Superdash)), "{moves:?}");
+            assert!((ch.pos.x - to).abs() < 6.0, "{:?}", ch.pos);
+        }
+    }
+}

@@ -9,7 +9,7 @@
 use anyhow::{Context, Result};
 
 use crate::anim::{AnimEvent, ClipId, ClipLibrary};
-use crate::controller::{Character, CharacterParams, DivePhase, Gait, MoveEvent, MoveState};
+use crate::controller::{Character, CharacterParams, BehindPhase, DivePhase, Gait, MoveEvent, MoveState};
 
 /// Clip ids used by locomotion, resolved once.
 #[derive(Clone, Debug)]
@@ -20,6 +20,8 @@ struct Clips {
     sprint: ClipId,
     run_to_idle: ClipId,
     turn_to_idle: ClipId,
+    turn_to_bg: ClipId,
+    turn_from_bg: ClipId,
     look_up_to_idle: ClipId,
     look_down_to_idle: ClipId,
     get_up_to_idle: ClipId,
@@ -63,6 +65,8 @@ impl Clips {
             sprint: id("Sprint")?,
             run_to_idle: id("Run To Idle")?,
             turn_to_idle: id("TurnToIdle")?,
+            turn_to_bg: id("TurnToBG")?,
+            turn_from_bg: id("TurnFromBG")?,
             look_up_to_idle: id("LookUpToIdle")?,
             look_down_to_idle: id("LookDownToIdle")?,
             get_up_to_idle: id("GetUpToIdle")?,
@@ -264,6 +268,14 @@ impl Locomotion {
             if !ok {
                 self.one_shot = None;
             }
+        }
+        // Stepping behind screen content: face into the screen (the clip holds its last
+        // frame while he walks behind the line), then turn back out.
+        if let Some(phase) = ch.behind_phase() {
+            self.one_shot = None;
+            self.was_moving = false;
+            let clip = if phase == BehindPhase::TurningOut { c.turn_from_bg } else { c.turn_to_bg };
+            return ClipRequest { clip, restart: false };
         }
         if let Some(a) = self.one_shot {
             let restart = std::mem::take(&mut self.restart);
