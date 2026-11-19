@@ -534,12 +534,26 @@ internal static class Program
             catch { }
         }
         var active = go.baseField["m_IsActive"].AsBool ? "" : " (inactive)";
-        Console.WriteLine($"{new string(' ', depth * 2)}{go.baseField["m_Name"].AsString}{active} pos=({p["x"].AsFloat:0.###},{p["y"].AsFloat:0.###},{p["z"].AsFloat:0.###}) scale=({s["x"].AsFloat:0.###},{s["y"].AsFloat:0.###}) [{string.Join("; ", parts)}]");
+        var r = transform["m_LocalRotation"];
+        var rot = RotationText(r["x"].AsFloat, r["y"].AsFloat, r["z"].AsFloat, r["w"].AsFloat);
+        Console.WriteLine($"{new string(' ', depth * 2)}{go.baseField["m_Name"].AsString}{active} pos=({p["x"].AsFloat:0.###},{p["y"].AsFloat:0.###},{p["z"].AsFloat:0.###}) scale=({s["x"].AsFloat:0.###},{s["y"].AsFloat:0.###}){rot} [{string.Join("; ", parts)}]");
         foreach (var child in transform["m_Children.Array"].Children)
         {
             var ct = am.GetExtAsset(file, child);
             if (ct.baseField is not null) PrintTree(am, scan, ct.file, ct.baseField, depth + 1);
         }
+    }
+
+    /// " rot=(x,y,z)" Euler degrees (Unity ZXY order) of a local rotation, or "" for identity.
+    static string RotationText(float x, float y, float z, float w)
+    {
+        if (Math.Abs(x) < 1e-5 && Math.Abs(y) < 1e-5 && Math.Abs(z) < 1e-5) return "";
+        double D(double r) => r * 180.0 / Math.PI;
+        double sx = Math.Clamp(2.0 * (w * x - y * z), -1.0, 1.0);
+        double ex = Math.Asin(sx);
+        double ey = Math.Atan2(2.0 * (w * y + x * z), 1.0 - 2.0 * (x * x + y * y));
+        double ez = Math.Atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (x * x + z * z));
+        return $" rot=({D(ex):0.#},{D(ey):0.#},{D(ez):0.#})";
     }
 
     static string NameOrGo(AssetsManager am, AssetsFileInstance file, AssetTypeValueField mb)

@@ -1,5 +1,5 @@
 {
-  "$comment": "Behaviour choreographies built from Knight clips. Each step plays a clip; looping clips run for `hold` seconds (random in [min,max]); one-shot clips play `repeat` times (default once) then hold their last frame for `hold` seconds if given. `until` ends a step on an external signal instead (e.g. 'woken'). `move` walks with a gait during the step. `interruptible: false` protects a step from being cut short. Tags feed the mood-driven AI; `requires` is checked before starting. `requires` is grounded | any | seat (perched on a window edge or at a bench; sitting clips are a front-facing pose with dangling legs). Weight 0 = never picked at random: the AI starts acts by name for a reason (watching activity, cursor above, mapping a new window, settling down, ...). Only `fidget` acts keep a small weight for genuine idle.",
+  "$comment": "Behaviour choreographies built from Knight clips. Each step plays a clip; looping clips run for `hold` seconds (random in [min,max]); one-shot clips play `repeat` times (default once) then hold their last frame for `hold` seconds if given. `until` ends a step on an external signal instead (e.g. 'woken'). `move` walks with a gait during the step (`turn`: clip played when the walk turns around). Steps ending on a `…ToIdle` clip hand over to idle without a snap. `interruptible: false` protects a step from being cut short. Tags feed the mood-driven AI; `requires` is checked before starting. `requires` is grounded | any | seat (perched on a window edge or at a bench; sitting clips are a front-facing pose with dangling legs). Weight 0 = never picked at random: the AI starts acts by name for a reason (watching activity, cursor above, mapping a new window, settling down, ...). Only `fidget` acts keep a small weight for genuine idle.",
   "acts": [
     {
       "name": "look_up",
@@ -19,7 +19,7 @@
           ]
         },
         {
-          "clip": "LookUpEnd"
+          "clip": "LookUpToIdle"
         }
       ]
     },
@@ -41,7 +41,7 @@
           ]
         },
         {
-          "clip": "LookDownEnd"
+          "clip": "LookDownToIdle"
         }
       ]
     },
@@ -128,8 +128,15 @@
           ]
         },
         {
-          "clip": "Wake",
+          "clip": "Wake To Sit",
           "interruptible": false
+        },
+        {
+          "clip": "Sit Idle",
+          "hold": [
+            1.0,
+            2.5
+          ]
         },
         {
           "clip": "Get Off"
@@ -191,6 +198,7 @@
         {
           "clip": "Map Walk",
           "move": "walk",
+          "turn": "Map Turn",
           "hold": [
             2.0,
             5.0
@@ -363,7 +371,7 @@
           ]
         },
         {
-          "clip": "Collect Normal 3"
+          "clip": "GetUpToIdle"
         }
       ]
     },

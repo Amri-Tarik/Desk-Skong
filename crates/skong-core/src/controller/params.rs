@@ -66,18 +66,24 @@ pub struct Abilities {
     pub shadow_dash: bool,
     /// Crystal Heart.
     pub superdash: bool,
+    /// Dashmaster: dashing while holding down in the air dashes straight down.
+    pub down_dash: bool,
+    /// Sharp Shadow: shadow dashes use the sharp variants of their clips.
+    pub sharp_shadow: bool,
+    /// Desolate Dive / Descending Dark (see [`MoveInput::dive_pressed`]).
+    pub dive: bool,
 }
 
 impl Default for Abilities {
     fn default() -> Self {
-        Self { double_jump: true, wall_jump: true, dash: true, shadow_dash: true, superdash: true }
+        Self { double_jump: true, wall_jump: true, dash: true, shadow_dash: true, superdash: true, down_dash: true, sharp_shadow: false, dive: true }
     }
 }
 
 impl Abilities {
     /// Nothing unlocked: walk and jump only.
     pub const fn none() -> Self {
-        Self { double_jump: false, wall_jump: false, dash: false, shadow_dash: false, superdash: false }
+        Self { double_jump: false, wall_jump: false, dash: false, shadow_dash: false, superdash: false, down_dash: false, sharp_shadow: false, dive: false }
     }
 }
 
@@ -162,6 +168,18 @@ pub struct CharacterParams {
     pub big_fall_time: f32,
     /// *HK* `HARD_LANDING_TIME`: stun duration.
     pub hard_landing_time: f32,
+    /// Falling longer than this ends in a super hard landing (*chosen*; HK plays
+    /// "Super Hard Land" only in scripted falls).
+    pub super_hard_fall_time: f32,
+    /// Stun after a super hard landing: the impact pose, then getting up (*chosen*).
+    pub super_hard_landing_time: f32,
+
+    /// *HK* Spell Control `Quake Antic`: hover before diving (= the clip length).
+    pub dive_antic_time: f32,
+    /// *HK* Spell Control `Quake1 Down` velocity (magnitude).
+    pub dive_speed: f32,
+    /// Recovery after the dive hits the ground (*chosen*, HK `Quake Finish` wait ~ clip).
+    pub dive_land_time: f32,
 
     /// Ledges this far above the feet are stepped onto while grounded (*chosen*).
     pub step_height: f32,
@@ -209,6 +227,11 @@ impl CharacterParams {
             superdash_cancel_time: 0.2,
             big_fall_time: 1.1,
             hard_landing_time: 0.8,
+            super_hard_fall_time: 2.0,
+            super_hard_landing_time: 1.0,
+            dive_antic_time: 0.25,
+            dive_speed: 50.0,
+            dive_land_time: 0.6,
             step_height: 0.1,
             pop_up_height: 0.5,
         }
@@ -253,6 +276,10 @@ impl CharacterParams {
 
     pub fn dash_speed_px(&self) -> f32 {
         self.px(self.dash_speed)
+    }
+
+    pub fn dive_speed_px(&self) -> f32 {
+        self.px(self.dive_speed)
     }
 
     pub fn superdash_speed_px(&self) -> f32 {

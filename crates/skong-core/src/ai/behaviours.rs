@@ -22,6 +22,9 @@ use super::repertoire::Repertoire;
 use super::rng::Rng;
 use super::spots::{self, View};
 use super::watch::WatchSpot;
+use super::death::Dead;
+use super::shade_hunt::{Loot, ShadeHunt};
+use super::stakes::StakesMind;
 use super::{Intent, Motion};
 
 /// What the knight is up to.
@@ -53,10 +56,16 @@ pub enum BehaviourKind {
     Recover,
     /// A visitor (NPC) showed up: hurry over and talk.
     Greet,
+    /// Died: death act, gone, respawn at a bench / safe ledge.
+    Dead,
+    /// Go fight the Shade to get the Geo back.
+    ShadeHunt,
+    /// Walk over loose Geo to pick it up.
+    Loot,
 }
 
 impl BehaviourKind {
-    pub const ALL: [BehaviourKind; 13] = [
+    pub const ALL: [BehaviourKind; 16] = [
         BehaviourKind::Idle,
         BehaviourKind::Companion,
         BehaviourKind::Watch,
@@ -70,6 +79,9 @@ impl BehaviourKind {
         BehaviourKind::KnockedOut,
         BehaviourKind::Recover,
         BehaviourKind::Greet,
+        BehaviourKind::Dead,
+        BehaviourKind::ShadeHunt,
+        BehaviourKind::Loot,
     ];
 
     pub fn label(self) -> &'static str {
@@ -87,12 +99,15 @@ impl BehaviourKind {
             BehaviourKind::KnockedOut => "knocked out",
             BehaviourKind::Recover => "recover",
             BehaviourKind::Greet => "greet",
+            BehaviourKind::Dead => "dead",
+            BehaviourKind::ShadeHunt => "shade hunt",
+            BehaviourKind::Loot => "loot",
         }
     }
 
     /// Exclusive behaviours end themselves; only urgent challengers may interrupt.
     pub fn exclusive(self) -> bool {
-        matches!(self, BehaviourKind::Nap | BehaviourKind::Battle | BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut)
+        matches!(self, BehaviourKind::Nap | BehaviourKind::Battle | BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead | BehaviourKind::ShadeHunt | BehaviourKind::Loot)
     }
 }
 
@@ -100,6 +115,9 @@ impl BehaviourKind {
 pub(crate) enum Status {
     Running,
     Done,
+    /// Ended without achieving its goal (no seat, unreachable target, ...). The brain
+    /// puts the behaviour on a short cooldown so it is not re-picked at once.
+    Failed,
 }
 
 /// Everything a behaviour may read or poke during its tick.
@@ -114,6 +132,7 @@ pub(crate) struct Ctx<'a, 'p> {
     pub rep: &'a mut Repertoire,
     pub interest: &'a mut InterestMap,
     pub spots: &'a mut ActivityTracker,
+    pub stakes: &'a mut StakesMind,
     pub out: &'a mut Intent,
 }
 
@@ -290,16 +309,25 @@ pub(crate) struct Travel {
     started: bool,
     elapsed: f32,
     timeout: f32,
+    /// Arrival must be on the goal point (seats, vantage points), within this many px.
+    exact: Option<f32>,
 }
 
 impl Travel {
     pub fn new(goal: NavGoal, style: TravelStyle, timeout: f32) -> Self {
-        Self { goal, style, started: false, elapsed: 0.0, timeout }
+        Self { goal, style, started: false, elapsed: 0.0, timeout, exact: None }
     }
 
     /// Travel with a timeout estimated from the straight-line distance.
     pub fn to(ctx: &Ctx, to: Vec2, style: TravelStyle) -> Self {
         Self::new(NavGoal::Point(to), style, timeout_for(ctx, to, style))
+    }
+
+    /// Travel that only counts as arrived when the knight stands on `to` (within `tol` px).
+    /// A follower that "arrives" next to it (e.g. under a ledge it cannot mount) fails,
+    /// and the target is blocked for a while.
+    pub fn exact(ctx: &Ctx, to: Vec2, style: TravelStyle, tol: f32) -> Self {
+        Self { exact: Some(tol), ..Self::to(ctx, to, style) }
     }
 
     /// Change destination; the next tick re-issues `go`.
@@ -329,7 +357,14 @@ impl Travel {
             return TravelStep::Failed;
         }
         match ctx.nav.status() {
-            NavStatus::Arrived => TravelStep::Arrived,
+            NavStatus::Arrived => match (self.exact, self.goal) {
+                (Some(tol), NavGoal::Point(p)) if !on_point(ctx.p.knight, p, tol) => {
+                    log::debug!("brain: arrived at ({:.0},{:.0}) instead of ({:.0},{:.0}); target blocked", ctx.p.knight.pos.x, ctx.p.knight.pos.y, p.x, p.y);
+                    block(ctx, self.goal, FAILED_TARGET_SECS);
+                    TravelStep::Failed
+                }
+                _ => TravelStep::Arrived,
+            },
             NavStatus::Failed | NavStatus::Idle => TravelStep::Failed,
             NavStatus::Moving => {
                 ctx.out.motion = Motion::Navigate { goal: self.goal, style: self.style };
@@ -337,6 +372,14 @@ impl Travel {
             }
         }
     }
+}
+
+/// How long a target that could not be reached (or stood on) stays blocked.
+pub(crate) const FAILED_TARGET_SECS: f32 = 60.0;
+
+/// Is the knight standing on `p` (grounded, same height, within `tol` px)?
+pub(crate) fn on_point(k: &crate::controller::Character, p: Vec2, tol: f32) -> bool {
+    k.is_grounded() && (k.pos.x - p.x).abs() <= tol && (k.pos.y - p.y).abs() <= 3.0
 }
 
 /// Remember a goal as unreachable for `secs`.
@@ -364,12 +407,30 @@ pub(crate) fn style_for(ctx: &Ctx, to: Vec2) -> TravelStyle {
     }
 }
 
-/// Nearest reachable seat (bench first if one is close) around `near`.
-pub(crate) fn find_seat(ctx: &Ctx, near: Vec2, range: f32) -> Option<Vec2> {
+/// Arrival tolerance on a seat (px): benches need the knight right at them.
+pub(crate) const SEAT_TOL: f32 = 6.0;
+/// At most this many seat candidates are route-planned per search.
+const SEAT_PLANS: usize = 4;
+
+/// Nearest seat (bench or perch) around `near` that a route actually gets the knight *onto*,
+/// with the gentlest style that does (stroll, else a normal run). Seats whose route ends
+/// elsewhere (e.g. a content ledge a stroll can't mount: the planner stops underneath)
+/// are blocked for a while so they aren't tried again and again.
+pub(crate) fn find_seat(ctx: &mut Ctx, near: Vec2, range: f32) -> Option<(Vec2, TravelStyle)> {
     let k = ctx.p.knight;
-    spots::seats(ctx.p.terrain, k, near, ctx.p.benches, range)
+    let candidates: Vec<Vec2> = spots::seats(ctx.p.terrain, k, near, ctx.p.benches, range)
         .into_iter()
-        .find(|s| !ctx.interest.is_blocked(PoiTarget::Spot(*s)) && s.distance(k.pos) > 3.0)
+        .filter(|s| !ctx.interest.is_blocked(PoiTarget::Spot(*s)) && !on_point(k, *s, SEAT_TOL))
+        .take(SEAT_PLANS)
+        .collect();
+    let styles: &[TravelStyle] = if ctx.mind.needs.energy > 0.15 { &[TravelStyle::Stroll, TravelStyle::Normal] } else { &[TravelStyle::Stroll] };
+    for s in candidates {
+        if let Some(&style) = styles.iter().find(|&&st| ctx.nav.reaches(k, s, st, SEAT_TOL)) {
+            return Some((s, style));
+        }
+        ctx.interest.block(PoiTarget::Spot(s), ctx.now + FAILED_TARGET_SECS);
+    }
+    None
 }
 
 // --- Idle ---------------------------------------------------------------------------
@@ -455,7 +516,7 @@ impl Explore {
                     TravelStep::Moving => Status::Running,
                     TravelStep::Failed => {
                         ctx.interest.block(self.poi.target, ctx.now + 60.0);
-                        Status::Done
+                        Status::Failed
                     }
                     TravelStep::Arrived => {
                         self.arrive(ctx);
@@ -530,7 +591,8 @@ impl Rest {
         let travel = if ctx.senses.can_sit() {
             None
         } else {
-            find_seat(ctx, ctx.p.knight.pos, 900.0).map(|s| Travel::to(ctx, s, TravelStyle::Stroll))
+            let near = ctx.p.knight.pos;
+            find_seat(ctx, near, 900.0).map(|(s, style)| Travel::exact(ctx, s, style, SEAT_TOL))
         };
         Self { travel, beat: Beat::new(0.2) }
     }
@@ -540,7 +602,13 @@ impl Rest {
             match t.tick(ctx) {
                 TravelStep::Moving => return Status::Running,
                 TravelStep::Arrived => self.travel = None,
-                TravelStep::Failed => return Status::Done,
+                TravelStep::Failed => {
+                    // Could not get onto the seat: sit right here if possible, else give up.
+                    self.travel = None;
+                    if !ctx.senses.can_sit() {
+                        return Status::Failed;
+                    }
+                }
             }
         }
         if ctx.mind.tiredness() < 0.2 && !self.beat.busy() {
@@ -548,7 +616,10 @@ impl Rest {
         }
         if self.beat.tick(ctx, [0.5, 1.5]) {
             if !ctx.senses.can_sit() {
-                return Status::Done; // seat gone (window moved / closed)
+                // Nowhere to sit here (no seat found, or the seat moved / closed).
+                let here = ctx.p.knight.pos;
+                ctx.interest.block(PoiTarget::Spot(here), ctx.now + FAILED_TARGET_SECS);
+                return Status::Failed;
             }
             let act = ctx.seated_act();
             self.beat.play(ctx, act, [0.5, 1.5]);
@@ -588,14 +659,9 @@ impl Nap {
         let phase = if ctx.senses.can_sit() {
             NapPhase::Seated(ActWait::named(ctx, "nap"))
         } else {
-            // A bench beats a perch when both are around.
             let k = ctx.p.knight;
-            let bench = ctx.p.benches.iter().copied().filter(|b| b.distance(k.pos) <= Self::SEAT_RANGE).min_by(|a, b| a.distance(k.pos).total_cmp(&b.distance(k.pos)));
-            match bench.or_else(|| find_seat(ctx, k.pos, Self::SEAT_RANGE)) {
-                Some(s) => {
-                    let style = if ctx.mind.tiredness() > 0.7 { TravelStyle::Stroll } else { ctx.mind.travel_style() };
-                    NapPhase::ToSeat(Travel::to(ctx, s, style))
-                }
+            match find_seat(ctx, k.pos, Self::SEAT_RANGE) {
+                Some((s, style)) => NapPhase::ToSeat(Travel::exact(ctx, s, style, SEAT_TOL)),
                 None => NapPhase::Deep(ActWait::named(ctx, "bow_down")),
             }
         };
@@ -844,6 +910,9 @@ pub(crate) enum Active {
     KnockedOut(KnockedOut),
     Recover(Recover),
     Greet(Box<super::greet::Greet>),
+    Dead(Dead),
+    ShadeHunt(Box<ShadeHunt>),
+    Loot(Loot),
 }
 
 impl Active {
@@ -862,6 +931,9 @@ impl Active {
             Active::KnockedOut(_) => BehaviourKind::KnockedOut,
             Active::Recover(_) => BehaviourKind::Recover,
             Active::Greet(_) => BehaviourKind::Greet,
+            Active::Dead(_) => BehaviourKind::Dead,
+            Active::ShadeHunt(_) => BehaviourKind::ShadeHunt,
+            Active::Loot(_) => BehaviourKind::Loot,
         }
     }
 
@@ -880,6 +952,9 @@ impl Active {
             Active::KnockedOut(b) => b.tick(ctx),
             Active::Recover(b) => b.tick(ctx),
             Active::Greet(b) => b.tick(ctx),
+            Active::Dead(b) => b.tick(ctx),
+            Active::ShadeHunt(b) => b.tick(ctx),
+            Active::Loot(b) => b.tick(ctx),
         }
     }
 
@@ -899,6 +974,9 @@ impl Active {
             Active::KnockedOut(_) => "knocked out: huge fall".into(),
             Active::Recover(b) => b.reason(),
             Active::Greet(b) => b.reason(ctx),
+            Active::Dead(b) => b.reason(),
+            Active::ShadeHunt(b) => b.reason(),
+            Active::Loot(b) => b.reason(),
         }
     }
 }

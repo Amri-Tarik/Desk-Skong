@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use eframe::egui::{self, Color32, Key, RichText, TextWrapMode};
-use skong_ipc::{Command, LogLevel, LogLine, ManualKeys, OverlayLayers, PanelMsg, Status};
+use skong_ipc::{SPELLS, StakesCommand, Command, LogLevel, LogLine, ManualKeys, OverlayLayers, PanelMsg, Status};
 
 use crate::link::Link;
 
@@ -185,6 +185,19 @@ impl Panel {
                     self.cmd(Command::DreamNail);
                 }
             });
+            ui.horizontal_wrapped(|ui| {
+                ui.label("Stakes");
+                for (label, c) in [("Die", StakesCommand::Die), ("Drop geo", StakesCommand::DropGeo), ("Spill geo", StakesCommand::SpillGeo), ("Fight shade", StakesCommand::HuntShade)] {
+                    if ui.button(label).clicked() {
+                        self.cmd(Command::Stakes(c));
+                    }
+                }
+                for (i, (_, name)) in SPELLS.iter().enumerate() {
+                    if ui.small_button(*name).on_hover_text("play this spell / nail art now").clicked() {
+                        self.cmd(Command::Stakes(StakesCommand::Cast(i as u8)));
+                    }
+                }
+            });
             let toggle = |ui: &mut egui::Ui, on: bool, label: &str, c: Command| {
                 let mut v = on;
                 if ui.checkbox(&mut v, label).changed() {
@@ -237,6 +250,10 @@ impl Panel {
                 row("Vision", format!("{} · {} updates · {} frames\nanalysis {:.2} ms · latency {:.1} ms", if c.running { "running" } else { "unavailable" }, c.updates, c.frames, c.last_analysis_ms, c.last_latency_ms));
             }
             row("Process", format!("CPU {:.1}% · RAM {:.1} MB · {} panel(s)", s.process.cpu_percent, s.process.working_set_mb, s.panels));
+            if let Some(st) = &s.stakes {
+                let shade = st.shade.map_or_else(|| "none".to_string(), |(x, y, g)| format!("at ({x:.0}, {y:.0}) holding {g} geo"));
+                row("Stakes", format!("{} geo (+{} loose) · soul {:.0}%\nshade {shade}\n{} deaths · {} shades beaten", st.geo, st.loose_geo, st.soul * 100.0, st.deaths, st.shades_defeated));
+            }
             if let Some(n) = &s.nav {
                 let edges: Vec<String> = n.edges.iter().filter(|e| e.1 > 0).map(|(k, c)| format!("{k} {c}")).collect();
                 row("Nav graph", format!("gen {} · {} surfaces · build {:.1} ms\ncache {}/{} pairs · {} sims\n{}", n.generation, n.surfaces, n.build_ms, n.cache_hits, n.pairs, n.sims, wrap_list(&edges, 3)));

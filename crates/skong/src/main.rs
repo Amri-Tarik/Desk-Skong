@@ -15,6 +15,7 @@ mod gameguard;
 mod grab;
 mod browser;
 mod keyboard;
+mod movefx;
 mod settings;
 mod navbuild;
 
@@ -37,6 +38,8 @@ pub struct Args {
     pub visit: Option<String>,
     /// `--dream-test`: dream-nail every 15 s (debug).
     pub dream_test: bool,
+    /// `--move-test`: scripted dive + turn-in-place loop (screenshots).
+    pub move_test: bool,
 }
 
 const USAGE: &str = "usage: skong [--browse] [--capturable] [--panel|--no-panel] [--no-vision] [--capture-stats] [--data DIR] [--skins DIR] [--skin NAME] [--scale F] [--clip NAME] [--visit NAME|any]";
@@ -57,6 +60,7 @@ fn parse_args() -> Result<Args> {
         goto_test: false,
         visit: None,
         dream_test: false,
+        move_test: false,
     };
     let mut it = std::env::args().skip(1);
     while let Some(k) = it.next() {
@@ -78,6 +82,7 @@ fn parse_args() -> Result<Args> {
             "--goto-test" => a.goto_test = true,
             "--visit" => a.visit = Some(v()?),
             "--dream-test" => a.dream_test = true,
+            "--move-test" => a.move_test = true,
             "-h" | "--help" => {
                 println!("{USAGE}");
                 std::process::exit(0);

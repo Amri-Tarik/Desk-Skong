@@ -15,11 +15,13 @@ pub struct Settings {
     pub click_through: bool,
     /// Launch the control panel together with the pet.
     pub open_panel: bool,
+    /// Wallet and the Shade waiting where the knight last died.
+    pub stakes: skong_core::stakes::StakesSave,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { skin: None, scale: 0.6, bother: 0.5, click_through: false, open_panel: true }
+        Self { skin: None, scale: 0.6, bother: 0.5, click_through: false, open_panel: true, stakes: Default::default() }
     }
 }
 

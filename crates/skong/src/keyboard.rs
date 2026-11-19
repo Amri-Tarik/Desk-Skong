@@ -2,7 +2,8 @@
 //! control panel (which then don't leak to other apps).
 //!
 //! ←/→ move · ↑ jump (hold for height) · ↓ down (↓+↑ drops through) · LShift dash ·
-//! LCtrl hold = superdash charge · Z walk · X sprint
+//! LCtrl hold = superdash charge · Z walk · X sprint · C dive (↓ held: through one-way
+//! ledges; global keyboard only) · ↓+LShift in the air: down-dash
 use skong_core::controller::{Gait, MoveInput};
 use skong_ipc::ManualKeys;
 use skong_win::runloop::key_down;
@@ -12,12 +13,18 @@ use skong_win::vk;
 pub struct Keyboard {
     jump_was: bool,
     dash_was: bool,
+    dive_was: bool,
 }
 
 impl Keyboard {
     /// This tick's input from `panel` keys when a panel is driving, else the global keyboard.
     pub fn read(&mut self, panel: Option<ManualKeys>) -> MoveInput {
-        self.input(panel.unwrap_or_else(global_keys))
+        // Ctrl+Alt+C is a hotkey: not a dive.
+        let dive = panel.is_none() && key_down(vk::VK_C) && !key_down(vk::VK_MENU);
+        let mut input = self.input(panel.unwrap_or_else(global_keys));
+        input.dive_pressed = dive && !self.dive_was;
+        self.dive_was = dive;
+        input
     }
 
     fn input(&mut self, k: ManualKeys) -> MoveInput {
@@ -37,6 +44,7 @@ impl Keyboard {
             jump_pressed: k.jump && !self.jump_was,
             dash_pressed: k.dash && !self.dash_was,
             superdash_held: k.superdash,
+            ..MoveInput::default()
         };
         self.jump_was = k.jump;
         self.dash_was = k.dash;
