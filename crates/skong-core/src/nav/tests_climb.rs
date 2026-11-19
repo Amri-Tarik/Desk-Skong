@@ -66,7 +66,7 @@ fn drive(g: &NavGraph, t: &Terrain, ch: &mut Character, f: &mut PathFollower, se
         if status != FollowStatus::Moving {
             return (status, dives);
         }
-        if f.dive_ok()
+        if f.dive_ok(ch)
             && let Some(dark) = ch.auto_dive(t, &input, false)
         {
             input.dive_pressed = true;
@@ -202,7 +202,7 @@ fn no_dive_mid_climb() {
     let goal = NavGoal::OnWindow(1);
     let f = PathFollower::new(g.plan(&ch, goal, TravelStyle::Normal).expect("route"), goal, TravelStyle::Normal);
     assert_eq!(f.current_move(), Some(MoveKind::WallJump));
-    assert!(!f.dive_ok());
+    assert!(!f.dive_ok(&ch));
 }
 
 #[test]

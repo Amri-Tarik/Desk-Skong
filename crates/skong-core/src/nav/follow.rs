@@ -43,6 +43,9 @@ pub struct PathFollower {
     /// Time in the current stage (approach / script / final walk) and its budget.
     stage_time: f32,
     stage_limit: f32,
+    /// Seconds spent pressing a direction while grounded without moving (walking into
+    /// something the plan didn't expect). Triggers a re-plan.
+    push: f32,
     /// Drift re-plans so far.
     drifts: u32,
     /// Re-plans so far (any reason).
@@ -81,14 +84,20 @@ impl PathFollower {
         self.route.steps.get(self.step).map(|s| s.edge.kind)
     }
 
-    /// May the app turn a fall into a dive now? Only where a straight drop is the plan
-    /// (walk-offs, drops, drop-throughs; or a fall after a slip, before re-planning): a dive
-    /// lands where that fall would. Mid-jump or mid-climb a dive would wreck the move.
-    pub fn dive_ok(&self) -> bool {
-        match self.route.steps.get(self.step) {
-            None => true,
-            Some(step) => self.replan.is_some() || matches!(step.edge.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::DropThrough),
+    /// May the app turn a fall into a dive now? Only while falling along a planned drop whose
+    /// landing is straight below him: a dive kills horizontal speed, so anywhere else (a
+    /// walk-off still drifting sideways, mid-jump, mid-climb, after a slip) it would land him
+    /// somewhere the plan never meant.
+    pub fn dive_ok(&self, ch: &Character) -> bool {
+        const STRAIGHT_PX: f32 = 12.0;
+        if self.replan.is_some() {
+            return false;
         }
+        self.route.steps.get(self.step).is_some_and(|step| {
+            matches!(step.edge.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::DropThrough)
+                && (ch.pos.x - step.edge.land.x).abs() <= STRAIGHT_PX
+                && ch.vel.x.abs() < ch.params.px(0.5)
+        })
     }
 
     /// Re-plans so far (terrain changes, drift, timeouts).
@@ -153,9 +162,14 @@ impl PathFollower {
                     return (idle, FollowStatus::Moving);
                 }
                 let input = exec.input(ch, self.style.gait(), dt);
+                // Still walking to the take-off (not into the scripted move itself).
+                let walking = approaching && exec.stage == Stage::Approach;
                 if approaching && exec.stage == Stage::Script {
                     self.stage_time = 0.0;
                     self.stage_limit = step.edge.duration + STAGE_SLACK;
+                }
+                if walking {
+                    self.watch_push(ch, &input, dt);
                 }
                 (input, FollowStatus::Moving)
             }
@@ -180,7 +194,22 @@ impl PathFollower {
             return (idle, FollowStatus::Arrived);
         }
         let x = steer(ch.pos.x, target, ch.params.px(ARRIVE_GAIN));
-        (MoveInput { x, gait: self.style.gait(), ..idle }, FollowStatus::Moving)
+        let input = MoveInput { x, gait: self.style.gait(), ..idle };
+        self.watch_push(ch, &input, 1.0 / 120.0);
+        (input, FollowStatus::Moving)
+    }
+
+    /// Walking (not a scripted move) but not getting anywhere — pressed against a wall the
+    /// plan didn't account for: re-plan after half a second instead of pushing until the
+    /// stage times out.
+    fn watch_push(&mut self, ch: &Character, input: &MoveInput, dt: f32) {
+        const PUSH_LIMIT: f32 = 0.5;
+        let pushing = ch.is_grounded() && input.x.abs() > 0.2 && ch.vel.x.abs() < ch.params.px(0.15);
+        self.push = if pushing { self.push + dt } else { 0.0 };
+        if self.push > PUSH_LIMIT {
+            self.push = 0.0;
+            self.request(Replan::Drift);
+        }
     }
 
     fn request(&mut self, reason: Replan) {

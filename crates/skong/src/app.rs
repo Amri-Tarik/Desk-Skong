@@ -449,7 +449,7 @@ impl Pet {
             self.act = None;
         } else if manual_input.is_none()
             // Never mid-jump or mid-climb of a planned route: only where it plans a drop.
-            && self.nav.follower().is_none_or(|f| f.dive_ok())
+            && self.nav.follower().is_none_or(|f| f.dive_ok(&self.ch))
             && let Some(dark) = self.ch.auto_dive(&self.terrain, &input, self.brain.mind().arousal() > 0.6)
         {
             // Far straight drops: Desolate Dive (Descending Dark when excited / very deep).

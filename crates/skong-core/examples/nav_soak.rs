@@ -132,7 +132,7 @@ fn main() {
                     }
                     // Like the app: dive on big straight drops (excited on odd seeds).
                     let mut input = input;
-                    if f.dive_ok() && let Some(dark) = ch.auto_dive(&t, &input, seed % 2 == 1) {
+                    if f.dive_ok(&ch) && let Some(dark) = ch.auto_dive(&t, &input, seed % 2 == 1) {
                         input.dive_pressed = true;
                         input.dive_dark = dark;
                         dives += 1;
