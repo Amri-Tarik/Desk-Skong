@@ -68,7 +68,7 @@ impl TravelStyle {
     /// Can this style use `edge`?
     pub fn allows(self, edge: &Edge) -> bool {
         match self {
-            TravelStyle::Stroll => edge.gait == Gait::Walk && matches!(edge.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::Jump),
+            TravelStyle::Stroll => edge.gait == Gait::Walk && matches!(edge.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::Jump | MoveKind::Behind),
             TravelStyle::Normal => edge.kind != MoveKind::Superdash,
             TravelStyle::Hurry => true,
         }
@@ -96,10 +96,12 @@ pub enum MoveKind {
     Dash,
     ShadowDash,
     Superdash,
+    /// Turn into the screen and walk behind a drawn line (content walls only).
+    Behind,
 }
 
 impl MoveKind {
-    pub const ALL: [MoveKind; 9] = [
+    pub const ALL: [MoveKind; 10] = [
         MoveKind::Walk,
         MoveKind::Drop,
         MoveKind::DropThrough,
@@ -109,6 +111,7 @@ impl MoveKind {
         MoveKind::Dash,
         MoveKind::ShadowDash,
         MoveKind::Superdash,
+        MoveKind::Behind,
     ];
 }
 

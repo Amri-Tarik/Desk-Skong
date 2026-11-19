@@ -36,6 +36,8 @@ pub(crate) enum Recipe {
     Climb,
     /// Charge in place, fly in `dir`, cancel past `tx`, drop.
     Superdash,
+    /// Turn into the screen at the take-off, walk behind the drawn line(s) to `tx`, turn back.
+    Behind,
 }
 
 /// How the take-off point must be reached.
@@ -194,6 +196,7 @@ impl Exec {
             Recipe::Jump { double, dash, .. } => (!double || self.double_done) && (!dash || self.dash_done),
             Recipe::Climb => false,
             Recipe::Superdash => self.released,
+            Recipe::Behind => true,
         }
     }
 
@@ -297,6 +300,15 @@ impl Exec {
                         input.dash_pressed = true;
                         input.x = if s.tx >= ch.pos.x { 1.0 } else { -1.0 };
                     }
+                }
+            }
+            Recipe::Behind => {
+                // Held until at `tx`; letting go turns him back out of the screen.
+                if (ch.pos.x - s.tx) * s.dir.sign() < -1.0 {
+                    input.behind = true;
+                    input.x = s.dir.sign();
+                } else {
+                    input.x = 0.0;
                 }
             }
             Recipe::Climb => self.climb_input(ch, &mut input),

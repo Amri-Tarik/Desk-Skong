@@ -64,7 +64,26 @@ pub struct MoveInput {
     pub dive_pressed: bool,
     /// The dive pressed this tick is Descending Dark (bigger effects, same movement).
     pub dive_dark: bool,
+    /// Held while grounded: turn to face into the screen and walk *behind* what is drawn on
+    /// it, so content walls (lines, borders) don't block. Window and monitor edges still do.
+    /// Released: turn back out.
+    pub behind: bool,
 }
+
+/// Stepping behind screen content ([`MoveInput::behind`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BehindPhase {
+    /// Turning to face into the screen ("TurnToBG"); not moving yet.
+    TurningIn,
+    /// Facing into the screen, walking behind drawn lines.
+    Behind,
+    /// Turning back out ("TurnFromBG"); not moving.
+    TurningOut,
+}
+
+/// Seconds to turn into the screen (TurnToBG: 3 frames at 12 fps) and back out (2 frames).
+pub const BEHIND_TURN_TIME: f32 = 0.25;
+pub const BEHIND_RETURN_TIME: f32 = 0.17;
 
 /// Horizontal direction.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -255,6 +274,10 @@ pub struct Character {
     dive_pierce: bool,
     /// Previous tick's `superdash_held` (edge detection).
     superdash_was_held: bool,
+    /// Seconds spent turned into the screen ([`MoveInput::behind`]); 0 when not.
+    behind: f32,
+    /// Seconds left turning back out of the screen.
+    behind_out: f32,
 }
 
 impl Character {
@@ -276,6 +299,8 @@ impl Character {
             dash_down: false,
             dive_pierce: false,
             superdash_was_held: false,
+            behind: 0.0,
+            behind_out: 0.0,
         }
     }
 
@@ -303,6 +328,15 @@ impl Character {
         self.abilities.shadow_dash && self.timers.shadow_cooldown <= 0.0
     }
 
+    /// Where the knight is in a step behind screen content, if in one.
+    pub fn behind_phase(&self) -> Option<BehindPhase> {
+        if self.behind > 0.0 {
+            Some(if self.behind < BEHIND_TURN_TIME { BehindPhase::TurningIn } else { BehindPhase::Behind })
+        } else {
+            (self.behind_out > 0.0).then_some(BehindPhase::TurningOut)
+        }
+    }
+
     /// Advance one tick.
     pub fn step(&mut self, input: &MoveInput, terrain: &Terrain, dt: f32, events: &mut Vec<MoveEvent>) {
         if !(dt > 0.0 && dt.is_finite()) {
@@ -327,6 +361,10 @@ impl Character {
         self.move_and_collide(&q, dt, events);
         self.resolve_contacts(x_in, &q, events);
         self.clamp_to_bounds(terrain.bounds);
+        if self.support.is_none() {
+            self.behind = 0.0;
+            self.behind_out = 0.0;
+        }
         if self.drop_y.is_some_and(|y| self.pos.y > y + 1.0 || self.support.is_some()) {
             self.drop_y = None;
         }
@@ -350,6 +388,9 @@ impl Character {
         let dash_dir = Side::of(x_in).unwrap_or(self.facing);
         match self.state {
             MoveState::Grounded => {
+                if self.behind_step(input, x_in, dt) {
+                    return;
+                }
                 self.timers.down_held = if input.down { self.timers.down_held + dt } else { 0.0 };
                 if input.dive_pressed && self.abilities.dive && q.can_drop_through(self.body()) {
                     self.drop_y = Some(self.pos.y);
@@ -497,6 +538,31 @@ impl Character {
     }
 
     /// Accelerate towards the gait speed; update facing.
+    /// Turning into / walking behind / turning out of the screen. True while it owns the
+    /// tick (no jumping, dashing or dropping meanwhile).
+    fn behind_step(&mut self, input: &MoveInput, x_in: f32, dt: f32) -> bool {
+        if input.behind {
+            self.behind_out = 0.0;
+            self.behind += dt;
+            if self.behind < BEHIND_TURN_TIME {
+                self.vel.x = 0.0;
+            } else {
+                self.steer(x_in, Gait::Walk, dt);
+            }
+            return true;
+        }
+        if self.behind > 0.0 {
+            self.behind = 0.0;
+            self.behind_out = BEHIND_RETURN_TIME;
+        }
+        if self.behind_out > 0.0 {
+            self.behind_out -= dt;
+            self.vel.x = 0.0;
+            return true;
+        }
+        false
+    }
+
     fn steer(&mut self, x_in: f32, gait: Gait, dt: f32) {
         let p = self.params;
         if self.timers.wall_lock > 0.0 {
@@ -684,7 +750,8 @@ impl Character {
         // Horizontal.
         let foot_tol = if self.support.is_some() { p.step_height_px() } else { 0.0 };
         let shadow = matches!(self.state, MoveState::Dashing { shadow: true });
-        let (ax, hit) = q.sweep_x(self.body(), dx, shadow, foot_tol);
+        let behind = self.behind >= BEHIND_TURN_TIME;
+        let (ax, hit) = q.sweep_x(self.body(), dx, shadow, behind, foot_tol);
         self.pos.x += ax;
         if hit {
             self.vel.x = 0.0;

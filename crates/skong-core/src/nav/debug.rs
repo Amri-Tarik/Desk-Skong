@@ -80,7 +80,7 @@ pub fn edge_path(edge: &Edge, from_y: f32, highlighted: bool) -> DebugPath {
         Vec2::new(mid.x, 2.0 * top - mid.y)
     };
     let control = match edge.kind {
-        MoveKind::Walk => mid,
+        MoveKind::Walk | MoveKind::Behind => mid,
         MoveKind::Drop | MoveKind::DropThrough => Vec2::new(p2.x, p0.y),
         MoveKind::Jump => arc(40.0),
         MoveKind::DoubleJump => arc(110.0),

@@ -83,9 +83,10 @@ impl<'a> Query<'a> {
     /// Horizontal sweep by `dx`. Returns the allowed displacement and whether a wall was hit.
     ///
     /// `pass_window_walls`: shadow dash (window and content walls don't block; monitor walls do).
+    /// `pass_content`: stepping behind screen content (only content walls don't block).
     /// `foot_tol`: walls overlapping only the bottom `foot_tol` px of the body don't block
     /// (lets a grounded body step onto slightly higher ledges).
-    pub fn sweep_x(&self, body: RectF, dx: f32, pass_window_walls: bool, foot_tol: f32) -> (f32, bool) {
+    pub fn sweep_x(&self, body: RectF, dx: f32, pass_window_walls: bool, pass_content: bool, foot_tol: f32) -> (f32, bool) {
         if dx == 0.0 {
             return (0.0, false);
         }
@@ -93,7 +94,7 @@ impl<'a> Query<'a> {
         let mut allowed = dx;
         let mut hit = false;
         for w in self.walls() {
-            if w.face != blocking || (pass_window_walls && w.kind != WallKind::Monitor) {
+            if w.face != blocking || (pass_window_walls && w.kind != WallKind::Monitor) || (pass_content && w.kind == WallKind::Content) {
                 continue;
             }
             if !(w.y0 < body.bottom - foot_tol && body.top < w.y1) {

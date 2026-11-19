@@ -871,3 +871,29 @@ fn shadow_dash_passes_content_walls() {
     run(&mut c, &t, idle(), secs(0.3));
     assert!(c.pos.x > 1102.0 + 16.0, "shadow dash stopped at {}", c.pos.x);
 }
+
+#[test]
+fn stepping_behind_passes_content_walls_only() {
+    let t = window_with_vertical_line(1100.0);
+    let behind = |x: f32| MoveInput { behind: true, x, ..MoveInput::default() };
+    // Turning in first: no movement while the knight faces into the screen.
+    let mut c = standing(&t, 1050.0, FLOOR);
+    run(&mut c, &t, behind(1.0), secs(0.2));
+    assert_eq!(c.behind_phase(), Some(BehindPhase::TurningIn));
+    assert!((c.pos.x - 1050.0).abs() < 0.5, "moved while turning: {}", c.pos.x);
+    // Then walks behind the drawn line.
+    run(&mut c, &t, behind(1.0), secs(1.0));
+    assert_eq!(c.behind_phase(), Some(BehindPhase::Behind));
+    assert!(c.body().left > 1102.0, "stopped at {}", c.pos.x);
+    // Released: turns back out in place, then is done.
+    let x = c.pos.x;
+    run(&mut c, &t, MoveInput { x: 1.0, ..MoveInput::default() }, secs(0.1));
+    assert_eq!(c.behind_phase(), Some(BehindPhase::TurningOut));
+    assert!((c.pos.x - x).abs() < 1.0);
+    run(&mut c, &t, idle(), secs(0.2));
+    assert_eq!(c.behind_phase(), None);
+    // Monitor edges still stop him.
+    let mut c = standing(&t, t.bounds.right - 60.0, FLOOR);
+    run(&mut c, &t, behind(1.0), secs(2.0));
+    assert!(c.body().right <= t.bounds.right + 0.5);
+}
