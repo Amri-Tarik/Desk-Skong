@@ -231,23 +231,58 @@ fn thorns_answer_hits_and_focus_heals_after() {
 #[test]
 fn closed_windows_shatter_by_size_with_a_cap_and_a_rate_limit() {
     let mut src = GeoSources::new(GeoSourceConfig::default(), 1);
-    let small = src.on_closed(crate::geom::RectI::new(0, 0, 400, 300), 0).expect("small window");
+    let small = src.on_closed(1, crate::geom::RectI::new(0, 0, 400, 300), 0).expect("small window");
     let mut src = GeoSources::new(GeoSourceConfig::default(), 1);
-    let big = src.on_closed(crate::geom::RectI::new(0, 0, 2560, 1400), 0).expect("big window");
+    let big = src.on_closed(1, crate::geom::RectI::new(0, 0, 2560, 1400), 0).expect("big window");
     assert!(big.amount > small.amount, "bigger windows hold more: {} vs {}", big.amount, small.amount);
     assert!(big.amount <= GeoSourceConfig::default().shatter_geo[1]);
     assert!(!big.shower);
 
     let mut src = GeoSources::new(GeoSourceConfig::default(), 2);
     let r = crate::geom::RectI::new(0, 0, 800, 600);
-    assert!(src.on_closed(crate::geom::RectI::new(0, 0, 120, 600), 0).is_none(), "popups don't shatter");
-    assert!(src.on_closed(r, 0).is_some());
-    assert!(src.on_closed(r, 0).is_some());
-    assert!(src.on_closed(r, 0).is_none(), "closing a whole app at once: rate limited");
+    assert!(src.on_closed(1, crate::geom::RectI::new(0, 0, 120, 600), 0).is_none(), "popups don't shatter");
+    assert!(src.on_closed(2, r, 0).is_some());
+    assert!(src.on_closed(3, r, 0).is_some());
+    assert!(src.on_closed(4, r, 0).is_none(), "closing a whole app at once: rate limited");
     let b = RectF::new(0.0, 0.0, 1920.0, 1080.0);
     src.tick(21.0, false, false, 0, b);
-    assert!(src.on_closed(r, 0).is_some(), "the limit window passed");
-    assert!(src.on_closed(r, 10_000).is_none(), "enough geo lying around");
+    assert!(src.on_closed(4, r, 0).is_some(), "the limit window passed (and window 4 never paid)");
+    assert!(src.on_closed(5, r, 10_000).is_none(), "enough geo lying around");
+}
+
+#[test]
+fn minimized_windows_shatter_once_per_window_sharing_the_rate_limit() {
+    let cfg = GeoSourceConfig::default();
+    let b = RectF::new(0.0, 0.0, 1920.0, 1080.0);
+    let r = crate::geom::RectI::new(0, 0, 800, 600);
+    let mut src = GeoSources::new(cfg, 3);
+    let d = src.on_minimized(7, r, 0).expect("minimizing shatters");
+    assert!(!d.shower && d.amount >= cfg.shatter_geo[0]);
+    assert!(src.on_minimized(8, crate::geom::RectI::new(0, 0, 300, 100), 0).is_none(), "small windows don't");
+    // Restore + minimize again (well past the rate limit): no farm.
+    for _ in 0..10 {
+        src.tick(30.0, false, false, 0, b);
+        assert!(src.on_minimized(7, r, 0).is_none(), "the same window pays once per {} s", cfg.repay_after);
+    }
+    // ...not even by closing it afterwards.
+    assert!(src.on_closed(7, r, 0).is_none());
+    src.tick(cfg.repay_after, false, false, 0, b);
+    assert!(src.on_minimized(7, r, 0).is_some(), "after a while it pays again");
+
+    // One rate limit for closing and minimizing ("show desktop" minimizes everything).
+    let mut src = GeoSources::new(cfg, 4);
+    assert!(src.on_closed(1, r, 0).is_some());
+    assert!(src.on_minimized(2, r, 0).is_some());
+    assert!(src.on_minimized(3, r, 0).is_none(), "rate limited");
+    assert!(src.on_closed(4, r, 0).is_none(), "rate limited");
+    // A rate-limited window didn't pay: it still can later.
+    src.tick(cfg.shatter_window + 1.0, false, false, 0, b);
+    assert!(src.on_minimized(3, r, 0).is_some());
+
+    // Switched off.
+    let mut src = GeoSources::new(GeoSourceConfig { shatter_minimized: false, ..cfg }, 5);
+    assert!(src.on_minimized(1, r, 0).is_none());
+    assert!(src.on_closed(1, r, 0).is_some());
 }
 
 #[test]

@@ -24,6 +24,7 @@
       "requires": "grounded",
       "weight": 0.3,
       "cooldown": 20,
+      "linger": true,
       "steps": [
         {
           "clip": "LookUp",
@@ -46,6 +47,7 @@
       "requires": "grounded",
       "weight": 0.3,
       "cooldown": 20,
+      "linger": true,
       "steps": [
         {
           "clip": "LookDown",
@@ -250,6 +252,7 @@
       "requires": "grounded",
       "weight": 0.0,
       "cooldown": 180,
+      "linger": true,
       "steps": [
         {
           "clip": "Exit",
@@ -272,6 +275,7 @@
       "requires": "grounded",
       "weight": 0.0,
       "cooldown": 120,
+      "linger": true,
       "steps": [
         {
           "clip": "TurnToBG"

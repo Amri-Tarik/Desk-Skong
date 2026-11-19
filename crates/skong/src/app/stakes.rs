@@ -18,6 +18,7 @@ use skong_core::desktop::WindowId;
 use skong_core::geom::{RectF, RectI};
 use skong_core::stakes::{DeathKind, GeoDrop, GeoField, GeoSources, Shade, StakesSave};
 use skong_ipc::{SPELLS, StakesCommand, StakesInfo};
+use skong_win::desktop::WindowGone;
 use skong_win::monitor;
 
 use super::{Pet, seed};
@@ -239,13 +240,19 @@ impl Pet {
             st.desk_generation = desk.generation;
             let now: HashMap<WindowId, (RectI, bool)> = desk.windows.iter().map(|w| (w.id, (w.rect, w.fullscreen))).collect();
             for (id, &(rect, fullscreen)) in &st.windows {
-                // Games (fullscreen) closing don't shatter, nor anything on a game monitor.
+                // Games (fullscreen) closing or minimizing don't shatter, nor anything on a
+                // game monitor.
                 let on_game = st.games.iter().any(|g| !g.intersect(&rect).is_empty());
-                if first || fullscreen || on_game || now.contains_key(id) || !skong_win::desktop::window_closed(*id) {
+                if first || fullscreen || on_game || now.contains_key(id) {
                     continue;
                 }
-                if let Some(d) = st.sources.on_closed(rect, loose) {
-                    log::info!("a closed window shatters into {} geo", d.amount);
+                let drop = match skong_win::desktop::window_gone(*id) {
+                    WindowGone::Closed => st.sources.on_closed(*id, rect, loose).map(|d| (d, "closed")),
+                    WindowGone::Minimized => st.sources.on_minimized(*id, rect, loose).map(|d| (d, "minimized")),
+                    WindowGone::Other => None,
+                };
+                if let Some((d, how)) = drop {
+                    log::info!("a {how} window shatters into {} geo", d.amount);
                     st.geo.spill(&d);
                 }
             }

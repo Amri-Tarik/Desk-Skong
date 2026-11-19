@@ -1,11 +1,16 @@
 //! The knight is silent: instead of speech he shows small emote icons above his head —
 //! "zzz" while asleep, a Geo coin when he spots loot, "!" when startled or excited, "?"
 //! when something catches his curiosity. One small capture-excluded window follows him.
+//!
+//! Thoughts (Geo: "I want that"; "?": "what's that?") sit in a small thought cloud so they
+//! read as his thinking, not as an object floating over him. Reactions stay bare: "!" is a
+//! startle (a jolt, not a thought) and the rising "zzz" is the usual sleep sign.
 use std::path::Path;
 
 use anyhow::Result;
 use skong_core::anim::ClipLibrary;
 use skong_core::assets::{Skin, SpriteBank};
+use skong_core::bubble::thought_cloud;
 use skong_core::canvas::Image;
 use skong_core::geom::Vec2;
 use skong_win::sprite_window::SpriteWindow;
@@ -27,6 +32,11 @@ impl Emote {
             Emote::Bang => 1.2,
             Emote::Question => 1.8,
         }
+    }
+
+    /// Shown inside a thought cloud (see the module docs).
+    fn in_cloud(self) -> bool {
+        matches!(self, Emote::Geo | Emote::Question)
     }
 
     /// Reactions (startle, sleep) always show; curiosity/greed respect a cooldown.
@@ -69,7 +79,7 @@ impl Emotes {
         self.ppu = px_per_unit;
         let px = (0.7 * px_per_unit).round().max(12.0) as i32;
         self.painter = TextPainter::new(&["Trajan Pro", "Perpetua Titling MT", "Georgia"], px, false).map_err(|e| log::warn!("emote font: {e:#}")).ok();
-        self.coin = vanilla.and_then(|v| coin_icon(data, v, px_per_unit).map_err(|e| log::warn!("emote coin: {e:#}")).ok());
+        self.coin = vanilla.and_then(|v| coin_icon(data, v, px_per_unit * 0.85).map_err(|e| log::warn!("emote coin: {e:#}")).ok());
         self.drawn = None;
     }
 
@@ -153,12 +163,39 @@ impl Emotes {
     }
 
     fn render(&mut self, e: Emote, phase: u32) -> Option<Image> {
+        if e.in_cloud() {
+            let icon = match e {
+                Emote::Geo => self.coin.clone()?,
+                _ => self.ink("?")?,
+            };
+            let cloud = thought_cloud((icon.width, icon.height), (self.ppu / 38.4 * 1.3).clamp(1.0, 3.0));
+            let mut img = cloud.image;
+            img.blit_over(&icon, cloud.content_at.0, cloud.content_at.1, false);
+            return Some(img);
+        }
         match e {
             Emote::Geo => self.coin.clone(),
             Emote::Bang => self.glyphs("!"),
             Emote::Question => self.glyphs("?"),
             Emote::Zzz => self.glyphs(["z", "z Z", "z Z z"][phase as usize]),
         }
+    }
+
+    /// Dark text, tightly sized (drawn on a pale thought cloud).
+    fn ink(&mut self, text: &str) -> Option<Image> {
+        let p = self.painter.as_mut()?;
+        let w = p.measure(text).ceil() as u32 + 2;
+        let h = p.line_height().ceil() as u32;
+        let mut img = Image::new(w, h);
+        p.draw(&mut img, 1, 0, text, [40, 40, 56], 1.0).ok()?;
+        // Trim to the inked pixels (the line box has room for accents and descenders).
+        let inked = |x: u32, y: u32| img.px[(y * w + x) as usize] >> 24 > 0;
+        let rows: Vec<u32> = (0..h).filter(|&y| (0..w).any(|x| inked(x, y))).collect();
+        let cols: Vec<u32> = (0..w).filter(|&x| (0..h).any(|y| inked(x, y))).collect();
+        let (&y0, &y1, &x0, &x1) = (rows.first()?, rows.last()?, cols.first()?, cols.last()?);
+        let mut out = Image::new(x1 - x0 + 1, y1 - y0 + 1);
+        out.blit_over(&img, -(x0 as i32), -(y0 as i32), false);
+        Some(out)
     }
 
     /// White text with a dark outline (readable on any background).
