@@ -86,6 +86,9 @@ pub struct Visitors {
     pending_fx: Vec<Vec2>,
     /// Every window hidden (games cover every monitor).
     hidden: bool,
+    /// Debug (`--dream-test`): seconds until the knight is asked to dream-nail again.
+    pub dream_test: Option<f32>,
+    dream_wanted: bool,
 }
 
 const SLASH_CLIP: &str = "DN Slash";
@@ -122,6 +125,8 @@ impl Visitors {
             knight_clip_was_slash: false,
             pending_fx: Vec::new(),
             hidden: false,
+            dream_test: None,
+            dream_wanted: false,
         };
         v.rescale(vanilla, scale)?;
         Ok(v)
@@ -299,6 +304,13 @@ impl Visitors {
         }
 
         // 4. Dream-nail thoughts.
+        if let Some(t) = self.dream_test.as_mut() {
+            *t -= dt;
+            if *t <= 0.0 {
+                *t = 15.0;
+                self.dream_wanted = true;
+            }
+        }
         if let Some(t) = self.thought_in.as_mut() {
             *t -= dt;
             if *t <= 0.0 {
@@ -307,6 +319,11 @@ impl Visitors {
             }
         }
         self.bubbles.update(dt);
+    }
+
+    /// Debug: the dream test wants a dream nail now.
+    pub fn take_dream_request(&mut self) -> bool {
+        std::mem::take(&mut self.dream_wanted)
     }
 
     /// Watch the knight's clip: the dream nail's slash spawns its effect, then a thought.

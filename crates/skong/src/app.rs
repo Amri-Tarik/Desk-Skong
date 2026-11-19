@@ -284,6 +284,9 @@ pub fn run(args: &Args) -> Result<()> {
     if let (Some(v), Some(name)) = (pet.visitors.as_mut(), &args.visit) {
         v.invite((name != "any").then(|| name.clone()));
     }
+    if let Some(v) = pet.visitors.as_mut().filter(|_| args.dream_test) {
+        v.dream_test = Some(4.0);
+    }
     pet.control.set_hello(pet.hello());
 
     pet.benches.capturable = args.capturable;

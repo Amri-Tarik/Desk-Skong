@@ -427,7 +427,7 @@ impl Brain {
             woken |= napping;
         }
         if std::mem::take(&mut self.visitors.knock) {
-            woken |= napping; // a visitor! up you get
+            woken |= napping || matches!(self.active, Active::Nap(_)); // a visitor! up you get
         }
         if p.move_events.contains(&MoveEvent::Landed { hard: true }) {
             self.knocked_out = true;

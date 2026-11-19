@@ -63,6 +63,9 @@ impl Pet {
             v.knight_clip(&clip, origin, right, fx);
             v.tick(dt, w, fx);
         });
+        if self.visitors.as_mut().is_some_and(|v| v.take_dream_request()) && self.act.is_none() {
+            let _ = self.apply_visit(Command::DreamNail);
+        }
     }
 
     /// Games cover every monitor: hide visitors and bubbles until the next tick.

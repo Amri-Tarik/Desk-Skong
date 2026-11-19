@@ -35,6 +35,8 @@ pub struct Args {
     pub goto_test: bool,
     /// `--visit NAME|any`: invite a visitor right after start (debug).
     pub visit: Option<String>,
+    /// `--dream-test`: dream-nail every 15 s (debug).
+    pub dream_test: bool,
 }
 
 const USAGE: &str = "usage: skong [--browse] [--capturable] [--panel|--no-panel] [--no-vision] [--capture-stats] [--data DIR] [--skins DIR] [--skin NAME] [--scale F] [--clip NAME] [--visit NAME|any]";
@@ -54,6 +56,7 @@ fn parse_args() -> Result<Args> {
         fx_test: false,
         goto_test: false,
         visit: None,
+        dream_test: false,
     };
     let mut it = std::env::args().skip(1);
     while let Some(k) = it.next() {
@@ -74,6 +77,7 @@ fn parse_args() -> Result<Args> {
             "--fx-test" => a.fx_test = true,
             "--goto-test" => a.goto_test = true,
             "--visit" => a.visit = Some(v()?),
+            "--dream-test" => a.dream_test = true,
             "-h" | "--help" => {
                 println!("{USAGE}");
                 std::process::exit(0);
