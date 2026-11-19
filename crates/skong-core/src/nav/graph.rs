@@ -22,9 +22,9 @@ pub(crate) const SIM_DT: f32 = 1.0 / 120.0;
 /// Walls considered per climbing pair.
 const MAX_CLIMB_WALLS: usize = 3;
 /// Perturbed re-runs a climb must also pass.
-const PERTURBATIONS: u8 = 2;
+const PERTURBATIONS: u8 = 1;
 /// A climb run without a new high point for this long (s) is abandoned.
-const CLIMB_STALL: f32 = 1.5;
+const CLIMB_STALL: f32 = 1.1;
 /// Slowest take-off speed (fraction of the gait speed) a perturbed run uses; just above what
 /// the follower's approach accepts.
 const RUN_FRACTION_MIN: f32 = 0.82;
@@ -103,8 +103,7 @@ struct Found {
 }
 
 /// Results for one ordered pair, per tier (stroll, normal, hurry).
-/// Slot 3 is an alternative normal-tier climb up another wall.
-type PairResult = [Option<Found>; 4];
+type PairResult = [Option<Found>; 3];
 
 /// Pair results of one build, keyed by a hash of everything they depend on.
 #[derive(Clone, Default)]
@@ -376,28 +375,28 @@ impl Builder<'_> {
     /// run was caught by a surface sitting right above the target is not retried (more
     /// power or speed will not help), and the stroll's winner is tried first at run speed.
     fn search_pair(&mut self, s: &Surface, t: &Surface, region: RectF, tiers: [bool; 3]) -> PairResult {
-        let mut out = [None; 4];
+        let mut out = [None; 3];
         let mut blocked: Vec<f32> = Vec::new();
         if tiers[1] {
-            (out[1], out[3]) = self.search(Tier::Normal, s, t, region, None, &mut blocked);
+            out[1] = self.search(Tier::Normal, s, t, region, None, &mut blocked);
         }
         // Strolling only uses walk / drop / single jump at walking pace: if running could not
         // connect the pair with those, walking will not either.
         let basic = |f: &Found| matches!(f.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::DropThrough | MoveKind::Jump);
         if tiers[0] && out[1].as_ref().is_some_and(basic) {
             let hint = out[1].map(|f| f.script.recipe);
-            out[0] = self.search(Tier::Stroll, s, t, region, hint, &mut blocked).0;
+            out[0] = self.search(Tier::Stroll, s, t, region, hint, &mut blocked);
         }
         if tiers[2] && out[1].is_none() {
-            out[2] = self.search(Tier::Hurry, s, t, region, None, &mut blocked).0;
+            out[2] = self.search(Tier::Hurry, s, t, region, None, &mut blocked);
         }
         out
     }
 
     /// Try the tier's candidate scripts in order of preference; first success wins. A climb
-    /// only counts if it also succeeds from perturbed starts; once one is found, the next
-    /// robust climb up a *different* wall is kept as an alternative (second result), for the
-    /// follower to fall back on when the first keeps slipping.
+    /// only counts if it also succeeds from a perturbed start. (No second, alternative climb
+    /// per pair: it cost ~10% of build time, and the follower's slip memory already falls
+    /// back on other routes.)
     fn search(
         &mut self,
         tier: Tier,
@@ -406,7 +405,7 @@ impl Builder<'_> {
         region: RectF,
         hint: Option<Recipe>,
         blocked: &mut Vec<f32>,
-    ) -> (Option<Found>, Option<Found>) {
+    ) -> Option<Found> {
         let mut cands = std::mem::take(&mut self.candidates);
         cands.clear();
         self.candidates_for(tier, s, t, &mut cands);
@@ -420,7 +419,6 @@ impl Builder<'_> {
             cands.insert(at, c);
         }
         let mut found: Option<Found> = None;
-        let mut alternative = None;
         let mut caught = false;
         let mut dead_walls: Vec<f32> = Vec::new();
         let (mut stalled_walls, mut short_walls): (Vec<f32>, Vec<f32>) = (Vec::new(), Vec::new());
@@ -428,16 +426,7 @@ impl Builder<'_> {
         // onto the source off a wall, or fell short). Jumps that were all caught by other
         // surfaces on the way say the same of climbs.
         let (mut jumps_tried, mut climb_could_help) = (false, false);
-        let mut alternative_tries = 0;
         for c in &cands {
-            // Looking for an alternative: one try at a climb up another wall.
-            if let Some(f) = found {
-                let other_wall = c.climb.zip(f.script.climb).is_some_and(|(a, b)| a.wall.x != b.wall.x);
-                if !other_wall || alternative_tries >= 1 {
-                    continue;
-                }
-                alternative_tries += 1;
-            }
             if c.recipe == Recipe::Climb && jumps_tried && !climb_could_help {
                 continue;
             }
@@ -471,14 +460,8 @@ impl Builder<'_> {
                     if !ok || (c.recipe == Recipe::Climb && !self.robust(*c, s, t, region)) {
                         continue;
                     }
-                    if found.is_some() {
-                        alternative = Some(f);
-                        break;
-                    }
                     found = Some(f);
-                    if c.recipe != Recipe::Climb {
-                        break;
-                    }
+                    break;
                 }
                 Err(Fail::Landed { above: true, near: true, source: false }) if c.recipe != Recipe::Climb => blocked.push(c.tx),
                 Err(Fail::Landed { source: false, .. }) if matches!(c.recipe, Recipe::Jump { .. }) => caught = true,
@@ -490,7 +473,7 @@ impl Builder<'_> {
             }
         }
         self.candidates = cands;
-        (found, alternative)
+        found
     }
 
     /// Does `c` also work from the perturbed starts? Brittle scripts would make the follower
@@ -676,8 +659,10 @@ impl Builder<'_> {
                 Side::Left => t.lo < wall.x,
             };
             let want = if over { wall.x + sign * (r.half + 8.0) } else { hover - sign * (r.half + 8.0) };
-            // Land where nothing sits on top of the target (it would catch the knight first).
-            let Some(tx) = self.exposed_x(t, want, t.y - r.jump) else { continue };
+            // Prefer a landing x nothing sits on top of; but a climb comes in from the side,
+            // just above `t`, under such ledges, so a covered target is still worth a try
+            // (skipping those, even only for over-the-top climbs, measurably cost reach).
+            let tx = self.exposed_x(t, want, t.y - r.jump).unwrap_or_else(|| inset(t, want, r.half));
             let cw = |w: &Wall| ClimbWall { x: w.x, y0: w.y0, y1: w.y1 };
             let far = (tx - hover).abs() > 4.0 * r.half + 32.0;
             let mut push = |shaft: Option<ClimbWall>, dash: bool| {

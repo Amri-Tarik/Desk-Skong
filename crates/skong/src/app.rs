@@ -678,7 +678,8 @@ impl Pet {
         let Some((x, y)) = monitor::cursor_pos() else { return };
         let style = if hurry { TravelStyle::Hurry } else { TravelStyle::Stroll };
         if self.nav.go(&self.ch, NavGoal::Point(Vec2::new(x as f32, y as f32)), style) {
-            log::info!("go-to-cursor ({style:?}) toward ({x},{y})");
+            let moves = self.nav.follower().map(|f| f.route().moves.clone()).unwrap_or_default();
+            log::info!("go-to-cursor ({style:?}) toward ({x},{y}) via {moves:?}");
             // The planner heads for the closest reachable point; say so when that is not the cursor.
             if let Some(end) = self.nav.follower().map(|f| f.route().end) {
                 // Ending below a cursor that hovers in mid-air is normal; only a horizontal miss
