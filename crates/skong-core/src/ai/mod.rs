@@ -60,7 +60,7 @@ use std::fmt::Write as _;
 pub use activity::{Activity, ActivitySpot, ActivityTracker, QUIET, TrackedSpot};
 pub use battle::{BattleScore, Outcome};
 pub use behaviours::{BehaviourKind, Tier};
-pub use config::{BattleConfig, BoredomConfig, BrainConfig, CompanionConfig, NeedRates, Personality, TierConfig, WatchConfig};
+pub use config::{BattleConfig, BoredomConfig, BrainConfig, CompanionConfig, NeedRates, Personality, SereneConfig, TierConfig, WatchConfig};
 pub use greet::{STAND_OFF_UNITS, Visitor, VisitorState};
 pub use train::{LessonCue, LessonReport, LessonSignal, LessonStage};
 pub use interest::{InterestMap, Poi, PoiKey, PoiKind, PoiTarget, ScoredPoi};
@@ -496,6 +496,7 @@ impl Brain {
             }
             self.think(p, nav, &mut out, true);
         }
+        self.stir_from_slug(p, &mut out);
         if p.act.is_some() || out.act.is_some() || !matches!(out.motion, Motion::Hold) {
             out.waiting = false;
         }
@@ -573,6 +574,31 @@ impl Brain {
         let Some(act) = p.act else { return false };
         let is = |name: &str| self.rep.catalog.id(name) == Some(act.id);
         is("nap") || (is("bow_down") && matches!(self.active, Active::Nap(_)))
+    }
+
+    /// The Unn slug ends the moment anything matters: the user stirs (any input, a poke,
+    /// typing), a visitor, Geo or the Shade shows up, or he gets excited. He always
+    /// transforms back first (`slug_up`) rather than snapping out of the slug, also when a
+    /// behaviour simply cancels the act.
+    fn stir_from_slug(&self, p: &Percepts, out: &mut Intent) {
+        let cat = &self.rep.catalog;
+        let Some(act) = p.act.filter(|a| a.interruptible && cat.id(behaviours::SLUG_ACT) == Some(a.id)) else { return };
+        let s = &self.senses;
+        let stirred = p.user.idle_secs < 1.0
+            || !p.pokes.is_empty()
+            || s.user_busy
+            || s.fullscreen
+            || !s.visitors.is_empty()
+            || !self.stakes.sense.coins.is_empty()
+            || self.stakes.sense.shade.is_some()
+            || self.mind.arousal() > self.cfg.serene.stir_arousal;
+        if (stirred || out.cancel_act) && out.exit_act.is_none() {
+            log::debug!("brain: stirred out of the slug (act {})", act.id.0);
+            out.exit_act = cat.id(behaviours::SLUG_EXIT);
+        }
+        if out.exit_act.is_some() {
+            out.cancel_act = false; // the exit act replaces it
+        }
     }
 
     /// Immediate reactions that bypass deliberation.

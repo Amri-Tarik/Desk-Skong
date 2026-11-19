@@ -255,9 +255,14 @@ impl Ctx<'_, '_> {
     /// Sitting down again is fine: tired, or the last seat was a while ago.
     /// A little wander with a prop, when nothing better is going on: the lantern where it's
     /// dark (a dark-themed window, night), or a look at his map (more often when curious).
-    /// Spaced out so it stays a treat.
+    /// Spaced out so it stays a treat. In a serene moment, rarely, the Unn slug's crawl.
     pub fn wander_act(&mut self) -> Option<ActWait> {
         let since = |ctx: &Self, name: &str| ctx.act_id(name).map_or(0.0, |id| ctx.rep.since_used(id, ctx.now));
+        let s = self.cfg.serene;
+        let calm_nature = 1.5 - self.mind.personality.vigour; // placid knights slug more
+        if self.serene() && since(self, SLUG_ACT) >= s.cooldown_secs && self.rng.chance(s.chance * calm_nature) {
+            return ActWait::named(self, SLUG_ACT);
+        }
         if self.senses.dark && since(self, "lantern_patrol") >= 60.0 && self.rng.chance(0.35) {
             return ActWait::named(self, "lantern_patrol");
         }
@@ -266,6 +271,26 @@ impl Ctx<'_, '_> {
             return ActWait::named(self, "map_stroll");
         }
         None
+    }
+
+    /// A serene moment: rested and calm, no input for a while, nobody visiting, no Geo or
+    /// Shade about, nothing worth watching on screen, and a ledge long enough to crawl.
+    pub fn serene(&self) -> bool {
+        let s = &self.cfg.serene;
+        let (k, senses) = (self.p.knight, self.senses);
+        self.grounded()
+            && self.p.user.idle_secs >= s.user_idle_secs
+            && !senses.user_busy
+            && !senses.fullscreen
+            && !senses.held
+            && senses.visitors.is_empty()
+            && self.stakes.sense.coins.is_empty()
+            && self.stakes.sense.shade.is_none()
+            && self.p.activity.spots.iter().all(|a| a.intensity < self.cfg.watch.min_intensity)
+            && self.mind.needs.energy >= s.min_energy
+            && self.mind.arousal() <= s.max_arousal
+            && self.mind.emotions.hurt <= s.max_arousal
+            && k.support.is_some_and(|l| l.x1 - l.x0 >= s.min_ledge_widths * k.size.x)
     }
 
     pub fn may_sit(&self) -> bool {
@@ -572,6 +597,7 @@ impl Idle {
         match self.beat.doing_name(ctx) {
             Some("lantern_patrol") => "idle: dark, lantern walk".into(),
             Some("map_stroll") => "idle: checking his map".into(),
+            Some(SLUG_ACT) => "idle: feeling serene (slug crawl)".into(),
             Some(n) => format!("idle: {n}"),
             None => "idle: nothing going on".into(),
         }
@@ -1100,10 +1126,16 @@ impl Active {
     }
 }
 
+/// The Unn slug's serene crawl, and its way back (transform back to the knight).
+pub(crate) const SLUG_ACT: &str = "slug_crawl";
+pub(crate) const SLUG_EXIT: &str = "slug_up";
+
 /// Short act that ends `act` gracefully when another behaviour takes over (getting up from
-/// a seat, lowering the head, turning back from the screen) instead of snapping to idle.
+/// a seat, lowering the head, turning back from the screen, standing up from the slug)
+/// instead of snapping to idle.
 pub(crate) fn exit_act_for(act: &ActInfo) -> Option<&'static str> {
     match act.name.as_str() {
+        SLUG_ACT => Some(SLUG_EXIT),
         "look_up" => Some("look_up_end"),
         "look_down" => Some("look_down_end"),
         "gaze_into_screen" => Some("turn_from_screen"),

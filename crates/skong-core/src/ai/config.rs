@@ -200,6 +200,32 @@ impl Default for WatchConfig {
     }
 }
 
+/// Serene moments: the Unn slug's slow crawl (`slug_crawl`) when everything is quiet.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct SereneConfig {
+    /// No keyboard or mouse input for at least this long (s).
+    pub user_idle_secs: f32,
+    /// At least this long between two crawls (s): a few times an hour at most.
+    pub cooldown_secs: f32,
+    /// Chance per idle beat once everything is serene (scaled up for calm personalities).
+    pub chance: f32,
+    /// Rested: energy at least this.
+    pub min_energy: f32,
+    /// Calm: arousal (and hurt) at most this.
+    pub max_arousal: f32,
+    /// Arousal above this snaps him out of the slug.
+    pub stir_arousal: f32,
+    /// Room to crawl: the ledge is at least this many body widths long.
+    pub min_ledge_widths: f32,
+}
+
+impl Default for SereneConfig {
+    fn default() -> Self {
+        Self { user_idle_secs: 90.0, cooldown_secs: 900.0, chance: 0.2, min_energy: 0.6, max_arousal: 0.15, stir_arousal: 0.3, min_ledge_widths: 8.0 }
+    }
+}
+
 /// Priority-tier tuning (see [`super::Tier`]).
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(default)]
@@ -278,6 +304,8 @@ pub struct BrainConfig {
     pub stakes: super::stakes::StakesConfig,
     pub companion: CompanionConfig,
     pub watch: WatchConfig,
+    /// The Unn slug's serene crawl.
+    pub serene: SereneConfig,
     /// Seconds of plain standing between purposeful actions when idle.
     pub idle_gap: [f32; 2],
     /// User idle this long = away (pet naps, stops bothering).
@@ -311,6 +339,7 @@ impl Default for BrainConfig {
             stakes: super::stakes::StakesConfig::default(),
             companion: CompanionConfig::default(),
             watch: WatchConfig::default(),
+            serene: SereneConfig::default(),
             idle_gap: [1.0, 3.0],
             user_away_secs: 300.0,
             typing_busy_rate: 1.5,

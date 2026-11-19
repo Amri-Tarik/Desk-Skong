@@ -93,6 +93,7 @@ impl StepJson {
             Some("walk") => Some(Gait::Walk),
             Some("run") => Some(Gait::Run),
             Some("sprint") => Some(Gait::Sprint),
+            Some("crawl") => Some(Gait::Crawl),
             Some(m) => bail!("{ctx}: unknown move '{m}'"),
         };
         let turn = match s.turn.as_deref() {
@@ -810,5 +811,41 @@ mod tests {
             }
         }
         assert!(walked);
+    }
+
+    #[test]
+    fn slug_crawl_transforms_crawls_slowly_and_ends_transformed_back() {
+        let (clips, acts) = libs();
+        let id = acts.id("slug_crawl").expect("act");
+        assert_eq!(acts.get(id).weight, 0.0, "started for a reason only");
+        for seed in [1, 5, 9] {
+            let mut anim = Animator::new(clips.id("Idle").expect("Idle"));
+            let mut p = ActPlayer::start(&acts, &clips, &mut anim, id, seed);
+            assert_eq!(clips.get(anim.clip()).name, "Slug Down", "melts into the slug first");
+            let crawling = |p: &ActPlayer, s: ActStatus| {
+                if let ActStatus::Running { gait: Some(g) } = s {
+                    assert_eq!(g, Gait::Crawl);
+                }
+                p.gait(&acts).is_some()
+            };
+            tick_until(&clips, &acts, &mut anim, &mut p, 5.0, crawling);
+            assert_eq!(clips.get(anim.clip()).name, "Slug Walk");
+            // Turning at a ledge end plays the slug's own turn, still crawling.
+            p.turned(&acts, &clips, &mut anim);
+            assert_eq!(clips.get(anim.clip()).name, "Slug Turn");
+            assert_eq!(p.gait(&acts), Some(Gait::Crawl));
+            let seen = tick_until(&clips, &acts, &mut anim, &mut p, 30.0, |_, s| s == ActStatus::Done);
+            assert!(!seen.iter().any(|c| !c.starts_with("Slug")), "slug form throughout: {seen:?}");
+            assert_eq!(seen.last().map(String::as_str), Some("Slug Up"), "ends transformed back: {seen:?}");
+            assert!(anim.is_finished(), "Slug Up played through");
+        }
+        // The graceful way out when something interrupts: transform back, uninterruptible.
+        let exit = acts.get(acts.id("slug_up").expect("exit act"));
+        assert_eq!(exit.steps.len(), 1);
+        assert_eq!(clips.get(exit.steps[0].clip).name, "Slug Up");
+        assert!(!exit.steps[0].interruptible);
+        // A slow crawl: well under a walk.
+        let params = crate::controller::CharacterParams::hollow_knight(64.0);
+        assert!(params.gait_speed(Gait::Crawl) < 0.5 * params.gait_speed(Gait::Walk));
     }
 }

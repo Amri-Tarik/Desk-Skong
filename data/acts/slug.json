@@ -1,0 +1,19 @@
+{
+  "$comment": "The Shape of Unn's slug form, for serene moments: very calm, rested, the desktop quiet (no input for a while, no Geo, no visitors). He melts into the slug (Slug Down), rests, crawls his ledge slowly (turning at its ends), rests again and stands back up (Slug Up). Anything that matters snaps him out through `slug_up` (transform back first). Started by name only (Ctx::wander_act).",
+  "acts": [
+    {
+      "name": "slug_crawl",
+      "tags": ["calm"],
+      "requires": "grounded",
+      "weight": 0.0,
+      "cooldown": 600,
+      "steps": [
+        { "clip": "Slug Down", "hold": [2.0, 3.5] },
+        { "clip": "Slug Walk", "move": "crawl", "turn": "Slug Turn", "hold": [8.0, 16.0] },
+        { "clip": "Slug Idle", "hold": [2.0, 4.0] },
+        { "clip": "Slug Up", "interruptible": false }
+      ]
+    },
+    { "name": "slug_up", "tags": ["exit"], "requires": "any", "weight": 0.0, "cooldown": 0, "steps": [ { "clip": "Slug Up", "interruptible": false } ] }
+  ]
+}
