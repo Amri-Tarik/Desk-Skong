@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use skong_core::anim::{AnimEvent, Animator};
-use skong_core::assets::{Frame, SpriteKey};
+use skong_core::assets::{Frame, FrameStore, SpriteKey};
 use skong_core::canvas::Image;
 use skong_core::effects::EffectSet;
 use skong_core::geom::Vec2;
@@ -19,6 +19,8 @@ use skong_win::sprite_window::SpriteWindow;
 const PARTICLE_FPS: f32 = 60.0;
 /// At most this many particle bursts at once (new one-shots are skipped beyond it).
 const MAX_BURSTS: usize = 8;
+/// Unpacked effect frames not drawn for this long are dropped (they stay packed).
+const EVICT_PERIOD: f32 = 60.0;
 
 struct LiveBurst {
     /// Streams (fed every tick while their condition holds) and `particles_once` bursts
@@ -45,8 +47,10 @@ struct Live {
 
 pub struct Fx {
     pub set: EffectSet,
-    /// Rasterized frames per effect def (each at its own scale).
-    frames: Vec<HashMap<SpriteKey, Frame>>,
+    /// Rasterized frames per effect def (each at its own scale), packed until drawn.
+    frames: Vec<FrameStore>,
+    /// Seconds to the next eviction of unpacked frames no effect drew meanwhile.
+    evict_in: f32,
     live: Vec<Live>,
     pool: Vec<SpriteWindow>,
     events: Vec<AnimEvent>,
@@ -64,7 +68,8 @@ impl Fx {
         let n = set.defs.len();
         Self {
             set,
-            frames: vec![HashMap::new(); n],
+            frames: (0..n).map(|_| FrameStore::default()).collect(),
+            evict_in: EVICT_PERIOD,
             live: Vec::new(),
             pool: Vec::new(),
             events: Vec::new(),
@@ -178,7 +183,7 @@ impl Fx {
                 }
             }
         }
-        self.frames = frames;
+        self.frames = frames.into_iter().map(FrameStore::pack).collect();
         for l in &mut self.live {
             l.drawn = None;
         }
@@ -224,6 +229,13 @@ impl Fx {
 
     /// Advance and draw. `origin` / `right` describe the knight now; `ppu` the scale.
     pub fn update(&mut self, dt: f32, origin: Vec2, right: bool, ppu: f32) -> Result<()> {
+        self.evict_in -= dt;
+        if self.evict_in <= 0.0 {
+            self.evict_in = EVICT_PERIOD;
+            for f in &mut self.frames {
+                f.evict_unused();
+            }
+        }
         let mut finished = Vec::new();
         for (i, l) in self.live.iter_mut().enumerate() {
             let def = &self.set.defs[l.def];

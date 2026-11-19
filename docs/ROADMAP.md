@@ -55,7 +55,8 @@ _Working list, last updated 2026-11-19. Reorder freely and add notes under any i
 
 - [ ] Nav graph builds are slower since climbing (~2.3 ms median, background thread).
       Next lever: share climb results per wall.
-- [ ] Load animation frames only as needed, to cut memory at large scales.
+- [x] Load animation frames only as needed, to cut memory at large scales (frames stay
+      packed until drawn: knight + effects 75 → 22 MiB private at x0.6, 202 → 41 at x1.0).
 - [ ] With "Visible in screen shares" (or `--capturable`) on, a rock or coin on a line
       that disappears can float until it's turned off.
 - [ ] Rotated monitors get no content terrain.

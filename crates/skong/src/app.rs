@@ -9,7 +9,7 @@ use skong_core::acts::{ActId, ActLibrary, ActPlayer, ActStatus, Requirement};
 use skong_core::anim::{AnimEvent, Animator, ClipId, ClipLibrary};
 use std::collections::HashMap;
 
-use skong_core::assets::{Frame, Skin, SpriteBank, SpriteKey, VANILLA};
+use skong_core::assets::{Frame, FrameStore, Skin, SpriteBank, SpriteKey, VANILLA};
 use skong_core::effects::EffectSet;
 
 use crate::fx::Fx;
@@ -98,6 +98,8 @@ struct Look {
     bank: SpriteBank,
     /// Pixels from the sprite origin down to the feet (measured on Idle frame 0).
     feet_offset: f32,
+    /// Seconds to the next eviction of idle unpacked frames.
+    evict_in: f32,
 }
 
 /// Static game data shared by everything.
@@ -123,12 +125,42 @@ impl Data {
         let mut sets: Vec<(&[SpriteKey], f32)> = vec![(&keys, ppu)];
         sets.extend(fx_sets.iter().map(|(k, s)| (k.as_slice(), ppu * s)));
         let mut bank = SpriteBank::load_metadata(&self.args_data)?;
-        let mut frames = bank.rasterize_sets(&self.skins[skin], self.vanilla(), &sets)?;
-        let fx_frames = frames.split_off(1);
-        bank.install_frames(frames.pop().unwrap_or_default(), ppu);
+        // Knight frames are packed as they come (most clips are rarely played and unpack
+        // on first use); effect frames stay raw for `Fx` to bake.
+        let mut knight = FrameStore::default();
+        let mut fx_frames: Vec<HashMap<SpriteKey, Frame>> = vec![HashMap::new(); fx_sets.len()];
+        bank.rasterize_each(&self.skins[skin], self.vanilla(), &sets, |set, k, f| match set {
+            0 => knight.insert(k, &f),
+            i => drop(fx_frames[i - 1].insert(k, f)),
+        })?;
+        bank.install_store(knight, ppu);
         let feet_offset = self.lib.get(self.idle).frames.first().and_then(|f| f.sprite).and_then(|k| bank.frame(k)).map_or(0.0, |f| f.image.height as f32 - f.anchor[1]);
-        log::info!("skin '{}' at x{scale} ready in {:?} ({} KiB of frames)", self.skins[skin].name, t.elapsed(), bank.frame_bytes() / 1024);
-        Ok((Look { bank, feet_offset }, fx_frames))
+        let store = bank.frames();
+        log::info!(
+            "skin '{}' at x{scale} ready in {:?} ({} KiB of packed knight frames, {} KiB unpacked)",
+            self.skins[skin].name,
+            t.elapsed(),
+            store.bytes() / 1024,
+            store.unpacked_bytes() / 1024
+        );
+        Ok((Look { bank, feet_offset, evict_in: EVICT_PERIOD }, fx_frames))
+    }
+}
+
+/// Unpacked frames not drawn for this long are dropped (they stay packed).
+const EVICT_PERIOD: f32 = 60.0;
+
+impl Look {
+    /// Every [`EVICT_PERIOD`], drop unpacked frames not drawn since the previous check.
+    fn tick(&mut self, dt: f32) {
+        self.evict_in -= dt;
+        if self.evict_in <= 0.0 {
+            self.evict_in = EVICT_PERIOD;
+            let n = self.bank.evict_unused();
+            if n > 0 {
+                log::debug!("evicted {n} idle knight frames ({} KiB held)", self.bank.frame_bytes() / 1024);
+            }
+        }
     }
 }
 
@@ -441,6 +473,7 @@ pub fn run(args: &Args) -> Result<()> {
 impl Pet {
     fn tick(&mut self, dt: f32) -> Result<()> {
         self.handle_mouse();
+        self.look.tick(dt);
         self.move_events.clear();
         if let Some(g) = self.navb.poll() {
             self.nav.set_graph(g);
