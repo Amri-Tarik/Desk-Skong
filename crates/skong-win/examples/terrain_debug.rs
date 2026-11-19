@@ -1,7 +1,8 @@
 //! Terrain debug overlay: draws the live window + content terrain over the whole virtual
 //! desktop.
 //!
-//! OneWay ledges green, Ground blue, content ledges magenta, walls orange. Click-through,
+//! OneWay ledges green, Ground blue, content ledges magenta, walls orange, content walls
+//! purple, activity hotspots outlined yellow. Click-through,
 //! never takes focus, excluded from screen capture (so it never detects itself). Redraws
 //! when the desktop snapshot or the detected content changes, and prints per-update
 //! content timings (frames, dirty area, analysis time, frame-to-ledges latency).
@@ -10,7 +11,7 @@
 //! `--verbose` prints every ledge/wall on each change, `--no-vision` disables content
 //! capture, `--wallpaper` keeps content ledges on the desktop wallpaper, `--no-overlay`
 //! runs headless (timings and CPU only), `--repaint-hz N` re-presents the overlay N times
-//! a second.
+//! a second. `--capture-stats` logs per-second capture counters.
 //!
 //! ```text
 //! cargo run -p skong-win --example terrain_debug --release
@@ -21,7 +22,8 @@ use anyhow::{Context, Result};
 use skong_core::canvas::premul;
 use skong_core::desktop::DesktopSnapshot;
 use skong_core::geom::RectF;
-use skong_core::terrain::{Facing, LedgeKind, Terrain, TerrainOptions};
+use skong_core::terrain::{Facing, LedgeKind, Terrain, TerrainOptions, WallKind};
+use skong_core::vision::Activity;
 use skong_win::capture::{CaptureStats, ContentFeed};
 use skong_win::desktop::{DesktopWatcher, enable_per_monitor_dpi, mark_dirty};
 use windows::Win32::Foundation::{COLORREF, FILETIME, HWND, LPARAM, LRESULT, POINT, SIZE, WAIT_FAILED, WPARAM};
@@ -60,7 +62,8 @@ fn main() -> Result<()> {
 
     let mut overlay = if args.overlay {
         let mut o = Overlay::new(terrain.bounds)?;
-        o.draw(&terrain);
+        feed.not_own_window(o.hwnd);
+        o.draw(&terrain, feed.activity());
         o.present()?;
         println!("overlay up; Ctrl+Alt+Q to quit");
         Some(o)
@@ -71,6 +74,7 @@ fn main() -> Result<()> {
     let mut summary = Summary::default();
     let started = Instant::now();
     let mut last_repaint = Instant::now();
+    let mut last_activity = Activity::default();
 
     let deadline = args.seconds.map(|s| Instant::now() + Duration::from_secs_f64(s));
     let (mut changes, mut updates) = (0u32, 0u32);
@@ -100,7 +104,17 @@ fn main() -> Result<()> {
                 s.surfaces
             );
         }
-        if !desk_changed && !content_changed {
+        let activity_changed = *feed.activity() != last_activity;
+        if activity_changed {
+            last_activity = feed.activity().clone();
+            for s in &last_activity.spots {
+                println!(
+                    "  activity: {:?} intensity {:.2} for {:.1} s, owner {:?}",
+                    s.rect, s.intensity, s.age_secs, s.owner
+                );
+            }
+        }
+        if !desk_changed && !content_changed && !activity_changed {
             continue;
         }
         if desk_changed {
@@ -110,14 +124,16 @@ fn main() -> Result<()> {
         terrain = build_timed(watcher.snapshot(), &feed, &opts, desk_changed);
         if content_changed {
             let n = terrain.ledges.iter().filter(|l| l.kind == LedgeKind::Content).count();
-            println!("  -> {n} content ledges in terrain");
+            let m = terrain.walls.iter().filter(|w| w.kind == WallKind::Content).count();
+            println!("  -> {n} content ledges, {m} content walls in terrain");
         }
         print_terrain(&terrain, args.verbose);
         if let Some(o) = overlay.as_mut() {
             if terrain.bounds != o.bounds {
                 *o = Overlay::new(terrain.bounds)?;
+                feed.not_own_window(o.hwnd);
             }
-            o.draw(&terrain);
+            o.draw(&terrain, feed.activity());
             o.present()?;
         }
     }
@@ -149,6 +165,7 @@ impl Args {
                 "--no-vision" => args.vision = false,
                 "--wallpaper" => args.wallpaper = true,
                 "--no-overlay" => args.overlay = false,
+                "--capture-stats" => skong_win::capture::set_stats_logging(true),
                 "--repaint-hz" => args.repaint_hz = it.next().and_then(|s| s.parse().ok()),
                 other => eprintln!("ignoring unknown argument {other}"),
             }
@@ -264,8 +281,9 @@ impl Overlay {
             if let Err(e) = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE) {
                 eprintln!("SetWindowDisplayAffinity failed: {e}");
             }
-            RegisterHotKey(Some(hwnd), HOTKEY_QUIT, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, u32::from(b'Q'))
-                .context("RegisterHotKey Ctrl+Alt+Q")?;
+            if let Err(e) = RegisterHotKey(Some(hwnd), HOTKEY_QUIT, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, u32::from(b'Q')) {
+                eprintln!("Ctrl+Alt+Q unavailable ({e}); use --seconds or close the console");
+            }
         }
         let (dc, bitmap, bits) = create_dib(size)?;
         // SAFETY: select our bitmap into our DC; restored in Drop.
@@ -280,12 +298,14 @@ impl Overlay {
         unsafe { std::slice::from_raw_parts_mut(self.bits, (self.size.cx * self.size.cy) as usize) }
     }
 
-    fn draw(&mut self, t: &Terrain) {
+    fn draw(&mut self, t: &Terrain, activity: &Activity) {
         let (ox, oy, w, h) = (self.origin.x, self.origin.y, self.size.cx, self.size.cy);
         let green = premul(40, 230, 60, 230);
         let blue = premul(40, 120, 255, 230);
         let orange = premul(255, 140, 20, 230);
         let magenta = premul(255, 40, 220, 230);
+        let purple = premul(150, 60, 255, 230);
+        let yellow = premul(255, 230, 40, 200);
         let px = self.pixels();
         px.fill(0);
         let mut fill = |x0: f32, y0: f32, x1: f32, y1: f32, c: u32| {
@@ -310,7 +330,15 @@ impl Overlay {
                 Facing::Left => wall.x,
                 Facing::Right => wall.x - LINE as f32,
             };
-            fill(x0, wall.y0, x0 + LINE as f32, wall.y1, orange);
+            let c = if wall.kind == WallKind::Content { purple } else { orange };
+            fill(x0, wall.y0, x0 + LINE as f32, wall.y1, c);
+        }
+        for s in &activity.spots {
+            let r = s.rect.to_f();
+            fill(r.left, r.top, r.right, r.top + 2.0, yellow);
+            fill(r.left, r.bottom - 2.0, r.right, r.bottom, yellow);
+            fill(r.left, r.top, r.left + 2.0, r.bottom, yellow);
+            fill(r.right - 2.0, r.top, r.right, r.bottom, yellow);
         }
     }
 

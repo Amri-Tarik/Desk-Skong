@@ -24,7 +24,7 @@ pub struct Args {
     pub sit_test: bool,
 }
 
-const USAGE: &str = "usage: skong [--browse] [--capturable] [--no-vision] [--data DIR] [--skins DIR] [--skin NAME] [--scale F] [--clip NAME]";
+const USAGE: &str = "usage: skong [--browse] [--capturable] [--no-vision] [--capture-stats] [--data DIR] [--skins DIR] [--skin NAME] [--scale F] [--clip NAME]";
 
 fn parse_args() -> Result<Args> {
     let mut a = Args {
@@ -50,6 +50,7 @@ fn parse_args() -> Result<Args> {
             "--browse" => a.browse = true,
             "--capturable" => a.capturable = true,
             "--no-vision" => a.vision = false,
+            "--capture-stats" => skong_win::capture::set_stats_logging(true),
             "--sit-test" => a.sit_test = true,
             "-h" | "--help" => {
                 println!("{USAGE}");
