@@ -81,6 +81,7 @@ const ID_INVITE: u32 = 11;
 const ID_DREAM: u32 = 12;
 const ID_SHARE: u32 = 14;
 const ID_FIGHT: u32 = 15;
+const ID_SHOWER: u32 = 20;
 const ID_QUIT: u32 = 9;
 const ID_SKIN0: u32 = 1000;
 const ID_SCALE0: u32 = 2000;
@@ -1178,6 +1179,7 @@ impl Pet {
             MenuItem::action(ID_ACT, "Do something!"),
             MenuItem::check(ID_FIGHT, "Fight the cursor", self.brain.fight_mode()),
             MenuItem::action(ID_INVITE, "Invite a visitor"),
+            MenuItem::action(ID_SHOWER, "Geo shower"),
             MenuItem::action(ID_DREAM, "Dream-nail a window"),
             MenuItem::action(ID_RESPAWN, "Come here (respawn at cursor)"),
             MenuItem::check(ID_MANUAL, "Manual control", self.manual),
@@ -1208,6 +1210,7 @@ impl Pet {
             ID_OVERLAY => Command::ToggleDebugOverlay,
             ID_PANEL => Command::OpenPanel,
             ID_INVITE => Command::InviteVisitor,
+            ID_SHOWER => Command::Stakes(skong_ipc::StakesCommand::SpillGeo),
             ID_DREAM => Command::DreamNail,
             i if (ID_BENCH0..ID_BENCH0 + self.benches.styles.len() as u32).contains(&i) => Command::PlaceBenchNearKnight((i - ID_BENCH0) as usize),
             i if (ID_SKIN0..ID_SKIN0 + self.data.skins.len() as u32).contains(&i) => Command::SetSkin((i - ID_SKIN0) as usize),

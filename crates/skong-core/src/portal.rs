@@ -52,6 +52,20 @@ impl Default for SpotOptions {
     }
 }
 
+/// Is there `need` px of room above `f` before the top of its monitor? Arrivals that open
+/// higher than that would clip off the screen. Footings outside every monitor pass (the
+/// spot picker rejects them anyway).
+pub fn has_headroom(f: &Footing, monitors: &[Monitor], need: f32) -> bool {
+    let x = (0.5 * (f.x0 + f.x1)) as i32;
+    monitors.iter().find(|m| m.rect.contains(x, f.y as i32 - 1)).is_none_or(|m| f.y - need >= m.rect.top as f32)
+}
+
+/// The footings something may arrive on: `settled` ones (floors, or window ledges that
+/// lasted [`crate::lasting::SETTLED_SECS`]) with `need` px of headroom.
+pub fn arrival_footings(footings: impl IntoIterator<Item = Footing>, monitors: &[Monitor], need: f32, settled: &dyn Fn(&Footing) -> bool) -> Vec<Footing> {
+    footings.into_iter().filter(|f| settled(f) && has_headroom(f, monitors, need)).collect()
+}
+
 /// Pick a reachable spot. `random()` returns uniform [0,1); `reachable(p)` route-checks
 /// (e.g. `NavGraph::plan`). Spots must lie inside a monitor's work area.
 pub fn pick_spot(
@@ -219,6 +233,34 @@ mod tests {
         let footings = [Footing { x0: 200.0, x1: 400.0, y: 1040.0, owner: None }, Footing { x0: 5000.0, x1: 6000.0, y: 500.0, owner: None }];
         let mut random = seq(&[0.5]);
         assert!(pick_spot(&footings, Vec2::new(300.0, 1040.0), &mons(), &SpotOptions::default(), &mut random, &mut |_| true).is_none());
+    }
+
+    #[test]
+    fn arrivals_only_on_settled_footings_with_headroom() {
+        let fresh = Footing { x0: 2000.0, x1: 2600.0, y: 500.0, owner: Some(9) };
+        let lasting = Footing { x0: 100.0, x1: 700.0, y: 600.0, owner: Some(4) };
+        let floor = Footing { x0: 0.0, x1: 1920.0, y: 1040.0, owner: None };
+        let high = Footing { x0: 2000.0, x1: 2600.0, y: 120.0, owner: None }; // near the top
+        let settled = |f: &Footing| f.owner != Some(9);
+        let need = 3.6 * 64.0;
+        let ok = arrival_footings([fresh, lasting, floor, high], &mons(), need, &settled);
+        assert_eq!(ok, vec![lasting, floor]);
+        assert!(!has_headroom(&high, &mons(), need));
+        assert!(has_headroom(&Footing { y: need + 1.0, ..high }, &mons(), need));
+        // The picker never lands on the far, fresh window ledge it would otherwise prefer.
+        let knight = Vec2::new(1800.0, 1040.0);
+        let opts = SpotOptions { jitter: 0.0, ..Default::default() };
+        for r in [0.0, 0.5, 0.99] {
+            let vals = [r];
+            let mut random = seq(&vals);
+            let s = pick_spot(&ok, knight, &mons(), &opts, &mut random, &mut |_| true).expect("spot");
+            assert!(s.owner == Some(4) || s.owner.is_none(), "{s:?}");
+            assert!(s.at.y >= need);
+        }
+        // Nothing settled with room: no spot at all.
+        let none = arrival_footings([fresh, high], &mons(), need, &settled);
+        let mut random = seq(&[0.5]);
+        assert!(pick_spot(&none, knight, &mons(), &opts, &mut random, &mut |_| true).is_none());
     }
 
     #[test]
