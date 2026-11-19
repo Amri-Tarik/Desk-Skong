@@ -231,8 +231,8 @@ impl NavGraph {
     }
 
     /// Number of edges of each kind (in [`MoveKind::ALL`] order).
-    pub fn edge_counts(&self) -> [usize; 9] {
-        let mut n = [0; 9];
+    pub fn edge_counts(&self) -> [usize; MoveKind::ALL.len()] {
+        let mut n = [0; MoveKind::ALL.len()];
         for e in &self.edges {
             if let Some(i) = MoveKind::ALL.iter().position(|k| *k == e.kind) {
                 n[i] += 1;

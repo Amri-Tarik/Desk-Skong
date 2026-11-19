@@ -56,7 +56,7 @@ fn main() {
     let seeds = args.get(1).copied().unwrap_or(5) as u64;
     let opts = TerrainOptions::default();
     let template = Character::new(CharacterParams::hollow_knight(64.0), Abilities::default(), Vec2::new(960.0, 1040.0));
-    let mut kinds = [0usize; 9];
+    let mut kinds = [0usize; MoveKind::ALL.len()];
     for seed in 1..=seeds {
         let mut desk = desktop(n, seed);
         let terrain = Terrain::from_desktop(&desk, &opts);
