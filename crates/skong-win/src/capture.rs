@@ -12,10 +12,14 @@
 //! * Each frame's move + dirty rects are copied GPU-side into a persistent shadow
 //!   texture that therefore always mirrors the whole screen.
 //! * [`tiles::Tiles`] decides what to analyse: changed 32 px tiles, except that
-//!   animated tiles (changed in consecutive passes) and tiles under our own windows are
-//!   analysed at most every [`tiles::SLOW_INTERVAL`], and tiles under fullscreen
-//!   windows not at all. Our sprite window is excluded from capture, but moving it still
-//!   produces dirty rects.
+//!   animated tiles (changed in consecutive passes) are analysed at most every
+//!   [`tiles::SLOW_INTERVAL`], and tiles under fullscreen windows not at all.
+//! * Content under **our own windows** (knight, benches, effects) is **frozen**: those
+//!   tiles are not analysed and [`SurfaceMap::set_frozen`] keeps their masks, so the
+//!   ledge the knight sits on can never change under him, even on systems where capture
+//!   would see our windows. When a window moves away, the area it left is rescanned once.
+//!   (Our windows are `WDA_EXCLUDEFROMCAPTURE` and, measured on Windows 11, invisible to
+//!   duplication; moving them still produces dirty rects.)
 //! * Only the selected regions (grown by the [`MARGIN`] px the edge tests look around) are read
 //!   back, shelf-packed into a small CPU-readable staging band ([`BAND`] rows), mapped
 //!   once per band and scanned in place: no full-screen CPU copy is kept.
@@ -79,8 +83,9 @@ pub const IDLE_WAKE: Duration = Duration::from_millis(250);
 const QUIET_WAKE: Duration = Duration::from_millis(50);
 /// Rows of the CPU-readable staging band regions are packed into.
 pub const BAND: u32 = 512;
-/// Own windows are grown by this much (their position may lag a frame).
-const OWN_MARGIN: i32 = 8;
+/// Own windows are grown by this much (their position may lag a frame or two behind a
+/// dashing knight).
+const OWN_MARGIN: i32 = 16;
 /// Activity hotspots are recomputed and sent at most this often (≤ 10 Hz).
 pub const ACTIVITY_INTERVAL: Duration = Duration::from_millis(100);
 /// How often [`ContentFeed`] re-lists our own windows.
@@ -571,7 +576,11 @@ impl Session {
             }
             if let Some((g, list)) = shared.own.if_changed(own_gen) {
                 own_gen = g;
-                tiles.set_own(&self.to_local(&list, OWN_MARGIN));
+                // Freeze what is detected under our own windows; areas they left are
+                // marked for one rescan (Tiles::set_own) and unfrozen here.
+                let local = self.to_local(&list, OWN_MARGIN);
+                tiles.set_own(&local);
+                map.set_frozen(&local);
                 own_virtual = list.iter().map(|r| RectI::new(r.left - OWN_MARGIN, r.top - OWN_MARGIN, r.right + OWN_MARGIN, r.bottom + OWN_MARGIN)).collect();
             }
 
@@ -726,6 +735,26 @@ impl Session {
             return Ok(());
         }
         let t = Instant::now();
+        let mut scan_t = Duration::ZERO;
+        self.with_mapped(|px, stride| {
+            timing.0 += t.elapsed();
+            let t = Instant::now();
+            for p in batch {
+                let off = p.at.1 as usize * stride + p.at.0 as usize;
+                let view = PixelView::new(&px[off..], p.grown.width() as usize, p.grown.height() as usize, stride);
+                if let Some(view) = view {
+                    map.scan(&view.at(p.grown.left as usize, p.grown.top as usize), &[p.scan]);
+                }
+            }
+            scan_t = t.elapsed();
+        })?;
+        timing.1 += scan_t;
+        Ok(())
+    }
+
+    /// Map the staging band (without blocking in the driver) and hand `f` its pixels and
+    /// row stride (in pixels).
+    fn with_mapped(&self, f: impl FnOnce(&[u32], usize)) -> Result<()> {
         let mut m = D3D11_MAPPED_SUBRESOURCE::default();
         // Don't block in Map (drivers may spin until the GPU copy is done): submit, then
         // poll with DO_NOT_WAIT and sleep between attempts.
@@ -739,8 +768,6 @@ impl Session {
                 Err(e) => return Err(e).context("Map staging"),
             }
         }
-        timing.0 += t.elapsed();
-        let t = Instant::now();
         let (w, h) = (self.width as usize, self.band as usize);
         let stride = m.RowPitch as usize / 4;
         let ok = h > 0 && !m.pData.is_null() && m.RowPitch.is_multiple_of(4) && stride >= w && (m.pData as usize).is_multiple_of(4);
@@ -748,17 +775,10 @@ impl Session {
             // SAFETY: while mapped, pData points to `h` rows of RowPitch bytes (the last row
             // at least `w` pixels), 4-byte aligned (checked), and nothing writes to it.
             let px = unsafe { std::slice::from_raw_parts(m.pData as *const u32, stride * (h - 1) + w) };
-            for p in batch {
-                let off = p.at.1 as usize * stride + p.at.0 as usize;
-                let view = PixelView::new(&px[off..], p.grown.width() as usize, p.grown.height() as usize, stride);
-                if let Some(view) = view {
-                    map.scan(&view.at(p.grown.left as usize, p.grown.top as usize), &[p.scan]);
-                }
-            }
+            f(px, stride);
         }
         // SAFETY: matches the Map above; `px` is not used past this point.
         unsafe { self.ctx.Unmap(&self.staging, 0) };
-        timing.1 += t.elapsed();
         if !ok {
             bail!("unexpected staging layout (pitch {})", m.RowPitch);
         }
@@ -806,6 +826,42 @@ fn subtract_rect(r: RectI, cut: &RectI) -> Vec<RectI> {
     .collect()
 }
 
+
+/// One-shot capture of `r` (virtual-desktop px; on a single output, at most [`BAND`] rows
+/// tall) exactly as Desktop Duplication sees it, BGRA row-major. Diagnostics only: opens
+/// its own duplication, so it competes with a running [`ContentCapture`].
+pub fn grab_region(r: RectI) -> Result<Vec<u32>> {
+    let (name, out) = enumerate_outputs()?
+        .into_iter()
+        .find(|(_, o)| o.left <= r.left && r.right <= o.right && o.top <= r.top && r.bottom <= o.bottom)
+        .context("rect is not inside a single output")?;
+    let s = Session::open(&name)?;
+    let local = RectI::new(r.left - out.left, r.top - out.top, r.right - out.left, r.bottom - out.top);
+    if local.is_empty() || local.height() as u32 > s.band {
+        bail!("rect must be non-empty and at most {} rows", s.band);
+    }
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let mut rects = Vec::new();
+    loop {
+        if let Acquired::Frame { .. } = s.acquire(200, true, &mut rects)? {
+            break;
+        }
+        if Instant::now() > deadline {
+            bail!("no desktop frame within 2 s");
+        }
+    }
+    let b = d3d_box(&local);
+    // SAFETY: `local` lies inside the shadow texture and fits the staging band at (0, 0).
+    unsafe { s.ctx.CopySubresourceRegion(&s.staging, 0, 0, 0, 0, &s.shadow, 0, Some(&b)) };
+    let (w, h) = (local.width() as usize, local.height() as usize);
+    let mut out = Vec::with_capacity(w * h);
+    s.with_mapped(|px, stride| {
+        for y in 0..h {
+            out.extend_from_slice(&px[y * stride..y * stride + w]);
+        }
+    })?;
+    Ok(out)
+}
 /// Time since a QPC timestamp.
 fn qpc_age(then: i64) -> Duration {
     let (mut now, mut freq) = (0i64, 0i64);

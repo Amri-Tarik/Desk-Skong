@@ -46,6 +46,8 @@ struct StepJson {
     until: Option<String>,
     #[serde(default, rename = "move")]
     movement: Option<String>,
+    #[serde(default)]
+    turn: Option<String>,
     #[serde(default = "yes")]
     interruptible: bool,
 }
@@ -76,6 +78,8 @@ pub struct Step {
     pub until: Option<String>,
     pub gait: Option<Gait>,
     pub interruptible: bool,
+    /// Clip played when a walking step turns around (e.g. "Map Turn"), then the step clip resumes.
+    pub turn: Option<ClipId>,
 }
 
 #[derive(Clone, Debug)]
@@ -105,10 +109,23 @@ pub struct ActLibrary {
 }
 
 impl ActLibrary {
-    /// Load and validate against the clip library (unknown clips are an error).
+    /// Load and validate against the clip library (unknown clips are an error). Act files
+    /// in an `acts/` folder next to `path` (e.g. `data/acts/stakes.json`) are added too.
     pub fn load(path: &Path, clips: &ClipLibrary) -> Result<ActLibrary> {
-        let raw: ActsFile = read_json(path)?;
         let mut lib = ActLibrary::default();
+        lib.add_file(path, clips)?;
+        let dir = path.parent().map(|d| d.join("acts"));
+        let mut extra: Vec<_> = dir.and_then(|d| std::fs::read_dir(d).ok()).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "json")).collect();
+        extra.sort();
+        for p in extra {
+            lib.add_file(&p, clips)?;
+        }
+        Ok(lib)
+    }
+
+    fn add_file(&mut self, path: &Path, clips: &ClipLibrary) -> Result<()> {
+        let raw: ActsFile = read_json(path)?;
+        let lib = self;
         for a in raw.acts {
             if a.steps.is_empty() {
                 bail!("act '{}' has no steps", a.name);
@@ -125,8 +142,12 @@ impl ActLibrary {
                         Some("sprint") => Some(Gait::Sprint),
                         Some(m) => bail!("act '{}': unknown move '{m}'", a.name),
                     };
+                    let turn = match s.turn.as_deref() {
+                        None => None,
+                        Some(t) => Some(clips.id(t).with_context(|| format!("act '{}': unknown turn clip '{t}'", a.name))?),
+                    };
                     let repeat = s.repeat.map_or((1, 1), |[lo, hi]| (lo.max(1), hi.max(lo.max(1))));
-                    Ok(Step { clip, hold: s.hold.map(|[lo, hi]| (lo, hi.max(lo))), repeat, until: s.until, gait, interruptible: s.interruptible })
+                    Ok(Step { clip, hold: s.hold.map(|[lo, hi]| (lo, hi.max(lo))), repeat, until: s.until, gait, interruptible: s.interruptible, turn })
                 })
                 .collect::<Result<Vec<_>>>()?;
             let id = ActId(lib.acts.len() as u16);
@@ -135,7 +156,7 @@ impl ActLibrary {
             }
             lib.acts.push(Act { name: a.name, tags: a.tags, requires: a.requires, weight: a.weight, cooldown: a.cooldown, steps });
         }
-        Ok(lib)
+        Ok(())
     }
 
     pub fn id(&self, name: &str) -> Option<ActId> {
@@ -185,11 +206,13 @@ pub struct ActPlayer {
     repeats_left: u32,
     done: bool,
     rng: u32,
+    /// Playing the step's turn clip (see [`ActPlayer::turned`]).
+    turning: bool,
 }
 
 impl ActPlayer {
     pub fn start(acts: &ActLibrary, clips: &ClipLibrary, anim: &mut Animator, act: ActId, seed: u32) -> Self {
-        let mut p = Self { act, step: 0, phase: Phase::Playing, timer: 0.0, repeats_left: 1, done: false, rng: seed | 1 };
+        let mut p = Self { act, step: 0, phase: Phase::Playing, timer: 0.0, repeats_left: 1, done: false, rng: seed | 1, turning: false };
         p.enter_step(acts, clips, anim);
         p
     }
@@ -226,6 +249,18 @@ impl ActPlayer {
         }
     }
 
+    /// The walking character just turned around: play the step's turn clip (if any),
+    /// then resume the step clip. The step's timer keeps running.
+    pub fn turned(&mut self, acts: &ActLibrary, clips: &ClipLibrary, anim: &mut Animator) {
+        if self.done {
+            return;
+        }
+        if let Some(t) = acts.get(self.act).steps[self.step].turn {
+            anim.play(clips, t, true);
+            self.turning = true;
+        }
+    }
+
     /// Advance timers. Call after `anim.update(...)` with the events it produced this tick.
     pub fn update(&mut self, acts: &ActLibrary, clips: &ClipLibrary, anim: &mut Animator, dt: f32, anim_events: &[AnimEvent]) -> ActStatus {
         if self.done {
@@ -233,6 +268,15 @@ impl ActPlayer {
         }
         let step = &acts.get(self.act).steps[self.step];
         let looping = clips.get(step.clip).wrap.loops();
+        if self.turning {
+            let t = step.turn.unwrap_or(step.clip);
+            if anim_events.contains(&AnimEvent::Finished(t)) || anim.is_finished() || anim.clip() != t {
+                self.turning = false;
+                anim.play(clips, step.clip, false);
+            } else if !looping {
+                return ActStatus::Running { gait: step.gait };
+            }
+        }
         match self.phase {
             Phase::Playing if looping => {
                 self.timer -= dt;
@@ -286,6 +330,7 @@ impl ActPlayer {
         let clip = clips.get(step.clip);
         anim.play(clips, step.clip, true);
         self.phase = Phase::Playing;
+        self.turning = false;
         self.repeats_left = self.sample_u(step.repeat);
         // Looping clips run for `hold` (default one full pass); `until` steps use the
         // upper bound of `hold` as a timeout.
@@ -383,8 +428,48 @@ mod tests {
         }
         assert_eq!(clips.get(anim.clip()).name, "Sitting Asleep");
         p.signal(&acts, &clips, &mut anim, "woken");
-        assert_eq!(clips.get(anim.clip()).name, "Wake");
+        assert_eq!(clips.get(anim.clip()).name, "Wake To Sit");
         assert!(!p.interruptible(&acts));
+    }
+
+    #[test]
+    fn walking_step_plays_its_turn_clip_then_resumes() {
+        let (clips, acts) = libs();
+        let id = acts.id("map_stroll").expect("act");
+        let mut anim = Animator::new(clips.id("Idle").expect("Idle"));
+        let mut p = ActPlayer::start(&acts, &clips, &mut anim, id, 3);
+        let mut ev = Vec::new();
+        let dt = 1.0 / 120.0;
+        while p.gait(&acts).is_none() {
+            ev.clear();
+            anim.update(&clips, dt, &mut ev);
+            p.update(&acts, &clips, &mut anim, dt, &ev);
+        }
+        p.turned(&acts, &clips, &mut anim);
+        assert_eq!(clips.get(anim.clip()).name, "Map Turn");
+        let mut seen = vec![];
+        for _ in 0..30 {
+            ev.clear();
+            anim.update(&clips, dt, &mut ev);
+            p.update(&acts, &clips, &mut anim, dt, &ev);
+            seen.push(clips.get(anim.clip()).name.clone());
+        }
+        assert_eq!(seen.last().map(String::as_str), Some("Map Walk"), "{seen:?}");
+        assert!(p.gait(&acts).is_some());
+        // Steps without a turn clip ignore it.
+        let lantern = acts.id("lantern_patrol").expect("act");
+        let mut p = ActPlayer::start(&acts, &clips, &mut anim, lantern, 3);
+        p.turned(&acts, &clips, &mut anim);
+        assert_eq!(clips.get(anim.clip()).name, "Lantern Idle");
+    }
+
+    #[test]
+    fn fidgets_end_on_idle_transitions() {
+        let (clips, acts) = libs();
+        for (act, last) in [("look_up", "LookUpToIdle"), ("look_down", "LookDownToIdle"), ("pick_up_trinket", "GetUpToIdle"), ("ascend", "Collect StandToIdle")] {
+            let a = acts.get(acts.id(act).expect("act"));
+            assert_eq!(clips.get(a.steps.last().expect("steps").clip).name, last);
+        }
     }
 
     #[test]

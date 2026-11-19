@@ -206,6 +206,9 @@ impl Default for WatchConfig {
 pub struct BrainConfig {
     /// 0 = never bothers the user (no battles, no title-bar squatting), 1 = gremlin.
     pub bother_level: f32,
+    /// Retreat and keep quiet whenever *any* fullscreen window is in front. Off by default:
+    /// the app keeps the knight away from games itself; other fullscreen apps are fine.
+    pub hide_for_fullscreen: bool,
     /// Fixed personality; `None` derives one from the seed.
     pub personality: Option<Personality>,
     /// Seconds between utility re-evaluations.
@@ -218,6 +221,8 @@ pub struct BrainConfig {
     pub urgent: f32,
     pub needs: NeedRates,
     pub battle: BattleConfig,
+    /// Death, the Shade, Geo and spells.
+    pub stakes: super::stakes::StakesConfig,
     pub companion: CompanionConfig,
     pub watch: WatchConfig,
     /// Seconds of plain standing between purposeful actions when idle.
@@ -240,6 +245,7 @@ impl Default for BrainConfig {
     fn default() -> Self {
         Self {
             bother_level: 0.5,
+            hide_for_fullscreen: false,
             personality: None,
             think_interval: 0.25,
             min_commit: 2.0,
@@ -247,6 +253,7 @@ impl Default for BrainConfig {
             urgent: 1.0,
             needs: NeedRates::default(),
             battle: BattleConfig::default(),
+            stakes: super::stakes::StakesConfig::default(),
             companion: CompanionConfig::default(),
             watch: WatchConfig::default(),
             idle_gap: [1.0, 3.0],

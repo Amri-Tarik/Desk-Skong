@@ -31,6 +31,22 @@ struct FakeNav {
     elapsed: f32,
     trip: f32,
     gos: Vec<(NavGoal, TravelStyle)>,
+    /// Routes to these goals (with this style, or any if `None`) end elsewhere, e.g. under
+    /// a ledge the style cannot mount.
+    ends: Vec<(Vec2, Option<TravelStyle>, Vec2)>,
+    /// Hide those ends from `reach` (a planner that over-promises).
+    lies: bool,
+}
+
+impl FakeNav {
+    fn end_of(&self, goal: NavGoal, style: TravelStyle) -> Option<Vec2> {
+        match goal {
+            NavGoal::Point(p) => Some(
+                self.ends.iter().find(|(g, s, _)| g.distance(p) < 1.0 && s.is_none_or(|s| s == style)).map_or(p, |e| e.2),
+            ),
+            NavGoal::OnWindow(_) => None,
+        }
+    }
 }
 
 impl Navigator for FakeNav {
@@ -45,6 +61,11 @@ impl Navigator for FakeNav {
         self.status = NavStatus::Moving;
         self.elapsed = 0.0;
         true
+    }
+    fn reach(&mut self, from: &Character, goal: NavGoal, style: TravelStyle) -> Option<Reach> {
+        let eta = self.estimate(from, goal, style)?;
+        let end = if self.lies { None } else { self.end_of(goal, style) };
+        Some(Reach { eta, end })
     }
     fn stop(&mut self) {
         self.status = NavStatus::Idle;
@@ -92,6 +113,8 @@ struct Sim {
     act: Option<PlayingAct>,
     /// A wall in front: pressing a direction doesn't move the knight.
     wall: bool,
+    /// Force the knight's horizontal velocity (oscillation tests).
+    vel_override: Option<f32>,
     dark: bool,
     last_input: MoveInput,
     last_motion: Motion,
@@ -152,6 +175,7 @@ impl Sim {
             events: vec![],
             act: None,
             wall: false,
+            vel_override: None,
             dark: false,
             last_input: MoveInput::default(),
             last_motion: Motion::Hold,
@@ -214,7 +238,11 @@ impl Sim {
         if self.act.is_some() {
             self.last_input = MoveInput::default();
         }
-        self.knight.vel.x = if self.wall { 0.0 } else { self.last_input.x * 150.0 };
+        self.knight.vel.x = match self.vel_override {
+            Some(v) => v,
+            None if self.wall => 0.0,
+            None => self.last_input.x * 150.0,
+        };
         let perch = self.knight.support.is_some_and(|s| s.kind != LedgeKind::Ground);
         let p = Percepts {
             dt: DT,
@@ -272,8 +300,8 @@ impl Sim {
             self.nav.elapsed += DT;
             if self.nav.elapsed >= self.nav.trip {
                 self.nav.status = NavStatus::Arrived;
-                if let Some(&(goal, _)) = self.nav.gos.last() {
-                    let p = self.goal_point(goal);
+                if let Some(&(goal, style)) = self.nav.gos.last() {
+                    let p = self.nav.end_of(goal, style).unwrap_or_else(|| self.goal_point(goal));
                     self.place(p);
                 }
             }
@@ -706,8 +734,8 @@ fn huge_fall_knocks_the_knight_out() {
 }
 
 #[test]
-fn fullscreen_app_sends_knight_into_hiding() {
-    let mut sim = calm(BrainConfig::default());
+fn fullscreen_app_sends_knight_into_hiding_when_configured() {
+    let mut sim = calm(BrainConfig { hide_for_fullscreen: true, ..Default::default() });
     sim.knight.pos.x = 1500.0;
     sim.run(1.0);
     let mut w = window(20, RectI::new(0, 0, 1920, 1080), "game.exe");
@@ -719,6 +747,19 @@ fn fullscreen_app_sends_knight_into_hiding() {
     assert_eq!(sim.nav.gos.last().map(|g| g.0), Some(NavGoal::Point(Vec2::new(1890.0, FLOOR))));
     sim.close(20);
     assert!(sim.run_while(1.0, |s| s.brain.behaviour() == BehaviourKind::Hide));
+}
+
+#[test]
+fn fullscreen_app_is_ignored_by_default() {
+    // Games are handled by the app (the knight leaves their monitor); other fullscreen
+    // apps are fine to play around.
+    let mut sim = calm(BrainConfig::default());
+    sim.run(1.0);
+    let mut w = window(20, RectI::new(0, 0, 1920, 1080), "chrome.exe");
+    w.fullscreen = true;
+    w.foreground = true;
+    sim.open(w);
+    assert!(!sim.run_until(2.0, BehaviourKind::Hide), "non-game fullscreen apps must not send him into hiding");
 }
 
 #[test]
@@ -878,4 +919,109 @@ fn every_named_act_exists_and_only_fidgets_are_random() {
     for a in cat.iter().filter(|a| a.weight > 0.0) {
         assert!(a.has_tag("fidget"), "'{}' would be picked at random", a.name);
     }
+}
+
+// --- Ping-pong regressions -----------------------------------------------------------------
+
+/// Seat height of the low content ledges (40 px above the floor: perchable, but a stroll
+/// can't get up there).
+const LOW_SEAT_Y: f32 = FLOOR - 40.0;
+
+impl Sim {
+    /// A content ledge (drawn line, table border) the knight could sit on.
+    fn add_content_ledge(&mut self, x0: f32, x1: f32, y: f32) {
+        self.terrain.ledges.push(crate::terrain::Ledge { x0, x1, y, kind: LedgeKind::Content, owner: None });
+    }
+
+    /// Navigation to `seat` ends on the floor below it (for `style`, or any style).
+    fn unmountable(&mut self, seat: Vec2, style: Option<TravelStyle>) {
+        self.nav.ends.push((seat, style, Vec2::new(seat.x, FLOOR)));
+    }
+
+    fn seat_trips(&self, seat: Vec2) -> usize {
+        self.nav.gos.iter().filter(|(g, _)| *g == NavGoal::Point(seat)).count()
+    }
+}
+
+fn tired_between_low_seats() -> (Sim, Vec2, Vec2) {
+    let mut sim = calm(BrainConfig::default());
+    sim.brain.mind_mut().needs.energy = 0.35;
+    sim.add_content_ledge(560.0, 700.0, LOW_SEAT_Y);
+    sim.add_content_ledge(1220.0, 1360.0, LOW_SEAT_Y);
+    // Seats are chosen at the ledge point closest to the knight (x = 960).
+    (sim, Vec2::new(680.0, LOW_SEAT_Y), Vec2::new(1240.0, LOW_SEAT_Y))
+}
+
+#[test]
+fn seat_a_stroll_cannot_mount_is_reached_at_a_run() {
+    let (mut sim, left, right) = tired_between_low_seats();
+    sim.unmountable(right, None);
+    sim.unmountable(left, Some(TravelStyle::Stroll));
+    assert!(sim.run_until(3.0, BehaviourKind::Rest), "{}", sim.last_reason());
+    sim.run(4.0);
+    assert_eq!(sim.nav.gos.first(), Some(&(NavGoal::Point(left), TravelStyle::Normal)), "runs (and jumps) up instead of strolling underneath");
+    assert_eq!(sim.knight.pos, left);
+    assert!(sim.started.iter().any(|a| a == "rest"), "acts: {:?}", sim.started);
+    assert_eq!(sim.seat_trips(right), 0);
+}
+
+#[test]
+fn unreachable_seats_on_both_sides_cause_no_ping_pong() {
+    let (mut sim, left, right) = tired_between_low_seats();
+    sim.unmountable(left, None);
+    sim.unmountable(right, None);
+    let x0 = sim.knight.pos.x;
+    sim.run(60.0);
+    assert_eq!(sim.seat_trips(left) + sim.seat_trips(right), 0, "never walks to a seat it can't get onto: {:?}", sim.nav.gos);
+    let rests = sim.switches.iter().filter(|s| s.to == BehaviourKind::Rest).count();
+    assert!(rests <= 6, "rest re-picked {rests} times in a minute");
+    assert_eq!(sim.knight.pos.x, x0, "no pacing");
+    assert_eq!(sim.brain.oscillations(), 0);
+}
+
+#[test]
+fn arriving_without_getting_seated_blocks_the_seat_and_cools_rest_down() {
+    // The planner over-promises: the route claims to reach the seats but ends below.
+    let (mut sim, left, right) = tired_between_low_seats();
+    sim.unmountable(left, None);
+    sim.unmountable(right, None);
+    sim.nav.lies = true;
+    sim.nav.trip = 1.0;
+    sim.run(30.0);
+    assert!(sim.seat_trips(left) <= 1 && sim.seat_trips(right) <= 1, "retried a seat it failed to sit on: {:?}", sim.nav.gos);
+    let fails: Vec<f32> = sim.switches.iter().filter(|s| s.from == BehaviourKind::Rest).map(|s| s.at).collect();
+    let rest_starts: Vec<f32> = sim.switches.iter().filter(|s| s.to == BehaviourKind::Rest).map(|s| s.at).collect();
+    for (i, w) in rest_starts.windows(2).enumerate() {
+        assert!(w[1] - w[0] >= 10.0, "rest re-picked {:.1}s after it ended (#{i}); ends {fails:?}", w[1] - w[0]);
+    }
+    assert_eq!(sim.brain.oscillations(), 0);
+}
+
+#[test]
+fn oscillation_guard_calms_a_dithering_knight() {
+    let mut sim = calm(BrainConfig::default());
+    sim.cursor = Some(Cursor { pos: Vec2::new(1800.0, 900.0), ..Default::default() });
+    sim.nav.trip = 1e9; // never arrives
+    assert!(sim.run_while(3.0, |s| !matches!(s.last_motion, Motion::Navigate { .. })), "follows the cursor");
+    sim.run(2.0);
+    assert_eq!(sim.brain.oscillations(), 0, "guard must not fire while travelling steadily");
+    // Something makes him go left, right, left, right... without ever arriving.
+    for i in 0..8 {
+        assert!(matches!(sim.last_motion, Motion::Navigate { .. }), "still travelling");
+        sim.vel_override = Some(if i % 2 == 0 { -150.0 } else { 150.0 });
+        sim.run(0.7);
+        if sim.brain.oscillations() > 0 {
+            break;
+        }
+    }
+    sim.vel_override = None;
+    assert_eq!(sim.brain.oscillations(), 1, "3 reversals within 6 s");
+    assert_eq!(sim.brain.behaviour(), BehaviourKind::Idle);
+    assert!(sim.last_reason().starts_with("calming down"), "{}", sim.last_reason());
+    let gos = sim.nav.gos.len();
+    let calm = sim.run(3.5);
+    assert!(calm.iter().all(|k| *k == BehaviourKind::Idle));
+    assert_eq!(sim.nav.gos.len(), gos, "stands still while calming down");
+    sim.run(6.0);
+    assert_eq!(sim.brain.behaviour(), BehaviourKind::Companion, "back to normal afterwards");
 }

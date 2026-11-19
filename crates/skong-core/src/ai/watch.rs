@@ -8,6 +8,8 @@ use super::spots::{Vantage, View};
 /// Satiation at which the knight has seen enough (satiation decays a little every tick, so
 /// it never sits at exactly 1).
 const SATISFIED: f32 = 0.98;
+/// Arrival tolerance at a vantage point (px): any spot on that ledge near it will do.
+pub(crate) const VANTAGE_TOL: f32 = 30.0;
 
 #[derive(Clone, Copy, Debug)]
 enum Phase {
@@ -39,7 +41,7 @@ impl WatchSpot {
             Phase::Watching
         } else {
             let style = style_for(ctx, vantage.point);
-            Phase::Travel(Travel::to(ctx, vantage.point, style))
+            Phase::Travel(Travel::exact(ctx, vantage.point, style, VANTAGE_TOL))
         };
         Self { spot, phase, view: vantage.view, watched: 0.0, budget, beat: Beat::new(0.0), seated: false }
     }
@@ -53,7 +55,7 @@ impl WatchSpot {
             match t.tick(ctx) {
                 TravelStep::Moving => return Status::Running,
                 TravelStep::Arrived => self.phase = Phase::Watching,
-                TravelStep::Failed => return Status::Done,
+                TravelStep::Failed => return Status::Failed,
             }
         }
 

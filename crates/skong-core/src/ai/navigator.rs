@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use crate::controller::{Character, MoveInput};
+use crate::geom::Vec2;
 use crate::nav::{FollowStatus, NavGoal, NavGraph, PathFollower, TravelStyle};
 use crate::terrain::Terrain;
 
@@ -29,6 +30,34 @@ pub trait Navigator {
     /// Abandon the current goal.
     fn stop(&mut self);
     fn status(&self) -> NavStatus;
+
+    /// Plan without moving: the travel time and where the route actually ends (planners
+    /// may stop at the closest reachable point, e.g. under a ledge a stroll can't mount).
+    /// `end: None` = this navigator can't tell; the default only knows the eta.
+    fn reach(&mut self, from: &Character, goal: NavGoal, style: TravelStyle) -> Option<Reach> {
+        self.estimate(from, goal, style).map(|eta| Reach { eta, end: None })
+    }
+
+    /// Does a route with `style` get *onto* `p` (end within `tol` px horizontally and on
+    /// the same height), not just somewhere near it?
+    fn reaches(&mut self, from: &Character, p: Vec2, style: TravelStyle, tol: f32) -> bool {
+        self.reach(from, NavGoal::Point(p), style).is_some_and(|r| r.lands_on(p, tol))
+    }
+}
+
+/// Result of [`Navigator::reach`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Reach {
+    pub eta: f32,
+    /// Planned final feet position, if known.
+    pub end: Option<Vec2>,
+}
+
+impl Reach {
+    /// The route ends on `p` (unknown ends are given the benefit of the doubt).
+    pub fn lands_on(&self, p: Vec2, tol: f32) -> bool {
+        self.end.is_none_or(|e| (e.x - p.x).abs() <= tol && (e.y - p.y).abs() <= 3.0)
+    }
 }
 
 /// [`Navigator`] backed by [`NavGraph`] + [`PathFollower`].
@@ -86,6 +115,11 @@ impl GraphNavigator {
 }
 
 impl Navigator for GraphNavigator {
+    fn reach(&mut self, from: &Character, goal: NavGoal, style: TravelStyle) -> Option<Reach> {
+        let r = self.graph.as_ref()?.plan(from, goal, style)?;
+        Some(Reach { eta: r.eta, end: Some(r.end) })
+    }
+
     fn estimate(&mut self, from: &Character, goal: NavGoal, style: TravelStyle) -> Option<f32> {
         self.graph.as_ref()?.plan(from, goal, style).map(|r| r.eta)
     }

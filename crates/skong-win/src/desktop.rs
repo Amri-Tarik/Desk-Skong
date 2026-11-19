@@ -83,6 +83,19 @@ pub fn enable_per_monitor_dpi() {
     let _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
 }
 
+/// A window that left the snapshot was really closed (destroyed, or hidden by its app
+/// like a close-to-tray), not minimized or cloaked (virtual desktop switch).
+pub fn window_closed(id: u64) -> bool {
+    let hwnd = HWND(id as usize as *mut core::ffi::c_void);
+    // SAFETY: plain queries on a window handle that may no longer exist.
+    unsafe {
+        if !windows::Win32::UI::WindowsAndMessaging::IsWindow(Some(hwnd)).as_bool() {
+            return true;
+        }
+        !IsWindowVisible(hwnd).as_bool() && !IsIconic(hwnd).as_bool() && !is_cloaked(hwnd)
+    }
+}
+
 /// Request a re-enumeration on the next [`DesktopWatcher::poll`]. Cheap and thread-safe.
 pub fn mark_dirty() {
     EVENT_SEQ.fetch_add(1, Ordering::Relaxed);
@@ -400,7 +413,8 @@ fn class_name(hwnd: HWND) -> String {
     String::from_utf16_lossy(&buf[..n.max(0) as usize])
 }
 
-fn query_exe_name(pid: u32) -> Option<String> {
+/// Full image path of a process (e.g. `C:\Games\x\x.exe`).
+pub(crate) fn query_exe_path(pid: u32) -> Option<String> {
     // SAFETY: handle is closed below on every path after a successful open.
     let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }.ok()?;
     let mut buf = [0u16; 1024];
@@ -410,7 +424,11 @@ fn query_exe_name(pid: u32) -> Option<String> {
     // SAFETY: valid handle from OpenProcess.
     let _ = unsafe { CloseHandle(handle) };
     res.ok()?;
-    let path = String::from_utf16_lossy(&buf[..len as usize]);
+    Some(String::from_utf16_lossy(&buf[..len as usize]))
+}
+
+fn query_exe_name(pid: u32) -> Option<String> {
+    let path = query_exe_path(pid)?;
     Some(path.rsplit(['\\', '/']).next().unwrap_or_default().to_owned())
 }
 

@@ -40,7 +40,15 @@ impl Fx {
         (0..self.set.defs.len()).map(|i| (self.set.sprite_keys(i), self.set.defs[i].raster_scale())).collect()
     }
 
-    pub fn install_frames(&mut self, frames: Vec<HashMap<SpriteKey, Frame>>) {
+    /// Install rasterized frames; rotated / squashed effects get their transform baked here.
+    pub fn install_frames(&mut self, mut frames: Vec<HashMap<SpriteKey, Frame>>) {
+        for (def, map) in self.set.defs.iter().zip(frames.iter_mut()) {
+            if def.baked() {
+                for f in map.values_mut() {
+                    *f = def.bake(f);
+                }
+            }
+        }
         self.frames = frames;
         for l in &mut self.live {
             l.drawn = None;
@@ -49,7 +57,11 @@ impl Fx {
 
     /// Start effect `name` for a knight with sprite origin `origin`.
     pub fn spawn(&mut self, name: &str, origin: Vec2, right: bool) {
-        let Some(def) = self.set.id(name) else { return };
+        let Some(def) = self.set.id(name) else {
+            log::debug!("no effect {name}");
+            return;
+        };
+        log::debug!("fx {name}");
         let win = match self.pool.pop() {
             Some(w) => w,
             None => match SpriteWindow::new() {
@@ -97,7 +109,10 @@ impl Fx {
             let pos = def.place(base, facing, ppu);
             let flip = def.mirrored(facing);
             let Some(key) = l.anim.current(lib) else { continue };
-            let Some(frame) = self.frames[l.def].get(&key) else { continue };
+            let Some(frame) = self.frames[l.def].get(&key) else {
+                log::debug!("fx {}: frame {key:?} not rasterized", def.name);
+                continue;
+            };
             let x = (pos.x - frame.anchor_x(flip)).round() as i32;
             let y = (pos.y - frame.anchor[1]).round() as i32;
             if l.drawn != Some((key, flip)) {
