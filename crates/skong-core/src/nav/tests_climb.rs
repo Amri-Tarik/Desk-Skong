@@ -309,3 +309,17 @@ fn hanging_walls_that_stop_short_of_the_floor() {
     }
     assert!(fails.is_empty(), "{}", fails.join("\n"));
 }
+
+#[test]
+fn a_stroll_climbs_walls_but_never_dashes() {
+    // The user saw strolls stuck at walls: they had no climbing at all. A window 500 px tall
+    // standing on the floor: strolling onto it needs a wall climb.
+    let t = desktop(vec![primary()], vec![win(1, 1000, 900, 1400, 1400)]);
+    for x in [400.0, 2000.0] {
+        let mut ch = knight(&t, x, FLOOR);
+        let (status, moves) = follow(&t, &mut ch, NavGoal::OnWindow(1), TravelStyle::Stroll);
+        assert_eq!(status, FollowStatus::Arrived, "from {x}: {moves:?} at {:?}", ch.pos);
+        assert_eq!(ch.support.and_then(|s| s.owner), Some(1), "from {x}: {moves:?}");
+        assert!(!moves.iter().any(|m| matches!(m, MoveKind::Dash | MoveKind::ShadowDash | MoveKind::Superdash)), "{moves:?}");
+    }
+}

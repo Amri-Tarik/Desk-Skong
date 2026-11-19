@@ -150,5 +150,5 @@ fn approach_cost(ch: &Character, e: &Edge, x: f32, v: f32) -> f32 {
 
 fn penalty(e: &Edge, style: TravelStyle) -> f32 {
     let flashy = matches!(e.kind, MoveKind::DoubleJump | MoveKind::WallJump | MoveKind::Dash | MoveKind::ShadowDash);
-    EDGE_COST + if style == TravelStyle::Normal && flashy { FLASHY_COST } else { 0.0 }
+    EDGE_COST + if style != TravelStyle::Hurry && flashy { FLASHY_COST } else { 0.0 }
 }
