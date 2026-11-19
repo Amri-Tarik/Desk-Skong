@@ -897,6 +897,11 @@ pub struct ContentFeed {
     own_listed: Option<Instant>,
     /// Own windows not to treat as such (e.g. a full-screen debug overlay).
     not_own: Vec<HWND>,
+    /// Only these windows of ours freeze content under them (the knight: his own sprite
+    /// must never erase the ledge he stands on). `None`: all of our sprite windows.
+    /// Coins, props and visitors must not: a line that went away stayed "alive" under
+    /// them and they floated on it.
+    freeze_only: Option<Vec<HWND>>,
     own_rects: Vec<RectI>,
     /// Latest hotspots per output, and the merged view with owners.
     spots: Vec<(u32, Vec<ActivitySpot>)>,
@@ -931,6 +936,7 @@ impl ContentFeed {
             own: Vec::new(),
             own_listed: None,
             not_own: Vec::new(),
+            freeze_only: None,
             own_rects: Vec::new(),
             spots: Vec::new(),
             activity: Activity::default(),
@@ -1049,7 +1055,10 @@ impl ContentFeed {
 
     fn update_own_rects(&mut self) {
         if self.own_listed.is_none_or(|t| t.elapsed() >= OWN_REFRESH) {
-            self.own = own_windows();
+            self.own = match &self.freeze_only {
+                Some(only) => only.clone(),
+                None => own_windows(),
+            };
             self.own.retain(|h| !self.not_own.contains(h));
             self.own_listed = Some(Instant::now());
         }
@@ -1077,6 +1086,12 @@ impl ContentFeed {
     /// analysed lazily and excluded from activity): for overlays covering the screen.
     pub fn not_own_window(&mut self, hwnd: HWND) {
         self.not_own.push(hwnd);
+        self.own_listed = None;
+    }
+
+    /// Freeze content only under these windows of ours (see the field).
+    pub fn freeze_only(&mut self, hwnds: Vec<HWND>) {
+        self.freeze_only = Some(hwnds);
         self.own_listed = None;
     }
 

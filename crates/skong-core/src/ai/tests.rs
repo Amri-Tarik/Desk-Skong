@@ -1024,9 +1024,11 @@ fn oscillation_guard_calms_a_dithering_knight() {
     assert!(sim.run_while(3.0, |s| !matches!(s.last_motion, Motion::Navigate { .. })), "follows the cursor");
     sim.run(2.0);
     assert_eq!(sim.brain.oscillations(), 0, "guard must not fire while travelling steadily");
-    // Something makes him go left, right, left, right... without ever arriving.
+    // Something makes him flip between two targets: left, right, left, right... without
+    // ever arriving.
     for i in 0..8 {
         assert!(matches!(sim.last_motion, Motion::Navigate { .. }), "still travelling");
+        sim.cursor = Some(Cursor { pos: Vec2::new(if i % 2 == 0 { 200.0 } else { 1800.0 }, 900.0), ..Default::default() });
         sim.vel_override = Some(if i % 2 == 0 { -150.0 } else { 150.0 });
         sim.run(0.7);
         if sim.brain.oscillations() > 0 {
@@ -1273,4 +1275,22 @@ fn a_wall_climb_is_not_dithering() {
     sim.knight.support = support;
     assert_eq!(sim.brain.oscillations(), 0);
     assert!(matches!(sim.last_motion, Motion::Navigate { .. }), "still travelling");
+}
+
+#[test]
+fn a_winding_route_to_one_deposit_is_not_dithering() {
+    // The live bug: walking to a deposit, the route turned around on the ground a few times
+    // (run-up, a climb on the far side). The guard cancelled the trip and blocked the
+    // deposit, so he idled with Geo on screen.
+    let mut sim = calm(BrainConfig::default());
+    sim.brain.set_places(&[place(2, PlaceKind::Deposit, Vec2::new(1500.0, FLOOR), 0.5, false)]);
+    assert!(sim.run_until(5.0, BehaviourKind::Visit), "{}", sim.last_reason());
+    sim.nav.trip = 1e9;
+    for i in 0..8 {
+        sim.vel_override = Some(if i % 2 == 0 { -150.0 } else { 150.0 });
+        sim.run(0.5);
+    }
+    sim.vel_override = None;
+    assert_eq!(sim.brain.oscillations(), 0);
+    assert_eq!(sim.brain.behaviour(), BehaviourKind::Visit);
 }

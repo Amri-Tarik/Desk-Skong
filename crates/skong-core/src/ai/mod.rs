@@ -260,6 +260,8 @@ pub struct Brain {
     /// last navigation goals, and the end of the current calm-down.
     reversals: Vec<f32>,
     travel_dir: f32,
+    /// Goal at the last counted travel reversal (see `guard_oscillation`).
+    reversal_goal: Option<NavGoal>,
     recent_goals: Vec<NavGoal>,
     calm_until: f32,
     /// Seconds bored (above `BoredomConfig::bored`) in a row.
@@ -310,6 +312,7 @@ impl Brain {
             cooldown: BTreeMap::new(),
             reversals: Vec::new(),
             travel_dir: 0.0,
+            reversal_goal: None,
             recent_goals: Vec::new(),
             calm_until: f32::NEG_INFINITY,
             bored_for: 0.0,
@@ -650,13 +653,23 @@ impl Brain {
                     self.recent_goals.clear();
                 }
             }
-            // Only walking back and forth on the ground is dithering: airborne reversals are
-            // the route itself (a wall climb kicks left, right, left...) and must not count, or
-            // every climb gets cancelled a second in.
+            // Dithering is flip-flopping between *targets*. Reversals on the way to one target
+            // are the route itself (a wall climb kicks left, right, left; a run-up backs off;
+            // a climb starts on the far side), and the path follower already re-plans and
+            // gives up when stuck. So a reversal only counts on the ground and when the goal
+            // changed since the last one (another window, or a point far from the old one).
             if k.is_grounded() && k.vel.x.abs() > 20.0 {
                 let dir = k.vel.x.signum();
                 if self.travel_dir != 0.0 && dir != self.travel_dir {
-                    self.reversals.push(self.now);
+                    let new_target = match (self.reversal_goal, goal) {
+                        (Some(NavGoal::Point(a)), NavGoal::Point(b)) => a.distance(b) > 150.0,
+                        (Some(a), b) => a != b,
+                        (None, _) => true,
+                    };
+                    if new_target {
+                        self.reversals.push(self.now);
+                    }
+                    self.reversal_goal = Some(goal);
                 }
                 self.travel_dir = dir;
             }
