@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use super::MoveKind;
-use super::script::{Exec, Outcome, Recipe, Script, Stage, Start};
+use super::script::{Climb, ClimbWall, Exec, Outcome, Recipe, SHORT_RUNUP, Script, Stage, Start};
 use super::surface::{Surface, SurfaceId, all_walls};
 use crate::controller::{Abilities, Character, CharacterParams, Gait, MoveEvent, MoveInput, MoveState, Side};
 use crate::geom::{RectF, Vec2};
@@ -19,6 +19,13 @@ use crate::terrain::{Facing, LedgeKind, Terrain, Wall, WallKind};
 
 /// Fixed step used to validate edges (the app ticks at 120 Hz).
 pub(crate) const SIM_DT: f32 = 1.0 / 120.0;
+/// Walls considered per climbing pair.
+const MAX_CLIMB_WALLS: usize = 3;
+/// Perturbed re-runs a climb must also pass.
+const PERTURBATIONS: u8 = 2;
+/// Slowest take-off speed (fraction of the gait speed) a perturbed run uses; just above what
+/// the follower's approach accepts.
+const RUN_FRACTION_MIN: f32 = 0.82;
 
 /// A validated traversal from one surface to another.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -34,6 +41,9 @@ pub struct Edge {
     pub land: Vec2,
     /// Seconds from take-off to standing on `to` (validation run).
     pub duration: f32,
+    /// Walls used, for climbs ([`MoveKind::WallJump`] edges, and climbs that needed no wall
+    /// jump in the end).
+    pub climb: Option<Climb>,
     pub(crate) script: Script,
 }
 
@@ -50,6 +60,8 @@ pub struct BuildStats {
     pub sims: usize,
     /// Simulated ticks in total.
     pub ticks: usize,
+    /// Climbs that worked once but failed from a perturbed start (rejected).
+    pub brittle: usize,
     pub millis: f32,
 }
 
@@ -86,7 +98,8 @@ struct Found {
 }
 
 /// Results for one ordered pair, per tier (stroll, normal, hurry).
-type PairResult = [Option<Found>; 3];
+/// Slot 3 is an alternative normal-tier climb up another wall.
+type PairResult = [Option<Found>; 4];
 
 /// Pair results of one build, keyed by a hash of everything they depend on.
 #[derive(Clone, Default)]
@@ -256,6 +269,7 @@ impl Builder<'_> {
                 takeoff: f.script.takeoff,
                 land: f.land,
                 duration: f.duration,
+                climb: f.script.climb,
                 script: f.script,
             });
         }
@@ -357,25 +371,28 @@ impl Builder<'_> {
     /// run was caught by a surface sitting right above the target is not retried (more
     /// power or speed will not help), and the stroll's winner is tried first at run speed.
     fn search_pair(&mut self, s: &Surface, t: &Surface, region: RectF, tiers: [bool; 3]) -> PairResult {
-        let mut out = [None; 3];
+        let mut out = [None; 4];
         let mut blocked: Vec<f32> = Vec::new();
         if tiers[1] {
-            out[1] = self.search(Tier::Normal, s, t, region, None, &mut blocked);
+            (out[1], out[3]) = self.search(Tier::Normal, s, t, region, None, &mut blocked);
         }
         // Strolling only uses walk / drop / single jump at walking pace: if running could not
         // connect the pair with those, walking will not either.
         let basic = |f: &Found| matches!(f.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::DropThrough | MoveKind::Jump);
         if tiers[0] && out[1].as_ref().is_some_and(basic) {
             let hint = out[1].map(|f| f.script.recipe);
-            out[0] = self.search(Tier::Stroll, s, t, region, hint, &mut blocked);
+            out[0] = self.search(Tier::Stroll, s, t, region, hint, &mut blocked).0;
         }
         if tiers[2] && out[1].is_none() {
-            out[2] = self.search(Tier::Hurry, s, t, region, None, &mut blocked);
+            out[2] = self.search(Tier::Hurry, s, t, region, None, &mut blocked).0;
         }
         out
     }
 
-    /// Try the tier's candidate scripts in order of preference; first success wins.
+    /// Try the tier's candidate scripts in order of preference; first success wins. A climb
+    /// only counts if it also succeeds from perturbed starts; once one is found, the next
+    /// robust climb up a *different* wall is kept as an alternative (second result), for the
+    /// follower to fall back on when the first keeps slipping.
     fn search(
         &mut self,
         tier: Tier,
@@ -384,7 +401,7 @@ impl Builder<'_> {
         region: RectF,
         hint: Option<Recipe>,
         blocked: &mut Vec<f32>,
-    ) -> Option<Found> {
+    ) -> (Option<Found>, Option<Found>) {
         let mut cands = std::mem::take(&mut self.candidates);
         cands.clear();
         self.candidates_for(tier, s, t, &mut cands);
@@ -397,25 +414,39 @@ impl Builder<'_> {
             let at = usize::from(cands.first().is_some_and(|c| c.recipe == Recipe::DropThrough));
             cands.insert(at, c);
         }
-        let mut found = None;
+        let mut found: Option<Found> = None;
+        let mut alternative = None;
         let mut caught = false;
         for c in &cands {
+            // Looking for an alternative: only climbs up another wall.
+            if let Some(f) = found {
+                let other_wall = c.climb.zip(f.script.climb).is_some_and(|(a, b)| a.wall.x != b.wall.x);
+                if !other_wall {
+                    continue;
+                }
+            }
             // Caught on the way by another surface: an air dash (flying further at the same
             // heights) will not do better, unless it is meant to shadow-dash through a wall.
             let dash_jump = matches!(c.recipe, Recipe::Jump { dash: true, .. });
             if blocked.contains(&c.tx) || (caught && dash_jump && !c.needs_shadow) {
                 continue;
             }
-            let res = self.simulate(*c, s, t, region);
-            match res {
+            match self.simulate(*c, s, t, region, 0) {
                 Ok(f) => {
                     let ok = match tier {
                         Tier::Stroll => matches!(f.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::Jump),
                         Tier::Normal => f.kind != MoveKind::Superdash,
                         Tier::Hurry => true,
                     };
-                    if ok {
-                        found = Some(f);
+                    if !ok || (c.recipe == Recipe::Climb && !self.robust(*c, s, t, region)) {
+                        continue;
+                    }
+                    if found.is_some() {
+                        alternative = Some(f);
+                        break;
+                    }
+                    found = Some(f);
+                    if c.recipe != Recipe::Climb {
                         break;
                     }
                 }
@@ -425,7 +456,17 @@ impl Builder<'_> {
             }
         }
         self.candidates = cands;
-        found
+        (found, alternative)
+    }
+
+    /// Does `c` also work from the perturbed starts? Brittle scripts would make the follower
+    /// slip whenever it arrives a little differently from the validation run.
+    fn robust(&mut self, c: Script, s: &Surface, t: &Surface, region: RectF) -> bool {
+        let ok = (1..=PERTURBATIONS).all(|k| self.simulate(c, s, t, region, k).is_ok());
+        if !ok {
+            self.stats.brittle += 1;
+        }
+        ok
     }
 
     /// Candidate scripts for a pair, most preferred first.
@@ -443,7 +484,7 @@ impl Builder<'_> {
                 Start::Stand => takeoff,
                 _ => s.clamp(takeoff - dir.sign() * self.runup(gait)),
             };
-            Script { recipe, start, dir, gait, takeoff, back, tx, ty: t.y, needs_shadow: false }
+            Script { recipe, start, dir, gait, takeoff, back, tx, ty: t.y, needs_shadow: false, climb: None }
         };
         let sep = separated(s, t);
         let overlap = (s.lo.max(t.lo), s.hi.min(t.hi));
@@ -582,22 +623,38 @@ impl Builder<'_> {
         self.climbs(s, t, &mk, out);
     }
 
-    /// Wall-jump chains up the walls at `t`'s ends.
+    /// Wall climbs from `s` up to `t`: for each usable wall (best first), a single-wall climb,
+    /// a shaft climb when a facing wall is close, and a dash finish when `t` is far from the
+    /// wall line.
     fn climbs(&self, s: &Surface, t: &Surface, mk: &impl Fn(Recipe, Start, Side, f32, f32) -> Script, out: &mut Vec<Script>) {
         let r = self.reach;
-        if !self.abilities.wall_jump || s.y - t.y <= 0.0 {
+        if !self.abilities.wall_jump || s.y - t.y <= r.step {
             return;
         }
-        for (wall, dir) in self.climb_walls(s, t) {
-            let takeoff = s.clamp(wall.x - dir.sign() * (r.half + 48.0));
-            // Over the top (the surface lies beyond the wall) or alongside it.
-            let beyond = match dir {
-                Side::Right => (wall.x - t.x0).abs() <= (wall.x - t.x1).abs(),
-                Side::Left => (wall.x - t.x1).abs() <= (wall.x - t.x0).abs(),
+        for (wall, dir, shaft) in self.climb_walls(s, t) {
+            let sign = dir.sign();
+            let hover = wall.x - sign * (r.half + 0.5);
+            // Run in from a little way back (or jump across from the end of `s`).
+            let takeoff = s.clamp(hover - sign * 48.0);
+            // Over the top when `t` lies beyond the wall line, else step off beside it.
+            let over = match dir {
+                Side::Right => t.hi > wall.x,
+                Side::Left => t.lo < wall.x,
             };
-            let off = if beyond { r.half + 8.0 } else { -(r.half + 8.0) };
-            let tx = inset(t, wall.x + dir.sign() * off, r.half);
-            out.push(mk(Recipe::Climb, Start::Run, dir, takeoff, tx));
+            let tx = if over { inset(t, wall.x + sign * (r.half + 8.0), r.half) } else { inset(t, hover - sign * (r.half + 8.0), r.half) };
+            let cw = |w: &Wall| ClimbWall { x: w.x, y0: w.y0, y1: w.y1 };
+            let far = (tx - hover).abs() > 4.0 * r.half + 32.0;
+            let mut push = |shaft: Option<ClimbWall>, dash: bool| {
+                let climb = Climb { wall: cw(&wall), shaft, dash, over };
+                out.push(Script { climb: Some(climb), ..mk(Recipe::Climb, Start::Run, dir, takeoff, tx) });
+            };
+            push(None, false);
+            if let Some(other) = shaft {
+                push(Some(cw(&other)), false);
+            }
+            if far && self.abilities.dash {
+                push(None, true);
+            }
         }
     }
 
@@ -641,14 +698,26 @@ impl Builder<'_> {
         self.local_walls.iter().filter(move |w| w.face == face && w.x > lo && w.x < hi)
     }
 
-    /// Walls next to `t`'s ends that can be climbed from `s`: (wall, direction towards it).
-    fn climb_walls(&self, s: &Surface, t: &Surface) -> Vec<(Wall, Side)> {
+    /// Walls that can carry the knight from `s` up to `t`, best first: (wall, direction
+    /// towards it, facing wall of a shaft if one is close). Any wall qualifies, wherever it
+    /// stands, when
+    /// * its bottom is within jump + double jump of `s` and it has the knight's side on `s`
+    ///   (or a short hop from the end of `s`),
+    /// * its top reaches `t`'s height, or ends close enough below it to jump the rest,
+    /// * `t` is within a hop (plus dash) of the wall line.
+    ///
+    /// Ranked by how much climbing and sideways travel they leave; at most [`MAX_CLIMB_WALLS`].
+    fn climb_walls(&self, s: &Surface, t: &Surface) -> Vec<(Wall, Side, Option<Wall>)> {
         let r = self.reach;
-        let reach_top = s.y - (r.jump + if self.abilities.double_jump { r.double } else { 0.0 }) + r.height * 0.5;
-        let mut out = Vec::new();
+        let lift = r.jump + if self.abilities.double_jump { r.double } else { 0.0 };
+        let reach_bottom = s.y - lift + r.height * 0.5 + 4.0;
+        let finish_rise = 0.8 * lift;
+        // From the top of a climb: most of a running jump sideways, plus an air dash.
+        let run = self.params.gait_speed_px(Gait::Run);
+        let finish_dx = 0.6 * r.single(run, 0.0) + if self.abilities.dash { r.dash } else { 0.0 };
+        let mut found: Vec<(f32, Wall, Side)> = Vec::new();
         for w in &self.local_walls {
-            let at_end = (w.x - t.x0).abs() <= r.half + 2.0 || (w.x - t.x1).abs() <= r.half + 2.0;
-            if !at_end || w.y0 > t.y + 2.0 || w.y1 < t.y || w.y1 < reach_top || w.y0 > s.y {
+            if w.y1 < reach_bottom || w.y0 > s.y - r.height * 0.5 || w.y0 - t.y > finish_rise {
                 continue;
             }
             // The knight climbs on the wall's face side: left of a Left-facing wall.
@@ -656,15 +725,36 @@ impl Builder<'_> {
                 Facing::Left => Side::Right,
                 Facing::Right => Side::Left,
             };
-            let near = match dir {
-                Side::Right => s.lo < w.x - r.half && s.hi >= w.x - r.half - 64.0,
-                Side::Left => s.hi > w.x + r.half && s.lo <= w.x + r.half + 64.0,
-            };
-            if near && out.len() < 2 {
-                out.push((*w, dir));
+            let sign = dir.sign();
+            let hover = w.x - sign * (r.half + 0.5);
+            let on_side = (s.lo - hover) * sign < 0.0 || (s.hi - hover) * sign < 0.0;
+            let from_s = (s.lo - hover).max(hover - s.hi).max(0.0);
+            let to_t = (t.lo - r.half - w.x).max(w.x - t.hi - r.half).max(0.0);
+            if !on_side || from_s > 4.0 * r.half + 32.0 || to_t > finish_dx {
+                continue;
             }
+            let score = (w.y0 - t.y).max(0.0) * 2.0 + to_t + from_s;
+            found.push((score, *w, dir));
         }
-        out
+        found.sort_by(|a, b| a.0.total_cmp(&b.0));
+        found.truncate(MAX_CLIMB_WALLS);
+        found
+            .into_iter()
+            .map(|(_, w, dir)| {
+                // A facing wall on the knight's side, overlapping vertically, a shaft away.
+                let shaft = self
+                    .local_walls
+                    .iter()
+                    .filter(|o| o.face != w.face && o.y0 < w.y1 && w.y0 < o.y1)
+                    .filter(|o| {
+                        let gap = (w.x - o.x) * dir.sign();
+                        gap >= 2.0 * r.half + 8.0 && gap <= r.jump
+                    })
+                    .min_by(|a, b| (a.x - w.x).abs().total_cmp(&(b.x - w.x).abs()))
+                    .copied();
+                (w, dir, shaft)
+            })
+            .collect()
     }
 
     fn runup(&self, gait: Gait) -> f32 {
@@ -674,15 +764,19 @@ impl Builder<'_> {
     }
 
     /// Forward-simulate one candidate; `Ok` if it ends standing on `t`.
-    fn simulate(&mut self, mut script: Script, s: &Surface, t: &Surface, region: RectF) -> Result<Found, Fail> {
+    ///
+    /// `perturb` > 0 varies how the follower might arrive at the take-off (speed within what
+    /// the approach accepts, sub-tick phase, a px or two of standing offset), to reject
+    /// scripts that only work from one exact start.
+    fn simulate(&mut self, mut script: Script, s: &Surface, t: &Surface, region: RectF, perturb: u8) -> Result<Found, Fail> {
         self.stats.sims += 1;
         let r = self.reach;
         // Per-tick cost grows with the terrain in view, so each run gets only the part of the
         // pair's local terrain its move can reach: its horizontal span and its apex.
         let region = {
-            let xs = [script.back, script.takeoff, script.tx];
-            let lo = xs.iter().copied().fold(f32::INFINITY, f32::min);
-            let hi = xs.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+            let walls = script.climb.map(|c| [c.wall.x, c.shaft.map_or(c.wall.x, |w| w.x)]);
+            let xs = [script.back, script.takeoff, script.tx].into_iter().chain(walls.into_iter().flatten());
+            let (lo, hi) = xs.fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), x| (lo.min(x), hi.max(x)));
             let slack = r.dash + 2.0 * r.half + 32.0;
             let (apex, mx) = match script.recipe {
                 Recipe::Jump { double: true, .. } => (s.y - r.jump - r.double, slack),
@@ -701,13 +795,22 @@ impl Builder<'_> {
         let sign = script.dir.sign();
         // With room for a full run-up the follower reaches the take-off at gait speed: start
         // there (a tick early) already running instead of simulating the run-up.
-        let full_runup = (script.takeoff - script.back) * sign >= 0.9 * self.runup(script.gait);
+        let full_runup = (script.takeoff - script.back) * sign >= SHORT_RUNUP * self.runup(script.gait);
         let running = script.start != Start::Stand && full_runup;
+        let (speed, phase, nudge) = match perturb {
+            0 => (1.0, 1.0, 0.0),
+            1 => (RUN_FRACTION_MIN, 1.5, -1.5),
+            _ => (1.2, 0.35, 1.5),
+        };
         let start_x = match script.start {
-            Start::Stand => script.takeoff,
-            _ if running => script.takeoff - sign * v_air * SIM_DT,
+            Start::Stand => script.takeoff + nudge,
+            _ if running => s.clamp(script.takeoff - sign * v_air * speed * SIM_DT * phase),
             _ => script.back,
         };
+        // Never start inside a wall: only where the follower could actually stand.
+        if start_x < s.lo - 0.5 || start_x > s.hi + 0.5 {
+            return Err(Fail::Other);
+        }
         let mut ch = Character::new(p, self.abilities, Vec2::new(start_x, s.y));
         ch.facing = script.dir;
         let ev = &mut self.events;
@@ -717,7 +820,7 @@ impl Builder<'_> {
             return Err(Fail::Other);
         }
         if running {
-            ch.vel.x = sign * v_air;
+            ch.vel.x = sign * (v_air * speed).min(p.gait_speed_px(Gait::Sprint));
         }
         let mut exec = Exec::new(script);
         let limit = match script.recipe {
@@ -880,5 +983,7 @@ fn near_x(t: &Surface, dir: Side, half: f32) -> f32 {
 /// `x` clamped into `t`, a body width away from the ends when `t` is wide enough.
 fn inset(t: &Surface, x: f32, half: f32) -> f32 {
     let m = (half + 8.0).min((t.hi - t.lo) * 0.5);
-    x.clamp(t.lo + m, t.hi - m)
+    let (lo, hi) = (t.lo + m, t.hi - m);
+    // `lo` can round past `hi` on a surface exactly two margins wide.
+    if lo < hi { x.clamp(lo, hi) } else { (t.lo + t.hi) * 0.5 }
 }

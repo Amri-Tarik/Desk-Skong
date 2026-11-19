@@ -30,10 +30,13 @@ mod search;
 mod surface;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_climb;
 
 pub use debug::{DebugPath, DebugSpan, debug_paths, debug_spans, edge_path, route_paths};
 pub use follow::PathFollower;
 pub use graph::{BuildStats, Edge};
+pub use script::{Climb, ClimbWall};
 pub use surface::{Surface, SurfaceId};
 
 use crate::controller::{Character, Gait};

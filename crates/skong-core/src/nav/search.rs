@@ -20,6 +20,12 @@ const MAX_FALL: f32 = 4.0;
 const POINT_SLACK: f32 = 1.0;
 
 pub(super) fn plan(g: &NavGraph, from: &Character, goal: NavGoal, style: TravelStyle) -> Option<Route> {
+    plan_with(g, from, goal, style, &|_| 0.0)
+}
+
+/// [`plan`] with an extra cost (s) per edge; `f32::INFINITY` excludes the edge. The follower
+/// uses it to steer away from edges that keep failing.
+pub(super) fn plan_with(g: &NavGraph, from: &Character, goal: NavGoal, style: TravelStyle, extra: &dyn Fn(&Edge) -> f32) -> Option<Route> {
     let (start, start_x) = start_state(g, from)?;
     let v = from.params.gait_speed_px(style.gait());
     let n = 1 + g.edges.len();
@@ -44,7 +50,10 @@ pub(super) fn plan(g: &NavGraph, from: &Character, goal: NavGoal, style: TravelS
                 continue;
             }
             let j = 1 + g.out_start[s] + k;
-            let nc = c + approach_cost(from, e, x, v) + e.duration + penalty(e, style);
+            let nc = c + approach_cost(from, e, x, v) + e.duration + penalty(e, style) + extra(e);
+            if !nc.is_finite() {
+                continue;
+            }
             if nc < cost[j] {
                 cost[j] = nc;
                 prev[j] = i;
@@ -72,7 +81,9 @@ pub(super) fn plan(g: &NavGraph, from: &Character, goal: NavGoal, style: TravelS
                 }
                 // Stay near where we land, but not on the very edge.
                 let m = (from.size.x + 8.0).min((surf.hi - surf.lo) * 0.5);
-                (0.0, x.clamp(surf.lo + m, surf.hi - m))
+                let (lo, hi) = (surf.lo + m, surf.hi - m);
+                // `lo` can round past `hi` on a surface exactly two margins wide.
+                (0.0, if lo < hi { x.clamp(lo, hi) } else { (surf.lo + surf.hi) * 0.5 })
             }
         };
         let total = c + (fx - x).abs() / v;
