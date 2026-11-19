@@ -516,3 +516,33 @@ fn an_unbroken_fall_kills_and_leaves_a_shade_to_hunt() {
     assert!(sim.started.iter().any(|a| a == "death"));
     assert!(DeathKind::Fall.leaves_shade(), "a Shade with his Geo: something to go and do");
 }
+
+#[test]
+fn a_coin_landing_close_on_the_way_is_grabbed_first() {
+    // He was heading for a far coin; another lands right by him. He used to run past it to
+    // the far one (the target was chosen once). Now the quicker coin takes over.
+    let mut sim = Sim::new();
+    sim.coins = vec![Vec2::new(1900.0, FLOOR)];
+    assert!(sim.run_until(1.0, |s| s.brain.behaviour() == BehaviourKind::Loot));
+    sim.run_until(0.2, |_| false);
+    sim.coins.push(Vec2::new(1000.0, FLOOR));
+    let near_first = sim.run_until(6.0, |s| !s.coins.iter().any(|c| c.x == 1000.0) || !s.coins.iter().any(|c| c.x == 1900.0));
+    assert!(near_first);
+    assert!(sim.coins.iter().any(|c| c.x == 1900.0), "took the near coin first: {:?} at {:?}", sim.coins, sim.knight.pos);
+    assert!(sim.run_until(10.0, |s| s.coins.is_empty()), "then the far one");
+}
+
+#[test]
+fn geo_is_worth_running_for() {
+    // Two coins aren't a stroll any more: he runs (and hurries for far ones).
+    let mut sim = Sim::new();
+    sim.coins = vec![Vec2::new(1200.0, FLOOR)];
+    let mut style = None;
+    for _ in 0..(1.0 / DT) as usize {
+        if let Motion::Navigate { style: s, .. } = sim.step().motion {
+            style = Some(s);
+            break;
+        }
+    }
+    assert!(matches!(style, Some(TravelStyle::Normal | TravelStyle::Hurry)), "{style:?}");
+}
