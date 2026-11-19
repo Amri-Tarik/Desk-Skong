@@ -175,6 +175,8 @@ struct Pet {
     nav_missing: Option<skong_core::controller::Support>,
     /// Dark surroundings (sampled behind the knight every 2 s) and seconds to the next sample.
     dark: (bool, f32),
+    /// Seconds to the next update of the planner's keep-points.
+    keep_check: f32,
     user_input: UserInput,
     /// Controller events not yet seen by the brain.
     brain_events: Vec<MoveEvent>,
@@ -305,6 +307,7 @@ pub fn run(args: &Args) -> Result<()> {
         navb,
         nav_missing: None,
         dark: (false, 0.0),
+        keep_check: 0.0,
         user_input: UserInput::new()?,
         brain_events: Vec::new(),
         last_input: MoveInput::default(),
@@ -407,6 +410,18 @@ impl Pet {
         self.move_events.clear();
         if let Some(g) = self.navb.poll() {
             self.nav.set_graph(g);
+        }
+        // Ledges carrying something he wants (deposits, shinies, resting Geo) stay in the
+        // planner's terrain, or short ones were unreachable and he ignored the prize.
+        self.keep_check -= dt;
+        if self.keep_check <= 0.0 {
+            self.keep_check = 0.5;
+            let mut keep: Vec<Vec2> = self.discoveries.places().iter().flat_map(|p| [p.at, p.center]).collect();
+            keep.extend(self.shinies.percepts().iter().map(|s| s.pos));
+            keep.extend(self.stakes.resting_coins());
+            if self.navb.set_keep(keep) {
+                self.navb.request(&self.terrain, &self.ch, true);
+            }
         }
         // Standing on a ledge the graph doesn't have (a small content ledge trimmed from the
         // planner's terrain): no route can start there, so rebuild with it, once per ledge.

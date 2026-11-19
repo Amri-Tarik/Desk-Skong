@@ -314,14 +314,17 @@ pub fn place(site: &Site, id: WindowId, kind: FindKind, salt: u64, free: &dyn Fn
 /// Where an anchored find of `width` px is on window `rect` right now: on a ledge of that
 /// window that carries its whole footprint. Returns the bottom center and the ledge span;
 /// `None` while covered / scrolled away / out of room.
-pub fn resolve(terrain: &Terrain, id: WindowId, rect: RectF, a: Anchor, width: f32) -> Option<(Vec2, (f32, f32))> {
+/// `settled`: the ledge has been on screen long enough to carry it (a line that just
+/// appeared where the old one was — new text, a scrolled page — doesn't count yet; see
+/// [`crate::lasting::SETTLED_SECS`]).
+pub fn resolve(terrain: &Terrain, id: WindowId, rect: RectF, a: Anchor, width: f32, settled: &dyn Fn(&Ledge) -> bool) -> Option<(Vec2, (f32, f32))> {
     let x = rect.left + a.fx * rect.width();
     let y = rect.top + a.dy;
     let half = width * 0.5;
     terrain
         .ledges
         .iter()
-        .filter(|l| l.owner == Some(id) && (l.y - y).abs() <= LEDGE_SLACK && l.x0 <= x - half && x + half <= l.x1)
+        .filter(|l| l.owner == Some(id) && (l.y - y).abs() <= LEDGE_SLACK && l.x0 <= x - half && x + half <= l.x1 && settled(l))
         .min_by(|p, q| (p.y - y).abs().total_cmp(&(q.y - y).abs()))
         .map(|l| (Vec2::new(x, l.y), (l.x0, l.x1)))
 }
@@ -452,7 +455,7 @@ impl World {
     /// Finds on screen (before collisions, see [`settle`]): for every app with a room, on
     /// its hosting window (the one last explored if still open, else its first visible
     /// window where something resolves).
-    pub fn shown(&mut self, desk: &DesktopSnapshot, terrain: &Terrain, now_unix: u64, rules: &Rules, footprint: &dyn Fn(FindKind) -> Footprint) -> Vec<Shown> {
+    pub fn shown(&mut self, desk: &DesktopSnapshot, terrain: &Terrain, now_unix: u64, rules: &Rules, footprint: &dyn Fn(FindKind) -> Footprint, settled: &dyn Fn(&Ledge) -> bool) -> Vec<Shown> {
         // Worlds saved before deposits moved on keep broken rocks to regrow: they go now,
         // and turn up elsewhere instead.
         let _ = rules;
@@ -475,7 +478,7 @@ impl World {
                 let here: Vec<Shown> = live
                     .iter()
                     .filter_map(|f| {
-                        let (pos, span) = resolve(terrain, wid, rect, f.anchor?, footprint(f.kind).w)?;
+                        let (pos, span) = resolve(terrain, wid, rect, f.anchor?, footprint(f.kind).w, settled)?;
                         Some(Shown { id: f.id, kind: f.kind, window: wid, pos, span, favour: f.favour() })
                     })
                     .collect();
@@ -670,22 +673,22 @@ mod tests {
         let env = Env::new(t);
         let mut world = World::new(3);
         world.explored(1, &d, &env.site(), &rules);
-        let s = world.shown(&d, &env.terrain, 0, &rules, &fp);
+        let s = world.shown(&d, &env.terrain, 0, &rules, &fp, &|_| true);
         assert_eq!(s.len(), 1);
         assert_eq!(s[0].pos.y, 400.0, "on the title bar (the only lasting ledge)");
         assert!(s[0].pos.x - 75.0 >= 200.0 + EDGE_MARGIN && s[0].pos.x + 75.0 <= 900.0 - EDGE_MARGIN);
         let x0 = s[0].pos.x;
 
         let (d2, t2) = desk(vec![win(1, RectI::new(500, 300, 1200, 800), "paint.exe")]);
-        let s2 = world.shown(&d2, &t2, 0, &rules, &fp);
+        let s2 = world.shown(&d2, &t2, 0, &rules, &fp, &|_| true);
         assert_eq!(s2[0].pos, Vec2::new(x0 + 300.0, 300.0), "rides the window");
 
         let (d3, t3) = desk(vec![win(2, RectI::new(500, 300, 1200, 800), "notepad.exe")]);
-        assert!(world.shown(&d3, &t3, 0, &rules, &fp).is_empty(), "closed with its window");
+        assert!(world.shown(&d3, &t3, 0, &rules, &fp, &|_| true).is_empty(), "closed with its window");
 
         // Reopened later (new window id): still there, same relative spot.
         let (d4, t4) = desk(vec![win(9, RectI::new(200, 400, 900, 900), "paint.exe")]);
-        let s4 = world.shown(&d4, &t4, 0, &rules, &fp);
+        let s4 = world.shown(&d4, &t4, 0, &rules, &fp, &|_| true);
         assert_eq!(s4.len(), 1);
         assert_eq!(s4[0].pos, Vec2::new(x0, 400.0));
     }
@@ -700,7 +703,7 @@ mod tests {
         for seed in 0..30 {
             let mut world = World::new(seed);
             world.force(FindKind::Deposit, 1, &d, &env.site()).expect("room");
-            let s = world.shown(&d, &env.terrain, 0, &Rules::default(), &fp);
+            let s = world.shown(&d, &env.terrain, 0, &Rules::default(), &fp, &|_| true);
             ys.insert(s[0].pos.y as i32);
         }
         assert_eq!(ys.into_iter().collect::<Vec<_>>(), vec![400, 650], "not only title bars");
@@ -709,13 +712,13 @@ mod tests {
         let mut world = World::new(1);
         let id = loop {
             let id = world.force(FindKind::Bench { style: 0 }, 1, &d, &env.site()).expect("room");
-            if world.shown(&d, &env.terrain, 0, &Rules::default(), &fp).iter().any(|s| s.id == id && s.pos.y == 650.0) {
+            if world.shown(&d, &env.terrain, 0, &Rules::default(), &fp, &|_| true).iter().any(|s| s.id == id && s.pos.y == 650.0) {
                 break id;
             }
         };
         let (_, bare) = desk(vec![win(1, RectI::new(200, 400, 1400, 900), "excel.exe")]);
-        assert!(!world.shown(&d, &bare, 0, &Rules::default(), &fp).iter().any(|s| s.id == id), "scrolled away");
-        assert!(world.shown(&d, &env.terrain, 0, &Rules::default(), &fp).iter().any(|s| s.id == id), "back");
+        assert!(!world.shown(&d, &bare, 0, &Rules::default(), &fp, &|_| true).iter().any(|s| s.id == id), "scrolled away");
+        assert!(world.shown(&d, &env.terrain, 0, &Rules::default(), &fp, &|_| true).iter().any(|s| s.id == id), "back");
     }
 
     #[test]
@@ -742,7 +745,7 @@ mod tests {
         assert_eq!(world.arrived(1, &d2, &Env::new(t2).site()).len(), 1, "placed once there is room");
         // A window on top covering the whole title bar hides it.
         let (d3, t3) = desk(vec![win(2, RectI::new(100, 300, 1000, 600), "other.exe"), win(1, RectI::new(200, 400, 900, 900), "tiny.exe")]);
-        assert!(world.shown(&d3, &t3, 0, &rules, &fp).is_empty());
+        assert!(world.shown(&d3, &t3, 0, &rules, &fp, &|_| true).is_empty());
     }
 
     #[test]
@@ -785,16 +788,16 @@ mod tests {
         }
         let drop = world.strike(id, at, 1000, &rules).expect("broke");
         assert!((5..=15).contains(&drop.geo));
-        assert!(world.shown(&d, &env.terrain, 1001, &rules, &fp).is_empty(), "gone");
+        assert!(world.shown(&d, &env.terrain, 1001, &rules, &fp, &|_| true).is_empty(), "gone");
         assert!(world.relocate_due(&d, &env.site(), 1001).is_empty(), "not right away");
         let placed = world.relocate_due(&d, &env.site(), 1000 + 200);
         assert_eq!(placed.len(), 1, "turned up again");
         assert_eq!(placed[0].1, 2, "in another app's window, not where it broke");
-        let shown = world.shown(&d, &env.terrain, 1200, &rules, &fp);
+        let shown = world.shown(&d, &env.terrain, 1200, &rules, &fp, &|_| true);
         assert_eq!(shown.len(), 1);
         assert_eq!((shown[0].kind, shown[0].window), (FindKind::Deposit, 2));
         // It never regrows in paint.
-        assert!(world.shown(&d, &env.terrain, 1000 + 25 * 3600, &rules, &fp).iter().all(|s| s.window != 1));
+        assert!(world.shown(&d, &env.terrain, 1000 + 25 * 3600, &rules, &fp, &|_| true).iter().all(|s| s.window != 1));
     }
 
     #[test]
@@ -807,7 +810,7 @@ mod tests {
         for k in [FindKind::Deposit, FindKind::Bench { style: 0 }] {
             world.force(k, 1, &d, &env.site()).expect("room for two");
         }
-        let s = settle(world.shown(&d, &env.terrain, 0, &Rules::default(), &fp), &mut env.occ, &fp);
+        let s = settle(world.shown(&d, &env.terrain, 0, &Rules::default(), &fp, &|_| true), &mut env.occ, &fp);
         assert_eq!(s.len(), 2);
         let rects: Vec<RectF> = s.iter().map(|s| fp(s.kind).rect(s.pos)).collect();
         assert!(!rects[0].overlaps(&rects[1]));

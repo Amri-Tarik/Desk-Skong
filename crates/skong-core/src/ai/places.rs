@@ -91,6 +91,8 @@ pub struct PlaceMemory {
     /// The visit in progress: place and whether it was just found.
     current: Option<(PlaceId, bool)>,
     pub(crate) best: Option<PlaceChoice>,
+    /// Brain clock of the last scoring (route plans): at most every 0.25 s.
+    scored_at: Option<f32>,
 }
 
 impl PlaceMemory {
@@ -154,6 +156,12 @@ impl Brain {
 
     /// Rank places: fresh ones first (urgent), else by need minus travel.
     pub(crate) fn score_places(&mut self, p: &Percepts, nav: &mut dyn Navigator) {
+        // Route plans are not free: re-score at most 4 times a second (a behaviour that
+        // finishes may trigger several thinks in a row).
+        if self.interest.places.scored_at.is_some_and(|t| self.now - t < 0.25) {
+            return;
+        }
+        self.interest.places.scored_at = Some(self.now);
         let knight = p.knight;
         let style = self.mind.travel_style();
         // The place being visited (until that visit is done) is exempt from its cooldown,
@@ -202,6 +210,15 @@ impl Brain {
                     };
                     if r.end.is_some() && !r.lands_on(place.at, SEAT_TOL + 2.0) {
                         log::trace!("places: {} #{} at {:?}: route ends at {:?}, not on it", place.kind.label(), place.id, place.at, r.end);
+                        if log::log_enabled!(log::Level::Trace) {
+                            let near = |y: f32, x0: f32, x1: f32| (y - place.at.y).abs() < 120.0 && x0 < place.at.x + 200.0 && x1 > place.at.x - 200.0;
+                            for l in p.terrain.ledges.iter().filter(|l| near(l.y, l.x0, l.x1)) {
+                                log::trace!("places:   ledge {:?} owner {:?} y {} x {}..{}", l.kind, l.owner, l.y, l.x0, l.x1);
+                            }
+                            for w in p.terrain.walls.iter().filter(|w| (w.x - place.at.x).abs() < 200.0 && w.y0 < place.at.y + 20.0 && w.y1 > place.at.y - 120.0) {
+                                log::trace!("places:   wall {:?} {:?} x {} y {}..{}", w.kind, w.face, w.x, w.y0, w.y1);
+                            }
+                        }
                         return None;
                     }
                     r.eta
@@ -278,7 +295,19 @@ impl Visit {
             TravelStyle::Stroll if ctx.mind.needs.energy > 0.4 && place.kind == PlaceKind::Deposit => TravelStyle::Normal,
             s => s,
         };
-        Phase::Travel(Travel::exact(ctx, place.at, style, SEAT_TOL + 2.0))
+        match place.kind {
+            // Benches need him right at the seat.
+            PlaceKind::Bench => Phase::Travel(Travel::exact(ctx, place.at, style, SEAT_TOL + 2.0)),
+            // A rock only needs him within a swing on its ledge (see `in_swing`).
+            PlaceKind::Deposit => Phase::Travel(Travel::to(ctx, place.at, style)),
+        }
+    }
+
+    /// On the rock's ledge and close enough to swing at it.
+    fn in_swing(ctx: &Ctx, place: &KnownPlace) -> bool {
+        let k = ctx.p.knight;
+        let reach = (place.at.x - place.center.x).abs() + 24.0;
+        ctx.grounded() && (k.pos.y - place.at.y).abs() <= 6.0 && (k.pos.x - place.center.x).abs() <= reach
     }
 
     fn arrive(&mut self, ctx: &mut Ctx) {
@@ -298,6 +327,7 @@ impl Visit {
         let s = self.step(ctx);
         if s != Status::Running {
             ctx.interest.places.current = None;
+            ctx.interest.places.scored_at = None; // re-score now: this place just changed
         }
         s
     }
@@ -333,6 +363,11 @@ impl Visit {
                 Status::Running
             }
             Phase::Travel(t) => {
+                if place.kind == PlaceKind::Deposit && Self::in_swing(ctx, &place) {
+                    ctx.nav.stop();
+                    self.arrive(ctx);
+                    return Status::Running;
+                }
                 if let NavGoal::Point(g) = t.goal
                     && g.distance(place.at) > 6.0
                 {

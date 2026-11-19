@@ -247,7 +247,12 @@ impl Discoveries {
     pub fn update(&mut self, dt: f32, (desk, terrain): (&DesktopSnapshot, &Terrain), benches: &Benches, occ: &mut Occupancy, fx: &mut Fx, (knight, knight_win): (&Character, &SpriteWindow)) {
         self.clock += dt;
         let clock = self.clock;
-        if terrain.generation != self.observed.0 || clock - self.observed.1 >= OBSERVE_EVERY {
+        if self.observed.1 == f32::NEG_INFINITY {
+            // What is on screen at start-up was there before we looked: settled already
+            // (finds don't vanish for 15 s on every launch). Not "lasting" for new finds.
+            self.ages.observe_aged(terrain, clock, skong_core::lasting::SETTLED_SECS);
+            self.observed = (terrain.generation, clock);
+        } else if terrain.generation != self.observed.0 || clock - self.observed.1 >= OBSERVE_EVERY {
             self.ages.observe(terrain, clock);
             self.observed = (terrain.generation, clock);
         }
@@ -275,7 +280,11 @@ impl Discoveries {
             }
         }
 
-        let mut raw = self.world.shown(desk, terrain, now_unix(), &self.rules, &fp);
+        // Finds only stand on ledges that have lasted (a line that just appeared where the
+        // old one was doesn't carry them yet).
+        let ages = &self.ages;
+        let settled = |l: &skong_core::terrain::Ledge| ages.settled(terrain, l, clock);
+        let mut raw = self.world.shown(desk, terrain, now_unix(), &self.rules, &fp, &settled);
         // Really on its ledge this tick (the grace copies below must not count as seen, or
         // the grace never ends: broken rocks stayed, finds floated where a ledge had been).
         let seen_now: Vec<FindId> = raw.iter().map(|s| s.id).collect();
@@ -371,6 +380,11 @@ impl Discoveries {
                 .iter()
                 .filter(|l| l.owner == owner && (l.y - y).abs() <= 1.0 && l.x0 < x1 && x0 < l.x1)
                 .any(|l| self.ages.settled(terrain, l, self.clock))
+    }
+
+    /// Has `l` been on screen long enough to carry something ([`skong_core::lasting::SETTLED_SECS`])?
+    pub fn ledge_settled(&self, terrain: &Terrain, l: &skong_core::terrain::Ledge) -> bool {
+        self.ages.settled(terrain, l, self.clock)
     }
 
     pub fn raise_all(&self) {

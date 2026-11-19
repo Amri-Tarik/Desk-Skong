@@ -142,10 +142,10 @@ impl ShinyProps {
 
     /// Resolve, settle against the other props, and draw. `true` when a new window was
     /// created (raise the knight above it).
-    pub fn update(&mut self, desk: &DesktopSnapshot, terrain: &Terrain, occ: &mut Occupancy) -> bool {
+    pub fn update(&mut self, desk: &DesktopSnapshot, terrain: &Terrain, occ: &mut Occupancy, settled: &dyn Fn(&skong_core::terrain::Ledge) -> bool) -> bool {
         let clock = self.shinies.clock();
         let fp = self.footprint();
-        let mut raw = self.shinies.shown(desk, terrain, &self.rules, fp.w);
+        let mut raw = self.shinies.shown(desk, terrain, &self.rules, fp.w, settled);
         raw.retain(|s| !self.game_monitors.iter().any(|m| m.contains(s.pos.x as i32, s.pos.y as i32 - 1)));
         let shown = shiny::settle(raw, occ, fp);
         let mut created = false;
