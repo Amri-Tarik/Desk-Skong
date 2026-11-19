@@ -306,17 +306,8 @@ impl Kit {
             self.end_pogo(now);
         }
 
-        if now >= self.dodge_ready_at
-            && let Some(side) = dodge_now(m, &s)
-        {
-            input.x = side.sign();
-            input.dash_pressed = true;
-            self.dodge_ready_at = now + DODGE_COOLDOWN;
-            self.untouchable_until = now + k.params.dash_time + 0.2;
-            self.end_pogo(now);
-            ctx.out.stakes.push(StakeEvent::Technique(Technique::Dodge));
-            log::debug!("brain: shadow dash through the lunge");
-            return Some(KitMove::Dodge(side));
+        if let Some(mv) = self.dodge(ctx, m, input) {
+            return Some(mv);
         }
         // (Not out of his own pogo jump: that one is for bouncing.)
         if !self.pogo_run && now >= self.dive_ready_at && ctx.stakes.spells.soul + 1e-4 >= SPELL_SOUL && dive_now(m, &s) {
@@ -364,6 +355,25 @@ impl Kit {
             return Some(KitMove::PogoJump);
         }
         None
+    }
+
+    /// Dodge `m` (lunging at him from close) with a shadow dash through it, if one is ready;
+    /// he is untouchable while he passes through.
+    pub fn dodge(&mut self, ctx: &mut Ctx, m: &Mark, input: &mut MoveInput) -> Option<KitMove> {
+        let k = ctx.p.knight;
+        let now = ctx.now;
+        if now < self.dodge_ready_at {
+            return None;
+        }
+        let side = dodge_now(m, &Stance::of(k))?;
+        input.x = side.sign();
+        input.dash_pressed = true;
+        self.dodge_ready_at = now + DODGE_COOLDOWN;
+        self.untouchable_until = now + k.params.dash_time + 0.2;
+        self.end_pogo(now);
+        ctx.out.stakes.push(StakeEvent::Technique(Technique::Dodge));
+        log::debug!("brain: shadow dash through the lunge");
+        Some(KitMove::Dodge(side))
     }
 
     /// The crystal dash opener under way: charge facing the foe, launch, stop short of it.

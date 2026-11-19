@@ -11,6 +11,7 @@ mod benches;
 mod bubble;
 mod npcs;
 mod enemies;
+mod grimm;
 mod discoveries;
 mod shinies;
 mod emotes;

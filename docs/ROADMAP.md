@@ -76,6 +76,11 @@ Checked in tests only (unless noted). Note anything that looks off:
 - [ ] Dream Gate: gate size, glow, warp timing
 - [ ] Crystal dash: charge → launch on long runs and off walls; particles (dust, shards)
 - [ ] Unn slug crawl speed and turns; highlighted-text curiosity with real apps
+- [ ] The Troupe Master (panel → Achievements → Debug: "Summon the troupe master" / "Light a
+      scarlet flame"): his size (`art_scale`), feet line and facing; teleport flashes; the
+      lantern's dim flicker; firebat / fireball / pillar art scale and orientation; the
+      procedural pillar glow and spikes; bubbles following him; the knight's bow, dodges,
+      spike jumps; the defeat bats and Geo burst; how often he wins on a real desktop
 
 ## Recently done
 

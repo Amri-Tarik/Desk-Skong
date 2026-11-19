@@ -1,0 +1,86 @@
+{
+  "name": "Grimm Flash Anim",
+  "clips": [
+    {
+      "name": "Flash",
+      "fps": 22,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Flash Cln",
+          "sprite_id": 2,
+          "sprite": "Grimm_flash0001"
+        },
+        {
+          "collection": "Grimm Flash Cln",
+          "sprite_id": 5,
+          "sprite": "Grimm_flash0002"
+        },
+        {
+          "collection": "Grimm Flash Cln",
+          "sprite_id": 6,
+          "sprite": "Grimm_flash0003"
+        },
+        {
+          "collection": "Grimm Flash Cln",
+          "sprite_id": 4,
+          "sprite": "Grimm_flash0004"
+        },
+        {
+          "collection": "Grimm Flash Cln",
+          "sprite_id": 7,
+          "sprite": "Grimm_flash0005",
+          "event": {
+            "info": "",
+            "int": 0,
+            "float": 0
+          }
+        },
+        {
+          "collection": "Grimm Flash Cln",
+          "sprite_id": 3,
+          "sprite": "Grimm_flash0006"
+        },
+        {
+          "collection": "Grimm Flash Cln",
+          "sprite_id": 0,
+          "sprite": "Grimm_flash0007"
+        },
+        {
+          "collection": "Grimm Flash Cln",
+          "sprite_id": 1,
+          "sprite": "Grimm_flash0008"
+        }
+      ]
+    },
+    {
+      "name": "Quick Flash",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Flash Cln",
+          "sprite_id": 7,
+          "sprite": "Grimm_flash0005"
+        },
+        {
+          "collection": "Grimm Flash Cln",
+          "sprite_id": 3,
+          "sprite": "Grimm_flash0006"
+        },
+        {
+          "collection": "Grimm Flash Cln",
+          "sprite_id": 0,
+          "sprite": "Grimm_flash0007"
+        },
+        {
+          "collection": "Grimm Flash Cln",
+          "sprite_id": 1,
+          "sprite": "Grimm_flash0008"
+        }
+      ]
+    }
+  ]
+}

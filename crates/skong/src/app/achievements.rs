@@ -50,6 +50,8 @@ pub struct Achievements {
     shattered: u32,
     /// Gauntlets completed since the last tick (set by `tick_enemies`).
     pub(super) gauntlets_cleared: u32,
+    /// The troupe's events since the last tick (set by `tick_troupe`).
+    pub(super) troupe: Vec<skong_core::enemy::grimm::GrimmEvent>,
     /// Brain switch already looked at (its time).
     switch_at: f32,
     act: Option<String>,
@@ -88,6 +90,7 @@ impl Achievements {
             shades: 0,
             shattered: 0,
             gauntlets_cleared: 0,
+            troupe: Vec::new(),
             switch_at: -1.0,
             act: None,
             pos: Vec2::ZERO,
@@ -100,6 +103,11 @@ impl Achievements {
             changed: true,
             since_save: 0.0,
         }
+    }
+
+    /// How many are unlocked (the troupe's lantern waits for enough of them).
+    pub fn unlocked(&self) -> usize {
+        self.tracker.as_ref().map_or(0, |t| t.unlocked_count())
     }
 
     /// The tray tooltip, with the latest unlock for a while.
@@ -334,6 +342,14 @@ impl Pet {
         }
         for _ in 0..std::mem::take(&mut self.achievements.gauntlets_cleared) {
             evs.push(E::GauntletCleared);
+        }
+        for ev in std::mem::take(&mut self.achievements.troupe) {
+            use skong_core::enemy::grimm::GrimmEvent as G;
+            match ev {
+                G::Defeated { .. } => evs.push(E::TroupeMasterBeaten),
+                G::KnightFell => evs.push(E::FellToTroupeMaster),
+                _ => {}
+            }
         }
 
         for ev in evs {

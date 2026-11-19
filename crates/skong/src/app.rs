@@ -49,6 +49,7 @@ mod achievements;
 mod discover;
 mod dreamgate;
 mod enemy;
+mod grimm;
 mod panel;
 mod visit;
 mod stakes;
@@ -259,6 +260,8 @@ struct Pet {
     /// Enemies wandering in (None if their data is missing) and the bumps they gave him.
     enemies: Option<crate::enemies::Enemies>,
     enemy_hits: u32,
+    /// The secret boss: his lantern, the show (None if his data is missing).
+    troupe: Option<crate::grimm::Troupe>,
     /// Hidden achievements (all event mapping lives in `app/achievements.rs`).
     achievements: achievements::Achievements,
 }
@@ -384,10 +387,12 @@ pub fn run(args: &Args) -> Result<()> {
         visitors: None,
         enemies: None,
         enemy_hits: 0,
+        troupe: None,
         achievements: achievements::Achievements::load(&args.data),
     };
     pet.visitors = pet.load_visitors(args.capturable);
     pet.enemies = pet.load_enemies(args.capturable);
+    pet.troupe = pet.load_troupe(args.capturable);
     pet.achievements_setup();
     if let (Some(v), Some(name)) = (pet.visitors.as_mut(), &args.visit) {
         v.invite((name != "any").then(|| name.clone()));
@@ -458,6 +463,7 @@ pub fn run(args: &Args) -> Result<()> {
             pet.benches.raise_all();
             pet.raise_visitors();
             pet.raise_enemies();
+            pet.raise_troupe();
             pet.discoveries.raise_all();
             pet.shinies.raise_all();
             pet.win.raise();
@@ -531,6 +537,7 @@ impl Pet {
         if self.game_step() {
             self.hide_visitors();
             self.hide_enemies();
+            self.hide_troupe();
             self.achievements_tick(dt); // he hid from a game: that counts
             return Ok(()); // hidden while games cover every monitor
         }
@@ -657,6 +664,7 @@ impl Pet {
         let origin = self.knight_origin();
         self.tick_visitors(dt);
         self.tick_enemies(dt);
+        self.tick_troupe(dt);
         self.achievements_tick(dt);
         self.emote_tick(dt, origin)?;
         self.fx.update(dt, origin, self.ch.facing == Side::Right, self.ch.params.px_per_unit)
@@ -1226,6 +1234,7 @@ impl Pet {
                 None => log::warn!("enemies: not loaded"),
             },
             Command::StartGauntlet => self.start_gauntlet(),
+            Command::SummonGrimm { lantern } => self.summon_grimm(lantern),
             Command::Discover(_) | Command::ForgetDiscoveries => return self.apply_discovery(c),
             Command::Quit => return Ok(Flow::Quit),
             Command::Stakes(c) => self.apply_stakes(c),
@@ -1260,6 +1269,7 @@ impl Pet {
         self.drawn = None;
         self.rescale_visitors();
         self.rescale_enemies();
+        self.rescale_troupe();
         if let Err(e) = self.tray.set_icon(&tray_icon(&self.data, &self.look)) {
             log::warn!("tray icon: {e:#}");
         }

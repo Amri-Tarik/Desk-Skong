@@ -1,0 +1,57 @@
+{
+  "$comment": "The Troupe Master: a secret boss fight (skong-core `enemy::grimm`). Art is the vanilla `Grimm Anim` library (+ `Flameball Anim` for his fireballs, `Grimm Flash Anim` for teleport flashes); his art faces left and is mirrored to face right, drawn at `art_scale` x the knight's scale. Every distance is in game units and measured from the knight (his ledge, or the ledge under him), never from a fixed arena: Grimm teleports beside / above him, dashes and dives at him, slashes along his ledge and uppercuts out of it, sends firebats at his height, raises flame pillars under his feet and spikes along his ledge, and at each `phases` threshold (fraction of `hp` left) roars and floats up to spray fireballs (balloon). Flames ignore windows. Every attack has a wind-up the knight can read. `size`: body [w, h]. `hp`: blows he takes (spells count more). `tempo`: speed multiplier for his whole routine. `invuln`: seconds the knight can't be hurt again after a hit. `geo`: [min, max] burst when beaten. `max_secs`: he bows out of a fight that drags on. Typing at least `busy_keys_per_sec` for `busy_secs`, a fullscreen app or a visitor make him bow out too (no penalty). `lantern`: how he is found. Once `min_achievements` are unlocked, a dim scarlet flame appears now and then (`schedule`, like npcs.json `visits`: presence time, never during fullscreen apps, fast typing, a visitor, a gauntlet, other enemies or a waiting Shade) on a settled ledge the knight can reach; it fades after `secs` unless he strikes it, which summons Grimm. Lines: original writing only, `{daypart}` / `{app}` / `{title}` placeholders allowed (a line whose placeholder can't be filled is skipped).",
+  "library": "Grimm Anim",
+  "fx_library": "Flameball Anim",
+  "flash_library": "Grimm Flash Anim",
+  "art_scale": 0.62,
+  "size": [1.3, 2.9],
+  "hp": 30,
+  "phases": [0.66, 0.33],
+  "tempo": 1.0,
+  "invuln": 1.3,
+  "geo": [150, 220],
+  "max_secs": 300,
+  "busy_keys_per_sec": 2.5,
+  "busy_secs": 3.0,
+  "lantern": {
+    "enabled": true,
+    "min_achievements": 8,
+    "secs": 150,
+    "schedule": { "enabled": true, "first": [1800, 4800], "gap": [5400, 14400], "busy_keys_per_sec": 2.5, "away_secs": 90, "retry": 60 }
+  },
+  "lines": {
+    "intro": [
+      "Ah. A small flame answered the call. Splendid.",
+      "You struck the lantern. Now we dance; it is only polite.",
+      "A stage of glass and light. How delightfully improvised.",
+      "Every desk deserves one performance. Let this be yours.",
+      "Take your bow, little vessel. The curtain rises this {daypart}.",
+      "Such a curious theatre. The {app} window will make a fine balcony."
+    ],
+    "phase2": [
+      "Bravo! The audience leans closer.",
+      "Faster now. The music swells!",
+      "Your windows make a curious stage. I adore it."
+    ],
+    "phase3": [
+      "The final act! Hold nothing back.",
+      "Such fire in so small a shell!",
+      "Now the flames take their bow... or you do."
+    ],
+    "defeat": [
+      "Magnificent. The troupe will speak of this desk.",
+      "A worthy finale. Keep the Geo; you earned the applause.",
+      "Ah... the lantern dims. Until the next performance."
+    ],
+    "triumph": [
+      "A graceful fall. Rest, and rise for an encore.",
+      "Do not despair. Every great act begins with a stumble.",
+      "Your shadow lingers on the stage. Go and reclaim it."
+    ],
+    "bow_out": [
+      "Ah, the house lights. We shall resume another night.",
+      "An intermission, then. Pardon my exit.",
+      "The stage is needed elsewhere. Adieu, for now."
+    ]
+  }
+}

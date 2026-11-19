@@ -32,6 +32,8 @@
     { "id": "step_behind", "title": "Behind the Lines", "description": "Watched him step behind a line drawn on screen instead of through it.", "hint": "movement" },
     { "id": "wall_jump_chain", "title": "Up the Shaft", "description": "Five wall jumps in a row without touching down.", "hint": "movement", "goal": 5 },
     { "id": "super_hard_landing", "title": "Long Way Down", "description": "Fell so far that the landing shook him to the shell.", "hint": "movement" },
-    { "id": "every_enemy", "title": "Field Guide", "description": "Beat one of every kind of enemy that wanders in.", "hint": "a foe" }
+    { "id": "every_enemy", "title": "Field Guide", "description": "Beat one of every kind of enemy that wanders in.", "hint": "a foe" },
+    { "id": "troupe_master", "title": "Final Curtain", "description": "Struck a scarlet flame, met the master of its troupe, and won the show.", "hint": "the troupe" },
+    { "id": "troupe_encore", "title": "Taken a Bow", "description": "Fell to the Troupe Master. He bowed, very politely, and left a Shade behind.", "hint": "the troupe" }
   ]
 }

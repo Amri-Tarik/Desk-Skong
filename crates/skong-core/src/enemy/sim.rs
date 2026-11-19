@@ -214,6 +214,7 @@ impl Enemy {
             attacking: matches!(self.phase, EnemyPhase::Antic | EnemyPhase::Attacking | EnemyPhase::Chasing),
             winding_up: self.phase == EnemyPhase::Antic,
             lunging: self.phase == EnemyPhase::Attacking,
+            ..Default::default()
         })
     }
 

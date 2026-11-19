@@ -87,6 +87,14 @@ layer without the pet.
        --export-sprites town_bench,town_bench_lit,guardian_bench,fung_bench_new,tram_interior_bench,mines_small_rock
    ```
    (Re-running `--out ../data/hk` regenerates the committed metadata; it should come out identical.)
+   Scene-only art lives in `sharedassets*.assets` files: `--list --files <a,b,…>` shows which
+   file holds a library. The secret boss, for example (file numbers of the Unity 6 build):
+   ```text
+   dotnet run -c Release -- --data "<…>/hollow_knight_Data" --out ../data/hk --textures ../skins/Vanilla ^
+       --files sharedassets392.assets,sharedassets6.assets,resources.assets ^
+       --animations "Grimm Anim,Grimm Flash Anim,Flameball Anim"
+   ```
+   Without it he still shows up, drawn as plain shapes.
 3. **Optional community skins:** drop skin folders (each containing `Knight.png`, optionally
    `Sprint.png`, `Unn.png`, …) anywhere under `skins/` (up to two levels deep).
 4. **Build & run:** see *Usage* above.

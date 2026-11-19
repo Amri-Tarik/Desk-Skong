@@ -25,6 +25,8 @@ impl Pet {
     /// Before the brain thinks: enemies and a sparring visitor, and the bumps they gave.
     pub(super) fn see_foes(&mut self) {
         let mut foes = self.enemies.as_ref().map(|e| e.foes()).unwrap_or_default();
+        // The troupe: the lantern, Grimm, his flames (their hits come with the bumps).
+        foes.extend(self.troupe.as_ref().map(|t| t.foes()).unwrap_or_default());
         let mut hits = std::mem::take(&mut self.enemy_hits);
         if let Some(v) = self.visitors.as_mut() {
             foes.extend(v.foes());
@@ -50,6 +52,9 @@ impl Pet {
                         self.stakes.burst(at, geo, scale);
                     }
                 }
+                FoeKind::Boss => self.strike_grimm(s.damage, s.at, right),
+                FoeKind::Lantern => self.strike_lantern(s.at, right),
+                FoeKind::Hazard => {}
                 FoeKind::Sparring => {
                     self.fx.spawn("cursor_hit", s.at, right);
                     if let Some(mut v) = self.visitors.take() {
@@ -89,7 +94,8 @@ impl Pet {
     pub(super) fn tick_enemies(&mut self, dt: f32) {
         let Some(mut e) = self.enemies.take() else { return };
         let keys = self.user_input.keys_per_sec();
-        let visiting = self.visitors.as_ref().is_some_and(|v| v.present());
+        // A visitor, or the troupe's flame / show: no enemies wander in meanwhile.
+        let visiting = self.visitors.as_ref().is_some_and(|v| v.present()) || self.troupe_active();
         let knight = (self.brain.behaviour() != BehaviourKind::Dead).then(|| self.ch.body());
         let (discoveries, terrain) = (&self.discoveries, &self.terrain);
         let settled = |f: &skong_core::portal::Footing| discoveries.settled(terrain, f.owner, f.y, f.x0, f.x1);

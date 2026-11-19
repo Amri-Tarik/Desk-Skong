@@ -186,6 +186,11 @@ impl Enemies {
         self.gauntlet.as_ref().is_some_and(|g| g.active())
     }
 
+    /// A gauntlet is under way or waiting to start.
+    pub fn gauntlet_busy(&self) -> bool {
+        self.gauntlet.as_ref().is_some_and(|g| g.active() || g.pending().is_some())
+    }
+
     /// For the brain.
     pub fn foes(&self) -> Vec<Foe> {
         self.live.iter().filter_map(|l| l.enemy.foe(&self.set, self.ppu)).collect()
