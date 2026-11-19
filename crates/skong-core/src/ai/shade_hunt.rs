@@ -38,6 +38,8 @@ pub(crate) struct ShadeHunt {
     geo: u32,
     /// Seconds the Shade has stayed out of slash reach while fighting.
     out_of_reach: f32,
+    /// The route to the Shade was checked (`Navigator::reaches`).
+    checked: bool,
 }
 
 impl ShadeHunt {
@@ -58,6 +60,7 @@ impl ShadeHunt {
             goal_at: goal,
             geo: shade.geo,
             out_of_reach: 0.0,
+            checked: false,
         }
     }
 
@@ -135,6 +138,17 @@ impl ShadeHunt {
             }
             (HuntPhase::Travel(t), Some(sh)) => {
                 self.geo = sh.geo;
+                if !self.checked {
+                    self.checked = true;
+                    let under = Self::ground_under(ctx, sh.pos);
+                    if !ctx.nav.reaches(ctx.p.knight, under, TravelStyle::Hurry, 150.0) {
+                        // No way to get under it: don't even try (no frantic chase).
+                        ctx.interest.block(PoiTarget::Spot(under), ctx.now + 2.0 * cfg.shade_retry);
+                        ctx.stakes.shade_ready_at = ctx.now + 2.0 * cfg.shade_retry;
+                        log::debug!("brain: the shade can't be reached; leaving it for now");
+                        return Status::Done;
+                    }
+                }
                 let near = sh.pos.distance(body_centre(ctx)) < 260.0 * ctx.stakes.sense.scale.max(0.1);
                 if near {
                     ctx.nav.stop();

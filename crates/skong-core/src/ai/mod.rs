@@ -49,6 +49,7 @@ mod tests;
 #[cfg(test)]
 mod stakes_tests;
 
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
 pub use activity::{Activity, ActivitySpot, ActivityTracker, QUIET, TrackedSpot};
@@ -56,7 +57,7 @@ pub use battle::{BattleScore, Outcome};
 pub use behaviours::BehaviourKind;
 pub use config::{BattleConfig, BrainConfig, CompanionConfig, NeedRates, Personality, WatchConfig};
 pub use interest::{InterestMap, Poi, PoiKey, PoiKind, PoiTarget, ScoredPoi};
-pub use navigator::{GraphNavigator, NavStatus, Navigator};
+pub use navigator::{GraphNavigator, NavStatus, Navigator, Reach};
 pub use needs::{Emotions, MOOD_TAGS, Mind, Needs};
 pub use percept::{ClosedWindow, Cursor, CursorSense, DesktopChanges, Percepts, Poke, RunningAct, STUCK_SECS, Senses, UserActivity};
 pub use repertoire::{ActCatalog, ActInfo};
@@ -152,6 +153,8 @@ pub enum SwitchReason {
     Outscored,
     /// An urgent behaviour (flee, hide) cut in.
     Urgent,
+    /// The oscillation guard stopped a ping-pong between targets.
+    Calming,
 }
 
 /// Record of one behaviour switch (for tests and the overlay).
@@ -171,6 +174,14 @@ struct SpotChoice {
     interest: f32,
     score: f32,
 }
+
+/// A behaviour that ends without success is not picked again for this long (s).
+const FAIL_COOLDOWN: f32 = 15.0;
+/// Oscillation guard: this many direction reversals within `OSC_WINDOW` s ...
+const OSC_REVERSALS: usize = 3;
+const OSC_WINDOW: f32 = 6.0;
+/// ... make the knight calm down (idle only) for this long.
+const CALM_SECS: f32 = 4.0;
 
 pub struct Brain {
     cfg: BrainConfig,
@@ -201,6 +212,15 @@ pub struct Brain {
     /// Times the knight caught himself pushing into a wall.
     stuck_count: u32,
     stakes: StakesMind,
+    /// Behaviours that just failed, and when they may be picked again.
+    cooldown: BTreeMap<BehaviourKind, f32>,
+    /// Oscillation guard: times the travel direction flipped, current direction, the
+    /// last navigation goals, and the end of the current calm-down.
+    reversals: Vec<f32>,
+    travel_dir: f32,
+    recent_goals: Vec<NavGoal>,
+    calm_until: f32,
+    oscillations: u32,
 }
 
 impl Brain {
@@ -230,6 +250,12 @@ impl Brain {
             exertion: 0.0,
             stuck_count: 0,
             stakes: StakesMind::new(&cfg.stakes),
+            cooldown: BTreeMap::new(),
+            reversals: Vec::new(),
+            travel_dir: 0.0,
+            recent_goals: Vec::new(),
+            calm_until: f32::NEG_INFINITY,
+            oscillations: 0,
             cfg,
         }
     }
@@ -273,6 +299,11 @@ impl Brain {
         self.last_switch
     }
 
+    /// Times the oscillation guard had to calm the knight down.
+    pub fn oscillations(&self) -> u32 {
+        self.oscillations
+    }
+
     /// Times the knight caught himself pushing into a wall.
     pub fn stuck_count(&self) -> u32 {
         self.stuck_count
@@ -313,6 +344,9 @@ impl Brain {
         let mut out = Intent::default();
         self.reflexes(p, &mut out);
         self.unstick(nav);
+        if !self.senses.held {
+            self.guard_oscillation(p, nav, &mut out);
+        }
         self.interest.observe(self.now, dt, &self.senses, p.desktop, &self.cfg);
 
         let asleep = self.asleep(p);
@@ -337,8 +371,15 @@ impl Brain {
         // A finished behaviour is replaced right away (at most once per tick).
         for _ in 0..2 {
             out.waiting = false;
-            if self.run_active(p, nav, &mut out) == Status::Running {
+            let status = self.run_active(p, nav, &mut out);
+            if status == Status::Running {
                 break;
+            }
+            if status == Status::Failed {
+                // Don't re-pick what just failed (e.g. the same unreachable seat) at once.
+                let kind = self.active.kind();
+                log::debug!("brain: {} failed; cooling down for {FAIL_COOLDOWN} s", kind.label());
+                self.cooldown.insert(kind, self.now + FAIL_COOLDOWN);
             }
             self.think(p, nav, &mut out, true);
         }
@@ -360,6 +401,9 @@ impl Brain {
         self.last_motion = out.motion;
         out.behaviour = Some(self.active.kind());
         out.reason = self.reason(p, nav);
+        if self.now < self.calm_until {
+            out.reason = format!("calming down (was dithering) | {}", out.reason);
+        }
         out.debug = self.debug_line(&out.reason);
         out
     }
@@ -436,6 +480,62 @@ impl Brain {
         if self.mind.emotions.startle < 0.3 {
             self.flee_from = None; // calmed down before getting round to it
         }
+    }
+
+    /// Anti-dither guard: the knight reversing direction ≥ [`OSC_REVERSALS`] times within
+    /// [`OSC_WINDOW`] s while travelling, without reaching where he was going, means the
+    /// brain is ping-ponging between targets. Stop, mark the recent targets bad and calm
+    /// down (idle only) for [`CALM_SECS`].
+    fn guard_oscillation(&mut self, p: &Percepts, nav: &mut dyn Navigator, out: &mut Intent) {
+        let k = p.knight;
+        if let Motion::Navigate { goal, .. } = self.last_motion {
+            if self.recent_goals.last() != Some(&goal) {
+                self.recent_goals.push(goal);
+                if self.recent_goals.len() > 6 {
+                    self.recent_goals.remove(0);
+                }
+            }
+            if nav.status() == NavStatus::Arrived {
+                let reached = match goal {
+                    NavGoal::Point(g) => behaviours::on_point(k, g, 30.0),
+                    NavGoal::OnWindow(id) => k.support.and_then(|s| s.owner) == Some(id),
+                };
+                if reached {
+                    self.reversals.clear();
+                    self.recent_goals.clear();
+                }
+            }
+            if k.vel.x.abs() > 20.0 {
+                let dir = k.vel.x.signum();
+                if self.travel_dir != 0.0 && dir != self.travel_dir {
+                    self.reversals.push(self.now);
+                }
+                self.travel_dir = dir;
+            }
+        }
+        self.reversals.retain(|t| self.now - *t <= OSC_WINDOW);
+        if self.reversals.len() < OSC_REVERSALS {
+            return;
+        }
+        log::debug!(
+            "brain: dithering ({} reversals in {OSC_WINDOW} s, {} behaviour); calming down, blocking {} recent targets",
+            self.reversals.len(),
+            self.active.kind().label(),
+            self.recent_goals.len()
+        );
+        nav.stop();
+        for goal in self.recent_goals.drain(..) {
+            let target = match goal {
+                NavGoal::Point(g) => PoiTarget::Spot(g),
+                NavGoal::OnWindow(id) => PoiTarget::Window(id),
+            };
+            self.interest.block(target, self.now + behaviours::FAILED_TARGET_SECS);
+        }
+        self.reversals.clear();
+        self.travel_dir = 0.0;
+        self.calm_until = self.now + CALM_SECS;
+        self.oscillations += 1;
+        self.switch_to(BehaviourKind::Idle, SwitchReason::Calming, p, nav, out);
     }
 
     /// Walking into a wall: pressing a direction without moving, or sliding down a wall on
@@ -638,7 +738,16 @@ impl Brain {
             .take(2)
             .filter_map(|(mut c, _)| {
                 let here = c.vantage.point.distance(knight.pos) < 30.0;
-                let eta = if here { 0.0 } else { nav.estimate(knight, NavGoal::Point(c.vantage.point), style)? };
+                // The route must end at the vantage point, not merely near it.
+                let eta = if here {
+                    0.0
+                } else {
+                    let r = nav.reach(knight, NavGoal::Point(c.vantage.point), style)?;
+                    if !r.lands_on(c.vantage.point, watch::VANTAGE_TOL) {
+                        return None;
+                    }
+                    r.eta
+                };
                 c.score = c.interest - self.cfg.travel_cost_per_sec * eta;
                 Some(c)
             })
@@ -727,6 +836,13 @@ impl Brain {
             (BehaviourKind::Recover, recover),
         ];
         u.extend(self.stakes_utilities(p));
+        let calm = self.now < self.calm_until;
+        for (kind, v) in &mut u {
+            let cooling = self.cooldown.get(kind).is_some_and(|t| self.now < *t);
+            if *v < cfg.urgent && (cooling || (calm && *kind != BehaviourKind::Idle)) {
+                *v = 0.0;
+            }
+        }
         // Stable sort: ties keep declaration order, so selection is deterministic.
         u.sort_by(|a, b| b.1.total_cmp(&a.1));
         u

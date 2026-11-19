@@ -29,9 +29,14 @@ struct Nav {
     status: NavStatus,
     elapsed: f32,
     goal: Option<NavGoal>,
+    /// Every planned route ends here instead (an unreachable goal).
+    ends_at: Option<Vec2>,
 }
 
 impl Navigator for Nav {
+    fn reach(&mut self, from: &Character, goal: NavGoal, style: TravelStyle) -> Option<navigator::Reach> {
+        self.estimate(from, goal, style).map(|eta| navigator::Reach { eta, end: self.ends_at })
+    }
     fn estimate(&mut self, from: &Character, goal: NavGoal, _: TravelStyle) -> Option<f32> {
         Some(match goal {
             NavGoal::Point(p) => from.pos.distance(p) / 400.0,
@@ -417,4 +422,16 @@ fn a_big_haul_ends_with_a_happy_act() {
     sim.coins = (0..8).map(|i| Vec2::new(1000.0 + 40.0 * i as f32, FLOOR)).collect();
     assert!(sim.run_until(5.0, |s| s.brain.behaviour() == BehaviourKind::Loot));
     assert!(sim.run_until(40.0, |s| s.started.iter().any(|a| a == "collect_happy")), "{:?}", sim.started);
+}
+
+#[test]
+fn a_shade_with_no_route_under_it_is_not_chased() {
+    let mut sim = Sim::new();
+    sim.knight.pos.x = 300.0;
+    sim.shade = Some(Shade::new(Vec2::new(1300.0, FLOOR - 70.0), 40, false, 3));
+    // Routes stop far from the Shade: he can't get there.
+    sim.nav.ends_at = Some(Vec2::new(320.0, FLOOR));
+    sim.brain.hunt_shade();
+    // It drops the idea at once (never travels there) and doesn't come back to it soon.
+    assert!(!sim.run_until(60.0, |s| s.brain.behaviour() == BehaviourKind::ShadeHunt || s.nav.goal.is_some_and(|g| matches!(g, NavGoal::Point(p) if (p.x - 1300.0).abs() < 2.0))));
 }

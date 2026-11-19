@@ -8,8 +8,9 @@
 //!   a blinking caret, streaming text). Hot tiles are analysed at most every
 //!   [`SLOW_INTERVAL`]; content that keeps moving is never reported anyway. A tile
 //!   cools down (and its pending work runs at once) on the first tick it is untouched;
-//! * tiles under **our own windows** (the knight's sprite window is excluded from
-//!   capture, but moving it still produces dirty rects) are treated as hot;
+//! * tiles under **our own windows** (knight, benches, effects) are **frozen**: never
+//!   analysed while covered, so nothing detected there can change under the knight (even
+//!   where capture would see our windows), and analysed once when uncovered;
 //! * tiles inside **excluded** regions (fullscreen windows) are never analysed; when
 //!   an exclusion goes away its tiles are analysed again.
 use std::time::{Duration, Instant};
@@ -94,11 +95,17 @@ impl Tiles {
         self.touched.fill(true);
     }
 
-    /// Replace the set of regions covered by our own windows (local coords).
+    /// Replace the set of regions covered by our own windows (local coords). Tiles they
+    /// no longer cover are marked touched, so they get analysed once.
     pub fn set_own(&mut self, rects: &[RectI]) {
         let mut own = vec![false; self.own.len()];
         for r in rects {
             self.for_tiles(r, |i| own[i] = true);
+        }
+        for (i, (&was, &is)) in self.own.iter().zip(&own).enumerate() {
+            if was && !is {
+                self.touched[i] = true;
+            }
         }
         self.own = own;
     }
@@ -118,9 +125,10 @@ impl Tiles {
         self.excluded = ex;
     }
 
-    /// Hot pending work is waiting (wake up to cool it down or flush it).
+    /// Hot pending work is waiting (wake up to cool it down or flush it). Work frozen
+    /// under our own windows doesn't count: it waits for them to leave.
     pub fn has_pending(&self) -> bool {
-        self.pending.iter().any(|&p| p)
+        self.pending.iter().zip(&self.own).any(|(&p, &own)| p && !own)
     }
 
     /// One scheduling step. Returns the rects (tile-aligned, local coords) to analyse now.
@@ -142,7 +150,10 @@ impl Tiles {
                 self.pending[i] = false;
                 continue;
             }
-            let hot = self.streak[i] >= HOT_STREAK || self.own[i];
+            if self.own[i] {
+                continue; // frozen: keep the work for when our window leaves
+            }
+            let hot = self.streak[i] >= HOT_STREAK;
             if hot && !slow_due {
                 continue;
             }
@@ -195,10 +206,6 @@ impl Tiles {
 mod tests {
     use super::*;
 
-    fn area(v: &[RectI]) -> i32 {
-        v.iter().map(|r| r.width() * r.height()).sum()
-    }
-
     #[test]
     fn changes_are_analysed_once_and_merged() {
         let mut t = Tiles::new(320, 200); // 10 x 7 tiles, last row 8 px tall
@@ -248,18 +255,23 @@ mod tests {
     }
 
     #[test]
-    fn own_windows_are_slow_and_excluded_regions_skipped() {
+    fn own_windows_freeze_and_excluded_regions_skip() {
         let mut t = Tiles::new(320, 320);
         let mut now = Instant::now();
         t.set_own(&[RectI::new(40, 40, 90, 90)]);
-        assert!(!t.mark(&RectI::new(40, 40, 90, 90)), "only our own window");
-        assert_eq!(t.tick(now), vec![RectI::new(32, 32, 96, 96)], "first slow pass");
-        now += Duration::from_millis(40);
-        t.mark(&RectI::new(40, 40, 90, 90));
-        assert!(t.tick(now).is_empty(), "within the slow interval");
-        now += SLOW_INTERVAL;
-        t.mark(&RectI::new(40, 40, 90, 90));
-        assert_eq!(area(&t.tick(now)), 64 * 64);
+        // While our window covers it, nothing there is analysed, however long.
+        for _ in 0..40 {
+            assert!(!t.mark(&RectI::new(40, 40, 90, 90)), "only our own window");
+            assert!(t.tick(now).is_empty());
+            assert!(!t.has_pending(), "frozen work does not keep the thread awake");
+            now += Duration::from_millis(33);
+        }
+        // It moves away: the uncovered tiles are analysed once.
+        t.set_own(&[RectI::new(140, 40, 190, 90)]);
+        assert_eq!(t.tick(now), vec![RectI::new(32, 32, 96, 96)]);
+        assert!(t.tick(now).is_empty());
+        t.set_own(&[]);
+        assert_eq!(t.tick(now), vec![RectI::new(128, 32, 192, 96)]);
 
         t.set_excluded(&[RectI::new(160, 0, 320, 320)]);
         assert!(!t.mark(&RectI::new(200, 10, 300, 300)));
