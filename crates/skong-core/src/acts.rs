@@ -105,10 +105,23 @@ pub struct ActLibrary {
 }
 
 impl ActLibrary {
-    /// Load and validate against the clip library (unknown clips are an error).
+    /// Load and validate against the clip library (unknown clips are an error). Act files
+    /// in an `acts/` folder next to `path` (e.g. `data/acts/stakes.json`) are added too.
     pub fn load(path: &Path, clips: &ClipLibrary) -> Result<ActLibrary> {
-        let raw: ActsFile = read_json(path)?;
         let mut lib = ActLibrary::default();
+        lib.add_file(path, clips)?;
+        let dir = path.parent().map(|d| d.join("acts"));
+        let mut extra: Vec<_> = dir.and_then(|d| std::fs::read_dir(d).ok()).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "json")).collect();
+        extra.sort();
+        for p in extra {
+            lib.add_file(&p, clips)?;
+        }
+        Ok(lib)
+    }
+
+    fn add_file(&mut self, path: &Path, clips: &ClipLibrary) -> Result<()> {
+        let raw: ActsFile = read_json(path)?;
+        let lib = self;
         for a in raw.acts {
             if a.steps.is_empty() {
                 bail!("act '{}' has no steps", a.name);
@@ -135,7 +148,7 @@ impl ActLibrary {
             }
             lib.acts.push(Act { name: a.name, tags: a.tags, requires: a.requires, weight: a.weight, cooldown: a.cooldown, steps });
         }
-        Ok(lib)
+        Ok(())
     }
 
     pub fn id(&self, name: &str) -> Option<ActId> {

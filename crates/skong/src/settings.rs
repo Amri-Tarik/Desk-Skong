@@ -13,11 +13,13 @@ pub struct Settings {
     /// 0 = never bothers you, 1 = maximum mischief (cursor battles…).
     pub bother: f32,
     pub click_through: bool,
+    /// Wallet and the Shade waiting where the knight last died.
+    pub stakes: skong_core::stakes::StakesSave,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { skin: None, scale: 0.6, bother: 0.5, click_through: false }
+        Self { skin: None, scale: 0.6, bother: 0.5, click_through: false, stakes: Default::default() }
     }
 }
 

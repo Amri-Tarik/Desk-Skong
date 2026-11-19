@@ -22,6 +22,9 @@ use super::repertoire::Repertoire;
 use super::rng::Rng;
 use super::spots::{self, View};
 use super::watch::WatchSpot;
+use super::death::Dead;
+use super::shade_hunt::{Loot, ShadeHunt};
+use super::stakes::StakesMind;
 use super::{Intent, Motion};
 
 /// What the knight is up to.
@@ -51,10 +54,16 @@ pub enum BehaviourKind {
     KnockedOut,
     /// Hurt: nurse it, then focus to heal.
     Recover,
+    /// Died: death act, gone, respawn at a bench / safe ledge.
+    Dead,
+    /// Go fight the Shade to get the Geo back.
+    ShadeHunt,
+    /// Walk over loose Geo to pick it up.
+    Loot,
 }
 
 impl BehaviourKind {
-    pub const ALL: [BehaviourKind; 12] = [
+    pub const ALL: [BehaviourKind; 15] = [
         BehaviourKind::Idle,
         BehaviourKind::Companion,
         BehaviourKind::Watch,
@@ -67,6 +76,9 @@ impl BehaviourKind {
         BehaviourKind::Ride,
         BehaviourKind::KnockedOut,
         BehaviourKind::Recover,
+        BehaviourKind::Dead,
+        BehaviourKind::ShadeHunt,
+        BehaviourKind::Loot,
     ];
 
     pub fn label(self) -> &'static str {
@@ -83,12 +95,15 @@ impl BehaviourKind {
             BehaviourKind::Ride => "ride",
             BehaviourKind::KnockedOut => "knocked out",
             BehaviourKind::Recover => "recover",
+            BehaviourKind::Dead => "dead",
+            BehaviourKind::ShadeHunt => "shade hunt",
+            BehaviourKind::Loot => "loot",
         }
     }
 
     /// Exclusive behaviours end themselves; only urgent challengers may interrupt.
     pub fn exclusive(self) -> bool {
-        matches!(self, BehaviourKind::Nap | BehaviourKind::Battle | BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut)
+        matches!(self, BehaviourKind::Nap | BehaviourKind::Battle | BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead | BehaviourKind::ShadeHunt)
     }
 }
 
@@ -110,6 +125,7 @@ pub(crate) struct Ctx<'a, 'p> {
     pub rep: &'a mut Repertoire,
     pub interest: &'a mut InterestMap,
     pub spots: &'a mut ActivityTracker,
+    pub stakes: &'a mut StakesMind,
     pub out: &'a mut Intent,
 }
 
@@ -834,6 +850,9 @@ pub(crate) enum Active {
     Ride(Ride),
     KnockedOut(KnockedOut),
     Recover(Recover),
+    Dead(Dead),
+    ShadeHunt(Box<ShadeHunt>),
+    Loot(Loot),
 }
 
 impl Active {
@@ -851,6 +870,9 @@ impl Active {
             Active::Ride(_) => BehaviourKind::Ride,
             Active::KnockedOut(_) => BehaviourKind::KnockedOut,
             Active::Recover(_) => BehaviourKind::Recover,
+            Active::Dead(_) => BehaviourKind::Dead,
+            Active::ShadeHunt(_) => BehaviourKind::ShadeHunt,
+            Active::Loot(_) => BehaviourKind::Loot,
         }
     }
 
@@ -868,6 +890,9 @@ impl Active {
             Active::Ride(b) => b.tick(ctx),
             Active::KnockedOut(b) => b.tick(ctx),
             Active::Recover(b) => b.tick(ctx),
+            Active::Dead(b) => b.tick(ctx),
+            Active::ShadeHunt(b) => b.tick(ctx),
+            Active::Loot(b) => b.tick(ctx),
         }
     }
 
@@ -886,6 +911,9 @@ impl Active {
             Active::Ride(_) => "ride: window moving".into(),
             Active::KnockedOut(_) => "knocked out: huge fall".into(),
             Active::Recover(b) => b.reason(),
+            Active::Dead(b) => b.reason(),
+            Active::ShadeHunt(b) => b.reason(),
+            Active::Loot(b) => b.reason(),
         }
     }
 }

@@ -33,16 +33,21 @@ mod battle;
 mod behaviours;
 mod companion;
 mod config;
+mod death;
 mod interest;
 mod navigator;
 mod needs;
 mod percept;
 mod repertoire;
 mod rng;
+mod shade_hunt;
 mod spots;
+mod stakes;
 mod watch;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod stakes_tests;
 
 use std::fmt::Write as _;
 
@@ -56,6 +61,7 @@ pub use needs::{Emotions, MOOD_TAGS, Mind, Needs};
 pub use percept::{ClosedWindow, Cursor, CursorSense, DesktopChanges, Percepts, Poke, RunningAct, STUCK_SECS, Senses, UserActivity};
 pub use repertoire::{ActCatalog, ActInfo};
 pub use spots::{Vantage, View};
+pub use stakes::{Lethality, ShadeSense, StakeEvent, StakesConfig, StakesSense};
 
 use crate::acts::{ActId, Requirement};
 use crate::controller::{MoveEvent, MoveInput, Side};
@@ -69,6 +75,9 @@ use needs::Activity as Exertion;
 use repertoire::Repertoire;
 use rng::Rng;
 use watch::WatchSpot;
+use death::Dead;
+use shade_hunt::{Loot, ShadeHunt};
+use stakes::StakesMind;
 
 /// How the knight should move this tick.
 #[derive(Clone, Copy, Debug, Default)]
@@ -121,6 +130,8 @@ pub struct Intent {
     /// Signal for the running act (e.g. "woken").
     pub signal: Option<&'static str>,
     pub attack: Option<Attack>,
+    /// Death / respawn / Shade / Geo / spell events for the app.
+    pub stakes: Vec<StakeEvent>,
     /// Face this way (when standing still).
     pub face: Option<Side>,
     pub behaviour: Option<BehaviourKind>,
@@ -189,6 +200,7 @@ pub struct Brain {
     exertion: f32,
     /// Times the knight caught himself pushing into a wall.
     stuck_count: u32,
+    stakes: StakesMind,
 }
 
 impl Brain {
@@ -217,6 +229,7 @@ impl Brain {
             last_motion: Motion::Hold,
             exertion: 0.0,
             stuck_count: 0,
+            stakes: StakesMind::new(&cfg.stakes),
             cfg,
         }
     }
@@ -494,6 +507,7 @@ impl Brain {
         let poi = self.best_poi.map(|s| s.poi);
         let spot = self.best_spot;
         let flee_from = if kind == BehaviourKind::Flee { self.flee_from.take().unwrap_or(p.knight.pos) } else { p.knight.pos };
+        let death = if kind == BehaviourKind::Dead { self.stakes.pending_death.take() } else { None };
         let mut ctx = self.ctx(p, nav, out);
         let active = match kind {
             BehaviourKind::Explore => match poi {
@@ -514,6 +528,12 @@ impl Brain {
             BehaviourKind::Ride => Active::Ride(Ride::start(&mut ctx)),
             BehaviourKind::KnockedOut => Active::KnockedOut(KnockedOut::start(&mut ctx)),
             BehaviourKind::Recover => Active::Recover(Recover::start(&mut ctx)),
+            BehaviourKind::Dead => {
+                let (k, cracked) = death.unwrap_or_default();
+                Active::Dead(Dead::start(&mut ctx, k, cracked))
+            }
+            BehaviourKind::ShadeHunt => Active::ShadeHunt(Box::new(ShadeHunt::start(&mut ctx))),
+            BehaviourKind::Loot => Active::Loot(Loot::start(&mut ctx)),
         };
         let kind = active.kind();
         log::debug!("brain: {} -> {} ({reason:?})", from.label(), kind.label());
@@ -523,15 +543,15 @@ impl Brain {
     }
 
     fn run_active(&mut self, p: &Percepts, nav: &mut dyn Navigator, out: &mut Intent) -> Status {
-        let Brain { cfg, mind, rng, rep, interest, spots, senses, active, now, .. } = self;
-        let mut ctx = Ctx { p, now: *now, cfg, senses, mind, nav, rng, rep, interest, spots, out };
+        let Brain { cfg, mind, rng, rep, interest, spots, senses, active, now, stakes, .. } = self;
+        let mut ctx = Ctx { p, now: *now, cfg, senses, mind, nav, rng, rep, interest, spots, stakes, out };
         active.tick(&mut ctx)
     }
 
     fn reason(&mut self, p: &Percepts, nav: &mut dyn Navigator) -> String {
         let mut scratch = Intent::default();
-        let Brain { cfg, mind, rng, rep, interest, spots, senses, active, now, .. } = self;
-        let ctx = Ctx { p, now: *now, cfg, senses, mind, nav, rng, rep, interest, spots, out: &mut scratch };
+        let Brain { cfg, mind, rng, rep, interest, spots, senses, active, now, stakes, .. } = self;
+        let ctx = Ctx { p, now: *now, cfg, senses, mind, nav, rng, rep, interest, spots, stakes, out: &mut scratch };
         active.reason(&ctx)
     }
 
@@ -547,6 +567,7 @@ impl Brain {
             rep: &mut self.rep,
             interest: &mut self.interest,
             spots: &mut self.spots,
+            stakes: &mut self.stakes,
             out,
         }
     }
@@ -705,6 +726,7 @@ impl Brain {
             (BehaviourKind::KnockedOut, knocked),
             (BehaviourKind::Recover, recover),
         ];
+        u.extend(self.stakes_utilities(p));
         // Stable sort: ties keep declaration order, so selection is deterministic.
         u.sort_by(|a, b| b.1.total_cmp(&a.1));
         u

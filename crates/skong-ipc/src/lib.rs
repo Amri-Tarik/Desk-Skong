@@ -10,8 +10,10 @@
 use serde::{Deserialize, Serialize};
 
 pub mod pipe;
+pub mod stakes;
 
 pub use pipe::{ClientId, Connection, PIPE_NAME, Server, ServerEvent, connect};
+pub use stakes::{SPELLS, StakesCommand, StakesInfo};
 
 /// Everything the user can ask the pet for, from hotkeys, the tray menu or a panel.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -39,6 +41,8 @@ pub enum Command {
     SetOverlayLayers(OverlayLayers),
     /// Launch `skong-panel.exe` next to the pet executable.
     OpenPanel,
+    /// Death / Shade / Geo / spell triggers.
+    Stakes(StakesCommand),
     Quit,
 }
 
@@ -180,6 +184,8 @@ pub struct Status {
     /// One-line summary of what the brain is doing.
     pub brain: Option<String>,
     pub nav: Option<NavInfo>,
+    /// Wallet, Shade, soul (absent from older pets).
+    pub stakes: Option<StakesInfo>,
     /// Connected panels.
     pub panels: usize,
 }

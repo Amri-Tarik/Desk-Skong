@@ -32,6 +32,8 @@ enum Phase {
     /// Took a hit: short recoil act, then back to the fight.
     Recoil(Option<ActWait>),
     Stunned(Option<ActWait>),
+    /// A spell or nail art (see `ai::stakes`), then back to the fight.
+    Special(Option<ActWait>),
     Finale(Outcome, Option<ActWait>),
 }
 
@@ -79,6 +81,7 @@ impl Battle {
             Phase::Fight => "fight",
             Phase::Recoil(_) => "recoil",
             Phase::Stunned(_) => "stunned",
+            Phase::Special(_) => "special",
             Phase::Finale(Outcome::Won, _) => "won",
             Phase::Finale(Outcome::Lost, _) => "lost",
             Phase::Finale(Outcome::GaveUp, _) => "gave up",
@@ -121,13 +124,19 @@ impl Battle {
                 ctx.mind.annoy(0.3);
                 Phase::Stunned(ActWait::named(ctx, "stunned"))
             } else {
-                Phase::Recoil(ActWait::named(ctx, "recoil"))
+                match super::stakes::try_spell(ctx, Some(cursor.offset), true, false) {
+                    Some((spell, w)) => {
+                        self.score.knight += u32::from(spell.reaches(cursor.offset, ctx.stakes.sense.scale.max(0.1)));
+                        Phase::Special(Some(w))
+                    }
+                    None => Phase::Recoil(ActWait::named(ctx, "recoil")),
+                }
             };
         }
 
         match &mut self.phase {
             Phase::Approach => self.approach(ctx, cursor),
-            Phase::Challenge(act) | Phase::Recoil(act) | Phase::Stunned(act) => {
+            Phase::Challenge(act) | Phase::Recoil(act) | Phase::Stunned(act) | Phase::Special(act) => {
                 ctx.face_cursor();
                 if act.as_mut().is_none_or(|w| w.tick(ctx)) {
                     if matches!(self.phase, Phase::Challenge(_)) {
@@ -184,6 +193,15 @@ impl Battle {
         let grounded = k.is_grounded();
         let off = c.offset;
         let side = Side::of(off.x).unwrap_or(k.facing);
+        if self.attack_cd <= 0.0
+            && let Some((spell, w)) = super::stakes::try_spell(ctx, Some(off), false, false)
+        {
+            // Spells and nail arts land like a slash would (a fast cursor dodges them).
+            self.attack_cd = b.attack_cooldown;
+            self.score.knight += u32::from(spell.reaches(off, ctx.stakes.sense.scale.max(0.1)) && c.speed() < b.dodge_speed);
+            self.phase = Phase::Special(Some(w));
+            return;
+        }
         let mut input = MoveInput { gait: Gait::Sprint, ..Default::default() };
 
         if off.x.abs() > b.attack_range * 0.5 {
@@ -222,6 +240,7 @@ impl Battle {
             self.attack_cd = b.attack_cooldown;
             if hit {
                 self.score.knight += 1;
+                ctx.stakes.spells.gain(1);
                 ctx.mind.excite(0.1);
             }
         }
@@ -233,13 +252,15 @@ impl Battle {
         ctx.nav.stop();
         let (act, mischief) = match outcome {
             Outcome::Won => {
+                super::stakes::victory(ctx);
                 ctx.mind.excite(0.4);
                 ctx.mind.adjust(|n| &mut n.boredom, -0.3);
                 ("victory", -0.7)
             }
             Outcome::Lost => {
                 ctx.mind.hurt(0.7);
-                ("bow_down", -0.5) // knocked out
+                // A bad beating is lethal: the death plays out in `Dead` instead.
+                if super::stakes::lethal_loss(ctx, self.score) { ("", -0.5) } else { ("bow_down", -0.5) } // knocked out
             }
             Outcome::GaveUp => {
                 ctx.mind.annoy(0.15);

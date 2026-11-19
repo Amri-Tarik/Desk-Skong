@@ -97,6 +97,7 @@ impl Pet {
             }),
             brain: (!self.brain_debug.is_empty()).then(|| self.brain_debug.clone()),
             nav: self.nav_info(),
+            stakes: Some(self.stakes.info(self.brain.soul())),
             ..Status::default() // process usage, panel count: filled by ControlServer::publish
         }
     }

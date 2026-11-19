@@ -145,6 +145,18 @@ impl Tray {
         Ok(())
     }
 
+    /// Replace the hover tooltip (truncated to 127 UTF-16 units).
+    pub fn set_tip(&mut self, tip: &str) {
+        if tip == self.tip {
+            return;
+        }
+        self.tip = tip.to_string();
+        // SAFETY: nid is fully initialised and owned by this frame.
+        unsafe {
+            let _ = Shell_NotifyIconW(NIM_MODIFY, &self.data());
+        }
+    }
+
     /// Events since the last call. Also re-adds the icon after an Explorer restart.
     pub fn take_events(&mut self) -> Vec<TrayEvent> {
         if RECREATE.with(|c| c.replace(false)) {
