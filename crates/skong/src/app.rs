@@ -173,6 +173,8 @@ struct Pet {
     navb: NavBuilder,
     /// Ledge last found missing from the nav graph (rebuild requested for it once).
     nav_missing: Option<skong_core::controller::Support>,
+    /// Dark surroundings (sampled behind the knight every 2 s) and seconds to the next sample.
+    dark: (bool, f32),
     user_input: UserInput,
     /// Controller events not yet seen by the brain.
     brain_events: Vec<MoveEvent>,
@@ -302,6 +304,7 @@ pub fn run(args: &Args) -> Result<()> {
         nav: GraphNavigator::new(),
         navb,
         nav_missing: None,
+        dark: (false, 0.0),
         user_input: UserInput::new()?,
         brain_events: Vec::new(),
         last_input: MoveInput::default(),
@@ -771,6 +774,26 @@ impl Pet {
         }
     }
 
+    /// Is it dark where he is? Every 2 s, the mean luminance of the screen around him (a
+    /// dark-themed editor, a night photo, a dimmed screen). Hysteresis keeps it steady.
+    fn sense_darkness(&mut self, dt: f32) {
+        self.dark.1 -= dt;
+        if self.dark.1 > 0.0 {
+            return;
+        }
+        self.dark.1 = 2.0;
+        let (p, s) = (self.ch.pos, self.ch.size);
+        // Around and above him, not the ledge he stands on.
+        let r = RectI::new((p.x - 2.0 * s.x) as i32, (p.y - 2.2 * s.y) as i32, (p.x + 2.0 * s.x) as i32, (p.y - 2.0) as i32);
+        if let Some(l) = monitor::mean_luma(r) {
+            let was = self.dark.0;
+            self.dark.0 = if was { l < 0.26 } else { l < 0.18 };
+            if self.dark.0 != was {
+                log::debug!("surroundings {} (luma {l:.2})", if self.dark.0 { "dark" } else { "light" });
+            }
+        }
+    }
+
     fn think(&mut self, dt: f32) -> MoveInput {
         self.stakes_sense();
         let mut benches: Vec<Vec2> = self.benches.placed.iter().map(|(b, _)| b.pos).collect();
@@ -778,6 +801,7 @@ impl Pet {
         let (left, right) = input::mouse_buttons();
         let cursor = monitor::cursor_pos().map(|(x, y)| Cursor { pos: Vec2::new(x as f32, y as f32), left, right });
         let user = UserActivity { idle_secs: input::idle_secs(), keys_per_sec: self.user_input.keys_per_sec() };
+        self.sense_darkness(dt);
         // A lingering pose already counts as finished for the brain (so it chooses what comes
         // next); its ending after a linger is not cut again.
         let act = self.act.as_ref().filter(|p| !p.is_lingering()).map(|p| RunningAct { id: p.act(), interruptible: p.interruptible(&self.data.acts) && !p.is_released() });
@@ -797,7 +821,7 @@ impl Pet {
             activity: &self.activity,
             last_input: self.last_input,
             local_hour: Some(monitor::local_hour()),
-            dark: false,
+            dark: self.dark.0,
         };
         let visitors = self.visitor_percepts();
         self.brain.see_visitors(visitors);

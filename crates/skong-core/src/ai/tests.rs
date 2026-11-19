@@ -1308,3 +1308,13 @@ fn a_winding_route_to_one_deposit_is_not_dithering() {
     assert_eq!(sim.brain.oscillations(), 0);
     assert_eq!(sim.brain.behaviour(), BehaviourKind::Visit);
 }
+
+#[test]
+fn idling_he_now_and_then_checks_his_map() {
+    // The user missed it: with nothing going on he pulls out his map for a stroll.
+    let mut sim = calm(BrainConfig::default());
+    sim.run(300.0);
+    let maps = sim.started.iter().filter(|a| *a == "map_stroll").count();
+    assert!(maps >= 1, "acts: {:?}", sim.started);
+    assert!(maps <= 3, "a treat, not a habit: {maps}");
+}

@@ -247,6 +247,21 @@ impl Ctx<'_, '_> {
     }
 
     /// Sitting down again is fine: tired, or the last seat was a while ago.
+    /// A little wander with a prop, when nothing better is going on: the lantern where it's
+    /// dark (a dark-themed window, night), or a look at his map (more often when curious).
+    /// Spaced out so it stays a treat.
+    pub fn wander_act(&mut self) -> Option<ActWait> {
+        let since = |ctx: &Self, name: &str| ctx.act_id(name).map_or(0.0, |id| ctx.rep.since_used(id, ctx.now));
+        if self.senses.dark && since(self, "lantern_patrol") >= 60.0 && self.rng.chance(0.35) {
+            return ActWait::named(self, "lantern_patrol");
+        }
+        let curious = self.mind.personality.curiosity;
+        if since(self, "map_stroll") >= 120.0 && self.rng.chance(0.2 + 0.2 * curious) {
+            return ActWait::named(self, "map_stroll");
+        }
+        None
+    }
+
     pub fn may_sit(&self) -> bool {
         self.mind.tiredness() > 0.5 || self.rep.since_seated(self.now) >= self.cfg.boredom.seat_cooldown
     }
@@ -532,10 +547,11 @@ impl Idle {
     pub fn tick(&mut self, ctx: &mut Ctx) -> Status {
         let gap = ctx.cfg.idle_gap;
         if self.beat.tick(ctx, gap) {
-            let act = if ctx.senses.can_sit() && ctx.may_sit() {
+            let wander = if ctx.grounded() { ctx.wander_act() } else { None };
+            let act = if wander.is_some() {
+                wander
+            } else if ctx.senses.can_sit() && ctx.may_sit() {
                 ctx.seated_act()
-            } else if ctx.senses.dark && ctx.rng.chance(0.3) {
-                ActWait::named(ctx, "lantern_patrol")
             } else if ctx.senses.support_owner.is_some() && ctx.rng.chance(0.06 * ctx.mind.personality.curiosity) {
                 ActWait::named(ctx, "dream_nail") // what is this window dreaming about?
             } else {
@@ -549,6 +565,7 @@ impl Idle {
     pub fn reason(&self, ctx: &Ctx) -> String {
         match self.beat.doing_name(ctx) {
             Some("lantern_patrol") => "idle: dark, lantern walk".into(),
+            Some("map_stroll") => "idle: checking his map".into(),
             Some(n) => format!("idle: {n}"),
             None => "idle: nothing going on".into(),
         }
