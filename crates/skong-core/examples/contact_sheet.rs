@@ -15,7 +15,9 @@ fn main() -> Result<()> {
     let data = Path::new(data);
     let skin = Skin::from_dir(Path::new(skin)).context("not a skin dir")?;
     let mut bank = SpriteBank::load_metadata(data)?;
-    let lib = ClipLibrary::load(&data.join("animations/Knight.json"), &bank)?;
+    // CLIP_LIB=Spells_Anim (etc.) renders another library instead of the Knight's.
+    let lib_name = std::env::var("CLIP_LIB").unwrap_or_else(|_| "Knight".into());
+    let lib = ClipLibrary::load(&data.join(format!("animations/{lib_name}.json")), &bank)?;
     let ppu = 64.0 * scale.parse::<f32>()?;
     let t = std::time::Instant::now();
     bank.rasterize_skin(&skin, None, &lib.sprite_keys(), ppu)?;

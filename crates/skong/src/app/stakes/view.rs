@@ -327,7 +327,8 @@ impl View {
                     }
                 }
             }
-            shot.sprite.draw(&self.spells_lib, &self.frames, shot.pos, shot.vel.x > 0.0, false, &self.blocked)?;
+            // The ball art faces right (head right, trail left): mirror it going left.
+            shot.sprite.draw(&self.spells_lib, &self.frames, shot.pos, shot.vel.x < 0.0, false, &self.blocked)?;
         }
         for i in done.into_iter().rev() {
             let s = self.shots.swap_remove(i).sprite;
