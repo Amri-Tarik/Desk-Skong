@@ -61,7 +61,7 @@ pub enum BehaviourKind {
     ShadeHunt,
     /// Walk over loose Geo to pick it up.
     Loot,
-    /// Use a place found in a window (bench, hot spring, geo deposit).
+    /// Use a place found in a window (bench, geo deposit).
     Visit,
 }
 

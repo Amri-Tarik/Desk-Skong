@@ -114,6 +114,19 @@ impl Benches {
         }
     }
 
+    /// Claim every placed bench's rect (user gifts outrank found props).
+    pub fn claim(&self, occ: &mut skong_core::occupancy::Occupancy) {
+        use skong_core::occupancy::{ClaimKey, ClaimKind};
+        occ.release_kind(ClaimKind::Bench);
+        for (i, (b, _)) in self.placed.iter().enumerate() {
+            if let Some(img) = &self.scaled[b.style] {
+                let (w, h) = (img.width as f32, img.height as f32);
+                let r = skong_core::geom::RectF::new(b.pos.x - w * 0.5, b.pos.y - h, b.pos.x + w * 0.5, b.pos.y);
+                occ.claim(ClaimKey::new(ClaimKind::Bench, i as u64), r, 100);
+            }
+        }
+    }
+
     pub fn raise_all(&self) {
         for (_, w) in &self.placed {
             w.raise();

@@ -1,20 +1,32 @@
 //! Things *found* inside windows. Each app is a "room" of Hallownest: the first time the
 //! knight explores one of its windows, the room is rolled (deterministically from the
-//! world seed and the app's name) for what was always there — a bench, a hot spring, a
-//! geo deposit, or (most often) nothing. The record persists (the app saves [`World`] as
-//! JSON), so the same things are in the same place whenever that app's window is open;
-//! they ride along with the window and vanish when it closes.
+//! world seed and the app's name) for what was always there — a bench, a geo deposit, or
+//! (most often) nothing. The record persists (the app saves [`World`] as JSON), so the same
+//! things are in the same place whenever that app's window is open; they ride along with
+//! the window and vanish when it closes.
 //!
-//! This module is pure: the app resolves positions every frame with [`World::shown`],
-//! draws the props and tells the world when the knight explored, used or struck one.
+//! Finds sit on **lasting** surfaces of their window — its title bar or a content line (a
+//! table border, a divider) that has been on screen for a while ([`Site::min_age`],
+//! tracked by [`LedgeAges`]) — anchored relative to the window. When that content goes
+//! away (scrolled off), the find hides until the line is back.
+//!
+//! Nothing overlaps: placement asks the shared [`Occupancy`], and [`settle`] resolves
+//! collisions every frame (a find slides along its ledge to make room, or hides while it
+//! can't).
+//!
+//! This module is pure: the app resolves positions every frame with [`World::shown`] and
+//! [`settle`], draws the props and tells the world when the knight explored, used or
+//! struck one.
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::ai::{KnownPlace, PlaceKind};
 use crate::desktop::{DesktopSnapshot, WindowId, WindowInfo};
 use crate::geom::{RectF, Vec2};
-use crate::terrain::{LedgeKind, Terrain};
+use crate::lasting::LedgeAges;
+use crate::occupancy::{ClaimKey, ClaimKind, Occupancy};
+use crate::terrain::{Ledge, LedgeKind, Terrain};
 
 pub type FindId = u64;
 
@@ -24,8 +36,6 @@ pub type FindId = u64;
 pub enum FindKind {
     /// A bench of one of the `props.json` styles.
     Bench { style: usize },
-    /// A steaming hot spring: bathing restores energy faster than resting.
-    Spring,
     /// A geo rock: slashed when playful; breaks after a few hits, regrows a day later.
     Deposit,
 }
@@ -34,7 +44,6 @@ impl FindKind {
     pub fn place_kind(self) -> PlaceKind {
         match self {
             FindKind::Bench { .. } => PlaceKind::Bench,
-            FindKind::Spring => PlaceKind::Spring,
             FindKind::Deposit => PlaceKind::Deposit,
         }
     }
@@ -42,8 +51,15 @@ impl FindKind {
     pub fn label(self) -> &'static str {
         match self {
             FindKind::Bench { .. } => "bench",
-            FindKind::Spring => "hot spring",
             FindKind::Deposit => "geo deposit",
+        }
+    }
+
+    /// Who keeps its spot when two props collide (higher wins).
+    fn priority(self) -> i32 {
+        match self {
+            FindKind::Bench { .. } => 50,
+            FindKind::Deposit => 40,
         }
     }
 }
@@ -61,9 +77,9 @@ pub struct Anchor {
 pub struct Find {
     pub id: FindId,
     pub kind: FindKind,
-    /// `None` until the window had room for it (it is placed on the next visit).
+    /// `None` until the window had room for it (it is placed on a later visit).
     pub anchor: Option<Anchor>,
-    /// Times the knight used it (sat, bathed, mined): favourite places get revisited.
+    /// Times the knight used it (sat, mined): favourite places get revisited.
     #[serde(default)]
     pub visits: u32,
     /// Deposit: hits taken since it (re)grew.
@@ -83,16 +99,23 @@ impl Find {
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Room {
+    /// Finds of kinds this version no longer knows (e.g. the retired hot springs) are
+    /// dropped on load.
+    #[serde(deserialize_with = "known_finds")]
     pub finds: Vec<Find>,
 }
 
-/// Rarity and sizes. Widths are footprints in px at the current scale (the app knows the art).
+fn known_finds<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Find>, D::Error> {
+    let raw = Vec::<serde_json::Value>::deserialize(d)?;
+    Ok(raw.into_iter().filter_map(|v| serde_json::from_value(v).ok()).collect())
+}
+
+/// Rarity and upkeep.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Rules {
-    /// Weights of nothing / bench / spring / deposit for a newly explored app.
+    /// Weights of nothing / bench / deposit for a newly explored app.
     pub nothing: f32,
     pub bench: f32,
-    pub spring: f32,
     pub deposit: f32,
     /// Relative weight per bench style (index = `props.json` order).
     pub bench_styles: Vec<f32>,
@@ -104,17 +127,49 @@ pub struct Rules {
 
 impl Default for Rules {
     fn default() -> Self {
-        Self { nothing: 0.55, bench: 0.2, spring: 0.1, deposit: 0.15, bench_styles: vec![3.0, 1.0, 1.5, 1.5, 1.5], regrow_hours: 24.0, deposit_hp: 3 }
+        Self { nothing: 0.6, bench: 0.25, deposit: 0.15, bench_styles: vec![3.0, 1.0, 1.5, 1.5, 1.5], regrow_hours: 24.0, deposit_hp: 3 }
     }
 }
 
 /// Keep finds this far from a ledge's ends (px).
 const EDGE_MARGIN: f32 = 24.0;
-/// Leave this much room above a find (steam, the knight standing on it): a maximized
-/// window's title bar at the top of the screen does not qualify (px).
+/// Leave this much room above a find (the knight standing on it): a maximized window's
+/// title bar at the very top of the screen does not qualify (px).
 const HEADROOM: f32 = 48.0;
 /// A content ledge may drift this much (re-detection jitter) and still carry its find (px).
 const LEDGE_SLACK: f32 = 6.0;
+/// Surfaces must have been on screen this long to carry a find (s).
+pub const LASTING_SECS: f32 = 30.0;
+
+/// Size of a find on screen, and how much free ledge it needs (e.g. room to stand beside
+/// a deposit to mine it).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Footprint {
+    pub w: f32,
+    pub h: f32,
+    /// Ledge width needed (>= `w`).
+    pub room: f32,
+}
+
+impl Footprint {
+    /// Screen rect of a find whose bottom center is `pos`.
+    pub fn rect(&self, pos: Vec2) -> RectF {
+        RectF::new(pos.x - self.w * 0.5, pos.y - self.h, pos.x + self.w * 0.5, pos.y)
+    }
+}
+
+/// Where finds can go right now: the terrain, which ledges have lasted, and what is
+/// already taken.
+pub struct Site<'a> {
+    pub terrain: &'a Terrain,
+    pub ages: &'a LedgeAges,
+    /// Clock of `ages`.
+    pub now: f32,
+    /// Ledges younger than this (s) carry nothing ([`LASTING_SECS`]; 0 for debug reveals).
+    pub min_age: f32,
+    pub occupancy: &'a Occupancy,
+    pub footprint: &'a dyn Fn(FindKind) -> Footprint,
+}
 
 /// Everything ever found, keyed by app (see [`app_key`]). Saved as `world.json`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -133,7 +188,7 @@ pub struct World {
 }
 
 fn version() -> u32 {
-    1
+    2
 }
 
 /// A find on screen this frame.
@@ -144,6 +199,8 @@ pub struct Shown {
     pub window: WindowId,
     /// Bottom center, resting on its ledge.
     pub pos: Vec2,
+    /// The ledge it rests on (x0, x1).
+    pub span: (f32, f32),
     pub favour: f32,
 }
 
@@ -198,36 +255,60 @@ impl Mix {
 /// The deterministic roll for one app: what its room holds (before placement).
 pub fn roll(seed: u64, key: &str, rules: &Rules) -> Vec<FindKind> {
     let mut m = Mix::new(seed, key);
-    match m.pick(&[rules.nothing, rules.bench, rules.spring, rules.deposit]) {
+    match m.pick(&[rules.nothing, rules.bench, rules.deposit]) {
         1 => vec![FindKind::Bench { style: m.pick(&rules.bench_styles) }],
-        2 => vec![FindKind::Spring],
-        3 => vec![FindKind::Deposit],
+        2 => vec![FindKind::Deposit],
         _ => vec![],
     }
 }
 
-/// Choose a spot for something `width` px wide on window `id`: its top ledge (title bar)
-/// if there is room, else the widest content ledge inside it, clear of the finds already
-/// there (`taken`: bottom center and width). Deterministic in `salt`.
-pub fn place(terrain: &Terrain, id: WindowId, width: f32, salt: u64, taken: &[(Vec2, f32)]) -> Option<Anchor> {
-    let rect = terrain.window_rect(id)?;
-    let need = width + 2.0 * EDGE_MARGIN;
-    let fits = terrain.ledges.iter().filter(|l| l.owner == Some(id) && l.kind != LedgeKind::Ground && l.x1 - l.x0 >= need && l.y >= terrain.bounds.top + HEADROOM);
-    let top = fits.clone().filter(|l| (l.y - rect.top).abs() < 2.0).max_by(|a, b| (a.x1 - a.x0).total_cmp(&(b.x1 - b.x0)));
-    let ledge = top.or_else(|| fits.max_by(|a, b| (a.x1 - a.x0).total_cmp(&(b.x1 - b.x0))))?;
-    let lo = ledge.x0 + EDGE_MARGIN + width * 0.5;
-    let hi = ledge.x1 - EDGE_MARGIN - width * 0.5;
-    let clear = |x: f32| !taken.iter().any(|(p, w)| (p.y - ledge.y).abs() < 4.0 && (p.x - x).abs() < (w + width) * 0.5 + 12.0);
+/// Window-owned ledges of `id` that could carry a find needing `room` px: lasting, wide
+/// enough, not at the very top of the screen.
+fn candidate_ledges<'t>(site: &'t Site, id: WindowId, room: f32) -> Vec<&'t Ledge> {
+    let t = site.terrain;
+    t.ledges
+        .iter()
+        .filter(|l| {
+            l.owner == Some(id)
+                && l.kind != LedgeKind::Ground
+                && l.x1 - l.x0 >= room + 2.0 * EDGE_MARGIN
+                && l.y >= t.bounds.top + HEADROOM
+                && site.ages.age(t, l, site.now) >= site.min_age
+        })
+        .collect()
+}
+
+/// Choose a spot for a find of `kind` on window `id`: any lasting ledge of it (title bar or
+/// content line, picked by width so finds spread out), where its rect is free (`free`).
+/// Deterministic in `salt`.
+pub fn place(site: &Site, id: WindowId, kind: FindKind, salt: u64, free: &dyn Fn(RectF) -> bool) -> Option<Anchor> {
+    let rect = site.terrain.window_rect(id)?;
+    let fp = (site.footprint)(kind);
+    let ledges = candidate_ledges(site, id, fp.room);
+    if ledges.is_empty() {
+        return None;
+    }
+    let ok = |l: &Ledge, x: f32| free(fp.rect(Vec2::new(x, l.y)));
+    let range = |l: &Ledge| (l.x0 + EDGE_MARGIN + fp.room * 0.5, l.x1 - EDGE_MARGIN - fp.room * 0.5);
     let mut mix = Mix(salt);
-    // Stay out of the right end of a title bar (window buttons) when there is room.
-    let first = (0..8).map(|_| lo + (hi - lo) * (0.15 + 0.6 * mix.f32())).find(|&x| clear(x));
-    let x = first.or_else(|| (0..=20).map(|i| lo + (hi - lo) * i as f32 / 20.0).find(|&x| clear(x)))?;
-    Some(Anchor { fx: (x - rect.left) / rect.width().max(1.0), dy: ledge.y - rect.top })
+    let weights: Vec<f32> = ledges.iter().map(|l| l.x1 - l.x0).collect();
+    let random = (0..16).find_map(|_| {
+        let l = ledges[mix.pick(&weights)];
+        let (lo, hi) = range(l);
+        let x = lo + (hi - lo) * mix.f32();
+        ok(l, x).then_some((l, x))
+    });
+    let (l, x) = random.or_else(|| ledges.iter().find_map(|l| {
+        let (lo, hi) = range(l);
+        (0..=20).map(|i| lo + (hi - lo) * i as f32 / 20.0).find(|&x| ok(l, x)).map(|x| (*l, x))
+    }))?;
+    Some(Anchor { fx: (x - rect.left) / rect.width().max(1.0), dy: l.y - rect.top })
 }
 
 /// Where an anchored find of `width` px is on window `rect` right now: on a ledge of that
-/// window that carries its whole footprint. `None` while covered / out of room.
-pub fn resolve(terrain: &Terrain, id: WindowId, rect: RectF, a: Anchor, width: f32) -> Option<Vec2> {
+/// window that carries its whole footprint. Returns the bottom center and the ledge span;
+/// `None` while covered / scrolled away / out of room.
+pub fn resolve(terrain: &Terrain, id: WindowId, rect: RectF, a: Anchor, width: f32) -> Option<(Vec2, (f32, f32))> {
     let x = rect.left + a.fx * rect.width();
     let y = rect.top + a.dy;
     let half = width * 0.5;
@@ -236,7 +317,28 @@ pub fn resolve(terrain: &Terrain, id: WindowId, rect: RectF, a: Anchor, width: f
         .iter()
         .filter(|l| l.owner == Some(id) && (l.y - y).abs() <= LEDGE_SLACK && l.x0 <= x - half && x + half <= l.x1)
         .min_by(|p, q| (p.y - y).abs().total_cmp(&(q.y - y).abs()))
-        .map(|l| Vec2::new(x, l.y))
+        .map(|l| (Vec2::new(x, l.y), (l.x0, l.x1)))
+}
+
+/// Collision pass over this frame's finds (after the higher-priority claims — placed
+/// benches, NPCs — are in `occ`): each find, highest priority first, keeps its spot if it
+/// is free, else slides along its ledge to the nearest free spot, else hides while it
+/// can't fit. Survivors are claimed as [`ClaimKind::Find`].
+pub fn settle(mut shown: Vec<Shown>, occ: &mut Occupancy, footprint: &dyn Fn(FindKind) -> Footprint) -> Vec<Shown> {
+    occ.release_kind(ClaimKind::Find);
+    let prio = |s: &Shown| s.kind.priority() + (s.favour * 5.0) as i32;
+    shown.sort_by(|a, b| prio(b).cmp(&prio(a)).then(a.id.cmp(&b.id)));
+    let mut out = Vec::with_capacity(shown.len());
+    for mut s in shown {
+        let fp = footprint(s.kind);
+        let rect = fp.rect(s.pos);
+        let key = ClaimKey::new(ClaimKind::Find, s.id);
+        let Some(dx) = occ.nudge(rect, s.span.0, s.span.1, Some(key), 4.0) else { continue };
+        s.pos.x += dx;
+        occ.claim(key, fp.rect(s.pos), prio(&s));
+        out.push(s);
+    }
+    out
 }
 
 impl World {
@@ -248,6 +350,7 @@ impl World {
         let mut w: World = serde_json::from_str(s)?;
         let max = w.rooms.values().flat_map(|r| r.finds.iter().map(|f| f.id)).max().unwrap_or(0);
         w.next_id = w.next_id.max(max + 1);
+        w.version = version();
         Ok(w)
     }
 
@@ -272,7 +375,7 @@ impl World {
 
     /// The knight explored window `id` (a window he never stood on). Rolls the app's room
     /// the first time; places anything not yet placed. Returns the finds revealed now.
-    pub fn explored(&mut self, id: WindowId, desk: &DesktopSnapshot, terrain: &Terrain, rules: &Rules, width: impl Fn(FindKind) -> f32) -> Vec<FindId> {
+    pub fn explored(&mut self, id: WindowId, desk: &DesktopSnapshot, site: &Site, rules: &Rules) -> Vec<FindId> {
         // Fullscreen windows (games, videos) are not rooms: nothing is found there.
         let Some(key) = desk.window(id).filter(|w| !w.fullscreen).and_then(app_key) else { return vec![] };
         if !self.rooms.contains_key(&key) {
@@ -283,14 +386,27 @@ impl World {
             }
         }
         self.hosts.insert(key.clone(), id);
-        self.place_pending(&key, id, terrain, width)
+        self.place_pending(&key, id, site)
+    }
+
+    /// The knight came onto window `id` (any way): finds of its app that had no lasting
+    /// room before are placed now, while he is there to find them.
+    pub fn arrived(&mut self, id: WindowId, desk: &DesktopSnapshot, site: &Site) -> Vec<FindId> {
+        let Some(key) = desk.window(id).filter(|w| !w.fullscreen).and_then(app_key) else { return vec![] };
+        let pending = self.rooms.get(&key).is_some_and(|r| r.finds.iter().any(|f| f.anchor.is_none()));
+        if !pending {
+            return vec![];
+        }
+        self.hosts.insert(key.clone(), id);
+        self.place_pending(&key, id, site)
     }
 
     /// Debug / gift: put a `kind` find into window `id`'s room right now.
-    pub fn force(&mut self, kind: FindKind, id: WindowId, desk: &DesktopSnapshot, terrain: &Terrain, width: impl Fn(FindKind) -> f32) -> Option<FindId> {
+    pub fn force(&mut self, kind: FindKind, id: WindowId, desk: &DesktopSnapshot, site: &Site) -> Option<FindId> {
         let key = desk.window(id).filter(|w| !w.fullscreen).and_then(app_key)?;
-        let taken = self.taken(&key, id, terrain, &width);
-        let anchor = place(terrain, id, width(kind), self.seed ^ self.next_id, &taken)?;
+        let taken = self.taken(&key, id, site);
+        let free = |r: RectF| site.occupancy.is_free(r, None) && !taken.iter().any(|t| t.overlaps(&r));
+        let anchor = place(site, id, kind, self.seed ^ self.next_id, &free)?;
         let fid = self.add(&key, kind);
         if let Some(f) = self.find_mut(fid) {
             f.anchor = Some(anchor);
@@ -299,32 +415,38 @@ impl World {
         Some(fid)
     }
 
-    fn place_pending(&mut self, key: &str, id: WindowId, terrain: &Terrain, width: impl Fn(FindKind) -> f32) -> Vec<FindId> {
+    fn place_pending(&mut self, key: &str, id: WindowId, site: &Site) -> Vec<FindId> {
         let seed = self.seed;
-        let mut taken = self.taken(key, id, terrain, &width);
+        let mut taken = self.taken(key, id, site);
         let Some(room) = self.rooms.get_mut(key) else { return vec![] };
+        let Some(rect) = site.terrain.window_rect(id) else { return vec![] };
         let mut placed = vec![];
         for f in room.finds.iter_mut().filter(|f| f.anchor.is_none()) {
-            let w = width(f.kind);
-            f.anchor = place(terrain, id, w, seed ^ f.id.wrapping_mul(0x9E37_79B9), &taken);
-            if let (Some(a), Some(rect)) = (f.anchor, terrain.window_rect(id)) {
+            let free = |r: RectF| site.occupancy.is_free(r, None) && !taken.iter().any(|t| t.overlaps(&r));
+            f.anchor = place(site, id, f.kind, seed ^ f.id.wrapping_mul(0x9E37_79B9), &free);
+            if let Some(a) = f.anchor {
                 placed.push(f.id);
-                taken.push((Vec2::new(rect.left + a.fx * rect.width(), rect.top + a.dy), w));
+                taken.push((site.footprint)(f.kind).rect(Vec2::new(rect.left + a.fx * rect.width(), rect.top + a.dy)));
             }
         }
         placed
     }
 
-    /// Where the anchored finds of a room sit on window `id` (bottom center, width).
-    fn taken(&self, key: &str, id: WindowId, terrain: &Terrain, width: &impl Fn(FindKind) -> f32) -> Vec<(Vec2, f32)> {
-        let Some(rect) = terrain.window_rect(id) else { return vec![] };
+    /// Rects of the anchored finds of a room on window `id` (shown or not).
+    fn taken(&self, key: &str, id: WindowId, site: &Site) -> Vec<RectF> {
+        let Some(rect) = site.terrain.window_rect(id) else { return vec![] };
         let finds = self.rooms.get(key).map_or(&[][..], |r| r.finds.as_slice());
-        finds.iter().filter_map(|f| f.anchor.map(|a| (Vec2::new(rect.left + a.fx * rect.width(), rect.top + a.dy), width(f.kind)))).collect()
+        finds
+            .iter()
+            .filter_map(|f| f.anchor.map(|a| (site.footprint)(f.kind).rect(Vec2::new(rect.left + a.fx * rect.width(), rect.top + a.dy))))
+            .map(|r| RectF::new(r.left - 8.0, r.top, r.right + 8.0, r.bottom))
+            .collect()
     }
 
-    /// Finds on screen: for every app with a room, on its hosting window (the one last
-    /// explored if still open, else its first visible window that has room).
-    pub fn shown(&mut self, desk: &DesktopSnapshot, terrain: &Terrain, now_unix: u64, rules: &Rules, width: impl Fn(FindKind) -> f32) -> Vec<Shown> {
+    /// Finds on screen (before collisions, see [`settle`]): for every app with a room, on
+    /// its hosting window (the one last explored if still open, else its first visible
+    /// window where something resolves).
+    pub fn shown(&mut self, desk: &DesktopSnapshot, terrain: &Terrain, now_unix: u64, rules: &Rules, footprint: &dyn Fn(FindKind) -> Footprint) -> Vec<Shown> {
         let regrow = (rules.regrow_hours * 3600.0) as u64;
         for f in self.rooms.values_mut().flat_map(|r| r.finds.iter_mut()) {
             if f.broken_at.is_some_and(|t| now_unix >= t + regrow) {
@@ -346,8 +468,8 @@ impl World {
                 let here: Vec<Shown> = live
                     .iter()
                     .filter_map(|f| {
-                        let pos = resolve(terrain, wid, rect, f.anchor?, width(f.kind))?;
-                        Some(Shown { id: f.id, kind: f.kind, window: wid, pos, favour: f.favour() })
+                        let (pos, span) = resolve(terrain, wid, rect, f.anchor?, footprint(f.kind).w)?;
+                        Some(Shown { id: f.id, kind: f.kind, window: wid, pos, span, favour: f.favour() })
                     })
                     .collect();
                 if !here.is_empty() {
@@ -363,7 +485,7 @@ impl World {
         out
     }
 
-    /// The knight used a find (sat, bathed, mined).
+    /// The knight used a find (sat, mined).
     pub fn used(&mut self, id: FindId) {
         if let Some(f) = self.find_mut(id) {
             f.visits += 1;
@@ -392,7 +514,7 @@ impl World {
 }
 
 /// What the brain knows about the finds on screen. `stand` gives where to stand to use a
-/// find of each kind (benches / springs: on it; deposits: beside it, facing it).
+/// find of each kind (benches: on it; deposits: beside it, facing it).
 pub fn known_places(shown: &[Shown], fresh: impl Fn(FindId) -> bool, stand: impl Fn(&Shown) -> Vec2) -> Vec<KnownPlace> {
     shown.iter().map(|s| KnownPlace { id: s.id, kind: s.kind.place_kind(), at: stand(s), center: s.pos, favour: s.favour, fresh: fresh(s.id) }).collect()
 }
@@ -429,14 +551,49 @@ mod tests {
         (d, t)
     }
 
-    fn w(_: FindKind) -> f32 {
-        150.0
+    /// Adds a content line to window `id` (a table border, say).
+    fn with_line(mut t: Terrain, id: WindowId, x0: f32, x1: f32, y: f32) -> Terrain {
+        t.ledges.push(Ledge { x0, x1, y, kind: LedgeKind::Content, owner: Some(id) });
+        t
+    }
+
+    fn fp(_: FindKind) -> Footprint {
+        Footprint { w: 150.0, h: 60.0, room: 150.0 }
+    }
+
+    /// Ages after `secs` of seeing `t`.
+    fn aged(t: &Terrain, secs: f32) -> LedgeAges {
+        let mut a = LedgeAges::default();
+        let mut now = 0.0;
+        while now <= secs {
+            a.observe(t, now);
+            now += 1.0;
+        }
+        a
+    }
+
+    struct Env {
+        terrain: Terrain,
+        ages: LedgeAges,
+        occ: Occupancy,
+        now: f32,
+        min_age: f32,
+    }
+
+    impl Env {
+        fn new(terrain: Terrain) -> Self {
+            let ages = aged(&terrain, 40.0);
+            Self { terrain, ages, occ: Occupancy::default(), now: 40.0, min_age: LASTING_SECS }
+        }
+        fn site(&self) -> Site<'_> {
+            Site { terrain: &self.terrain, ages: &self.ages, now: self.now, min_age: self.min_age, occupancy: &self.occ, footprint: &fp }
+        }
     }
 
     /// Rules that always find something of `kind`.
     fn always(kind: FindKind) -> Rules {
         let one = |k: FindKind| if std::mem::discriminant(&k) == std::mem::discriminant(&kind) { 1.0 } else { 0.0 };
-        Rules { nothing: 0.0, bench: one(FindKind::Bench { style: 0 }), spring: one(FindKind::Spring), deposit: one(FindKind::Deposit), ..Rules::default() }
+        Rules { nothing: 0.0, bench: one(FindKind::Bench { style: 0 }), deposit: one(FindKind::Deposit), ..Rules::default() }
     }
 
     #[test]
@@ -445,9 +602,9 @@ mod tests {
         assert_eq!(roll(7, "paint", &r), roll(7, "paint", &r));
         let apps: Vec<String> = (0..200).map(|i| format!("app{i}")).collect();
         let found = apps.iter().filter(|a| !roll(7, a, &r).is_empty()).count();
-        assert!((60..120).contains(&found), "about 45% of rooms hold something: {found}");
-        let springs = apps.iter().filter(|a| roll(7, a, &r) == vec![FindKind::Spring]).count();
-        assert!((8..40).contains(&springs), "springs are rare: {springs}");
+        assert!((55..110).contains(&found), "about 40% of rooms hold something: {found}");
+        let deposits = apps.iter().filter(|a| roll(7, a, &r) == vec![FindKind::Deposit]).count();
+        assert!((12..50).contains(&deposits), "deposits are rarer than benches: {deposits}");
         let other_seed = apps.iter().filter(|a| roll(7, a, &r) != roll(8, a, &r)).count();
         assert!(other_seed > 40, "another world, other finds");
     }
@@ -462,38 +619,82 @@ mod tests {
     #[test]
     fn first_visit_reveals_and_only_once() {
         let (d, t) = desk(vec![win(1, RectI::new(200, 400, 900, 900), "paint.exe")]);
+        let env = Env::new(t);
         let mut world = World::new(3);
-        let rules = always(FindKind::Spring);
-        let found = world.explored(1, &d, &t, &rules, w);
+        let rules = always(FindKind::Deposit);
+        let found = world.explored(1, &d, &env.site(), &rules);
         assert_eq!(found.len(), 1);
-        assert_eq!(world.find(found[0]).map(|f| f.kind), Some(FindKind::Spring));
-        assert!(world.explored(1, &d, &t, &rules, w).is_empty(), "already there, nothing new");
+        assert_eq!(world.find(found[0]).map(|f| f.kind), Some(FindKind::Deposit));
+        assert!(world.explored(1, &d, &env.site(), &rules).is_empty(), "already there, nothing new");
     }
 
     #[test]
-    fn placed_on_the_title_bar_following_moves_and_vanishing_with_the_window() {
+    fn placed_relative_to_the_window_following_moves_and_vanishing_with_it() {
         let rules = always(FindKind::Deposit);
         let (d, t) = desk(vec![win(1, RectI::new(200, 400, 900, 900), "paint.exe")]);
+        let env = Env::new(t);
         let mut world = World::new(3);
-        world.explored(1, &d, &t, &rules, w);
-        let s = world.shown(&d, &t, 0, &rules, w);
+        world.explored(1, &d, &env.site(), &rules);
+        let s = world.shown(&d, &env.terrain, 0, &rules, &fp);
         assert_eq!(s.len(), 1);
-        assert_eq!(s[0].pos.y, 400.0, "on the title bar");
+        assert_eq!(s[0].pos.y, 400.0, "on the title bar (the only lasting ledge)");
         assert!(s[0].pos.x - 75.0 >= 200.0 + EDGE_MARGIN && s[0].pos.x + 75.0 <= 900.0 - EDGE_MARGIN);
         let x0 = s[0].pos.x;
 
         let (d2, t2) = desk(vec![win(1, RectI::new(500, 300, 1200, 800), "paint.exe")]);
-        let s2 = world.shown(&d2, &t2, 0, &rules, w);
+        let s2 = world.shown(&d2, &t2, 0, &rules, &fp);
         assert_eq!(s2[0].pos, Vec2::new(x0 + 300.0, 300.0), "rides the window");
 
         let (d3, t3) = desk(vec![win(2, RectI::new(500, 300, 1200, 800), "notepad.exe")]);
-        assert!(world.shown(&d3, &t3, 0, &rules, w).is_empty(), "closed with its window");
+        assert!(world.shown(&d3, &t3, 0, &rules, &fp).is_empty(), "closed with its window");
 
         // Reopened later (new window id): still there, same relative spot.
         let (d4, t4) = desk(vec![win(9, RectI::new(200, 400, 900, 900), "paint.exe")]);
-        let s4 = world.shown(&d4, &t4, 0, &rules, w);
+        let s4 = world.shown(&d4, &t4, 0, &rules, &fp);
         assert_eq!(s4.len(), 1);
         assert_eq!(s4[0].pos, Vec2::new(x0, 400.0));
+    }
+
+    #[test]
+    fn finds_go_on_lasting_content_lines_and_hide_when_they_scroll_away() {
+        let (d, t) = desk(vec![win(1, RectI::new(200, 400, 1400, 900), "excel.exe")]);
+        let t = with_line(t, 1, 210.0, 1390.0, 650.0);
+        let env = Env::new(t);
+        // Many rooms: finds spread over the title bar and the content line.
+        let mut ys = std::collections::BTreeSet::new();
+        for seed in 0..30 {
+            let mut world = World::new(seed);
+            world.force(FindKind::Deposit, 1, &d, &env.site()).expect("room");
+            let s = world.shown(&d, &env.terrain, 0, &Rules::default(), &fp);
+            ys.insert(s[0].pos.y as i32);
+        }
+        assert_eq!(ys.into_iter().collect::<Vec<_>>(), vec![400, 650], "not only title bars");
+
+        // A find on the line hides while the line is gone and comes back with it.
+        let mut world = World::new(1);
+        let id = loop {
+            let id = world.force(FindKind::Bench { style: 0 }, 1, &d, &env.site()).expect("room");
+            if world.shown(&d, &env.terrain, 0, &Rules::default(), &fp).iter().any(|s| s.id == id && s.pos.y == 650.0) {
+                break id;
+            }
+        };
+        let (_, bare) = desk(vec![win(1, RectI::new(200, 400, 1400, 900), "excel.exe")]);
+        assert!(!world.shown(&d, &bare, 0, &Rules::default(), &fp).iter().any(|s| s.id == id), "scrolled away");
+        assert!(world.shown(&d, &env.terrain, 0, &Rules::default(), &fp).iter().any(|s| s.id == id), "back");
+    }
+
+    #[test]
+    fn fresh_surfaces_carry_nothing_until_they_last() {
+        let (d, t) = desk(vec![win(1, RectI::new(200, 400, 1400, 900), "excel.exe")]);
+        let young = with_line(t, 1, 210.0, 1390.0, 650.0);
+        let mut env = Env::new(young.clone());
+        env.ages = aged(&young, 10.0);
+        env.now = 10.0;
+        let mut world = World::new(5);
+        assert!(world.explored(1, &d, &env.site(), &always(FindKind::Bench { style: 1 })).is_empty(), "nothing has lasted yet");
+        env.ages = aged(&young, 35.0);
+        env.now = 35.0;
+        assert_eq!(world.arrived(1, &d, &env.site()).len(), 1, "placed when he comes by later");
     }
 
     #[test]
@@ -501,59 +702,104 @@ mod tests {
         let rules = always(FindKind::Bench { style: 0 });
         let (d, t) = desk(vec![win(1, RectI::new(200, 400, 360, 900), "tiny.exe")]);
         let mut world = World::new(3);
-        assert!(world.explored(1, &d, &t, &rules, w).is_empty(), "no room on a 160 px window");
+        assert!(world.explored(1, &d, &Env::new(t).site(), &rules).is_empty(), "no room on a 160 px window");
         let (d2, t2) = desk(vec![win(1, RectI::new(200, 400, 900, 900), "tiny.exe")]);
-        assert_eq!(world.explored(1, &d2, &t2, &rules, w).len(), 1, "placed once there is room");
+        assert_eq!(world.arrived(1, &d2, &Env::new(t2).site()).len(), 1, "placed once there is room");
         // A window on top covering the whole title bar hides it.
         let (d3, t3) = desk(vec![win(2, RectI::new(100, 300, 1000, 600), "other.exe"), win(1, RectI::new(200, 400, 900, 900), "tiny.exe")]);
-        assert!(world.shown(&d3, &t3, 0, &rules, w).is_empty());
+        assert!(world.shown(&d3, &t3, 0, &rules, &fp).is_empty());
     }
 
     #[test]
-    fn persistence_round_trip() {
+    fn persistence_round_trip_and_old_springs_are_ignored() {
         let (d, t) = desk(vec![win(1, RectI::new(200, 400, 900, 900), "paint.exe"), win(2, RectI::new(1000, 200, 1800, 700), "code.exe")]);
+        let env = Env::new(t);
         let mut world = World::new(11);
-        world.explored(1, &d, &t, &always(FindKind::Bench { style: 2 }), w);
-        world.explored(2, &d, &t, &always(FindKind::Deposit), w);
+        world.explored(1, &d, &env.site(), &always(FindKind::Bench { style: 2 }));
+        world.explored(2, &d, &env.site(), &always(FindKind::Deposit));
         let ids: Vec<FindId> = world.rooms.values().flat_map(|r| r.finds.iter().map(|f| f.id)).collect();
         world.used(ids[0]);
         let back = World::from_json(&world.to_json()).expect("parse");
         assert_eq!(back.rooms, world.rooms);
         assert_eq!(back.seed, 11);
         let mut back = back;
-        let fresh = back.add("x", FindKind::Spring);
+        let fresh = back.add("x", FindKind::Deposit);
         assert!(!ids.contains(&fresh), "ids keep counting after a reload");
+
+        // A v1 world with a hot spring: the spring is dropped, the rest kept.
+        let v1 = r#"{"version":1,"seed":5,"rooms":{"paint":{"finds":[
+            {"id":1,"kind":{"kind":"spring"},"anchor":{"fx":0.5,"dy":0.0},"visits":2},
+            {"id":2,"kind":{"kind":"bench","style":0},"anchor":{"fx":0.3,"dy":0.0}}]}},"next_id":3}"#;
+        let old = World::from_json(v1).expect("old worlds load");
+        let finds = &old.rooms["paint"].finds;
+        assert_eq!(finds.len(), 1);
+        assert_eq!(finds[0].kind, FindKind::Bench { style: 0 });
+        assert_eq!(old.next_id, 3);
     }
 
     #[test]
     fn deposits_break_drop_geo_and_regrow() {
         let rules = always(FindKind::Deposit);
         let (d, t) = desk(vec![win(1, RectI::new(200, 400, 900, 900), "paint.exe")]);
+        let env = Env::new(t);
         let mut world = World::new(3);
-        let id = world.explored(1, &d, &t, &rules, w)[0];
+        let id = world.explored(1, &d, &env.site(), &rules)[0];
         let at = Vec2::new(500.0, 400.0);
         for _ in 0..rules.deposit_hp - 1 {
             assert_eq!(world.strike(id, at, 1000, &rules), None);
         }
         let drop = world.strike(id, at, 1000, &rules).expect("broke");
         assert!((5..=15).contains(&drop.geo));
-        assert!(world.shown(&d, &t, 2000, &rules, w).is_empty(), "broken");
-        assert_eq!(world.shown(&d, &t, 1000 + 25 * 3600, &rules, w).len(), 1, "regrown a day later");
+        assert!(world.shown(&d, &env.terrain, 2000, &rules, &fp).is_empty(), "broken");
+        assert_eq!(world.shown(&d, &env.terrain, 1000 + 25 * 3600, &rules, &fp).len(), 1, "regrown a day later");
     }
 
     #[test]
-    fn finds_in_one_window_do_not_overlap() {
+    fn placement_avoids_claims_and_other_finds() {
         let (d, t) = desk(vec![win(1, RectI::new(200, 400, 1000, 900), "paint.exe")]);
+        let mut env = Env::new(t);
+        // A placed bench in the middle of the title bar.
+        env.occ.claim(ClaimKey::new(ClaimKind::Bench, 1), RectF::new(500.0, 340.0, 650.0, 400.0), 100);
         let mut world = World::new(3);
-        for k in [FindKind::Deposit, FindKind::Bench { style: 0 }, FindKind::Spring] {
-            world.force(k, 1, &d, &t, w).expect("room for three");
+        for k in [FindKind::Deposit, FindKind::Bench { style: 0 }] {
+            world.force(k, 1, &d, &env.site()).expect("room for two");
         }
-        let s = world.shown(&d, &t, 0, &Rules::default(), w);
-        assert_eq!(s.len(), 3);
-        for (i, a) in s.iter().enumerate() {
-            for b in &s[i + 1..] {
-                assert!((a.pos.x - b.pos.x).abs() >= 150.0, "{a:?} overlaps {b:?}");
-            }
+        let s = settle(world.shown(&d, &env.terrain, 0, &Rules::default(), &fp), &mut env.occ, &fp);
+        assert_eq!(s.len(), 2);
+        let rects: Vec<RectF> = s.iter().map(|s| fp(s.kind).rect(s.pos)).collect();
+        assert!(!rects[0].overlaps(&rects[1]));
+        for r in rects {
+            assert!(!r.overlaps(&RectF::new(500.0, 340.0, 650.0, 400.0)), "{r:?} sits in the bench");
         }
+    }
+
+    fn shown_at(id: FindId, kind: FindKind, x: f32, span: (f32, f32)) -> Shown {
+        Shown { id, kind, window: 1, pos: Vec2::new(x, 400.0), span, favour: 0.0 }
+    }
+
+    #[test]
+    fn colliding_finds_slide_apart_or_the_lesser_one_hides() {
+        let mut occ = Occupancy::default();
+        // Two windows' finds now on top of each other; the bench keeps its spot.
+        let bench = shown_at(1, FindKind::Bench { style: 0 }, 500.0, (200.0, 1000.0));
+        let rock = shown_at(2, FindKind::Deposit, 520.0, (200.0, 1000.0));
+        let s = settle(vec![rock, bench], &mut occ, &fp);
+        assert_eq!(s.len(), 2);
+        let b = s.iter().find(|s| s.id == 1).unwrap();
+        let r = s.iter().find(|s| s.id == 2).unwrap();
+        assert_eq!(b.pos.x, 500.0, "the bench stays");
+        assert!((r.pos.x - b.pos.x).abs() >= 150.0, "the rock slid aside: {r:?}");
+        assert_eq!(occ.claims().len(), 2);
+
+        // No room to slide on a short ledge: the rock hides while they overlap.
+        let rock = shown_at(2, FindKind::Deposit, 520.0, (420.0, 600.0));
+        let s = settle(vec![rock, bench], &mut occ, &fp);
+        assert_eq!(s.iter().map(|s| s.id).collect::<Vec<_>>(), vec![1]);
+
+        // A placed bench (higher-priority claim) beats a found bench.
+        let mut occ = Occupancy::default();
+        occ.claim(ClaimKey::new(ClaimKind::Bench, 9), RectF::new(430.0, 340.0, 570.0, 400.0), 100);
+        let s = settle(vec![shown_at(1, FindKind::Bench { style: 0 }, 500.0, (420.0, 600.0))], &mut occ, &fp);
+        assert!(s.is_empty());
     }
 }
