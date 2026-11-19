@@ -62,6 +62,11 @@ impl GraphNavigator {
         self.graph.as_ref()
     }
 
+    /// The route being followed, with its goal and style (debug overlay / status).
+    pub fn follower(&self) -> Option<&PathFollower> {
+        self.follower.as_ref()
+    }
+
     /// Input for this tick; neutral when idle. Updates [`Navigator::status`].
     pub fn next_input(&mut self, ch: &Character, terrain: &Terrain, dt: f32) -> MoveInput {
         let (Some(graph), Some(follower)) = (self.graph.as_ref(), self.follower.as_mut()) else {

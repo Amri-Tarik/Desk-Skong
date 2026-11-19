@@ -1,7 +1,7 @@
 //! The live pet: desktop → terrain → controller → locomotion/acts → sprite window,
 //! controlled from a tray menu and global hotkeys (Ctrl+Alt+…): K manual control,
 //! A random act, W wake, R respawn at cursor, S next skin, B bench at cursor, C click-through,
-//! P pause, Q quit.
+//! P pause, D debug overlay, Q quit. Control panels connect over a named pipe (`control`).
 use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
@@ -34,25 +34,11 @@ use crate::keyboard::Keyboard;
 use crate::settings::{BOTHER, SCALES, Settings};
 use crate::benches::{Benches, SEAT_BELOW_ORIGIN};
 use crate::navbuild::NavBuilder;
+use crate::control::ControlServer;
+use crate::overlay::PetOverlay;
+use skong_ipc::Command;
 
-/// Everything the user can ask for, from hotkeys or the tray menu.
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Command {
-    ToggleManual,
-    RandomAct,
-    Wake,
-    RespawnAtCursor,
-    NextSkin,
-    SetSkin(usize),
-    SetScale(f32),
-    SetBother(f32),
-    ToggleClickThrough,
-    PlaceBenchAtCursor(usize),
-    PlaceBenchNearKnight(usize),
-    ClearBenches,
-    TogglePause,
-    Quit,
-}
+mod panel;
 
 const HOTKEYS: &[(i32, vk::VIRTUAL_KEY, Command)] = &[
     (1, vk::VK_K, Command::ToggleManual),
@@ -64,6 +50,7 @@ const HOTKEYS: &[(i32, vk::VIRTUAL_KEY, Command)] = &[
     (7, vk::VK_P, Command::TogglePause),
     (8, vk::VK_Q, Command::Quit),
     (9, vk::VK_B, Command::PlaceBenchAtCursor(0)),
+    (10, vk::VK_D, Command::ToggleDebugOverlay),
 ];
 
 // Tray menu ids.
@@ -73,6 +60,9 @@ const ID_PAUSE: u32 = 3;
 const ID_ACT: u32 = 4;
 const ID_RESPAWN: u32 = 5;
 const ID_CLEAR_BENCHES: u32 = 6;
+const ID_VISION: u32 = 7;
+const ID_OVERLAY: u32 = 8;
+const ID_PANEL: u32 = 10;
 const ID_QUIT: u32 = 9;
 const ID_SKIN0: u32 = 1000;
 const ID_SCALE0: u32 = 2000;
@@ -163,6 +153,10 @@ struct Pet {
 
     move_events: Vec<MoveEvent>,
     anim_events: Vec<AnimEvent>,
+
+    /// Control panels (named pipe) and the terrain / nav debug overlay.
+    control: ControlServer,
+    overlay: PetOverlay,
 }
 
 pub fn run(args: &Args) -> Result<()> {
@@ -252,7 +246,10 @@ pub fn run(args: &Args) -> Result<()> {
         drawn: None,
         move_events: Vec::new(),
         anim_events: Vec::new(),
+        control: ControlServer::start(),
+        overlay: PetOverlay::default(),
     };
+    pet.control.set_hello(pet.hello());
 
     pet.benches.capturable = args.capturable;
     if args.sit_test {
@@ -265,7 +262,7 @@ pub fn run(args: &Args) -> Result<()> {
             log::warn!("{e:#}");
         }
     }
-    log::info!("tray menu ready; hotkeys Ctrl+Alt + K manual, A act, W wake, R respawn at cursor, S skin, C click-through, P pause, Q quit");
+    log::info!("tray menu ready; hotkeys Ctrl+Alt + K manual, A act, W wake, R respawn at cursor, S skin, C click-through, P pause, D debug overlay, Q quit");
 
     let mut last_housekeeping = Instant::now();
     rl.run(|tick| {
@@ -277,6 +274,7 @@ pub fn run(args: &Args) -> Result<()> {
                 cmds.extend(pet.menu_command(id));
             }
         }
+        cmds.extend(pet.service_panel());
         for c in cmds {
             if pet.apply(c)? == Flow::Quit {
                 return Ok(Flow::Quit);
@@ -322,7 +320,7 @@ impl Pet {
         }
 
         // 2. Intent: keyboard in manual mode, otherwise the brain.
-        let mut input = if self.manual { self.keyboard.read() } else { self.think(dt) };
+        let mut input = if self.manual { self.keyboard.read(self.control.manual_keys()) } else { self.think(dt) };
         if let Some(t) = self.fx_test.as_mut() {
             // Scripted: idle 3 s, charge a superdash for 1.2 s, release, repeat every 6 s.
             *t += dt;
@@ -637,6 +635,7 @@ impl Pet {
             }
             Command::ClearBenches => self.benches.clear(),
             Command::Quit => return Ok(Flow::Quit),
+            Command::SetManual(_) | Command::ToggleVision | Command::ToggleDebugOverlay | Command::SetOverlayLayers(_) | Command::OpenPanel => return self.apply_panel(c),
         }
         Ok(Flow::Continue)
     }
@@ -695,6 +694,10 @@ impl Pet {
             MenuItem::check(ID_CLICK, "Click-through", self.settings.click_through),
             MenuItem::check(ID_PAUSE, "Pause", self.paused),
             MenuItem::Separator,
+            MenuItem::check(ID_VISION, "Vision (content terrain)", self.content.is_enabled()),
+            MenuItem::check(ID_OVERLAY, "Debug overlay\tCtrl+Alt+D", self.overlay.is_on()),
+            MenuItem::action(ID_PANEL, "Open control panel"),
+            MenuItem::Separator,
             MenuItem::action(ID_QUIT, "Quit"),
         ]
     }
@@ -708,6 +711,9 @@ impl Pet {
             ID_RESPAWN => Command::RespawnAtCursor,
             ID_QUIT => Command::Quit,
             ID_CLEAR_BENCHES => Command::ClearBenches,
+            ID_VISION => Command::ToggleVision,
+            ID_OVERLAY => Command::ToggleDebugOverlay,
+            ID_PANEL => Command::OpenPanel,
             i if (ID_BENCH0..ID_BENCH0 + self.benches.styles.len() as u32).contains(&i) => Command::PlaceBenchNearKnight((i - ID_BENCH0) as usize),
             i if (ID_SKIN0..ID_SKIN0 + self.data.skins.len() as u32).contains(&i) => Command::SetSkin((i - ID_SKIN0) as usize),
             i if (ID_SCALE0..ID_SCALE0 + SCALES.len() as u32).contains(&i) => Command::SetScale(SCALES[(i - ID_SCALE0) as usize].1),
