@@ -200,6 +200,32 @@ impl Default for WatchConfig {
     }
 }
 
+/// Priority-tier tuning (see [`super::Tier`]).
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct TierConfig {
+    /// Utilities at or below this don't count as eligible for their tier.
+    pub eligible: f32,
+    /// Energy below this is a critical need: Rest / Nap rise to the Needs tier.
+    pub critical_energy: f32,
+    /// Hurt above this is a critical need: Recover rises to the Needs tier.
+    pub critical_hurt: f32,
+    /// While a need is critical, loot only stays an engagement within this distance (px):
+    /// a coin next to him beats sitting, a far one can wait for the nap.
+    pub tired_loot_reach: f32,
+    /// A behaviour only competes in the Engagement / Needs tier when its utility reaches this;
+    /// below it, it competes as Ambient. Keeps a merely *possible* cursor battle (low
+    /// baseline) from outranking everything, while an invited one still preempts.
+    pub engagement_min: f32,
+    pub needs_min: f32,
+}
+
+impl Default for TierConfig {
+    fn default() -> Self {
+        Self { eligible: 0.05, critical_energy: 0.2, critical_hurt: 0.6, tired_loot_reach: 300.0, engagement_min: 0.35, needs_min: 0.3 }
+    }
+}
+
 /// All brain tunables.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(default)]
@@ -219,6 +245,8 @@ pub struct BrainConfig {
     pub hysteresis: f32,
     /// Utilities at or above this are urgent: they bypass commitment.
     pub urgent: f32,
+    /// Priority tiers.
+    pub tiers: TierConfig,
     pub needs: NeedRates,
     pub battle: BattleConfig,
     /// Death, the Shade, Geo and spells.
@@ -251,6 +279,7 @@ impl Default for BrainConfig {
             min_commit: 2.0,
             hysteresis: 0.12,
             urgent: 1.0,
+            tiers: TierConfig::default(),
             needs: NeedRates::default(),
             battle: BattleConfig::default(),
             stakes: super::stakes::StakesConfig::default(),

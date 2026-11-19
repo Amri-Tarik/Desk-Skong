@@ -1,0 +1,10 @@
+{
+  "$comment": "Graceful exits the brain requests (Intent.exit_act) when a higher-priority behaviour interrupts an act: finish the pose instead of snapping out of it. Never picked at random.",
+  "acts": [
+    { "name": "get_up", "tags": ["exit"], "requires": "any", "weight": 0.0, "cooldown": 0, "steps": [ { "clip": "Get Off", "interruptible": false } ] },
+    { "name": "look_up_end", "tags": ["exit"], "requires": "any", "weight": 0.0, "cooldown": 0, "steps": [ { "clip": "LookUpToIdle", "interruptible": false } ] },
+    { "name": "look_down_end", "tags": ["exit"], "requires": "any", "weight": 0.0, "cooldown": 0, "steps": [ { "clip": "LookDownToIdle", "interruptible": false } ] },
+    { "name": "turn_from_screen", "tags": ["exit"], "requires": "any", "weight": 0.0, "cooldown": 0, "steps": [ { "clip": "TurnFromBG", "interruptible": false } ] },
+    { "name": "put_map_away", "tags": ["exit"], "requires": "any", "weight": 0.0, "cooldown": 0, "steps": [ { "clip": "Map Away", "interruptible": false } ] }
+  ]
+}

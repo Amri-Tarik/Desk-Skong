@@ -56,8 +56,8 @@ use std::fmt::Write as _;
 
 pub use activity::{Activity, ActivitySpot, ActivityTracker, QUIET, TrackedSpot};
 pub use battle::{BattleScore, Outcome};
-pub use behaviours::BehaviourKind;
-pub use config::{BattleConfig, BrainConfig, CompanionConfig, NeedRates, Personality, WatchConfig};
+pub use behaviours::{BehaviourKind, Tier};
+pub use config::{BattleConfig, BrainConfig, CompanionConfig, NeedRates, Personality, TierConfig, WatchConfig};
 pub use greet::{STAND_OFF_UNITS, Visitor, VisitorState};
 pub use interest::{InterestMap, Poi, PoiKey, PoiKind, PoiTarget, ScoredPoi};
 pub use navigator::{GraphNavigator, NavStatus, Navigator, Reach};
@@ -132,6 +132,10 @@ pub struct Intent {
     pub act: Option<ActId>,
     /// Cut the running act short (only requested when it is interruptible).
     pub cancel_act: bool,
+    /// End the running act gracefully: replace it with this short exit act (`get_up` from a
+    /// seat, `look_up_end`, ...) when another behaviour takes over. Exit acts are
+    /// uninterruptible and only a fraction of a second long.
+    pub exit_act: Option<ActId>,
     /// Signal for the running act (e.g. "woken").
     pub signal: Option<&'static str>,
     pub attack: Option<Attack>,
@@ -165,6 +169,8 @@ pub enum SwitchReason {
     Urgent,
     /// The oscillation guard stopped a ping-pong between targets.
     Calming,
+    /// A higher priority tier took over (e.g. loot appeared while he sat on a ledge).
+    Preempted,
 }
 
 /// Record of one behaviour switch (for tests and the overlay).
@@ -231,6 +237,8 @@ pub struct Brain {
     travel_dir: f32,
     recent_goals: Vec<NavGoal>,
     calm_until: f32,
+    /// Highest tier with an eligible behaviour at the last evaluation.
+    top_tier: Tier,
     oscillations: u32,
 }
 
@@ -267,6 +275,7 @@ impl Brain {
             travel_dir: 0.0,
             recent_goals: Vec::new(),
             calm_until: f32::NEG_INFINITY,
+            top_tier: Tier::Ambient,
             oscillations: 0,
             cfg,
         }
@@ -588,19 +597,40 @@ impl Brain {
         log::debug!("brain: stuck against a wall ({:?}); giving up that goal", self.last_motion);
     }
 
-    /// Score every behaviour and switch if warranted.
+    /// Score every behaviour and switch if warranted. Tiers first: the best eligible
+    /// behaviour of the highest non-empty tier is the candidate, and a higher tier than the
+    /// current one takes over at once. Within a tier, commitment and hysteresis apply.
     fn think(&mut self, p: &Percepts, nav: &mut dyn Navigator, out: &mut Intent, finished: bool) {
         self.best_poi = self.score_pois(p, nav);
         self.best_spot = self.score_spots(p, nav, finished);
         self.score_places(p, nav);
         self.utilities = self.score_behaviours(p);
+        let eligible = self.cfg.tiers.eligible;
+        let tiered: Vec<(BehaviourKind, f32, Tier)> = self.utilities.iter().map(|&(k, u)| (k, u, self.tier_at(k, u, p))).collect();
+        let top = tiered.iter().filter(|t| t.1 > eligible).map(|t| t.2).max();
+        // Utilities are sorted best first, so the first of the top tier is its best.
+        let Some(&(best, best_u, best_tier)) = tiered.iter().find(|t| Some(t.2) == top).or(tiered.first()) else { return };
         let current = self.active.kind();
-        let Some(&(best, best_u)) = self.utilities.first() else { return };
-        let cur_u = self.utilities.iter().find(|(k, _)| *k == current).map_or(0.0, |u| u.1);
+        let (cur_u, cur_tier) = tiered.iter().find(|t| t.0 == current).map_or((0.0, Tier::Ambient), |t| (t.1, t.2));
+        // A current behaviour that is no longer eligible holds no tier — except a running
+        // Urgent one (flee, hide…), whose trigger is spent once it starts: it keeps its tier
+        // until it finishes.
+        let cur_tier = if current.tier() == Tier::Urgent {
+            Tier::Urgent
+        } else if cur_u > eligible {
+            cur_tier
+        } else {
+            Tier::Ambient
+        };
+        self.top_tier = top.unwrap_or(Tier::Ambient);
 
         let reason = if finished {
             Some(SwitchReason::Finished)
         } else if best == current {
+            None
+        } else if best_tier > cur_tier {
+            Some(SwitchReason::Preempted)
+        } else if best_tier < cur_tier {
             None
         } else if best_u >= self.cfg.urgent && best_u > cur_u {
             Some(SwitchReason::Urgent)
@@ -614,6 +644,37 @@ impl Brain {
         };
         if let Some(reason) = reason {
             self.switch_to(best, reason, p, nav, out);
+        }
+    }
+
+    /// Tier at utility `u`: high tiers need a minimum score, otherwise it competes as Ambient.
+    fn tier_at(&self, kind: BehaviourKind, u: f32, p: &Percepts) -> Tier {
+        let t = self.tier_of(kind, p);
+        let min = match t {
+            Tier::Engagement => self.cfg.tiers.engagement_min,
+            Tier::Needs => self.cfg.tiers.needs_min,
+            _ => 0.0,
+        };
+        if u >= min { t } else { Tier::Ambient }
+    }
+
+    /// The tier `kind` competes in right now (its base tier refined by context).
+    fn tier_of(&self, kind: BehaviourKind, p: &Percepts) -> Tier {
+        let t = &self.cfg.tiers;
+        let critical = self.mind.needs.energy < t.critical_energy;
+        match kind {
+            // Resting is a pastime unless he's exhausted / badly hurt.
+            BehaviourKind::Rest | BehaviourKind::Nap if !critical => Tier::Ambient,
+            BehaviourKind::Recover if self.mind.emotions.hurt < t.critical_hurt => Tier::Ambient,
+            // An exhausted (or sleeping) knight lets far prizes wait; a coin next to him still
+            // beats sitting. A Shade hunt the user asked for stays an engagement.
+            BehaviourKind::Loot if critical || self.asleep(p) => {
+                let k = p.knight.pos;
+                let near = self.stakes.sense.coins.iter().any(|c| c.distance(k) <= t.tired_loot_reach);
+                if near && !self.asleep(p) { Tier::Engagement } else { Tier::Ambient }
+            }
+            BehaviourKind::ShadeHunt if (critical || self.asleep(p)) && !self.stakes.force_hunt => Tier::Ambient,
+            _ => kind.tier(),
         }
     }
 
@@ -637,6 +698,18 @@ impl Brain {
         }
         let visitor = self.visitors.target(&self.senses.visitors, p.knight.pos, self.now).cloned();
         nav.stop();
+        if reason == SwitchReason::Preempted {
+            // A deliberate change of plan, not dithering.
+            self.reversals.clear();
+            self.travel_dir = 0.0;
+            self.recent_goals.clear();
+        }
+        // End a running (interruptible) act gracefully rather than snapping out of it.
+        if let Some(a) = p.act.filter(|a| a.interruptible)
+            && let Some(exit) = self.rep.catalog.get(a.id).and_then(behaviours::exit_act_for)
+        {
+            out.exit_act = self.rep.catalog.id(exit);
+        }
         let poi = self.best_poi.map(|s| s.poi);
         let spot = self.best_spot;
         let place = self.interest.places.best;
