@@ -484,7 +484,9 @@ const SEAT_PLANS: usize = 4;
 /// are blocked for a while so they aren't tried again and again.
 pub(crate) fn find_seat(ctx: &mut Ctx, near: Vec2, range: f32) -> Option<(Vec2, TravelStyle)> {
     let k = ctx.p.knight;
-    let candidates: Vec<Vec2> = spots::seats(ctx.p.terrain, k, near, ctx.p.benches, range)
+    let (terrain, ages, now) = (ctx.p.terrain, &ctx.interest.ages, ctx.now);
+    let settled = |l: &crate::terrain::Ledge| ages.settled(terrain, l, now);
+    let candidates: Vec<Vec2> = spots::seats(terrain, k, near, ctx.p.benches, range, &settled)
         .into_iter()
         .filter(|s| !ctx.interest.is_blocked(PoiTarget::Spot(*s)) && !on_point(k, *s, SEAT_TOL))
         .take(SEAT_PLANS)

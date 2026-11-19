@@ -1,0 +1,148 @@
+{
+  "name": "Coin Rocks",
+  "clips": [
+    {
+      "name": "Idle 1",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 0,
+          "sprite": "coin_rock_010000"
+        }
+      ]
+    },
+    {
+      "name": "Gleam 1",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 0,
+          "sprite": "coin_rock_010000"
+        },
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 6,
+          "sprite": "coin_rock_010001"
+        },
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 2,
+          "sprite": "coin_rock_010002"
+        },
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 4,
+          "sprite": "coin_rock_010003"
+        },
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 1,
+          "sprite": "coin_rock_010004"
+        },
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 3,
+          "sprite": "coin_rock_010005"
+        },
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 0,
+          "sprite": "coin_rock_010000"
+        }
+      ]
+    },
+    {
+      "name": "Broken 1",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 5,
+          "sprite": "coin_rock_base"
+        }
+      ]
+    },
+    {
+      "name": "Idle 2",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 9,
+          "sprite": "coin_rock_02_0000"
+        }
+      ]
+    },
+    {
+      "name": "Gleam 2",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 9,
+          "sprite": "coin_rock_02_0000"
+        },
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 8,
+          "sprite": "coin_rock_02_0001"
+        },
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 12,
+          "sprite": "coin_rock_02_0002"
+        },
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 14,
+          "sprite": "coin_rock_02_0003"
+        },
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 10,
+          "sprite": "coin_rock_02_0004"
+        },
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 13,
+          "sprite": "coin_rock_02_0005"
+        },
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 7,
+          "sprite": "coin_rock_02_0006"
+        },
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 9,
+          "sprite": "coin_rock_02_0000"
+        }
+      ]
+    },
+    {
+      "name": "Broken 2",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Coin Rocks",
+          "sprite_id": 11,
+          "sprite": "coin_rock_base_02"
+        }
+      ]
+    }
+  ]
+}

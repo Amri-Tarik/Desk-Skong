@@ -33,11 +33,13 @@ pub(crate) fn perchable(terrain: &Terrain, l: &Ledge, x: f32, legs: f32) -> bool
 }
 
 /// Seats near `near`, closest first: benches and perch points (one per ledge).
-pub(crate) fn seats(terrain: &Terrain, knight: &Character, near: Vec2, benches: &[Vec2], max_dist: f32) -> Vec<Vec2> {
+/// `settled`: ledges that have been on screen long enough to sit on (see
+/// [`crate::lasting::SETTLED_SECS`]); benches are always fine.
+pub(crate) fn seats(terrain: &Terrain, knight: &Character, near: Vec2, benches: &[Vec2], max_dist: f32, settled: &dyn Fn(&crate::terrain::Ledge) -> bool) -> Vec<Vec2> {
     let legs = knight.params.px(LEG_LENGTH_UNITS);
     let mut out: Vec<Vec2> = benches.to_vec();
     for l in &terrain.ledges {
-        if l.x1 - l.x0 < 2.0 * EDGE_MARGIN + 8.0 {
+        if l.x1 - l.x0 < 2.0 * EDGE_MARGIN + 8.0 || !settled(l) {
             continue;
         }
         let x = x_on(l, near.x);
@@ -164,7 +166,7 @@ mod tests {
     fn perches_are_window_tops_not_the_floor() {
         let t = terrain();
         let k = Character::new(CharacterParams::hollow_knight(64.0), Abilities::default(), Vec2::new(1000.0, 1040.0));
-        let s = seats(&t, &k, Vec2::new(1000.0, 1040.0), &[], 2000.0);
+        let s = seats(&t, &k, Vec2::new(1000.0, 1040.0), &[], 2000.0, &|_| true);
         assert!(!s.is_empty());
         assert!(s.iter().all(|p| p.y == 400.0), "{s:?}");
     }

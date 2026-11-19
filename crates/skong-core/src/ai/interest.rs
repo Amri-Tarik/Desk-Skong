@@ -126,6 +126,10 @@ pub struct InterestMap {
     blocked: BTreeMap<PoiKey, f32>,
     /// Things found in windows (see [`super::places`]).
     pub(crate) places: PlaceMemory,
+    /// How long each window ledge has been on screen (seats must have settled).
+    pub(crate) ages: crate::lasting::LedgeAges,
+    /// Brain clock and terrain generation of the last age update (`None`: never).
+    pub(crate) ages_seen: Option<(f32, u64)>,
 }
 
 impl InterestMap {

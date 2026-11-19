@@ -1,4 +1,4 @@
-//! Things found in windows, on screen: the persistent [`World`] (`%APPDATA%\Desk-Skong\
+//! Thing found in windows, on screen: the persistent [`World`] (`%APPDATA%\Desk-Skong\
 //! world.json`), one small sprite window per find, reveal fades, deposit hits, how long
 //! each surface has lasted ([`LedgeAges`]), collisions with other props through the shared
 //! [`Occupancy`], and what the brain needs to know ([`Discoveries::places`]).
@@ -40,6 +40,50 @@ const DEPOSIT_W: f32 = 124.0;
 /// Where the knight stands to mine a deposit (from its center).
 const DEPOSIT_STAND: f32 = 82.0;
 
+/// Seconds between a deposit's gleams (the game's own shimmer), varied per rock.
+const GLEAM_EVERY: f32 = 6.0;
+const GLEAM_FPS: f32 = 12.0;
+
+/// One shape of the game's Geo Rock ("Coin Rocks": `Idle n` / `Gleam n`), at the current
+/// scale. Frames carry their anchors so the gleam lines up with the idle pose.
+struct RockArt {
+    idle: (Image, [f32; 2]),
+    gleam: Vec<(Image, [f32; 2])>,
+}
+
+/// Rasterize both Geo Rock shapes from the exported "Coin Rocks" library.
+fn rock_art(data: &Path, vanilla: &Path, px_per_unit: f32) -> anyhow::Result<Vec<RockArt>> {
+    use skong_core::anim::ClipLibrary;
+    use skong_core::assets::{Skin, SpriteBank};
+    let skin = Skin { name: "Vanilla".into(), dir: vanilla.to_path_buf() };
+    let mut bank = SpriteBank::load_metadata(data)?;
+    let lib = ClipLibrary::load(&data.join("animations/Coin_Rocks.json"), &bank)?;
+    bank.rasterize_skin(&skin, None, &lib.sprite_keys(), px_per_unit)?;
+    let frames = |name: &str| -> Vec<(Image, [f32; 2])> {
+        lib.id(name)
+            .map(|id| lib.get(id).frames.iter().filter_map(|f| f.sprite.and_then(|k| bank.frame(k))).map(|f| (f.image.clone(), f.anchor)).collect())
+            .unwrap_or_default()
+    };
+    let rocks: Vec<RockArt> = (1..=2)
+        .filter_map(|n| {
+            let idle = frames(&format!("Idle {n}")).into_iter().next()?;
+            Some(RockArt { idle, gleam: frames(&format!("Gleam {n}")) })
+        })
+        .collect();
+    anyhow::ensure!(!rocks.is_empty(), "no Geo Rock clips");
+    Ok(rocks)
+}
+
+/// Which rock shape a find uses, and the frame to show at `clock` (`None` = idle).
+fn rock_frame(id: FindId, rocks: &[RockArt], clock: f32) -> (usize, Option<usize>) {
+    let variant = (id % rocks.len().max(1) as u64) as usize;
+    let Some(rock) = rocks.get(variant) else { return (0, None) };
+    let period = GLEAM_EVERY + (id % 5) as f32 * 0.7;
+    let t = (clock + (id % 97) as f32 * 0.37) % period;
+    let f = (t * GLEAM_FPS) as usize;
+    (variant, (f < rock.gleam.len()).then_some(f))
+}
+
 #[derive(Deserialize)]
 #[serde(default)]
 struct ArtNames {
@@ -69,6 +113,8 @@ struct Prop {
     shake: f32,
     drawn_at: f32,
     dirty: bool,
+    /// Deposit frame last drawn (rock shape, gleam frame).
+    frame: (usize, Option<usize>),
 }
 
 pub struct Discoveries {
@@ -76,8 +122,13 @@ pub struct Discoveries {
     rules: Rules,
     path: Option<PathBuf>,
     deposit_src: Option<Image>,
-    /// The deposit at the current scale.
+    /// The deposit at the current scale (footprint; the drawn art when no Geo Rock).
     deposit: Image,
+    /// The game's Geo Rock at the current scale (empty: fall back to `deposit`).
+    rocks: Vec<RockArt>,
+    /// Exported metadata (`data/hk`) and the vanilla skin, to re-rasterize on rescale.
+    data_dir: PathBuf,
+    vanilla_dir: Option<PathBuf>,
     scale: f32,
     props: Vec<Prop>,
     shown: Vec<Shown>,
@@ -130,7 +181,7 @@ fn footprint(scale: f32, benches: &Benches, deposit: &Image, kind: FindKind) -> 
 }
 
 impl Discoveries {
-    pub fn load(props_json: &Path, vanilla: Option<&Path>, scale: f32) -> Discoveries {
+    pub fn load(data: &Path, props_json: &Path, vanilla: Option<&Path>, scale: f32) -> Discoveries {
         let names = read_json::<PropsFile>(props_json).map(|p| p.discoveries).unwrap_or_default();
         let deposit_src = vanilla.and_then(|v| load_sprite(&v.join("props"), &names.deposit_rock));
         let path = world_path();
@@ -149,6 +200,9 @@ impl Discoveries {
             path,
             deposit_src,
             deposit: Image::default(),
+            rocks: Vec::new(),
+            data_dir: data.to_path_buf(),
+            vanilla_dir: vanilla.map(Path::to_path_buf),
             scale: 0.0,
             props: Vec::new(),
             shown: Vec::new(),
@@ -169,6 +223,16 @@ impl Discoveries {
         let w = ((DEPOSIT_W * scale).round() as u32).max(1);
         let h = self.deposit_src.as_ref().map_or(((50.0 * scale).round() as u32).max(1), |r| ((r.height as f32 * w as f32 / r.width as f32).round() as u32).max(1));
         self.deposit = deposit_art(self.deposit_src.as_ref(), w, h, scale);
+        self.rocks = match &self.vanilla_dir {
+            Some(v) => rock_art(&self.data_dir, v, 64.0 * scale).unwrap_or_else(|e| {
+                log::warn!("geo rock art: {e:#}; drawing a plain deposit");
+                Vec::new()
+            }),
+            None => Vec::new(),
+        };
+        if let Some(r) = self.rocks.first() {
+            self.deposit = r.idle.0.clone();
+        }
         for p in &mut self.props {
             p.dirty = true;
         }
@@ -197,6 +261,9 @@ impl Discoveries {
         self.knight_on = on;
 
         let mut raw = self.world.shown(desk, terrain, now_unix(), &self.rules, &fp);
+        // Really on its ledge this tick (the grace copies below must not count as seen, or
+        // the grace never ends: broken rocks stayed, finds floated where a ledge had been).
+        let seen_now: Vec<FindId> = raw.iter().map(|s| s.id).collect();
         // Content ledges flicker (re-detection): a find keeps its last spot a moment while
         // its window is open.
         for p in &self.props {
@@ -205,7 +272,6 @@ impl Discoveries {
             }
         }
         raw.retain(|s| !self.game_monitors.iter().any(|m| m.contains(s.pos.x as i32, s.pos.y as i32 - 1)));
-        let resolved: Vec<FindId> = raw.iter().map(|s| s.id).collect();
         let shown = discovery::settle(raw, occ, &fp);
 
         self.props.retain(|p| {
@@ -217,7 +283,7 @@ impl Discoveries {
         });
         let mut created = false;
         for s in &shown {
-            let fresh_seen = resolved.contains(&s.id);
+            let fresh_seen = seen_now.contains(&s.id);
             match self.props.iter_mut().find(|p| p.shown.id == s.id) {
                 Some(p) => {
                     if p.shown.pos != s.pos {
@@ -237,7 +303,7 @@ impl Discoveries {
                     if revealed.is_some() {
                         fx.spawn(REVEAL_FX, s.pos, knight.pos.x < s.pos.x);
                     }
-                    self.props.push(Prop { shown: *s, win, revealed, shake: 0.0, seen_at: clock, drawn_at: f32::NEG_INFINITY, dirty: true });
+                    self.props.push(Prop { shown: *s, win, revealed, shake: 0.0, seen_at: clock, drawn_at: f32::NEG_INFINITY, dirty: true, frame: (0, None) });
                     created = true;
                 }
             }
@@ -248,8 +314,12 @@ impl Discoveries {
         for p in &mut self.props {
             p.shake = (p.shake - dt).max(0.0);
             let revealing = p.revealed.is_some_and(|t| clock - t <= REVEAL_SECS + 0.1);
+            // Geo rocks gleam now and then: redraw when the frame changes.
+            if p.shown.kind == FindKind::Deposit && !self.rocks.is_empty() && rock_frame(p.shown.id, &self.rocks, clock) != p.frame {
+                p.dirty = true;
+            }
             if p.dirty || ((revealing || p.shake > 0.0) && clock - p.drawn_at >= 1.0 / 30.0) {
-                if let Err(e) = draw(p, &self.deposit, benches, scale, clock) {
+                if let Err(e) = draw(p, &self.deposit, &self.rocks, benches, scale, clock) {
                     log::warn!("discovery prop: {e:#}");
                 }
                 p.drawn_at = clock;
@@ -270,6 +340,18 @@ impl Discoveries {
     }
 
     /// Prop windows (call before raising the knight).
+    /// Has the ledge at this footing (same owner and height, overlapping) been on screen
+    /// long enough to stand a visitor on ([`skong_core::lasting::SETTLED_SECS`])? Floors
+    /// (no owner) always have.
+    pub fn settled(&self, terrain: &Terrain, owner: Option<WindowId>, y: f32, x0: f32, x1: f32) -> bool {
+        owner.is_none()
+            || terrain
+                .ledges
+                .iter()
+                .filter(|l| l.owner == owner && (l.y - y).abs() <= 1.0 && l.x0 < x1 && x0 < l.x1)
+                .any(|l| self.ages.settled(terrain, l, self.clock))
+    }
+
     pub fn raise_all(&self) {
         for p in &self.props {
             p.win.raise();
@@ -391,7 +473,7 @@ impl Discoveries {
 
 // --- drawing ------------------------------------------------------------------------
 
-fn draw(p: &mut Prop, deposit: &Image, benches: &Benches, s: f32, clock: f32) -> anyhow::Result<()> {
+fn draw(p: &mut Prop, deposit: &Image, rocks: &[RockArt], benches: &Benches, s: f32, clock: f32) -> anyhow::Result<()> {
     let alpha = p.revealed.map_or(1.0, |t| ((clock - t) / REVEAL_SECS).clamp(0.0, 1.0));
     let pos = p.shown.pos;
     match p.shown.kind {
@@ -399,6 +481,20 @@ fn draw(p: &mut Prop, deposit: &Image, benches: &Benches, s: f32, clock: f32) ->
             let Some(img) = benches.art(style) else { return Ok(()) };
             let img = faded(img, alpha);
             p.win.present(&img, (pos.x - img.width as f32 * 0.5).round() as i32, (pos.y - img.height as f32).round() as i32)
+        }
+        FindKind::Deposit if !rocks.is_empty() => {
+            // The game's Geo Rock; every frame placed by its anchor relative to the idle
+            // pose, whose bottom center sits (sunk a little) on the ledge.
+            let (variant, gleam) = rock_frame(p.shown.id, rocks, clock);
+            p.frame = (variant, gleam);
+            let rock = &rocks[variant];
+            let (idle, idle_anchor) = (&rock.idle.0, rock.idle.1);
+            let (img, anchor) = gleam.and_then(|i| rock.gleam.get(i)).map_or((idle, idle_anchor), |(i, a)| (i, *a));
+            let dx = if p.shake > 0.0 { (p.shake * 90.0).sin() * 3.0 * s } else { 0.0 };
+            let ax = pos.x - idle.width as f32 * 0.5 + idle_anchor[0] + dx;
+            let ay = pos.y + 2.0 * s - idle.height as f32 + idle_anchor[1];
+            let img = faded(img, alpha);
+            p.win.present(&img, (ax - anchor[0]).round() as i32, (ay - anchor[1]).round() as i32)
         }
         FindKind::Deposit => {
             let img = faded(deposit, alpha);

@@ -33,6 +33,8 @@ impl Pet {
         let Some(v) = self.visitors.as_mut() else { return };
         let busy = self.grab.held_pos().is_some()
             || matches!(self.brain.behaviour(), BehaviourKind::Nap | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Flee);
+        let (discoveries, terrain) = (&self.discoveries, &self.terrain);
+        let settled = |f: &skong_core::portal::Footing| discoveries.settled(terrain, f.owner, f.y, f.x0, f.x1);
         let world = World {
             terrain: &self.terrain,
             desk: self.watcher.snapshot(),
@@ -47,6 +49,7 @@ impl Pet {
             game_monitors: &self.games.game_monitors,
             occupancy: &self.occupancy,
             since_fight: self.brain.since_fight(),
+            settled: &settled,
         };
         f(v, &world, &mut self.fx);
     }

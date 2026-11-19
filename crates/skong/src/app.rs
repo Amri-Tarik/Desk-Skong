@@ -250,7 +250,7 @@ pub fn run(args: &Args) -> Result<()> {
     let tray = Tray::new("Desk-Skong", &tray_icon(&data, &look))?;
     let benches = Benches::load(&args.data.join("../props.json"), data.vanilla().map(|s| s.dir.as_path()), settings.scale)?;
     let emotes = Emotes::new(&args.data, data.vanilla(), 64.0 * settings.scale, args.capturable)?;
-    let discoveries = Discoveries::load(&args.data.join("../props.json"), data.vanilla().map(|s| s.dir.as_path()), settings.scale);
+    let discoveries = Discoveries::load(&args.data, &args.data.join("../props.json"), data.vanilla().map(|s| s.dir.as_path()), settings.scale);
 
     let mut brain = Brain::new(BrainConfig::default(), ActCatalog::from_library(&data.acts), seed());
     brain.set_bother_level(settings.bother);
