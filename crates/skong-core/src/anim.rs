@@ -19,6 +19,9 @@ use crate::assets::{AnimLibraryJson, EventJson, SpriteBank, SpriteKey, read_json
 #[derive(Deserialize)]
 struct ExtraFile {
     clips: Vec<ExtraClip>,
+    /// Clip -> sprite -> seat-line correction in px at 64 px/unit (+ = down).
+    #[serde(default)]
+    frame_offsets: HashMap<String, HashMap<String, f32>>,
 }
 
 #[derive(Deserialize)]
@@ -71,6 +74,9 @@ pub struct ClipFrame {
     /// `None` when the frame's collection wasn't exported.
     pub sprite: Option<SpriteKey>,
     pub event: Option<EventJson>,
+    /// Vertical correction in game units (y down) applied while the knight is seated, so
+    /// every seated pose meets the seat at the same line (see `frame_offsets`).
+    pub dy: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -112,6 +118,7 @@ impl ClipLibrary {
                 .map(|f| ClipFrame {
                     sprite: bank.collection_index(&f.collection).map(|collection| SpriteKey { collection, sprite: f.sprite_id }),
                     event: f.event,
+                    dy: 0.0,
                 })
                 .collect();
             let id = ClipId(lib.clips.len() as u16);
@@ -145,11 +152,26 @@ impl ClipLibrary {
                 .iter()
                 .map(|s| {
                     let key = bank.sprite_key(&c.collection, s).with_context(|| format!("clip '{}': no sprite '{s}' in {}", c.name, c.collection))?;
-                    Ok(ClipFrame { sprite: Some(key), event: None })
+                    Ok(ClipFrame { sprite: Some(key), event: None, dy: 0.0 })
                 })
                 .collect::<Result<Vec<_>>>()?;
             self.by_name.insert(c.name.clone(), ClipId(self.clips.len() as u16));
             self.clips.push(Clip { name: c.name, fps: c.fps.max(0.001), loop_start: c.loop_start as usize, wrap: WrapMode::parse(&c.wrap_mode), frames });
+        }
+        for (clip, sprites) in raw.frame_offsets {
+            let id = self.id(&clip).with_context(|| format!("frame_offsets: no clip '{clip}'"))?;
+            for (sprite, px) in &sprites {
+                let mut hit = false;
+                for f in &mut self.clips[id.0 as usize].frames {
+                    if f.sprite.and_then(|k| bank.sprite_name(k)) == Some(sprite.as_str()) {
+                        f.dy = px / 64.0;
+                        hit = true;
+                    }
+                }
+                if !hit {
+                    bail!("frame_offsets: clip '{clip}' has no frame '{sprite}'");
+                }
+            }
         }
         Ok(())
     }
@@ -244,6 +266,11 @@ impl Animator {
         lib.get(self.clip).frames.get(self.frame).and_then(|f| f.sprite)
     }
 
+    /// Seat-line correction of the current frame (game units, y down; see [`ClipFrame::dy`]).
+    pub fn seat_dy(&self, lib: &ClipLibrary) -> f32 {
+        lib.get(self.clip).frames.get(self.frame).map_or(0.0, |f| f.dy)
+    }
+
     /// Advance by `dt` seconds, pushing events. Returns true if the displayed frame changed.
     pub fn update(&mut self, lib: &ClipLibrary, dt: f32, events: &mut Vec<AnimEvent>) -> bool {
         let c = lib.get(self.clip);
@@ -314,6 +341,7 @@ mod tests {
             .map(|i| ClipFrame {
                 sprite: Some(SpriteKey { collection: 0, sprite: i as u32 }),
                 event: (i == 2).then(EventJson::default),
+                dy: 0.0,
             })
             .collect();
         let mut l = ClipLibrary::default();

@@ -523,7 +523,7 @@ impl Pet {
     /// seat line on the seat; otherwise feet on the ground).
     fn knight_origin(&self) -> Vec2 {
         let y = match self.seat_y.filter(|_| self.act.is_some()) {
-            Some(seat) => seat - SEAT_BELOW_ORIGIN * self.ch.params.px_per_unit,
+            Some(seat) => seat - (SEAT_BELOW_ORIGIN - self.anim.seat_dy(&self.data.lib)) * self.ch.params.px_per_unit,
             None => self.ch.pos.y - self.look.feet_offset,
         };
         Vec2::new(self.ch.pos.x, y)

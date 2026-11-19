@@ -4,13 +4,13 @@
     "seated": {
       "base": "Sit Idle",
       "states": [
-        { "name": "idle", "weight": 4.0, "steps": [ { "clip": "Sit Idle", "hold": [1.5, 4.0] } ] },
-        { "name": "glance", "weight": 2.0, "curious": 1.0, "steps": [ { "clip": "Sit Glance" } ] },
-        { "name": "look_down", "weight": 1.0, "tired": 0.5, "steps": [ { "clip": "Sit Look Down" } ] },
-        { "name": "lean", "weight": 1.5, "tired": 0.3, "steps": [ { "clip": "Sit Lean" }, { "clip": "Sit Lean Idle", "hold": [3.0, 8.0] }, { "clip": "Sit Lean End" } ] },
-        { "name": "map", "weight": 1.0, "curious": 2.0, "tired": -0.7, "steps": [ { "clip": "Sit Map Open" }, { "clip": "Map Update", "repeat": [1, 2] }, { "clip": "Sit Map Close" } ] },
-        { "name": "nod", "weight": 0.3, "tired": 4.0, "steps": [ { "clip": "Sit Nod" } ] },
-        { "name": "doze", "weight": 0.08, "tired": 8.0, "curious": -0.5, "steps": [ { "clip": "Sit Fall Asleep" }, { "clip": "Sitting Asleep Breathe", "hold": [6.0, 18.0], "until": "woken" }, { "clip": "Wake To Sit", "interruptible": false } ] }
+        { "name": "idle", "weight": 5.0, "pace": true, "steps": [ { "clip": "Sit Breathe", "hold": [10.0, 18.0] } ] },
+        { "name": "glance", "weight": 0.8, "curious": 1.0, "lively": 4.0, "steps": [ { "clip": "Sit Glance" } ] },
+        { "name": "look_down", "weight": 0.5, "tired": 0.5, "lively": 2.0, "steps": [ { "clip": "Sit Look Down" } ] },
+        { "name": "lean", "weight": 1.5, "tired": 0.3, "lively": -0.5, "min": [3.0, 4.0], "body": 1, "exit": 2, "steps": [ { "clip": "Sit Lean" }, { "clip": "Sit Lean Idle", "hold": [4.0, 10.0] }, { "clip": "Sit Lean End" } ] },
+        { "name": "map", "weight": 1.0, "curious": 2.0, "tired": -0.7, "min": [4.5, 6.0], "body": 1, "exit": 2, "steps": [ { "clip": "Sit Map Open" }, { "clip": "Map Update" }, { "clip": "Sit Map Close" } ] },
+        { "name": "nod", "weight": 0.2, "tired": 4.0, "lively": -0.8, "steps": [ { "clip": "Sit Nod" } ] },
+        { "name": "doze", "weight": 0.08, "tired": 8.0, "curious": -0.5, "lively": -0.9, "min": [5.0, 6.0], "body": 1, "exit": 2, "steps": [ { "clip": "Sit Fall Asleep" }, { "clip": "Sitting Asleep Breathe", "hold": [8.0, 20.0], "until": "woken" }, { "clip": "Wake To Sit", "interruptible": false } ] }
       ]
     }
   },
