@@ -708,8 +708,8 @@ fn huge_fall_knocks_the_knight_out() {
 }
 
 #[test]
-fn fullscreen_app_sends_knight_into_hiding() {
-    let mut sim = calm(BrainConfig::default());
+fn fullscreen_app_sends_knight_into_hiding_when_configured() {
+    let mut sim = calm(BrainConfig { hide_for_fullscreen: true, ..Default::default() });
     sim.knight.pos.x = 1500.0;
     sim.run(1.0);
     let mut w = window(20, RectI::new(0, 0, 1920, 1080), "game.exe");
@@ -721,6 +721,19 @@ fn fullscreen_app_sends_knight_into_hiding() {
     assert_eq!(sim.nav.gos.last().map(|g| g.0), Some(NavGoal::Point(Vec2::new(1890.0, FLOOR))));
     sim.close(20);
     assert!(sim.run_while(1.0, |s| s.brain.behaviour() == BehaviourKind::Hide));
+}
+
+#[test]
+fn fullscreen_app_is_ignored_by_default() {
+    // Games are handled by the app (the knight leaves their monitor); other fullscreen
+    // apps are fine to play around.
+    let mut sim = calm(BrainConfig::default());
+    sim.run(1.0);
+    let mut w = window(20, RectI::new(0, 0, 1920, 1080), "chrome.exe");
+    w.fullscreen = true;
+    w.foreground = true;
+    sim.open(w);
+    assert!(!sim.run_until(2.0, BehaviourKind::Hide), "non-game fullscreen apps must not send him into hiding");
 }
 
 #[test]

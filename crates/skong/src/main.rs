@@ -11,6 +11,7 @@ mod benches;
 mod bubble;
 mod npcs;
 mod fx;
+mod gameguard;
 mod grab;
 mod browser;
 mod keyboard;

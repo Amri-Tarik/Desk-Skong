@@ -101,6 +101,14 @@ impl Benches {
         }
     }
 
+    /// Show only benches that are not on one of `hidden` monitors (games).
+    pub fn hide_on(&self, hidden: &[skong_core::geom::RectI]) {
+        for (b, w) in &self.placed {
+            let covered = hidden.iter().any(|r| r.contains(b.pos.x as i32, b.pos.y as i32 - 1));
+            w.set_visible(!covered);
+        }
+    }
+
     pub fn raise_all(&self) {
         for (_, w) in &self.placed {
             w.raise();
