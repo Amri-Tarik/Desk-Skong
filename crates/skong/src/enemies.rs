@@ -52,6 +52,8 @@ pub struct Enemies {
     pending_in: f32,
     /// One asked for (the bored knight, the menu).
     invited: bool,
+    /// The invitation came from the user (tray / panel): ignore presence and sleep.
+    forced: bool,
     hidden: bool,
 }
 
@@ -81,6 +83,7 @@ impl Enemies {
             pending: 0,
             pending_in: 0.0,
             invited: false,
+            forced: false,
             hidden: false,
         };
         e.rescale(vanilla, scale)?;
@@ -114,6 +117,13 @@ impl Enemies {
     /// Let one wander in as soon as there is a good spot (the bored knight, the menu).
     pub fn invite(&mut self) {
         self.invited = true;
+    }
+
+    /// Send one now (the tray / panel): it comes even while the user is away or the knight
+    /// sleeps (it will wake him); only a fullscreen app or a visitor holds it back.
+    pub fn send(&mut self) {
+        self.invited = true;
+        self.forced = true;
     }
 
     /// For the brain.
@@ -186,9 +196,11 @@ impl Enemies {
         };
         let due = self.sched.tick(dt, &VisitConditions { visitor_present: visitor_present || alive >= max || self.pending > 0, ..base }, &mut self.rng);
         let free = self.sched.blocked(&base).is_none();
-        if w.graph.is_some() && self.invited && free {
+        let forced_ok = self.forced && !w.fullscreen && !visitor_present;
+        if w.graph.is_some() && self.invited && (free || forced_ok) {
             // Invited (the bored knight, the menu): one more, even with a full house.
             self.invited = false;
+            self.forced = false;
             if alive <= max {
                 self.spawn(w);
             }

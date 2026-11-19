@@ -81,6 +81,7 @@ const ID_VISION: u32 = 7;
 const ID_OVERLAY: u32 = 8;
 const ID_PANEL: u32 = 10;
 const ID_INVITE: u32 = 11;
+const ID_ENEMY: u32 = 21;
 const ID_DREAM: u32 = 12;
 const ID_SHARE: u32 = 14;
 const ID_FIGHT: u32 = 15;
@@ -1169,6 +1170,13 @@ impl Pet {
             }
             Command::ClearBenches => self.benches.clear(),
             Command::InviteVisitor | Command::DreamNail => return self.apply_visit(c),
+            Command::SendEnemy => match self.enemies.as_mut() {
+                Some(e) => {
+                    e.send();
+                    log::info!("enemies: one invited (arrives at the next good spot)");
+                }
+                None => log::warn!("enemies: not loaded"),
+            },
             Command::Discover(_) | Command::ForgetDiscoveries => return self.apply_discovery(c),
             Command::Quit => return Ok(Flow::Quit),
             Command::Stakes(c) => self.apply_stakes(c),
@@ -1231,6 +1239,7 @@ impl Pet {
             MenuItem::action(ID_ACT, "Do something!"),
             MenuItem::check(ID_FIGHT, "Fight the cursor", self.brain.fight_mode()),
             MenuItem::action(ID_INVITE, "Invite a visitor"),
+            MenuItem::action(ID_ENEMY, "Send an enemy"),
             MenuItem::action(ID_SHOWER, "Geo shower"),
             MenuItem::action(ID_DREAM, "Dream-nail a window"),
             MenuItem::action(ID_RESPAWN, "Come here (respawn at cursor)"),
@@ -1264,6 +1273,7 @@ impl Pet {
             ID_OVERLAY => Command::ToggleDebugOverlay,
             ID_PANEL => Command::OpenPanel,
             ID_INVITE => Command::InviteVisitor,
+            ID_ENEMY => Command::SendEnemy,
             ID_SHOWER => Command::Stakes(skong_ipc::StakesCommand::SpillGeo),
             ID_DREAM => Command::DreamNail,
             i if (ID_BENCH0..ID_BENCH0 + self.benches.styles.len() as u32).contains(&i) => Command::PlaceBenchNearKnight((i - ID_BENCH0) as usize),

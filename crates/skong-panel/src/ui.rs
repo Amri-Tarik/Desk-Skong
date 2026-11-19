@@ -194,6 +194,9 @@ impl Panel {
                 if ui.button("Invite a visitor").on_hover_text("an NPC drops by; the knight runs over to talk").clicked() {
                     self.cmd(Command::InviteVisitor);
                 }
+                if ui.button("Send an enemy").on_hover_text("a crawlid, vengefly or husk wanders in; the knight fights it").clicked() {
+                    self.cmd(Command::SendEnemy);
+                }
                 if ui.button("Dream nail").on_hover_text("dream-nail the window he stands on").clicked() {
                     self.cmd(Command::DreamNail);
                 }
