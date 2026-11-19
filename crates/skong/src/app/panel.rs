@@ -67,6 +67,7 @@ impl Pet {
             click_through: self.settings.click_through,
             fight_mode: self.brain.fight_mode(),
             share_visible: self.settings.share_visible,
+            text_curiosity: self.settings.text_curiosity,
             vision: self.content.is_enabled(),
             overlay: self.overlay.is_on(),
             overlay_layers: self.overlay.layers,

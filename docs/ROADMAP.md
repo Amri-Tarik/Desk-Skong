@@ -36,6 +36,9 @@ _Working list, last updated 2026-11-19. Reorder freely and add notes under any i
       "selection changed" event gives the highlighted text and where it is (Word, Notepad,
       Edge/Chrome; Electron apps may need accessibility switched on). Start with "curious
       about highlighted text", keyword reactions later.
+      _(Step 1 done: tray/panel toggle "Curious about highlighted text", off by default. He
+      walks to a spot near a fresh selection and looks at it, once; rectangles only, the
+      text is never read. Not yet seen live.)_
 - [ ] **Unn slug form** for very calm moods (28 unused `Slug *` clips).
 - [ ] **Ability progression**: earn dash, wings, claw and crystal heart through the
       game's "collect" cutscenes. *Undecided.*

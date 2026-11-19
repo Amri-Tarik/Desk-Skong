@@ -14,6 +14,7 @@ use crate::geom::RectI;
 use crate::terrain::{LedgeKind, Terrain, TerrainOptions};
 
 mod greet;
+mod highlight;
 mod shiny;
 mod train;
 mod slug;
@@ -124,6 +125,8 @@ struct Sim {
     /// Hold the superdash button (charging a crystal dash) in the applied input.
     charging: bool,
     dark: bool,
+    /// Highlighted text on screen (the app's `None` when the feature is off).
+    selection: Option<RectI>,
     last_input: MoveInput,
     last_motion: Motion,
     started: Vec<String>,
@@ -190,6 +193,7 @@ impl Sim {
             vel_override: None,
             charging: false,
             dark: false,
+            selection: None,
             last_input: MoveInput::default(),
             last_motion: Motion::Hold,
             started: vec![],
@@ -277,6 +281,7 @@ impl Sim {
             last_input: self.last_input,
             local_hour: None,
             dark: self.dark,
+            selection: self.selection,
         };
         self.brain.set_shinies(&self.shinies);
         let intent = self.brain.tick(&p, &mut self.nav);

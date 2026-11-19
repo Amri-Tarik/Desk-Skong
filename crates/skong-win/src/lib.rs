@@ -8,6 +8,7 @@ pub mod input;
 pub mod monitor;
 pub mod process;
 pub mod runloop;
+pub mod selection;
 pub mod sprite_window;
 pub mod text;
 pub mod tray;

@@ -35,6 +35,7 @@ mod companion;
 mod config;
 mod greet;
 mod death;
+mod highlight;
 mod interest;
 mod navigator;
 mod needs;
@@ -436,6 +437,7 @@ impl Brain {
         self.think_in -= dt;
         self.senses.update(p, self.now, &self.cfg);
         self.spots.update(p.activity, dt);
+        self.interest.highlight.observe(p.selection, dt);
 
         let mut out = Intent::default();
         self.reflexes(p, &mut out);
@@ -540,6 +542,7 @@ impl Brain {
             || self.visit_utility() > 0.2
             || !self.stakes.sense.coins.is_empty()
             || self.interest.shinies.best.is_some()
+            || self.interest.highlight.best.is_some()
             || matches!(self.active.kind().tier(), Tier::Engagement | Tier::Urgent);
         if interesting || self.bored_for < b.event_after || self.now < self.next_event_at || s.user_busy || s.user_away || s.fullscreen {
             return;
@@ -779,6 +782,7 @@ impl Brain {
         self.best_spot = self.score_spots(p, nav, finished);
         self.score_places(p, nav);
         self.score_shinies(p, nav);
+        self.score_highlight(p, nav);
         self.utilities = self.score_behaviours(p);
         let eligible = self.cfg.tiers.eligible;
         let tiered: Vec<(BehaviourKind, f32, Tier)> = self.utilities.iter().map(|&(k, u)| (k, u, self.tier_at(k, u, p))).collect();
@@ -922,6 +926,7 @@ impl Brain {
         let spot = self.best_spot;
         let place = self.interest.places.best;
         let shiny = self.interest.shinies.best;
+        let highlight = self.interest.highlight.best;
         let flee_from = if kind == BehaviourKind::Flee { self.flee_from.take().unwrap_or(p.knight.pos) } else { p.knight.pos };
         let death = if kind == BehaviourKind::Dead { self.stakes.pending_death.take() } else { None };
         let mut ctx = self.ctx(p, nav, out);
@@ -965,6 +970,10 @@ impl Brain {
             },
             BehaviourKind::Shiny => match shiny {
                 Some(c) => Active::Shiny(shiny::PickShiny::start(&mut ctx, c)),
+                None => Active::Idle(Idle::start(&mut ctx)),
+            },
+            BehaviourKind::Highlight => match highlight {
+                Some(c) => Active::Highlight(highlight::LookAtHighlight::start(&mut ctx, c)),
                 None => Active::Idle(Idle::start(&mut ctx)),
             },
         };
@@ -1217,6 +1226,7 @@ impl Brain {
             (BehaviourKind::Train, train),
             (BehaviourKind::Visit, visit),
             (BehaviourKind::Shiny, self.shiny_utility(p)),
+            (BehaviourKind::Highlight, self.highlight_utility(p)),
         ];
         u.extend(self.stakes_utilities(p));
         let calm = self.now < self.calm_until;

@@ -132,6 +132,8 @@ pub struct InterestMap {
     pub(crate) ages_seen: Option<(f32, u64)>,
     /// Shinies on the ground (see [`super::shiny`]).
     pub(crate) shinies: super::shiny::ShinyMemory,
+    /// Where the user's highlighted text is (see [`super::highlight`]).
+    pub(crate) highlight: super::highlight::HighlightMemory,
 }
 
 impl InterestMap {

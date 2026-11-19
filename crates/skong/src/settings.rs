@@ -15,6 +15,9 @@ pub struct Settings {
     pub click_through: bool,
     /// Visible in screen shares and screenshots (otherwise excluded from capture).
     pub share_visible: bool,
+    /// Curious about highlighted text (opt-in, off by default): UI Automation tells the pet
+    /// *where* a text selection is (a rectangle; the text itself is never read or stored).
+    pub text_curiosity: bool,
     /// Launch the control panel together with the pet.
     pub open_panel: bool,
     /// Wallet and the Shade waiting where the knight last died.
@@ -23,7 +26,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { skin: None, scale: 0.6, bother: 0.5, click_through: false, share_visible: false, open_panel: true, stakes: Default::default() }
+        Self { skin: None, scale: 0.6, bother: 0.5, click_through: false, share_visible: false, text_curiosity: false, open_panel: true, stakes: Default::default() }
     }
 }
 

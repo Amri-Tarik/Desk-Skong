@@ -167,6 +167,7 @@ impl Sim {
             last_input: MoveInput::default(),
             local_hour: None,
             dark: false,
+            selection: None,
         };
         let intent = self.brain.tick(&p, &mut self.nav);
         self.pokes.clear();
