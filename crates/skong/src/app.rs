@@ -15,7 +15,7 @@ use skong_core::effects::EffectSet;
 use crate::fx::Fx;
 use crate::gameguard::GameGuard;
 use skong_core::controller::{Abilities, Character, CharacterParams, MoveEvent, MoveInput, MoveState, Side};
-use skong_core::ai::{Navigator, NavStatus, ActCatalog, Activity, AttackDir, Brain, BrainConfig, Cursor, GraphNavigator, Motion, Percepts, Poke, RunningAct, SwitchReason, UserActivity};
+use skong_core::ai::{Navigator, NavStatus, ActCatalog, Activity, AttackDir, Brain, BrainConfig, Cursor, GraphNavigator, Intent, Motion, Percepts, Poke, RunningAct, SwitchReason, UserActivity};
 use skong_win::input::{self, UserInput};
 
 use crate::grab::Grab;
@@ -751,7 +751,9 @@ impl Pet {
         let (left, right) = input::mouse_buttons();
         let cursor = monitor::cursor_pos().map(|(x, y)| Cursor { pos: Vec2::new(x as f32, y as f32), left, right });
         let user = UserActivity { idle_secs: input::idle_secs(), keys_per_sec: self.user_input.keys_per_sec() };
-        let act = self.act.as_ref().map(|p| RunningAct { id: p.act(), interruptible: p.interruptible(&self.data.acts) });
+        // A lingering pose already counts as finished for the brain (so it chooses what comes
+        // next); its ending after a linger is not cut again.
+        let act = self.act.as_ref().filter(|p| !p.is_lingering()).map(|p| RunningAct { id: p.act(), interruptible: p.interruptible(&self.data.acts) && !p.is_released() });
         let percepts = Percepts {
             dt,
             knight: &self.ch,
@@ -773,6 +775,7 @@ impl Pet {
         let visitors = self.visitor_percepts();
         self.brain.see_visitors(visitors);
         let intent = self.brain.tick(&percepts, &mut self.nav);
+        let quiet = lingering_fits(&intent, self.ch.facing);
         if let Some(id) = intent.greet {
             self.greet_visitor(id);
         }
@@ -820,13 +823,24 @@ impl Pet {
         {
             p.signal(&d.acts, &d.lib, &mut self.anim, sig);
         }
+        // A pose held on after its act (look down, look up, gaze): the same pose chosen again
+        // carries on (no ending + start stutter); anything else lets it end first.
+        if let Some(p) = self.act.as_mut().filter(|p| p.is_lingering()) {
+            if let Some(id) = intent.act
+                && p.fuse(&d.acts, &d.lib, &mut self.anim, id)
+            {
+                log::info!("act '{}' (holding the pose)", d.acts.get(id).name);
+            } else if !quiet {
+                p.release(&d.acts, &d.lib, &mut self.anim);
+            }
+        }
         let can_start = self.act.is_none() && self.ch.is_grounded() && !self.loco.busy();
         if let Some(id) = intent.act.filter(|_| can_start) {
             let seated = d.acts.get(id).requires == Requirement::Seat;
             if !seated || seat.is_some() {
                 log::info!("act '{}'{}", d.acts.get(id).name, if seated { " (seated)" } else { "" });
                 self.seat_y = if seated { seat } else { None };
-                self.act = Some(ActPlayer::start(&d.acts, &d.lib, &mut self.anim, id, seed()));
+                self.act = Some(ActPlayer::start(&d.acts, &d.lib, &mut self.anim, id, seed()).allow_linger(LINGER_SECS));
             }
         }
         if let Some(a) = intent.attack
@@ -1074,4 +1088,45 @@ pub fn vanilla_of(skins: &[Skin]) -> Option<&Skin> {
 
 fn seed() -> u32 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(7, |d| d.subsec_nanos() ^ d.as_secs() as u32)
+}
+
+/// How long a pose act (look down, look up, gaze) may be held on after it ends, waiting for
+/// the brain to choose the same pose again (its gaps between acts are 0.3–3 s).
+const LINGER_SECS: f32 = 3.0;
+
+/// The brain only waits (no new act, no move, no attack, same facing): a lingering pose may
+/// stay up. Anything else lets it play its ending.
+fn lingering_fits(intent: &Intent, facing: Side) -> bool {
+    let still = match &intent.motion {
+        Motion::Hold => true,
+        Motion::Navigate { .. } => false,
+        Motion::Direct(i) => i.x == 0.0 && !i.jump_pressed && !i.jump_held && !i.dash_pressed && !i.superdash_held && !i.down && !i.dive_pressed,
+    };
+    still && intent.act.is_none() && intent.attack.is_none() && intent.exit_act.is_none() && !intent.cancel_act && intent.face.is_none_or(|f| f == facing)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use skong_core::acts::ActId;
+    use skong_core::ai::Attack;
+
+    #[test]
+    fn a_lingering_pose_stays_only_while_the_brain_waits() {
+        let wait = Intent::default();
+        assert!(lingering_fits(&wait, Side::Left));
+        assert!(lingering_fits(&Intent { face: Some(Side::Left), ..Intent::default() }, Side::Left));
+        assert!(lingering_fits(&Intent { motion: Motion::Direct(MoveInput::default()), ..Intent::default() }, Side::Left));
+        let walk = MoveInput { x: 1.0, ..MoveInput::default() };
+        for busy in [
+            Intent { act: Some(ActId(0)), ..Intent::default() },
+            Intent { face: Some(Side::Right), ..Intent::default() },
+            Intent { motion: Motion::Direct(walk), ..Intent::default() },
+            Intent { motion: Motion::Navigate { goal: NavGoal::Point(Vec2::ZERO), style: TravelStyle::Stroll }, ..Intent::default() },
+            Intent { attack: Some(Attack { dir: AttackDir::Forward, side: Side::Left, hit: false }), ..Intent::default() },
+            Intent { exit_act: Some(ActId(1)), ..Intent::default() },
+        ] {
+            assert!(!lingering_fits(&busy, Side::Left), "{busy:?}");
+        }
+    }
 }

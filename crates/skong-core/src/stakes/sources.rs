@@ -1,16 +1,21 @@
 //! Where Geo comes from besides won fights:
 //!
-//! * **Shattered windows** — closing a window (really closing it, not minimizing) breaks
-//!   it into Geo like a breakable wall in the game: more for bigger windows, capped, and
-//!   rate-limited so closing a whole app at once doesn't flood the desktop.
+//! * **Shattered windows** — closing or minimizing a window breaks it into Geo like a
+//!   breakable wall in the game: more for bigger windows, capped, and rate-limited so
+//!   closing a whole app (or "show desktop") at once doesn't flood the desktop. Each window
+//!   pays at most once per `repay_after` seconds, so minimizing and restoring the same
+//!   window over and over is no Geo farm.
 //! * **Geo showers** — every few minutes while the user is around (never over a
 //!   fullscreen app or while typing fast), a handful of coins rains in through the top
 //!   of the screen somewhere.
 //!
-//! Pure bookkeeping: the app reports closed windows and presence, and spawns the bursts
+//! Pure bookkeeping: the app reports closed / minimized windows and presence, and spawns the bursts
 //! this returns into its [`super::GeoField`].
 use serde::Deserialize;
 
+use std::collections::HashMap;
+
+use crate::desktop::WindowId;
 use crate::geom::{RectF, RectI, Vec2};
 
 use super::Xorshift;
@@ -20,6 +25,12 @@ use super::Xorshift;
 pub struct GeoSourceConfig {
     /// Closing windows drops Geo.
     pub shatter_windows: bool,
+    /// Minimizing windows drops Geo too (same size rules and rate limit; needs
+    /// `shatter_windows`).
+    pub shatter_minimized: bool,
+    /// A window that paid out pays nothing again for this many seconds (minimize-restore
+    /// farming).
+    pub repay_after: f32,
     /// Geo per million px² of a closed window (a 1600×900 window ≈ 1.44 M px²).
     pub geo_per_mpx: f32,
     /// Geo for a closed window: [min, max].
@@ -41,6 +52,8 @@ impl Default for GeoSourceConfig {
     fn default() -> Self {
         Self {
             shatter_windows: true,
+            shatter_minimized: true,
+            repay_after: 600.0,
             geo_per_mpx: 25.0,
             shatter_geo: [6, 45],
             min_window_side: 160,
@@ -68,13 +81,15 @@ pub struct GeoSources {
     shower_in: f32,
     /// Times (on our clock) of recent shatters.
     shatters: Vec<f32>,
+    /// When each window last paid out (on our clock).
+    paid: HashMap<WindowId, f32>,
     clock: f32,
     rng: Xorshift,
 }
 
 impl GeoSources {
     pub fn new(cfg: GeoSourceConfig, seed: u32) -> Self {
-        let mut s = Self { cfg, shower_in: 0.0, shatters: Vec::new(), clock: 0.0, rng: Xorshift::new(seed) };
+        let mut s = Self { cfg, shower_in: 0.0, shatters: Vec::new(), paid: HashMap::new(), clock: 0.0, rng: Xorshift::new(seed) };
         s.shower_in = s.next_gap();
         s
     }
@@ -120,11 +135,33 @@ impl GeoSources {
         GeoDrop { rect: RectF::new(x - w * 0.5, bounds.top - 10.0, x + w * 0.5, bounds.top), amount, shower: true }
     }
 
-    /// A window really closed (the app checked it wasn't just minimized). Returns its
-    /// burst unless it's too small, the limit is reached, or enough Geo lies around.
-    pub fn on_closed(&mut self, rect: RectI, loose: u32) -> Option<GeoDrop> {
+    /// A window really closed (not just hidden by a virtual desktop switch). Returns its
+    /// burst unless it's too small, it paid recently, the limit is reached, or enough Geo
+    /// lies around.
+    pub fn on_closed(&mut self, id: WindowId, rect: RectI, loose: u32) -> Option<GeoDrop> {
+        if !self.cfg.shatter_windows {
+            return None;
+        }
+        self.shatter(id, rect, loose)
+    }
+
+    /// A window was minimized: shatters like a closed one (same rules, shared rate limit),
+    /// but each window pays at most once per [`GeoSourceConfig::repay_after`].
+    pub fn on_minimized(&mut self, id: WindowId, rect: RectI, loose: u32) -> Option<GeoDrop> {
+        if !self.cfg.shatter_windows || !self.cfg.shatter_minimized {
+            return None;
+        }
+        self.shatter(id, rect, loose)
+    }
+
+    fn shatter(&mut self, id: WindowId, rect: RectI, loose: u32) -> Option<GeoDrop> {
         let c = self.cfg;
-        if !c.shatter_windows || rect.width() < c.min_window_side || rect.height() < c.min_window_side || loose >= c.max_loose {
+        let clock = self.clock;
+        self.paid.retain(|_, t| clock - *t < c.repay_after);
+        if self.paid.contains_key(&id) {
+            return None;
+        }
+        if rect.width() < c.min_window_side || rect.height() < c.min_window_side || loose >= c.max_loose {
             return None;
         }
         self.shatters.retain(|t| self.clock - t < c.shatter_window);
@@ -132,6 +169,7 @@ impl GeoSources {
             return None;
         }
         self.shatters.push(self.clock);
+        self.paid.insert(id, self.clock);
         let area = rect.width() as f32 * rect.height() as f32 / 1.0e6;
         let [lo, hi] = c.shatter_geo;
         let jitter = self.rng.range(0.8, 1.2);

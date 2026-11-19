@@ -83,16 +83,33 @@ pub fn enable_per_monitor_dpi() {
     let _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
 }
 
-/// A window that left the snapshot was really closed (destroyed, or hidden by its app
-/// like a close-to-tray), not minimized or cloaked (virtual desktop switch).
-pub fn window_closed(id: u64) -> bool {
+/// Why a window left the snapshot (see [`window_gone`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WindowGone {
+    /// Really closed: destroyed, or hidden by its app (close-to-tray).
+    Closed,
+    /// Minimized to the taskbar.
+    Minimized,
+    /// Cloaked (virtual desktop switch, suspended app) or still visible (it left the
+    /// snapshot for another reason, e.g. it became a tool window).
+    Other,
+}
+
+/// Classify a window that left the snapshot.
+pub fn window_gone(id: u64) -> WindowGone {
     let hwnd = HWND(id as usize as *mut core::ffi::c_void);
     // SAFETY: plain queries on a window handle that may no longer exist.
     unsafe {
         if !windows::Win32::UI::WindowsAndMessaging::IsWindow(Some(hwnd)).as_bool() {
-            return true;
+            return WindowGone::Closed;
         }
-        !IsWindowVisible(hwnd).as_bool() && !IsIconic(hwnd).as_bool() && !is_cloaked(hwnd)
+        if is_cloaked(hwnd) {
+            return WindowGone::Other;
+        }
+        if IsIconic(hwnd).as_bool() {
+            return WindowGone::Minimized;
+        }
+        if IsWindowVisible(hwnd).as_bool() { WindowGone::Other } else { WindowGone::Closed }
     }
 }
 

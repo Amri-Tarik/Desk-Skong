@@ -39,6 +39,9 @@ struct ActJson {
     weight: f32,
     #[serde(default)]
     cooldown: f32,
+    /// A held pose with an ending (see [`Act::linger`]).
+    #[serde(default)]
+    linger: bool,
     steps: Vec<StepJson>,
 }
 
@@ -146,6 +149,11 @@ pub struct Act {
     pub weight: f32,
     /// Seconds before the act may be picked again.
     pub cooldown: f32,
+    /// A held pose with an ending (look down, look up, gaze...): when the pose step ends the
+    /// player may hold it a little longer ([`ActPlayer::allow_linger`]) so that an identical
+    /// act chosen next continues the pose ([`ActPlayer::fuse`]) instead of playing the ending
+    /// and the start again.
+    pub linger: bool,
     pub steps: Vec<Step>,
 }
 
@@ -201,7 +209,7 @@ impl ActLibrary {
             if lib.by_name.insert(a.name.clone(), id).is_some() {
                 bail!("duplicate act '{}'", a.name);
             }
-            lib.acts.push(Act { name: a.name, tags: a.tags, requires: a.requires, weight: a.weight, cooldown: a.cooldown, steps });
+            lib.acts.push(Act { name: a.name, tags: a.tags, requires: a.requires, weight: a.weight, cooldown: a.cooldown, linger: a.linger, steps });
         }
         Ok(())
     }
@@ -269,17 +277,81 @@ pub struct ActPlayer {
     mood: Mood,
     /// Wrapping up: after the current life step, go straight to the act's last step.
     wrapping: bool,
+    /// How long a lingering pose may be held (0 = never linger; see [`Self::allow_linger`]).
+    linger_max: f32,
+    /// Seconds left holding the pose past its step, waiting to see whether the same pose
+    /// is chosen next.
+    lingering: Option<f32>,
+    /// Playing the ending after a linger (see [`Self::is_released`]).
+    released: bool,
 }
 
 impl ActPlayer {
     pub fn start(acts: &ActLibrary, clips: &ClipLibrary, anim: &mut Animator, act: ActId, seed: u32) -> Self {
-        let mut p = Self { act, step: 0, phase: Phase::Playing, timer: 0.0, repeats_left: 1, done: false, rng: seed | 1, turning: false, life: None, mood: Mood::default(), wrapping: false };
+        let mut p = Self { act, step: 0, phase: Phase::Playing, timer: 0.0, repeats_left: 1, done: false, rng: seed | 1, turning: false, life: None, mood: Mood::default(), wrapping: false, linger_max: 0.0, lingering: None, released: false };
         p.enter_step(acts, clips, anim);
         p
     }
 
     pub fn act(&self) -> ActId {
         self.act
+    }
+
+    /// Let an [`Act::linger`] pose be held up to `secs` past its step instead of going
+    /// straight into its ending. While lingering the act counts as finished for whoever
+    /// chose it ([`Self::is_lingering`]); [`Self::fuse`] continues the pose with the next
+    /// act, [`Self::release`] (or the time running out) plays the ending.
+    pub fn allow_linger(mut self, secs: f32) -> Self {
+        self.linger_max = secs.max(0.0);
+        self
+    }
+
+    /// Holding the pose after its step ended (see [`Self::allow_linger`]).
+    pub fn is_lingering(&self) -> bool {
+        self.lingering.is_some() && !self.done
+    }
+
+    /// Playing the ending of a pose that lingered: the act was already reported finished,
+    /// so it should not be cut again.
+    pub fn is_released(&self) -> bool {
+        self.released && !self.done
+    }
+
+    /// The act chosen next while lingering: when it holds the same pose (the same act, or
+    /// any act with a timed step on the same clip before its ending), continue the pose as
+    /// that act's step instead of playing the ending and the start again. Returns false
+    /// (and changes nothing) otherwise.
+    pub fn fuse(&mut self, acts: &ActLibrary, clips: &ClipLibrary, anim: &mut Animator, next: ActId) -> bool {
+        if !self.is_lingering() {
+            return false;
+        }
+        let pose = acts.get(self.act).steps[self.step].clip;
+        let steps = &acts.get(next).steps;
+        let body = &steps[..steps.len().saturating_sub(1)];
+        let Some(i) = body.iter().position(|s| s.clip == pose && s.hold.is_some() && s.life.is_none() && s.gait.is_none() && s.until.is_none()) else {
+            return false;
+        };
+        let hold = steps[i].hold.unwrap_or((1.0, 1.0));
+        self.act = next;
+        self.step = i;
+        self.lingering = None;
+        self.released = false;
+        self.turning = false;
+        self.repeats_left = 1;
+        // No restart: a looping pose plays on, a one-shot pose keeps its last frame.
+        anim.play(clips, pose, false);
+        self.phase = if clips.get(pose).wrap.loops() { Phase::Playing } else { Phase::Holding };
+        self.timer = self.sample(hold);
+        true
+    }
+
+    /// End a lingering pose now: play the act's ending.
+    pub fn release(&mut self, acts: &ActLibrary, clips: &ClipLibrary, anim: &mut Animator) {
+        if self.is_lingering() {
+            self.lingering = None;
+            self.released = true;
+            self.advance(acts, clips, anim);
+        }
     }
 
     pub fn step_index(&self) -> usize {
@@ -368,6 +440,13 @@ impl ActPlayer {
         if self.done {
             return ActStatus::Done;
         }
+        if let Some(left) = self.lingering.as_mut() {
+            *left -= dt;
+            if *left <= 0.0 {
+                self.release(acts, clips, anim);
+            }
+            return if self.done { ActStatus::Done } else { ActStatus::Running { gait: None } };
+        }
         let step = &acts.get(self.act).steps[self.step];
         if let (Some(run), Some(l)) = (self.life.as_mut(), step.life) {
             let mut seed = self.rng;
@@ -431,6 +510,17 @@ impl ActPlayer {
     }
 
     fn next_step(&mut self, acts: &ActLibrary, clips: &ClipLibrary, anim: &mut Animator) {
+        // A lingering pose: the timed, standing step right before the act's ending.
+        let act = acts.get(self.act);
+        let s = &act.steps[self.step];
+        if act.linger && self.linger_max > 0.0 && !self.released && self.step + 2 == act.steps.len() && s.hold.is_some() && s.life.is_none() && s.gait.is_none() && s.until.is_none() {
+            self.lingering = Some(self.linger_max);
+            return;
+        }
+        self.advance(acts, clips, anim);
+    }
+
+    fn advance(&mut self, acts: &ActLibrary, clips: &ClipLibrary, anim: &mut Animator) {
         self.step += 1;
         if self.step >= acts.get(self.act).steps.len() {
             self.done = true;
@@ -636,6 +726,71 @@ mod tests {
             let a = acts.get(acts.id(act).expect("act"));
             assert_eq!(clips.get(a.steps.last().expect("steps").clip).name, last);
         }
+    }
+
+    /// Ticks `p` until `until` holds (or `max_s` passes); returns the clips seen.
+    fn tick_until(clips: &ClipLibrary, acts: &ActLibrary, anim: &mut Animator, p: &mut ActPlayer, max_s: f32, until: impl Fn(&ActPlayer, ActStatus) -> bool) -> Vec<String> {
+        let (dt, mut ev, mut t) = (1.0 / 120.0, Vec::new(), 0.0);
+        let mut seen = vec![clips.get(anim.clip()).name.clone()];
+        while t < max_s {
+            ev.clear();
+            anim.update(clips, dt, &mut ev);
+            let status = p.update(acts, clips, anim, dt, &ev);
+            let n = &clips.get(anim.clip()).name;
+            if seen.last() != Some(n) {
+                seen.push(n.clone());
+            }
+            if until(p, status) {
+                break;
+            }
+            t += dt;
+        }
+        assert!(t < max_s, "timed out: {seen:?}");
+        seen
+    }
+
+    #[test]
+    fn repeated_pose_acts_fuse_instead_of_restarting() {
+        let (clips, acts) = libs();
+        let down = acts.id("look_down").expect("act");
+        let mut anim = Animator::new(clips.id("Idle").expect("Idle"));
+        let mut p = ActPlayer::start(&acts, &clips, &mut anim, down, 5).allow_linger(3.0);
+        // Seven looks down in a row: one start, one ending.
+        for round in 0..7 {
+            let seen = tick_until(&clips, &acts, &mut anim, &mut p, 6.0, |p, _| p.is_lingering());
+            assert_eq!(seen.last().map(String::as_str), Some("LookDown"), "round {round}: {seen:?}");
+            assert!(!seen.iter().any(|c| c == "LookDownToIdle" || (c == "Idle" && round > 0)), "round {round}: {seen:?}");
+            assert!(p.fuse(&acts, &clips, &mut anim, down), "round {round}");
+            assert!(!p.is_lingering());
+            assert_eq!(clips.get(anim.clip()).name, "LookDown");
+        }
+        tick_until(&clips, &acts, &mut anim, &mut p, 6.0, |p, _| p.is_lingering());
+        // Another pose does not fuse; the linger runs out into the ending.
+        assert!(!p.fuse(&acts, &clips, &mut anim, acts.id("look_up").expect("act")));
+        let seen = tick_until(&clips, &acts, &mut anim, &mut p, 4.0, |_, s| s == ActStatus::Done);
+        assert_eq!(seen.last().map(String::as_str), Some("LookDownToIdle"), "{seen:?}");
+    }
+
+    #[test]
+    fn released_linger_plays_the_ending_once() {
+        let (clips, acts) = libs();
+        let up = acts.id("look_up").expect("act");
+        let mut anim = Animator::new(clips.id("Idle").expect("Idle"));
+        let mut p = ActPlayer::start(&acts, &clips, &mut anim, up, 9).allow_linger(3.0);
+        tick_until(&clips, &acts, &mut anim, &mut p, 6.0, |p, _| p.is_lingering());
+        p.release(&acts, &clips, &mut anim);
+        assert!(p.is_released() && !p.is_lingering());
+        assert_eq!(clips.get(anim.clip()).name, "LookUpToIdle");
+        assert!(!p.fuse(&acts, &clips, &mut anim, up), "only a lingering pose fuses");
+        let seen = tick_until(&clips, &acts, &mut anim, &mut p, 3.0, |_, s| s == ActStatus::Done);
+        assert_eq!(seen.iter().filter(|c| *c == "LookUpToIdle").count(), 1, "{seen:?}");
+        // Without the opt-in (e.g. scripted acts) the act ends as before.
+        let mut p = ActPlayer::start(&acts, &clips, &mut anim, up, 9);
+        let seen = tick_until(&clips, &acts, &mut anim, &mut p, 6.0, |p, s| {
+            assert!(!p.is_lingering());
+            s == ActStatus::Done
+        });
+        assert_eq!(seen.last().map(String::as_str), Some("LookUpToIdle"), "{seen:?}");
     }
 
     #[test]
