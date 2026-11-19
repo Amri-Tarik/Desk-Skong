@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use super::MoveKind;
-use super::script::{Climb, ClimbWall, Exec, Outcome, Recipe, SHORT_RUNUP, Script, Stage, Start};
+use super::script::{Climb, ClimbWall, Exec, LAUNCH_WINDOW_UNITS, Outcome, Recipe, SHORT_RUNUP, Script, Stage, Start};
 use super::surface::{Surface, SurfaceId, all_walls};
 use crate::controller::{Abilities, Character, CharacterParams, Gait, MoveEvent, MoveInput, MoveState, Side};
 use crate::geom::{RectF, Vec2};
@@ -32,6 +32,8 @@ const RUN_FRACTION_MIN: f32 = 0.82;
 const STATION_UNITS: f32 = 4.0;
 /// ...and at most this many per run (wider apart on longer runs).
 const MAX_STATIONS: usize = 12;
+/// Walls tried per pair for a crystal dash launched from a wall.
+const MAX_LAUNCH_WALLS: usize = 1;
 
 /// A validated traversal from one surface to another.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -252,9 +254,27 @@ pub(crate) fn build_edges(
             }
         }
     }
+    let n = surfaces.len();
+    if template.abilities.superdash && template.abilities.wall_jump {
+        // Pairs nothing else connects directly: maybe a crystal dash off a wall does.
+        let mut linked = vec![false; n * n];
+        for e in &edges {
+            linked[e.from * n + e.to] = true;
+        }
+        let walls: Vec<Wall> = all_walls(terrain).collect();
+        for from in 0..n {
+            let near = b.launch_walls(&surfaces[from], &walls);
+            if near.is_empty() {
+                continue;
+            }
+            for to in (0..n).filter(|&to| to != from && !linked[from * n + to]) {
+                b.connect_wall_launch(from, to, &near, &walls, &mut edges);
+            }
+        }
+    }
     if template.abilities.superdash {
-        for from in 0..surfaces.len() {
-            for to in 0..surfaces.len() {
+        for from in 0..n {
+            for to in 0..n {
                 b.connect_runs(from, to, &mut edges);
             }
         }
@@ -399,6 +419,133 @@ impl Builder<'_> {
             let script = Script { takeoff, tx: x, ..sc };
             let duration = fixed + (land.x - takeoff) * sign / r.fly;
             edges.push(Edge { from, to, kind: MoveKind::Superdash, gait: sc.gait, takeoff, land, duration, climb: None, script });
+        }
+    }
+
+    /// Walls (of `walls`, the whole terrain's) the knight can climb from `s`, as in
+    /// [`Builder::climb_walls`]: bottom within jump + double jump, rising above `s`, beside
+    /// `s` or a short hop from its end. With the direction towards each.
+    fn launch_walls(&self, s: &Surface, walls: &[Wall]) -> Vec<(Wall, Side)> {
+        let r = self.reach;
+        let lift = r.jump + if self.abilities.double_jump { r.double } else { 0.0 };
+        let reach_bottom = s.y - lift + r.height * 0.5 + 4.0;
+        walls
+            .iter()
+            .filter(|w| w.y1 >= reach_bottom && w.y0 <= s.y - r.height * 0.5)
+            .filter_map(|w| {
+                let dir = match w.face {
+                    Facing::Left => Side::Right,
+                    Facing::Right => Side::Left,
+                };
+                let hover = w.x - dir.sign() * (r.half + 0.5);
+                let on_side = (s.lo - hover) * dir.sign() < 0.0 || (s.hi - hover) * dir.sign() < 0.0;
+                let from_s = (s.lo - hover).max(hover - s.hi).max(0.0);
+                (on_side && from_s <= 4.0 * r.half + 32.0).then_some((*w, dir))
+            })
+            .collect()
+    }
+
+    /// Crystal dashes launched from a wall, for hurried routes between surfaces nothing else
+    /// connects directly: climb a wall `near` `s` (the knight can reach it from `s`) to just
+    /// above `t`'s height, charge clinging to it, and fly away from it across to `t` (which
+    /// must lie that way, a flight that can be cancelled away, with no wall across the line).
+    /// The walls with the shortest flights are simulated (at most [`MAX_LAUNCH_WALLS`]); the
+    /// first that lands, also from a perturbed start, becomes the edge.
+    fn connect_wall_launch(&mut self, from: SurfaceId, to: SurfaceId, near: &[(Wall, Side)], walls: &[Wall], edges: &mut Vec<Edge>) {
+        let (s, t) = (self.surfaces[from], self.surfaces[to]);
+        let r = self.reach;
+        if s.y - t.y <= r.step {
+            return;
+        }
+        // Feet heights the flight can start at, and the band the body sweeps on the way.
+        let window = self.params.px(LAUNCH_WINDOW_UNITS);
+        let (top, low) = (t.y - window, t.y - 2.0);
+        let band = (top - r.height, low);
+        let mut cands: Vec<(f32, Wall, Side, f32)> = near
+            .iter()
+            .filter_map(|&(w, dir)| {
+                // The wall must hold the body (its middle) at a height in the window.
+                if w.y0 > low - r.height * 0.5 - 1.0 || w.y1 < top - r.height * 0.5 {
+                    return None;
+                }
+                let away = dir.opposite();
+                let hover = w.x - dir.sign() * (r.half + 0.5);
+                let tx = near_x(&t, away, r.half);
+                let flight = (hover - tx) * dir.sign();
+                let beyond = match away {
+                    Side::Left => t.hi <= hover,
+                    Side::Right => t.lo >= hover,
+                };
+                if !beyond || flight < r.fly_min {
+                    return None;
+                }
+                let blocked = blocking_walls(walls, away, hover, tx, r.half).any(|b| b.y0 < band.1 && band.0 < b.y1);
+                (!blocked).then_some((flight, w, dir, tx))
+            })
+            .collect();
+        if cands.is_empty() {
+            return;
+        }
+        cands.sort_by(|a, b| a.0.total_cmp(&b.0));
+        // The bounds sides double the monitor walls on them.
+        cands.dedup_by(|a, b| a.1.x == b.1.x && a.2 == b.2);
+        cands.truncate(MAX_LAUNCH_WALLS);
+        for (_, w, dir, tx) in cands {
+            let sign = dir.sign();
+            let hover = w.x - sign * (r.half + 0.5);
+            // Run in from a little way back (or jump across from the end of `s`), as a climb.
+            let takeoff = s.clamp(hover - sign * 48.0);
+            let back = s.clamp(takeoff - sign * self.runup(Gait::Run));
+            let climb = Climb { wall: ClimbWall { x: w.x, y0: w.y0, y1: w.y1 }, shaft: None, dash: false, over: false };
+            let script = Script {
+                recipe: Recipe::WallSuperdash,
+                start: Start::Run,
+                dir,
+                gait: Gait::Run,
+                takeoff,
+                back,
+                tx,
+                ty: t.y,
+                needs_shadow: false,
+                climb: Some(climb),
+                free: false,
+            };
+            let xs = [back, takeoff, w.x, tx];
+            let (lo, hi) = xs.iter().fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), &x| (lo.min(x), hi.max(x)));
+            let mx = r.dash + 2.0 * r.half + 32.0 + 128.0;
+            let region = RectF::new(lo - mx, top - r.jump - 16.0, hi + mx, s.y + 1.0);
+            let local_hash = self.fill_local(region);
+            self.stats.pairs += 1;
+            let key = {
+                let mut h = DefaultHasher::new();
+                (self.key(&s, &t, local_hash), "wall", w.x.to_bits(), dir == Side::Right).hash(&mut h);
+                h.finish()
+            };
+            let found = match self.old.get(&key) {
+                Some(found) => {
+                    self.stats.cache_hits += 1;
+                    found[2]
+                }
+                None => self
+                    .simulate(script, &s, &t, region, 0)
+                    .ok()
+                    .filter(|f| f.kind == MoveKind::Superdash && self.robust(script, &s, &t, region)),
+            };
+            self.new.insert(key, [None, None, found]);
+            if let Some(f) = found {
+                edges.push(Edge {
+                    from,
+                    to,
+                    kind: f.kind,
+                    gait: f.script.gait,
+                    takeoff: f.script.takeoff,
+                    land: f.land,
+                    duration: f.duration,
+                    climb: f.script.climb,
+                    script: f.script,
+                });
+                return;
+            }
         }
     }
 
@@ -850,13 +997,7 @@ impl Builder<'_> {
     /// Local walls blocking travel in `dir` that the body's leading side meets between feet
     /// x `a` and `b`.
     fn walls_between(&self, dir: Side, a: f32, b: f32) -> impl Iterator<Item = &Wall> {
-        let face = match dir {
-            Side::Right => Facing::Left,
-            Side::Left => Facing::Right,
-        };
-        let lead = dir.sign() * self.reach.half;
-        let (lo, hi) = (a.min(b) + lead - 1.0, a.max(b) + lead + 1.0);
-        self.local_walls.iter().filter(move |w| w.face == face && w.x > lo && w.x < hi)
+        blocking_walls(&self.local_walls, dir, a, b, self.reach.half)
     }
 
     /// Walls that can carry the knight from `s` up to `t`, best first: (wall, direction
@@ -946,6 +1087,7 @@ impl Builder<'_> {
                 Recipe::Jump { double: true, .. } => (s.y - r.jump - r.double, slack),
                 Recipe::Jump { double: false, .. } => (s.y - r.jump, slack),
                 Recipe::Climb => (t.y - r.jump, slack + 128.0),
+                Recipe::WallSuperdash => (t.y - self.params.px(LAUNCH_WINDOW_UNITS) - r.jump, slack + 128.0),
                 Recipe::Walk | Recipe::DropThrough | Recipe::GroundDash | Recipe::Superdash | Recipe::Behind => (s.y, slack),
             };
             let top = apex.min(t.y) - 16.0;
@@ -989,10 +1131,13 @@ impl Builder<'_> {
             ch.vel.x = sign * (v_air * speed).min(p.gait_speed_px(Gait::Sprint));
         }
         let mut exec = Exec::new(Script { takeoff: launch, ..script });
+        // About one wall-jump cycle (~1 s) per double-jump height, plus slack.
+        let climb_limit = 1.5 + (s.y - t.y) / (r.jump + r.double).max(1.0) * 1.5;
         let limit = match script.recipe {
             Recipe::Walk => (script.tx - script.takeoff).abs() / v_air + 2.0,
-            // About one wall-jump cycle (~1 s) per double-jump height, plus slack.
-            Recipe::Climb => 1.5 + (s.y - t.y) / (r.jump + r.double).max(1.0) * 1.5,
+            Recipe::Climb => climb_limit,
+            // Then slide down to the launch height, charge and fly.
+            Recipe::WallSuperdash => climb_limit + 1.0 + p.superdash_charge_time + (script.tx - script.takeoff).abs() / r.fly + 1.0,
             Recipe::Superdash => p.superdash_charge_time + ((script.tx - launch).abs() / r.fly + 2.0).max(3.0),
             _ => 4.0,
         };
@@ -1065,7 +1210,13 @@ impl Builder<'_> {
             let stuck = still > 12 && !charging;
             let inside = (region.left..=region.right).contains(&ch.pos.x) && (region.top..=region.bottom).contains(&ch.pos.y);
             // A climb that stops gaining height is going nowhere (sliding / hovering in place).
-            if script.recipe == Recipe::Climb && exec.stage == Stage::Script {
+            // A wall launch only climbs until above the target (then it slides down to charge).
+            let climbing = match script.recipe {
+                Recipe::Climb => true,
+                Recipe::WallSuperdash => !superdash && ch.pos.y > t.y - 2.0,
+                _ => false,
+            };
+            if climbing && exec.stage == Stage::Script {
                 if ch.pos.y < best_y - 4.0 {
                     (best_y, best_t) = (ch.pos.y, exec.t);
                 } else if exec.t - best_t > CLIMB_STALL {
@@ -1129,6 +1280,18 @@ fn crosses_window_wall(t: &Terrain, ch: &Character, old_x: f32) -> bool {
     t.walls.iter().any(|w| {
         w.owner.is_some() && w.face == face && w.x > a - 0.5 && w.x <= b + 0.5 && w.y0 < body.bottom && body.top < w.y1
     })
+}
+
+/// Walls of `walls` blocking travel in `dir` that the leading side of a body `half` wide meets
+/// between feet x `a` and `b`.
+fn blocking_walls(walls: &[Wall], dir: Side, a: f32, b: f32, half: f32) -> impl Iterator<Item = &Wall> {
+    let face = match dir {
+        Side::Right => Facing::Left,
+        Side::Left => Facing::Right,
+    };
+    let lead = dir.sign() * half;
+    let (lo, hi) = (a.min(b) + lead - 1.0, a.max(b) + lead + 1.0);
+    walls.iter().filter(move |w| w.face == face && w.x > lo && w.x < hi)
 }
 
 /// Horizontal gap between the surfaces (0 when they overlap).

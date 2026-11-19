@@ -15,8 +15,9 @@ _Working list, last updated 2026-11-19. Reorder freely and add notes under any i
       wants to sit too.
 - [x] **Crystal dash on long runs.** _(Hurry crystal dashes along level runs longer than
       ~15 units ≈ 576 px at scale 0.6, the break-even with sprinting. If it feels too
-      eager, add a margin in `superdash_break_even`. Follow-ups: wall-launched charge,
-      runs to slightly higher ledges.)_
+      eager, add a margin in `superdash_break_even`. Wall-launched charges done: Hurry climbs
+      a wall to a high far ledge's height, charges clinging to it and flies across, where
+      nothing else connects the two directly. Follow-up: runs to slightly higher ledges.)_
 
 ## 2. Reasons to move around
 

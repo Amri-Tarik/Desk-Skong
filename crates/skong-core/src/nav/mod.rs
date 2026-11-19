@@ -20,7 +20,9 @@
 //!   the geometry they depend on, so [`NavGraph::rebuild`] after a window drag only
 //!   re-simulates nearby pairs. Long level runs (along one surface, or to another at the same
 //!   height) also get crystal dash edges for hurried routes: one validated flight per run,
-//!   landing at stations a few units apart, launched from wherever the knight stands.
+//!   landing at stations a few units apart, launched from wherever the knight stands. Pairs
+//!   nothing else connects directly may get a crystal dash launched from a wall: climb a wall
+//!   near the source to just above the target's height, charge clinging to it, fly across.
 //! * `search`: Dijkstra over landing states (surface + landing x), cost = estimated time
 //!   plus small style penalties.
 //! * `follow`: replays the edge scripts with the same executor the validation used.

@@ -16,6 +16,10 @@ const RUN_FRACTION: f32 = 0.8;
 /// A run-up shorter than this fraction of the full one starts from a standstill at `back`
 /// (both in validation and when following).
 pub(crate) const SHORT_RUNUP: f32 = 0.9;
+/// A wall-launched crystal dash charges once the feet have slid down to within this many
+/// units above the target's top (and are at least [`CLEAR_PX`] above it): it flies level,
+/// then drops this little onto the target.
+pub(crate) const LAUNCH_WINDOW_UNITS: f32 = 1.5;
 
 /// What the knight does after take-off.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,6 +40,10 @@ pub(crate) enum Recipe {
     Climb,
     /// Charge in place, fly in `dir`, cancel past `tx`, drop.
     Superdash,
+    /// Crystal dash launched from a wall ([`Script::climb`]): climb it like [`Recipe::Climb`]
+    /// until clinging (sliding) just above the target's height, charge there, fly away from
+    /// the wall (against `dir`), cancel past `tx`, drop.
+    WallSuperdash,
     /// Turn into the screen at the take-off, walk behind the drawn line(s) to `tx`, turn back.
     Behind,
 }
@@ -97,6 +105,11 @@ pub struct Climb {
 }
 
 impl Script {
+    /// Direction of a crystal dash's flight: away from the wall for a wall launch.
+    pub(crate) fn fly_dir(&self) -> Side {
+        if self.recipe == Recipe::WallSuperdash { self.dir.opposite() } else { self.dir }
+    }
+
     fn uses_dash(&self) -> bool {
         matches!(self.recipe, Recipe::GroundDash | Recipe::Jump { dash: true, .. })
             || self.needs_shadow
@@ -139,6 +152,8 @@ pub(crate) struct Exec {
     kicked: Option<Side>,
     /// A climb reached its finish (above the wall top or the target).
     pub finished: bool,
+    /// When (script time) a wall-launched crystal dash began charging.
+    charge_from: Option<f32>,
 }
 
 impl Exec {
@@ -156,6 +171,7 @@ impl Exec {
             released: false,
             kicked: None,
             finished: false,
+            charge_from: None,
         }
     }
 
@@ -178,7 +194,8 @@ impl Exec {
     /// Walking (never airborne) across other segments of the source ledge is fine: a ground
     /// dash or walk may pass through a window standing on the floor on its way to `to`.
     pub fn outcome(&mut self, ch: &Character, from: &Surface, to: &Surface) -> Outcome {
-        if to.holds(ch) && (self.script.recipe != Recipe::Superdash || self.superdash_over(ch)) {
+        let crystal = matches!(self.script.recipe, Recipe::Superdash | Recipe::WallSuperdash);
+        if to.holds(ch) && (!crystal || self.superdash_over(ch)) {
             return Outcome::Done;
         }
         if self.stage == Stage::Approach {
@@ -199,7 +216,7 @@ impl Exec {
     fn superdash_over(&self, ch: &Character) -> bool {
         let s = self.script;
         let flying = matches!(ch.state, MoveState::Superdash | MoveState::SuperdashCharge { .. });
-        self.released && !flying && (ch.pos.x - s.tx) * s.dir.sign() >= -ch.size.x * 0.5
+        self.released && !flying && (ch.pos.x - s.tx) * s.fly_dir().sign() >= -ch.size.x * 0.5
     }
 
     /// No further upward impulse will come from the script (falling below the target is final).
@@ -208,7 +225,7 @@ impl Exec {
             Recipe::Walk | Recipe::DropThrough | Recipe::GroundDash => true,
             Recipe::Jump { double, dash, .. } => (!double || self.double_done) && (!dash || self.dash_done),
             Recipe::Climb => false,
-            Recipe::Superdash => self.released,
+            Recipe::Superdash | Recipe::WallSuperdash => self.released,
             Recipe::Behind => true,
         }
     }
@@ -334,16 +351,81 @@ impl Exec {
                     } else {
                         self.released = true;
                     }
-                } else if ch.state == MoveState::Superdash {
-                    if (ch.pos.x - s.tx) * s.dir.sign() >= 0.0 {
-                        input.jump_pressed = true;
-                    }
                 } else {
-                    input.x = toward_tx;
+                    self.fly(ch, &mut input, toward_tx);
                 }
             }
+            Recipe::WallSuperdash => self.wall_superdash_input(ch, dt, &mut input, toward_tx),
         }
         input
+    }
+
+    /// A launched crystal dash: cancel once past `tx`, then steer onto it.
+    fn fly(&self, ch: &Character, input: &mut MoveInput, toward_tx: f32) {
+        let s = self.script;
+        input.x = 0.0;
+        if ch.state == MoveState::Superdash {
+            if (ch.pos.x - s.tx) * s.fly_dir().sign() >= 0.0 {
+                input.jump_pressed = true;
+            }
+        } else {
+            input.x = toward_tx;
+        }
+    }
+
+    /// Wall-launched crystal dash, one tick:
+    /// * charging: hold until charged, then release (the controller launches away from the
+    ///   wall) and fly like [`Recipe::Superdash`];
+    /// * sliding on the climbed wall with the feet just above the target (within
+    ///   [`LAUNCH_WINDOW_UNITS`]): start charging; higher up: keep pressing into the wall and
+    ///   slide down; lower: wall-jump to climb on;
+    /// * otherwise work the wall like a climb, double jumping only while below the target.
+    fn wall_superdash_input(&mut self, ch: &Character, dt: f32, input: &mut MoveInput, toward_tx: f32) {
+        let s = self.script;
+        let Some(c) = s.climb else { return };
+        let p = &ch.params;
+        if self.released {
+            self.fly(ch, input, toward_tx);
+            return;
+        }
+        input.x = 0.0;
+        if let Some(t0) = self.charge_from {
+            if self.t - t0 < p.superdash_charge_time + 2.0 * dt {
+                input.superdash_held = true;
+            } else {
+                self.released = true;
+            }
+            return;
+        }
+        let high = ch.pos.y <= s.ty - CLEAR_PX;
+        let in_window = high && ch.pos.y >= s.ty - p.px(LAUNCH_WINDOW_UNITS);
+        let press_jump = |input: &mut MoveInput| {
+            input.jump_pressed = true;
+            input.jump_held = true;
+        };
+        if let MoveState::WallSlide { side } = ch.state {
+            let on_wall = side == s.dir && (ch.pos.x + side.sign() * ch.size.x * 0.5 - c.wall.x).abs() <= 2.0;
+            if on_wall && in_window {
+                self.charge_from = Some(self.t);
+                input.superdash_held = true;
+            } else if on_wall && high {
+                input.x = side.sign();
+            } else {
+                input.x = side.opposite().sign();
+                press_jump(input);
+            }
+            return;
+        }
+        input.jump_held = true;
+        let first = self.ticks == 0;
+        let falling = ch.vel.y >= 0.0 && ch.state == MoveState::Airborne;
+        let mid = ch.pos.y - ch.size.y * 0.5;
+        let level = mid >= c.wall.y0 && mid < c.wall.y1 - 1.0;
+        let hover = c.wall.x - s.dir.sign() * (ch.size.x * 0.5 + 0.5);
+        input.x = if level { s.dir.sign() } else { steer(ch.pos.x, hover, p.px(STEER_UNITS)) };
+        if first || (falling && !high && ch.can_double_jump()) {
+            press_jump(input);
+        }
     }
 
     /// Wall climb, one tick:

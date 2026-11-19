@@ -84,6 +84,9 @@ fn main() {
     let mut build_ms = Vec::new();
     let mut superdash_edges = Vec::new();
     let mut superdash_routes: BTreeMap<String, usize> = BTreeMap::new();
+    // Routes with a crystal dash launched from a wall.
+    let mut wall_launch_routes: BTreeMap<String, usize> = BTreeMap::new();
+    let mut wall_launch_edges = Vec::new();
     // Total seconds to arrival per style (arrived routes only).
     let mut travel: BTreeMap<String, f32> = BTreeMap::new();
     let mut dives = 0usize;
@@ -97,6 +100,7 @@ fn main() {
         let g = NavGraph::build(&t, &ch0);
         build_ms.push(g.stats().millis);
         superdash_edges.push(g.edge_counts()[MoveKind::ALL.iter().position(|k| *k == MoveKind::Superdash).unwrap_or(0)]);
+        wall_launch_edges.push(g.edges().iter().filter(|e| e.kind == MoveKind::Superdash && e.climb.is_some()).count());
         // Window tops, plus a few points on the floors (long level runs: where a hurry
         // should crystal dash).
         let mut goals: Vec<(NavGoal, &str, Option<u64>)> = desk.windows.iter().map(|w| (NavGoal::OnWindow(w.id), "", Some(w.id))).collect();
@@ -119,6 +123,9 @@ fn main() {
                 let key = format!("{style:?}{label}");
                 if route.moves.contains(&MoveKind::Superdash) {
                     *superdash_routes.entry(key.clone()).or_default() += 1;
+                }
+                if route.edges().any(|e| e.kind == MoveKind::Superdash && e.climb.is_some()) {
+                    *wall_launch_routes.entry(key.clone()).or_default() += 1;
                 }
                 let entry = tally.entry(key).or_insert([0; 4]);
                 entry[0] += 1;
@@ -185,15 +192,21 @@ fn main() {
     }
     for (style, [planned, arrived, failed, timeout]) in &tally {
         let sd = superdash_routes.get(style).copied().unwrap_or(0);
+        let wl = wall_launch_routes.get(style).copied().unwrap_or(0);
         let mean = travel.get(style).copied().unwrap_or(0.0) / (*arrived).max(1) as f32;
         println!(
-            "{style}: {arrived}/{planned} arrived ({:.1}%), {failed} failed, {timeout} timed out; {sd} routes crystal dash; mean arrival {mean:.2} s",
+            "{style}: {arrived}/{planned} arrived ({:.1}%), {failed} failed, {timeout} timed out; {sd} routes crystal dash ({wl} off a wall); mean arrival {mean:.2} s",
             100.0 * *arrived as f32 / (*planned).max(1) as f32
         );
     }
     superdash_edges.sort_unstable();
     if let (Some(med), Some(max)) = (superdash_edges.get(superdash_edges.len() / 2), superdash_edges.last()) {
         println!("superdash edges per graph: median {med}, max {max}");
+    }
+    wall_launch_edges.sort_unstable();
+    if let (Some(med), Some(max)) = (wall_launch_edges.get(wall_launch_edges.len() / 2), wall_launch_edges.last()) {
+        let total: usize = wall_launch_edges.iter().sum();
+        println!("wall-launched superdash edges per graph: median {med}, max {max}, total {total}");
     }
     for (what, n) in &failing {
         println!("  {what}: {n}");
