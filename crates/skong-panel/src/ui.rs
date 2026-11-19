@@ -162,6 +162,19 @@ impl Panel {
                     }
                 });
                 ui.end_row();
+
+                ui.label("Discover");
+                ui.horizontal_wrapped(|ui| {
+                    for (i, name) in ["Bench", "Hot spring", "Geo deposit"].into_iter().enumerate() {
+                        if ui.button(name).on_hover_text("reveal one in the window the knight stands on").clicked() {
+                            self.cmd(Command::Discover(i as u8));
+                        }
+                    }
+                    if ui.button("Forget all").clicked() {
+                        self.cmd(Command::ForgetDiscoveries);
+                    }
+                });
+                ui.end_row();
             });
 
             ui.separator();

@@ -18,6 +18,7 @@ use super::interest::{InterestMap, Poi, PoiKind, PoiTarget};
 use super::navigator::{NavStatus, Navigator};
 use super::needs::Mind;
 use super::percept::{Percepts, Senses};
+use super::places::{DiscoveryEvent, Visit, favourite_bench};
 use super::repertoire::Repertoire;
 use super::rng::Rng;
 use super::spots::{self, View};
@@ -62,10 +63,12 @@ pub enum BehaviourKind {
     ShadeHunt,
     /// Walk over loose Geo to pick it up.
     Loot,
+    /// Use a place found in a window (bench, hot spring, geo deposit).
+    Visit,
 }
 
 impl BehaviourKind {
-    pub const ALL: [BehaviourKind; 16] = [
+    pub const ALL: [BehaviourKind; 17] = [
         BehaviourKind::Idle,
         BehaviourKind::Companion,
         BehaviourKind::Watch,
@@ -82,6 +85,7 @@ impl BehaviourKind {
         BehaviourKind::Dead,
         BehaviourKind::ShadeHunt,
         BehaviourKind::Loot,
+        BehaviourKind::Visit,
     ];
 
     pub fn label(self) -> &'static str {
@@ -102,6 +106,7 @@ impl BehaviourKind {
             BehaviourKind::Dead => "dead",
             BehaviourKind::ShadeHunt => "shade hunt",
             BehaviourKind::Loot => "loot",
+            BehaviourKind::Visit => "visit",
         }
     }
 
@@ -536,6 +541,9 @@ impl Explore {
     fn arrive(&mut self, ctx: &mut Ctx) {
         let novelty = self.poi.novelty;
         ctx.interest.visit(self.poi.target, ctx.now, ctx.p.desktop);
+        if let (PoiKind::NewWindow | PoiKind::Unvisited, PoiTarget::Window(id)) = (self.poi.kind, self.poi.target) {
+            ctx.out.discovery = Some(DiscoveryEvent::Explored(id)); // the app may reveal what lives there
+        }
         ctx.mind.adjust(|n| &mut n.boredom, -(0.15 + 0.45 * novelty));
         let small = match self.poi.target {
             PoiTarget::Window(id) => ctx.p.desktop.window(id).is_some_and(|w| w.rect.width() * w.rect.height() <= 420 * 320),
@@ -660,7 +668,8 @@ impl Nap {
             NapPhase::Seated(ActWait::named(ctx, "nap"))
         } else {
             let k = ctx.p.knight;
-            match find_seat(ctx, k.pos, Self::SEAT_RANGE) {
+            // A favourite found bench is worth a longer walk.
+            match favourite_bench(ctx, Self::SEAT_RANGE).or_else(|| find_seat(ctx, k.pos, Self::SEAT_RANGE)) {
                 Some((s, style)) => NapPhase::ToSeat(Travel::exact(ctx, s, style, SEAT_TOL)),
                 None => NapPhase::Deep(ActWait::named(ctx, "bow_down")),
             }
@@ -913,6 +922,7 @@ pub(crate) enum Active {
     Dead(Dead),
     ShadeHunt(Box<ShadeHunt>),
     Loot(Loot),
+    Visit(Visit),
 }
 
 impl Active {
@@ -934,6 +944,7 @@ impl Active {
             Active::Dead(_) => BehaviourKind::Dead,
             Active::ShadeHunt(_) => BehaviourKind::ShadeHunt,
             Active::Loot(_) => BehaviourKind::Loot,
+            Active::Visit(_) => BehaviourKind::Visit,
         }
     }
 
@@ -955,6 +966,7 @@ impl Active {
             Active::Dead(b) => b.tick(ctx),
             Active::ShadeHunt(b) => b.tick(ctx),
             Active::Loot(b) => b.tick(ctx),
+            Active::Visit(b) => b.tick(ctx),
         }
     }
 
@@ -977,6 +989,7 @@ impl Active {
             Active::Dead(b) => b.reason(),
             Active::ShadeHunt(b) => b.reason(),
             Active::Loot(b) => b.reason(),
+            Active::Visit(b) => b.reason(),
         }
     }
 }

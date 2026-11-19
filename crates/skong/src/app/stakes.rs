@@ -93,6 +93,12 @@ impl Stakes {
         }
     }
 
+    /// Geo coins bursting out at `at` (e.g. a broken geo deposit).
+    pub fn burst(&mut self, at: Vec2, amount: u32, scale: f32) {
+        self.geo.scale = scale;
+        self.geo.burst(at, amount);
+    }
+
     /// Fullscreen games on these monitors: hide our sprites there, keep Geo off them.
     pub fn hide_on(&mut self, monitors: &[RectI]) {
         self.games = monitors.to_vec();

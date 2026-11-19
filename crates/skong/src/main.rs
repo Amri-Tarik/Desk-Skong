@@ -10,6 +10,7 @@ mod overlay;
 mod benches;
 mod bubble;
 mod npcs;
+mod discoveries;
 mod fx;
 mod gameguard;
 mod grab;
