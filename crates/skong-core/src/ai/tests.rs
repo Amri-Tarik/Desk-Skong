@@ -793,7 +793,7 @@ fn riding_a_moving_window_is_fun() {
             w.rect.right += 2;
         }
         sim.desktop_changed();
-        sim.events.push(MoveEvent::CarriedBy { owner: 1 });
+        sim.events.push(MoveEvent::PlatformMoved { owner: 1 });
         sim.step();
         rode |= sim.brain.behaviour() == BehaviourKind::Ride;
     }

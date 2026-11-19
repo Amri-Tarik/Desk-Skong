@@ -76,7 +76,7 @@ pub enum BehaviourKind {
     Flee,
     /// A fullscreen app is up: retreat to a corner and keep quiet.
     Hide,
-    /// Enjoy riding a window that is being moved.
+    /// The window under him moved (he fell off it / it slid away): shake it off, windswept.
     Ride,
     /// Knocked flat by a huge fall.
     KnockedOut,
@@ -951,7 +951,7 @@ impl Ride {
     }
 
     pub fn tick(&mut self, ctx: &mut Ctx) -> Status {
-        if ctx.senses.since_carried(ctx.now) > 1.5 {
+        if ctx.senses.since_carried(ctx.now) > 3.0 {
             return Status::Done;
         }
         ctx.nav.stop();

@@ -193,8 +193,8 @@ pub enum MoveEvent {
     DiveEnded,
     /// Ground vanished under the feet (walked off, window closed / moved / occluded).
     LostSupport,
-    /// Carried along by the moving window we stand on.
-    CarriedBy { owner: WindowId },
+    /// The window we stood on moved (he falls / it slides out from under him).
+    PlatformMoved { owner: WindowId },
 }
 
 /// Countdown / elapsed timers, seconds.
@@ -905,20 +905,26 @@ impl Character {
 
     /// Call after the terrain was rebuilt from a new desktop snapshot.
     ///
-    /// * Standing on a window that moved: carried by the window's delta ([`MoveEvent::CarriedBy`]).
+    /// * Standing on a window that moved ([`MoveEvent::PlatformMoved`]): never carried. Moved
+    ///   up or down: falls at once; moved sideways: stays put while it slides under him.
     ///   This includes content ledges, which belong to the window showing them.
     /// * Support closed / hidden / moved away: falls ([`MoveEvent::LostSupport`]).
     /// * A window appeared or moved so its top is at most `pop_up_height` above the feet:
     ///   stand on it. Deeper overlaps fall under the overlap-ignore rule.
     pub fn on_terrain_rebuilt(&mut self, old: &Terrain, new: &Terrain, events: &mut Vec<MoveEvent>) {
         let p = self.params;
+        // The floor moved under him: he isn't glued to it. He drops into a free fall right
+        // away; if the window only slid sideways he lands back on its top a tick later (and
+        // it slides out from under him), if it moved up or down he falls.
         if let Some(owner) = self.support.and_then(|s| s.owner)
             && let (Some(a), Some(b)) = (old.window_rect(owner), new.window_rect(owner))
+            && (a.left != b.left || a.top != b.top)
         {
-            let delta = Vec2::new(b.left - a.left, b.top - a.top);
-            if delta != Vec2::ZERO {
-                self.pos += delta;
-                events.push(MoveEvent::CarriedBy { owner });
+            events.push(MoveEvent::PlatformMoved { owner });
+            if a.top != b.top {
+                self.clamp_to_bounds(new.bounds);
+                self.lose_support(events);
+                return;
             }
         }
         self.clamp_to_bounds(new.bounds);
