@@ -399,8 +399,11 @@ impl Discoveries {
     /// What the brain knows about the finds on screen.
     pub fn places(&self) -> Vec<KnownPlace> {
         let reach = DEPOSIT_STAND * self.scale;
+        // Only finds that still exist (a broken rock lingers on screen a moment; the knight
+        // must not keep swinging at it).
+        let live: Vec<Shown> = self.shown.iter().filter(|s| self.world.find(s.id).is_some()).copied().collect();
         discovery::known_places(
-            &self.shown,
+            &live,
             |id| self.reveals.iter().any(|r| r.0 == id),
             |f| match f.kind {
                 // Mine it from whichever side has room.
