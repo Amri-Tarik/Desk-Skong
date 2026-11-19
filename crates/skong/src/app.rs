@@ -146,6 +146,8 @@ struct Pet {
     act_blocked: f32,
     /// Debug (`--fx-test`): seconds since start, drives a scripted superdash.
     fx_test: Option<f32>,
+    /// Debug (`--move-test`): scripted dive + turn loop.
+    move_test: Option<crate::movefx::MoveTest>,
     brain: Brain,
     nav: GraphNavigator,
     navb: NavBuilder,
@@ -253,6 +255,7 @@ pub fn run(args: &Args) -> Result<()> {
         forced_nav: false,
         act_blocked: 0.0,
         fx_test: args.fx_test.then_some(0.0),
+        move_test: args.move_test.then(crate::movefx::MoveTest::new),
         brain,
         nav: GraphNavigator::new(),
         navb,
@@ -396,6 +399,17 @@ impl Pet {
             input = MoveInput { superdash_held: (3.0..4.2).contains(&phase), ..MoveInput::default() };
             self.act = None;
         }
+        if let Some(mt) = self.move_test.as_mut() {
+            let w = monitor::primary_work_area();
+            input = mt.input(dt, &mut self.ch, Vec2::new((w.left + w.right) as f32 * 0.5, w.top as f32 + 120.0));
+            self.act = None;
+        } else if manual_input.is_none()
+            && let Some(dark) = self.ch.auto_dive(&self.terrain, &input, self.brain.mind().arousal() > 0.6)
+        {
+            // Far straight drops: Desolate Dive (Descending Dark when excited / very deep).
+            input.dive_pressed = true;
+            input.dive_dark = dark;
+        }
         let d = &self.data;
         if let Some(p) = &self.act {
             let wants_to_move = input.x != 0.0 || input.jump_pressed || input.dash_pressed;
@@ -416,6 +430,9 @@ impl Pet {
             if near_end || self.act_blocked > 0.25 {
                 self.ch.facing = self.ch.facing.opposite();
                 self.act_blocked = 0.0;
+                if let Some(p) = self.act.as_mut() {
+                    p.turned(&d.acts, &d.lib, &mut self.anim);
+                }
             }
             input.gait = g;
             input.x = self.ch.facing.sign();
@@ -451,7 +468,8 @@ impl Pet {
             && p.update(&d.acts, &d.lib, &mut self.anim, dt, &self.anim_events) == ActStatus::Done
         {
             self.act = None;
-            self.anim.play(&d.lib, d.idle, true);
+            // `…ToIdle` endings keep looping idle instead of restarting it.
+            self.anim.play(&d.lib, self.loco.after_act(self.anim.clip()), false);
         }
 
         // The brain sees this tick's controller events on its next tick.
@@ -508,10 +526,11 @@ impl Pet {
                 }
                 MoveEvent::DoubleJumped => self.fx.spawn("double_jump", origin, right),
                 MoveEvent::WallJumped { .. } => self.fx.spawn("wall_puff", origin, right),
-                MoveEvent::DashStarted { shadow: true } => self.fx.spawn("shadow_burst", origin, right),
+                MoveEvent::DashStarted { shadow: true } if !self.ch.dashing_down() => self.fx.spawn("shadow_burst", origin, right),
                 _ => {}
             }
         }
+        crate::movefx::spawn(&mut self.fx, &self.move_events, &self.ch, origin);
     }
 
     /// Present only when the frame changed; otherwise just move the window.
@@ -706,11 +725,19 @@ impl Pet {
             self.seat_y = None;
             self.act = Some(ActPlayer::start(&d.acts, &d.lib, &mut self.anim, id, seed()));
         }
+        if intent.attack.is_some() && self.act.is_none() && matches!(self.ch.state, MoveState::WallSlide { .. }) {
+            // Slashing off a wall: away from it (the knight faces away while sliding).
+            self.loco.wall_slash();
+            self.fx.spawn("wall_slash", self.knight_origin(), self.ch.facing == Side::Right);
+        }
         if let Some(f) = intent.face
             && self.act.is_none()
             && self.ch.is_grounded()
             && self.ch.vel.x.abs() < 1.0
         {
+            if f != self.ch.facing {
+                self.loco.turned_in_place();
+            }
             self.ch.facing = f;
         }
         match intent.motion {

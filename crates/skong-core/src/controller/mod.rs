@@ -12,11 +12,13 @@
 //! * Windows move between ticks; call [`Character::on_terrain_rebuilt`] when the terrain
 //!   is rebuilt so the character rides (or falls off) the window it stands on.
 mod collide;
+mod dive;
 pub mod params;
 #[cfg(test)]
 mod tests;
 
 pub use params::{Abilities, CharacterParams};
+pub use dive::DivePhase;
 
 use collide::{EPS, Query};
 
@@ -55,6 +57,13 @@ pub struct MoveInput {
     pub dash_pressed: bool,
     /// Superdash button held: hold to charge (ground or wall), release to launch.
     pub superdash_held: bool,
+    /// Desolate Dive pressed this tick (edge): hover, then plunge straight down until the
+    /// first ledge. Holding `down` while falling smashes through one-way / content ledges;
+    /// ground (monitor / work-area floor) always stops it. Starts in the air, on a wall, or
+    /// standing on a one-way ledge (dives through it).
+    pub dive_pressed: bool,
+    /// The dive pressed this tick is Descending Dark (bigger effects, same movement).
+    pub dive_dark: bool,
 }
 
 /// Horizontal direction.
@@ -109,6 +118,8 @@ pub enum MoveState {
     Superdash,
     /// Stunned after a long fall.
     HardLanding,
+    /// Desolate Dive: antic hover, plunge, landing slam.
+    Dive { phase: DivePhase, dark: bool },
 }
 
 /// The ledge the character currently stands on.
@@ -151,6 +162,16 @@ pub enum MoveEvent {
     SuperdashEnded,
     DroppedThrough,
     TurnedAround,
+    /// A hard landing from an extremely long fall (follows `Landed { hard: true }`).
+    SuperHardLanded,
+    /// Dive antic started (`dark`: Descending Dark).
+    DiveStarted { dark: bool },
+    /// Antic over: plunging.
+    DiveFalling,
+    /// The dive hit a ledge (slam).
+    DiveLanded,
+    /// Recovered from the slam (or lost the ground while recovering).
+    DiveEnded,
     /// Ground vanished under the feet (walked off, window closed / moved / occluded).
     LostSupport,
     /// Carried along by the moving window we stand on.
@@ -186,6 +207,8 @@ struct Timers {
     down_held: f32,
     /// Time spent falling (for hard landings).
     fall: f32,
+    /// Dive antic / landing countdown.
+    dive: f32,
 }
 
 impl Timers {
@@ -226,6 +249,10 @@ pub struct Character {
     double_jump: bool,
     /// One-way ledge height being dropped through.
     drop_y: Option<f32>,
+    /// The current / last dash goes straight down (Dashmaster).
+    dash_down: bool,
+    /// Diving with down held: one-way ledges do not stop the dive.
+    dive_pierce: bool,
     /// Previous tick's `superdash_held` (edge detection).
     superdash_was_held: bool,
 }
@@ -246,6 +273,8 @@ impl Character {
             air_dash: true,
             double_jump: true,
             drop_y: None,
+            dash_down: false,
+            dive_pierce: false,
             superdash_was_held: false,
         }
     }
@@ -322,6 +351,12 @@ impl Character {
         match self.state {
             MoveState::Grounded => {
                 self.timers.down_held = if input.down { self.timers.down_held + dt } else { 0.0 };
+                if input.dive_pressed && self.abilities.dive && q.can_drop_through(self.body()) {
+                    self.drop_y = Some(self.pos.y);
+                    self.support = None;
+                    self.start_dive(input.dive_dark, events);
+                    return;
+                }
                 if self.timers.down_held >= p.drop_hold_time && q.can_drop_through(self.body()) {
                     self.timers.down_held = 0.0;
                     self.drop_through(events);
@@ -345,8 +380,16 @@ impl Character {
                 self.steer(x_in, input.gait, dt);
             }
             MoveState::Airborne => {
+                if input.dive_pressed && self.abilities.dive {
+                    self.start_dive(input.dive_dark, events);
+                    return;
+                }
                 if self.timers.dash_buffer > 0.0 && self.can_dash() {
-                    self.start_dash(dash_dir, events);
+                    if input.down && self.abilities.down_dash {
+                        self.start_down_dash(events);
+                    } else {
+                        self.start_dash(dash_dir, events);
+                    }
                     return;
                 }
                 if self.timers.jump_buffer > 0.0 {
@@ -368,6 +411,11 @@ impl Character {
                 self.steer(x_in, input.gait, dt);
             }
             MoveState::WallSlide { side } => {
+                if input.dive_pressed && self.abilities.dive {
+                    events.push(MoveEvent::WallSlideEnd);
+                    self.start_dive(input.dive_dark, events);
+                    return;
+                }
                 if self.timers.dash_buffer > 0.0 && self.can_dash() {
                     events.push(MoveEvent::WallSlideEnd);
                     self.start_dash(side.opposite(), events);
@@ -397,8 +445,13 @@ impl Character {
             }
             MoveState::Dashing { .. } => {
                 // Velocity is fixed for the whole dash; duration handled in `move_and_collide`.
-                self.vel = Vec2::new(self.facing.sign() * p.dash_speed_px(), 0.0);
+                self.vel = if self.dash_down {
+                    Vec2::new(0.0, p.dash_speed_px())
+                } else {
+                    Vec2::new(self.facing.sign() * p.dash_speed_px(), 0.0)
+                };
             }
+            MoveState::Dive { phase, .. } => self.control_dive(phase, input, dt, events),
             MoveState::SuperdashCharge { wall } => {
                 self.vel = Vec2::ZERO;
                 let was_charged = self.timers.charge >= p.superdash_charge_time;
@@ -531,6 +584,7 @@ impl Character {
         t.jump_active = false;
         t.wall_lock = 0.0;
         t.fall = 0.0;
+        self.dash_down = false;
         self.facing = dir;
         self.vel = Vec2::new(dir.sign() * p.dash_speed_px(), 0.0);
         self.state = MoveState::Dashing { shadow };
@@ -622,7 +676,7 @@ impl Character {
                 let t = self.timers.dash.min(dt);
                 self.timers.dash -= dt;
                 dash_ends = self.timers.dash <= 0.0;
-                (self.vel.x * t, 0.0)
+                if self.dash_down { (0.0, self.vel.y * t) } else { (self.vel.x * t, 0.0) }
             }
             _ => (self.vel.x * dt, self.vel.y * dt),
         };
@@ -643,7 +697,8 @@ impl Character {
 
         // Vertical.
         if dy > 0.0 {
-            match q.sweep_down(self.body(), dy) {
+            let pierce = self.dive_pierce && matches!(self.state, MoveState::Dive { phase: DivePhase::Fall, .. });
+            match q.sweep_down_where(self.body(), dy, |l| !(pierce && l.kind.is_one_way())) {
                 Some(l) => {
                     self.pos.y = l.y;
                     self.land(l, events);
@@ -666,6 +721,7 @@ impl Character {
         self.refill_air_moves();
         let t = &mut self.timers;
         let hard = t.fall > p.big_fall_time;
+        let super_hard = t.fall > p.super_hard_fall_time;
         t.fall = 0.0;
         t.jump_hold = 0.0;
         t.jump_active = false;
@@ -675,13 +731,18 @@ impl Character {
                 events.push(MoveEvent::WallSlideEnd);
             }
             if hard {
-                self.timers.hard_landing = p.hard_landing_time;
+                self.timers.hard_landing = if super_hard { p.super_hard_landing_time } else { p.hard_landing_time };
                 self.vel.x = 0.0;
                 self.state = MoveState::HardLanding;
             } else {
                 self.state = MoveState::Grounded;
             }
             events.push(MoveEvent::Landed { hard });
+            if super_hard {
+                events.push(MoveEvent::SuperHardLanded);
+            }
+        } else {
+            self.land_special(events);
         }
     }
 
@@ -741,6 +802,10 @@ impl Character {
                 self.state = MoveState::Airborne;
             }
             MoveState::HardLanding => self.state = MoveState::Airborne,
+            MoveState::Dive { phase: DivePhase::Land, .. } => {
+                self.state = MoveState::Airborne;
+                events.push(MoveEvent::DiveEnded);
+            }
             MoveState::SuperdashCharge { .. } => {
                 self.state = MoveState::Airborne;
                 events.push(MoveEvent::SuperdashCancelled);
@@ -810,7 +875,7 @@ impl Character {
                 }
                 None => self.lose_support(events),
             }
-        } else if matches!(self.state, MoveState::Airborne | MoveState::WallSlide { .. })
+        } else if matches!(self.state, MoveState::Airborne | MoveState::WallSlide { .. } | MoveState::Dive { phase: DivePhase::Fall, .. })
             && self.vel.y >= 0.0
             && let Some(l) = q.find_ledge(body, pop, EPS, |l| l.owner.is_some() && arrived(l))
         {

@@ -114,10 +114,11 @@ impl<'a> Query<'a> {
     }
 
     /// Downward sweep of the feet by `dy > 0`. Returns the first ledge landed on.
-    pub fn sweep_down(&self, body: RectF, dy: f32) -> Option<Ledge> {
+    /// Only ledges accepted by `solid` count (a diving body smashes through the others).
+    pub fn sweep_down_where(&self, body: RectF, dy: f32, solid: impl Fn(&Ledge) -> bool) -> Option<Ledge> {
         let feet = body.bottom;
         self.ledges()
-            .filter(|l| overlaps_x(l, body) && l.y >= feet - EPS && l.y <= feet + dy)
+            .filter(|l| overlaps_x(l, body) && l.y >= feet - EPS && l.y <= feet + dy && solid(l))
             .min_by(|a, b| a.y.total_cmp(&b.y))
     }
 
