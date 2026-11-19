@@ -478,3 +478,24 @@ fn urgent_reactions_beat_engagements() {
     }
     assert!(sim.run_until(1.0, |s| s.brain.behaviour() == BehaviourKind::Flee), "three quick pokes make him flee mid-loot");
 }
+
+#[test]
+fn geo_ends_a_cursor_battle_and_the_cursor_never_interrupts_looting() {
+    // The cursor is a boredom killer: with Geo to collect he's busy, not bored.
+    let mut sim = Sim::new();
+    sim.brain.mind_mut().needs.mischief = 1.0;
+    sim.cursor = Some(Cursor { pos: sim.knight.body().center() + Vec2::new(150.0, -20.0), ..Default::default() });
+    assert!(sim.run_until(10.0, |s| s.brain.behaviour() == BehaviourKind::Battle), "battle starts");
+    sim.coins = vec![Vec2::new(1300.0, FLOOR), Vec2::new(1340.0, FLOOR)];
+    assert!(sim.run_until(0.5, |s| s.brain.behaviour() == BehaviourKind::Loot), "Geo takes over the fight at once");
+    // Looting with a mischievous knight and the cursor waved right at him: he keeps looting.
+    for _ in 0..(2.0 / DT) as usize {
+        sim.brain.mind_mut().needs.mischief = 1.0;
+        sim.cursor = Some(Cursor { pos: sim.knight.body().center() + Vec2::new(60.0, -10.0), ..Default::default() });
+        sim.step();
+        if sim.coins.is_empty() {
+            break;
+        }
+        assert!(!matches!(sim.brain.behaviour(), BehaviourKind::Battle | BehaviourKind::Pester), "cursor interrupted looting");
+    }
+}
