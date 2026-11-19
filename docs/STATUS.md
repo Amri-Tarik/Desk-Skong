@@ -46,8 +46,11 @@ The prioritised backlog lives in [ROADMAP.md](ROADMAP.md) (the user edits and an
   arcs vs. nearby windows, his nail vanishing at the bow: no sheathe clip), thought clouds.
 - Training drills only check room on the current ledge; a dash slash near an edge may drop him
   off (he walks back).
-- Nav graph builds are 26–72 % slower than before climbing on a 30-window stress desktop
-  (background thread; ~3 ms median on realistic desktops). Next lever: share climb outcomes
-  per source/wall across targets.
+- Nav graph builds: ~2.0 ms median, ~4.2 ms max on the 8-window soak desktops, 5–13 ms on
+  30-window stress desktops (background thread), since collision queries test geometry
+  before the window-overlap rule (−15 % / −55 %, same graphs). Sharing climb simulations
+  per source/wall across targets was measured: walls serve ~1.4 targets each on the soak
+  desktops, so it saves ≤ 8 % of ticks there (≤ 18 % on stress desktops), less than a
+  straightforward replay costs; not done.
 - Under `--capturable` (debug), vision can see our own effects/props.
 - Rotated monitors get no content terrain.

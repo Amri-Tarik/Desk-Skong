@@ -53,10 +53,19 @@ _Working list, last updated 2026-11-19. Reorder freely and add notes under any i
 
 ## 4. Technical, low priority
 
+<<<<<<< HEAD
 - [ ] Nav graph builds are slower since climbing (~2.3 ms median, background thread).
       Next lever: share climb results per wall.
 - [x] Load animation frames only as needed, to cut memory at large scales (frames stay
       packed until drawn: knight + effects 75 → 22 MiB private at x0.6, 202 → 41 at x1.0).
+=======
+- [x] Nav graph builds faster: collision queries test geometry before the window-overlap
+      rule (soak median 2.3 → 2.0 ms, stress desktops −55 %, identical graphs).
+- [ ] Maybe: share climb simulations per source/wall across targets. Measured ceiling ≤ 8 %
+      of ticks on the soak desktops (walls serve ~1.4 targets), ≤ 18 % on stress desktops;
+      needs a replay cheaper than cloning the character each tick to pay off.
+- [ ] Load animation frames only as needed, to cut memory at large scales.
+>>>>>>> e400bb9 (perf(path): test geometry before the window rule in collision queries)
 - [ ] With "Visible in screen shares" (or `--capturable`) on, a rock or coin on a line
       that disappears can float until it's turned off.
 - [ ] Rotated monitors get no content terrain.
