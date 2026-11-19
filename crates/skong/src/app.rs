@@ -14,12 +14,13 @@ use skong_core::effects::EffectSet;
 
 use crate::fx::Fx;
 use skong_core::controller::{Abilities, Character, CharacterParams, MoveEvent, MoveInput, MoveState, Side};
-use skong_core::ai::{ActCatalog, Activity, AttackDir, Brain, BrainConfig, Cursor, GraphNavigator, Motion, Percepts, Poke, RunningAct, UserActivity};
+use skong_core::ai::{Navigator, NavStatus, ActCatalog, Activity, AttackDir, Brain, BrainConfig, Cursor, GraphNavigator, Motion, Percepts, Poke, RunningAct, UserActivity};
 use skong_win::input::{self, UserInput};
 
 use crate::grab::Grab;
 use skong_core::geom::Vec2;
 use skong_core::locomotion::Locomotion;
+use skong_core::nav::{NavGoal, TravelStyle};
 use skong_core::terrain::{Terrain, TerrainOptions};
 use skong_win::capture::ContentFeed;
 use skong_win::desktop::DesktopWatcher;
@@ -51,6 +52,8 @@ const HOTKEYS: &[(i32, vk::VIRTUAL_KEY, Command)] = &[
     (8, vk::VK_Q, Command::Quit),
     (9, vk::VK_B, Command::PlaceBenchAtCursor(0)),
     (10, vk::VK_D, Command::ToggleDebugOverlay),
+    (11, vk::VK_G, Command::GoToCursor { hurry: false }),
+    (12, vk::VK_H, Command::GoToCursor { hurry: true }),
 ];
 
 // Tray menu ids.
@@ -128,6 +131,8 @@ struct Pet {
     seat_y: Option<f32>,
     benches: Benches,
     fx: Fx,
+    /// A user-requested trip (go to cursor) is being followed instead of the brain.
+    forced_nav: bool,
     /// Seconds a walking act step has been pushing without moving.
     act_blocked: f32,
     /// Debug (`--fx-test`): seconds since start, drives a scripted superdash.
@@ -232,6 +237,7 @@ pub fn run(args: &Args) -> Result<()> {
         seat_y: None,
         benches,
         fx,
+        forced_nav: false,
         act_blocked: 0.0,
         fx_test: args.fx_test.then_some(0.0),
         brain,
@@ -258,6 +264,9 @@ pub fn run(args: &Args) -> Result<()> {
     pet.control.set_hello(pet.hello());
 
     pet.benches.capturable = args.capturable;
+    if args.panel.unwrap_or(pet.settings.open_panel) {
+        pet.apply(Command::OpenPanel)?;
+    }
     if args.sit_test {
         pet.sit_test();
     }
@@ -268,7 +277,7 @@ pub fn run(args: &Args) -> Result<()> {
             log::warn!("{e:#}");
         }
     }
-    log::info!("tray menu ready; hotkeys Ctrl+Alt + K manual, A act, W wake, R respawn at cursor, S skin, C click-through, P pause, D debug overlay, Q quit");
+    log::info!("tray menu ready; hotkeys Ctrl+Alt + K manual, A act, W wake, R respawn at cursor, G walk / H hurry to cursor, S skin, C click-through, P pause, D debug overlay, Q quit");
 
     let mut last_housekeeping = Instant::now();
     rl.run(|tick| {
@@ -330,7 +339,13 @@ impl Pet {
         }
 
         // 2. Intent: keyboard in manual mode, otherwise the brain.
-        let mut input = if self.manual { self.keyboard.read(self.control.manual_keys()) } else { self.think(dt) };
+        let mut input = if self.manual {
+            self.keyboard.read(self.control.manual_keys())
+        } else if self.forced_nav {
+            self.follow_forced(dt)
+        } else {
+            self.think(dt)
+        };
         if let Some(t) = self.fx_test.as_mut() {
             // Scripted: idle 3 s, charge a superdash for 1.2 s, release, repeat every 6 s.
             *t += dt;
@@ -475,6 +490,30 @@ impl Pet {
 
     /// One brain tick: gather percepts, apply the intent's acts/signals/attacks, and
     /// return this tick's movement input.
+    /// Follow a user-requested route; hand control back to the brain when it ends.
+    fn follow_forced(&mut self, dt: f32) -> MoveInput {
+        let input = self.nav.next_input(&self.ch, &self.terrain, dt);
+        let status = self.nav.status();
+        if status != NavStatus::Moving {
+            log::info!("go-to-cursor: {status:?}");
+            self.forced_nav = false;
+        }
+        input
+    }
+
+    /// Path-find to the cursor (drops any act; the brain resumes on arrival).
+    fn go_to_cursor(&mut self, hurry: bool) {
+        let Some((x, y)) = monitor::cursor_pos() else { return };
+        let style = if hurry { TravelStyle::Hurry } else { TravelStyle::Stroll };
+        if self.nav.go(&self.ch, NavGoal::Point(Vec2::new(x as f32, y as f32)), style) {
+            log::info!("go-to-cursor ({style:?}) toward ({x},{y})");
+            self.act = None;
+            self.forced_nav = true;
+        } else {
+            log::warn!("go-to-cursor ({style:?}): no route to ({x},{y}){}", if hurry { "" } else { " — try hurrying (Ctrl+Alt+H)" });
+        }
+    }
+
     fn think(&mut self, dt: f32) -> MoveInput {
         let seat = self.benches.seat_here(&self.ch, &self.terrain);
         let benches: Vec<Vec2> = self.benches.placed.iter().map(|(b, _)| b.pos).collect();
@@ -639,6 +678,7 @@ impl Pet {
                 self.paused = !self.paused;
                 self.win.set_visible(!self.paused);
             }
+            Command::GoToCursor { hurry } => self.go_to_cursor(hurry),
             Command::PlaceBenchAtCursor(style) => {
                 if let Some((x, y)) = monitor::cursor_pos() {
                     self.place_bench(style, Vec2::new(x as f32, y as f32));
