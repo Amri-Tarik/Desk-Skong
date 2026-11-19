@@ -21,7 +21,7 @@ use crate::geom::RectI;
 /// Half-open integer interval `start..end`.
 pub(super) type Span = (i32, i32);
 
-pub(super) fn build(desk: &DesktopSnapshot, content: &[ContentLedge], opts: &TerrainOptions) -> Terrain {
+pub(super) fn build(desk: &DesktopSnapshot, ledges: &[ContentLedge], walls: &[ContentWallSeg], opts: &TerrainOptions) -> Terrain {
     let mut t = Terrain { generation: desk.generation, ..Default::default() };
     t.bounds = monitor_bounds(&desk.monitors);
     add_monitor_terrain(&mut t, &desk.monitors);
@@ -31,25 +31,32 @@ pub(super) fn build(desk: &DesktopSnapshot, content: &[ContentLedge], opts: &Ter
         add_window_terrain(&mut t, w, &boxes[..i], &desk.monitors, opts);
     }
     t.windows = boxes.iter().map(|w| WindowBox { id: w.id, rect: w.rect.to_f() }).collect();
-    add_content_terrain(&mut t, desk, content, opts);
+    add_content_ledges(&mut t, desk, ledges, opts);
+    add_content_walls(&mut t, desk, walls, opts);
     t
 }
 
-/// Content ledges: visible parts (work areas minus every window in front of the owner,
-/// fullscreen and tiny ones included since they do cover pixels), minus stretches that
-/// duplicate a frame/ground ledge within `content_dedupe_px`.
-fn add_content_terrain(t: &mut Terrain, desk: &DesktopSnapshot, content: &[ContentLedge], opts: &TerrainOptions) {
+/// Windows in front of a content owner (fullscreen and tiny ones included since they do
+/// cover pixels); `None` when the content must be dropped (owner gone or fullscreen,
+/// wallpaper content disabled).
+fn content_front<'a>(all: &'a [&'a WindowInfo], owner: Option<WindowId>, opts: &TerrainOptions) -> Option<&'a [&'a WindowInfo]> {
+    match owner {
+        Some(id) => match all.iter().position(|w| w.id == id) {
+            Some(i) if !all[i].fullscreen => Some(&all[..i]),
+            _ => None, // owner gone, or fullscreen (games, video)
+        },
+        None if opts.include_wallpaper_content => Some(all),
+        None => None,
+    }
+}
+
+/// Content ledges: visible parts (work areas minus every window in front of the owner),
+/// minus stretches that duplicate a frame/ground ledge within `content_dedupe_px`.
+fn add_content_ledges(t: &mut Terrain, desk: &DesktopSnapshot, content: &[ContentLedge], opts: &TerrainOptions) {
     let all: Vec<&WindowInfo> = desk.windows.iter().collect();
     let frame_ledges = t.ledges.len();
     for c in content {
-        let front = match c.owner {
-            Some(id) => match all.iter().position(|w| w.id == id) {
-                Some(i) if !all[i].fullscreen => &all[..i],
-                _ => continue, // owner gone, or fullscreen (games, video)
-            },
-            None if opts.include_wallpaper_content => &all[..],
-            None => continue,
-        };
+        let Some(front) = content_front(&all, c.owner, opts) else { continue };
         let mut spans = visible_on_row(c.y, (c.x0, c.x1), front, &desk.monitors);
         let near = t.ledges[..frame_ledges]
             .iter()
@@ -59,6 +66,50 @@ fn add_content_terrain(t: &mut Terrain, desk: &DesktopSnapshot, content: &[Conte
         for (x0, x1) in spans {
             if ((x1 - x0) as f32) >= opts.min_content_len {
                 t.ledges.push(Ledge { x0: x0 as f32, x1: x1 as f32, y: c.y as f32, kind: LedgeKind::Content, owner: c.owner });
+            }
+        }
+    }
+}
+
+/// Content walls: visible parts of the solid column next to the wall line, minus
+/// stretches duplicating a window/monitor wall within `content_dedupe_px`, minus
+/// openings narrower than `min_content_gap`.
+fn add_content_walls(t: &mut Terrain, desk: &DesktopSnapshot, content: &[ContentWallSeg], opts: &TerrainOptions) {
+    let all: Vec<&WindowInfo> = desk.windows.iter().collect();
+    let mut kept: Vec<ContentWallSeg> = Vec::new();
+    for c in content {
+        let Some(front) = content_front(&all, c.owner, opts) else { continue };
+        let solid = if c.face == Facing::Left { c.x } else { c.x - 1 };
+        let mut spans = visible_on_col(solid, (c.y0, c.y1), front, &desk.monitors);
+        let near = t
+            .walls
+            .iter()
+            .filter(|w| (w.x - c.x as f32).abs() <= opts.content_dedupe_px)
+            .map(|w| (w.y0.floor() as i32, w.y1.ceil() as i32));
+        spans = subtract_all(spans, near);
+        kept.extend(spans.into_iter().map(|(y0, y1)| ContentWallSeg { y0, y1, ..*c }));
+    }
+    // Narrow openings: right-facing wall at xa (solid on its left), left-facing at xb > xa
+    // (solid on its right), overlapping vertically, closer than min_content_gap.
+    let narrow = |a: &ContentWallSeg, b: &ContentWallSeg| {
+        a.face == Facing::Right && b.face == Facing::Left && b.x > a.x && ((b.x - a.x) as f32) < opts.min_content_gap
+    };
+    let mut cuts: Vec<Vec<Span>> = vec![Vec::new(); kept.len()];
+    for (i, a) in kept.iter().enumerate() {
+        for (j, b) in kept.iter().enumerate() {
+            if narrow(a, b) {
+                let o = (a.y0.max(b.y0), a.y1.min(b.y1));
+                if o.0 < o.1 {
+                    cuts[i].push(o);
+                    cuts[j].push(o);
+                }
+            }
+        }
+    }
+    for (c, cut) in kept.iter().zip(cuts) {
+        for (y0, y1) in subtract_all(vec![(c.y0, c.y1)], cut.into_iter()) {
+            if ((y1 - y0) as f32) >= opts.min_content_wall_len {
+                t.walls.push(Wall { x: c.x as f32, y0: y0 as f32, y1: y1 as f32, face: c.face, owner: c.owner, kind: WallKind::Content });
             }
         }
     }
@@ -123,9 +174,10 @@ fn add_window_terrain(t: &mut Terrain, w: &WindowInfo, front: &[&WindowInfo], mo
 }
 
 fn push_walls(t: &mut Terrain, x: i32, spans: &[Span], face: Facing, owner: Option<WindowId>, min_len: f32) {
+    let kind = if owner.is_some() { WallKind::Window } else { WallKind::Monitor };
     for &(y0, y1) in spans {
         if ((y1 - y0) as f32) >= min_len {
-            t.walls.push(Wall { x: x as f32, y0: y0 as f32, y1: y1 as f32, face, owner });
+            t.walls.push(Wall { x: x as f32, y0: y0 as f32, y1: y1 as f32, face, owner, kind });
         }
     }
 }
@@ -137,7 +189,7 @@ pub(super) fn visible_on_row(y: i32, span: Span, front: &[&WindowInfo], monitors
 }
 
 /// Visible parts of `span` (rows) on pixel column `x`.
-fn visible_on_col(x: i32, span: Span, front: &[&WindowInfo], monitors: &[Monitor]) -> Vec<Span> {
+pub(super) fn visible_on_col(x: i32, span: Span, front: &[&WindowInfo], monitors: &[Monitor]) -> Vec<Span> {
     let allowed = clip_to(span, monitors.iter().filter_map(|m| col_span(&m.work, x)));
     subtract_all(allowed, front.iter().filter_map(|o| col_span(&o.rect, x)))
 }
@@ -195,6 +247,8 @@ mod tests {
         min_content_len: 1.0,
         content_dedupe_px: 3.0,
         include_wallpaper_content: false,
+        min_content_wall_len: 1.0,
+        min_content_gap: 40.0,
     };
 
     fn mon(rect: RectI, work: RectI) -> Monitor {
@@ -230,7 +284,7 @@ mod tests {
     }
 
     fn build_with(monitors: Vec<Monitor>, windows: Vec<WindowInfo>, opts: &TerrainOptions) -> Terrain {
-        build(&DesktopSnapshot { generation: 7, monitors, windows }, &[], opts)
+        build(&DesktopSnapshot { generation: 7, monitors, windows }, &[], &[], opts)
     }
 
     fn ledges_of(t: &Terrain, id: u64) -> Vec<(f32, f32, f32)> {
@@ -484,7 +538,7 @@ mod tests {
             .collect();
         let desk = DesktopSnapshot { generation: 1, monitors: two_monitors_side_by_side(), windows };
         let start = std::time::Instant::now();
-        let t = build(&desk, &[], &TerrainOptions::default());
+        let t = build(&desk, &[], &[], &TerrainOptions::default());
         let elapsed = start.elapsed();
         assert_eq!(t.windows.len(), 200);
         // Generous bound for unoptimised CI builds; typical is far below 1 ms.
@@ -500,7 +554,7 @@ mod tests {
     }
 
     fn build_content(windows: Vec<WindowInfo>, content: &[ContentLedge], opts: &TerrainOptions) -> Terrain {
-        build(&DesktopSnapshot { generation: 1, monitors: one_monitor(), windows }, content, opts)
+        build(&DesktopSnapshot { generation: 1, monitors: one_monitor(), windows }, content, &[], opts)
     }
 
     #[test]
@@ -559,5 +613,41 @@ mod tests {
             .ledges
             .iter()
             .all(|l| l.kind != LedgeKind::Content));
+    }
+
+    fn cw(x: i32, y0: i32, y1: i32, face: Facing, owner: Option<u64>) -> ContentWallSeg {
+        ContentWallSeg { x, y0, y1, face, owner }
+    }
+
+    fn content_walls(t: &Terrain) -> Vec<(f32, f32, f32, Facing)> {
+        t.walls.iter().filter(|w| w.kind == WallKind::Content).map(|w| (w.x, w.y0, w.y1, w.face)).collect()
+    }
+
+    #[test]
+    fn content_walls_are_clipped_deduped_and_kept_out_of_narrow_gaps() {
+        let opts = TerrainOptions { min_content_wall_len: 20.0, ..TerrainOptions::default() };
+        let windows = vec![win(1, 300, 100, 500, 300), win(2, 100, 200, 800, 700)];
+        let walls = [
+            cw(600, 150, 790, Facing::Left, Some(2)), // runs onto the taskbar
+            cw(400, 250, 600, Facing::Left, Some(2)), // partly behind window 1
+            cw(101, 300, 500, Facing::Left, Some(2)), // duplicate of window 2 frame
+            // A 20 px wide opening between two strokes: cut where they overlap.
+            cw(650, 400, 600, Facing::Right, Some(2)),
+            cw(670, 450, 650, Facing::Left, Some(2)),
+        ];
+        let t = build(&DesktopSnapshot { generation: 1, monitors: one_monitor(), windows }, &[], &walls, &opts);
+        let mut got = content_walls(&t);
+        got.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
+        assert_eq!(
+            got,
+            vec![
+                (400.0, 300.0, 600.0, Facing::Left),
+                (600.0, 150.0, 760.0, Facing::Left),
+                (650.0, 400.0, 450.0, Facing::Right),
+                (670.0, 600.0, 650.0, Facing::Left),
+            ]
+        );
+        assert!(t.walls.iter().filter(|w| w.kind == WallKind::Window).all(|w| w.owner.is_some()));
+        assert!(t.walls.iter().filter(|w| w.kind == WallKind::Monitor).all(|w| w.owner.is_none()));
     }
 }

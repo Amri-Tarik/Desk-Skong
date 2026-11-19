@@ -1,6 +1,6 @@
 //! Deterministic controller tests on synthetic terrains (render scale 1: 64 px/unit).
 use super::*;
-use crate::terrain::{Facing, Wall, WindowBox};
+use crate::terrain::{Facing, Wall, WallKind, WindowBox};
 
 const DT: f32 = 1.0 / 120.0;
 const PPU: f32 = 64.0;
@@ -19,8 +19,8 @@ fn world_sized(w: f32, h: f32) -> Terrain {
         windows: vec![],
         ledges: vec![Ledge { x0: 0.0, x1: w, y: floor, kind: LedgeKind::Ground, owner: None }],
         walls: vec![
-            Wall { x: 0.0, y0: 0.0, y1: floor, face: Facing::Right, owner: None },
-            Wall { x: w, y0: 0.0, y1: floor, face: Facing::Left, owner: None },
+            Wall { x: 0.0, y0: 0.0, y1: floor, face: Facing::Right, owner: None, kind: WallKind::Monitor },
+            Wall { x: w, y0: 0.0, y1: floor, face: Facing::Left, owner: None, kind: WallKind::Monitor },
         ],
         bounds: RectF::new(0.0, 0.0, w, h),
     }
@@ -30,8 +30,8 @@ fn world_sized(w: f32, h: f32) -> Terrain {
 fn add_window(t: &mut Terrain, id: WindowId, r: RectF) {
     t.windows.push(WindowBox { id, rect: r });
     t.ledges.push(Ledge { x0: r.left, x1: r.right, y: r.top, kind: LedgeKind::OneWay, owner: Some(id) });
-    t.walls.push(Wall { x: r.left, y0: r.top, y1: r.bottom, face: Facing::Left, owner: Some(id) });
-    t.walls.push(Wall { x: r.right, y0: r.top, y1: r.bottom, face: Facing::Right, owner: Some(id) });
+    t.walls.push(Wall { x: r.left, y0: r.top, y1: r.bottom, face: Facing::Left, owner: Some(id), kind: WallKind::Window });
+    t.walls.push(Wall { x: r.right, y0: r.top, y1: r.bottom, face: Facing::Right, owner: Some(id), kind: WallKind::Window });
 }
 
 fn with_window(id: WindowId, r: RectF) -> Terrain {
@@ -520,7 +520,7 @@ fn superdash_charges_launches_and_stops_at_thin_wall_without_tunnelling() {
     for dt in [DT, 1.0 / 30.0, 0.1] {
         let mut t = world();
         // Zero-thickness wall: only the left face of a window.
-        t.walls.push(Wall { x: 1500.0, y0: 500.0, y1: 1040.0, face: Facing::Left, owner: Some(9) });
+        t.walls.push(Wall { x: 1500.0, y0: 500.0, y1: 1040.0, face: Facing::Left, owner: Some(9), kind: WallKind::Window });
         let mut c = standing(&t, 200.0, FLOOR);
         let mut ev = charge_and_launch(&mut c, &t, dt);
         assert!(ev.contains(&MoveEvent::SuperdashCharging));
@@ -821,4 +821,53 @@ fn content_appearing_above_feet_does_not_pop_up() {
     c.on_terrain_rebuilt(&old, &new, &mut ev);
     assert_eq!(c.pos.y, FLOOR - 3.0);
     assert_eq!(c.support.map(|s| s.kind), Some(LedgeKind::Content));
+}
+
+// ------------------------------------------------------------------ content walls
+
+/// A vertical line drawn inside the big window (id 1), `x..x + 2`, rows 300..FLOOR: walls
+/// on both of its sides, as vision reports them.
+fn window_with_vertical_line(x: f32) -> Terrain {
+    let mut t = with_window(1, PAINT);
+    t.walls.push(Wall { x, y0: 300.0, y1: FLOOR, face: Facing::Left, owner: Some(1), kind: WallKind::Content });
+    t.walls.push(Wall { x: x + 2.0, y0: 300.0, y1: FLOOR, face: Facing::Right, owner: Some(1), kind: WallKind::Content });
+    t
+}
+
+#[test]
+fn content_wall_blocks_from_both_sides_inside_its_window() {
+    let t = window_with_vertical_line(1100.0);
+    // Inside the window (its own walls are ignored there), walking right: stopped.
+    let mut c = standing(&t, 900.0, FLOOR);
+    run(&mut c, &t, right(), secs(1.5));
+    assert_eq!(c.body().right, 1100.0);
+    // From the other side, walking left: stopped at the line's right edge.
+    let mut c = standing(&t, 1300.0, FLOOR);
+    run(&mut c, &t, left(), secs(1.5));
+    assert_eq!(c.body().left, 1102.0);
+}
+
+#[test]
+fn wall_slide_on_content_wall() {
+    let t = window_with_vertical_line(1100.0);
+    let mut c = standing(&t, 1000.0, FLOOR);
+    let mut ev = run(&mut c, &t, press_jump(1.0), 1);
+    for _ in 0..secs(1.0) {
+        c.step(&hold_jump(1.0), &t, DT, &mut ev);
+        if matches!(c.state, MoveState::WallSlide { .. }) {
+            break;
+        }
+    }
+    assert_eq!(c.state, MoveState::WallSlide { side: Side::Right });
+    assert_eq!(c.body().right, 1100.0);
+}
+
+#[test]
+fn shadow_dash_passes_content_walls() {
+    let t = window_with_vertical_line(1100.0);
+    let mut c = standing(&t, 1050.0, FLOOR);
+    let ev = run(&mut c, &t, MoveInput { dash_pressed: true, ..right() }, 1);
+    assert!(ev.contains(&MoveEvent::DashStarted { shadow: true }));
+    run(&mut c, &t, idle(), secs(0.3));
+    assert!(c.pos.x > 1102.0 + 16.0, "shadow dash stopped at {}", c.pos.x);
 }

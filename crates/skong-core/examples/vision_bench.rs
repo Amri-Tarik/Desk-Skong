@@ -14,11 +14,19 @@ fn main() {
         let view = PixelView::new(&px, w, h, w).expect("view");
         let mut m = SurfaceMap::new(w, h, VisionParams::default());
         let full = [RectI::new(0, 0, w as i32, h as i32)];
+        let dirty_probe = [RectI::new(0, 0, w as i32, 8)];
         m.rescan(&view, &full);
         let full_t = median(25, || {
             m.rescan(&view, &full);
         });
         let n = m.raw_surfaces().len();
+        let scan_t = median(15, || {
+            m.scan(&view, &full);
+        });
+        let finish_t = median(15, || {
+            m.scan(&view, &dirty_probe);
+            m.finish();
+        });
         let dirty = [RectI::new(400, 300, 800, 500)];
         let small_t = median(200, || {
             m.rescan(&view, &dirty);
@@ -29,8 +37,10 @@ fn main() {
             m.update(t);
         });
         println!(
-            "{w}x{h}: full rescan {:.2} ms ({n} surfaces), 400x200 dirty rescan {:.3} ms, hysteresis update {:.3} ms",
+            "{w}x{h}: full rescan {:.2} ms (scan {:.2} + finish(full width) {:.2}) ({n} surfaces), 400x200 dirty rescan {:.3} ms, hysteresis update {:.3} ms",
             ms(full_t),
+            ms(scan_t),
+            ms(finish_t),
             ms(small_t),
             ms(upd_t)
         );

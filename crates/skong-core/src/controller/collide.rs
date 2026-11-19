@@ -7,12 +7,13 @@
 //! * a [`Wall`] blocks only bodies that start on its face side and move into it;
 //! * a [`Ledge`] blocks only bodies whose feet start at/above it and move down;
 //! * edges of a window are ignored while the body overlaps that window's interior, except
-//!   [`LedgeKind::Content`] ledges (content drawn inside a window is meant to be stood on);
+//!   content ledges and walls ([`LedgeKind::Content`], [`WallKind::Content`]): content drawn
+//!   inside a window is meant to be stood on and bumped into;
 //! * `Terrain::bounds` adds an implicit ground floor and inward walls.
 use super::Side;
 use crate::desktop::WindowId;
 use crate::geom::RectF;
-use crate::terrain::{Facing, Ledge, LedgeKind, Terrain, Wall};
+use crate::terrain::{Facing, Ledge, LedgeKind, Terrain, Wall, WallKind};
 
 /// Float tolerance in px: a body this far past a segment still counts as "at" it.
 pub(super) const EPS: f32 = 0.5;
@@ -72,16 +73,16 @@ impl<'a> Query<'a> {
     fn walls(&self) -> impl Iterator<Item = Wall> + '_ {
         let sides = self.bounds().into_iter().flat_map(|b| {
             [
-                Wall { x: b.left, y0: b.top, y1: b.bottom, face: Facing::Right, owner: None },
-                Wall { x: b.right, y0: b.top, y1: b.bottom, face: Facing::Left, owner: None },
+                Wall { x: b.left, y0: b.top, y1: b.bottom, face: Facing::Right, owner: None, kind: WallKind::Monitor },
+                Wall { x: b.right, y0: b.top, y1: b.bottom, face: Facing::Left, owner: None, kind: WallKind::Monitor },
             ]
         });
-        self.terrain.walls.iter().copied().filter(|w| !self.ignores(w.owner)).chain(sides)
+        self.terrain.walls.iter().copied().filter(|w| w.kind == WallKind::Content || !self.ignores(w.owner)).chain(sides)
     }
 
     /// Horizontal sweep by `dx`. Returns the allowed displacement and whether a wall was hit.
     ///
-    /// `pass_window_walls`: shadow dash (walls owned by windows don't block; monitor walls do).
+    /// `pass_window_walls`: shadow dash (window and content walls don't block; monitor walls do).
     /// `foot_tol`: walls overlapping only the bottom `foot_tol` px of the body don't block
     /// (lets a grounded body step onto slightly higher ledges).
     pub fn sweep_x(&self, body: RectF, dx: f32, pass_window_walls: bool, foot_tol: f32) -> (f32, bool) {
@@ -92,7 +93,7 @@ impl<'a> Query<'a> {
         let mut allowed = dx;
         let mut hit = false;
         for w in self.walls() {
-            if w.face != blocking || (pass_window_walls && w.owner.is_some()) {
+            if w.face != blocking || (pass_window_walls && w.kind != WallKind::Monitor) {
                 continue;
             }
             if !(w.y0 < body.bottom - foot_tol && body.top < w.y1) {
