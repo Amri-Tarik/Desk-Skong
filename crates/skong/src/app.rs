@@ -448,6 +448,8 @@ impl Pet {
             input = mt.input(dt, &mut self.ch, Vec2::new((w.left + w.right) as f32 * 0.5, w.top as f32 + 120.0));
             self.act = None;
         } else if manual_input.is_none()
+            // Never mid-jump or mid-climb of a planned route: only where it plans a drop.
+            && self.nav.follower().is_none_or(|f| f.dive_ok())
             && let Some(dark) = self.ch.auto_dive(&self.terrain, &input, self.brain.mind().arousal() > 0.6)
         {
             // Far straight drops: Desolate Dive (Descending Dark when excited / very deep).
@@ -724,7 +726,8 @@ impl Pet {
         let Some((x, y)) = monitor::cursor_pos() else { return };
         let style = if hurry { TravelStyle::Hurry } else { TravelStyle::Stroll };
         if self.nav.go(&self.ch, NavGoal::Point(Vec2::new(x as f32, y as f32)), style) {
-            log::info!("go-to-cursor ({style:?}) toward ({x},{y})");
+            let moves = self.nav.follower().map(|f| f.route().moves.clone()).unwrap_or_default();
+            log::info!("go-to-cursor ({style:?}) toward ({x},{y}) via {moves:?}");
             // The planner heads for the closest reachable point; say so when that is not the cursor.
             if let Some(end) = self.nav.follower().map(|f| f.route().end) {
                 // Ending below a cursor that hovers in mid-air is normal; only a horizontal miss

@@ -151,19 +151,27 @@ pub(super) fn extract(terrain: &Terrain, half: f32, height: f32, step: f32) -> V
                 continue;
             }
             // Walls at (or within a body of) the ends stop the feet center short of them.
-            let mut lo = a + 1.0;
-            let mut hi = b - 1.0;
+            let (mut wall_lo, mut wall_hi) = (f32::NEG_INFINITY, f32::INFINITY);
             for w in walls.iter().filter(|w| blocks(w)) {
                 if w.face == Facing::Right && w.x >= a - half - 1.0 && w.x <= a + half {
-                    lo = lo.max(w.x + half + 0.5);
+                    wall_lo = wall_lo.max(w.x + half + 0.5);
                 }
                 if w.face == Facing::Left && w.x <= b + half + 1.0 && w.x >= b - half {
-                    hi = hi.min(w.x - half - 0.5);
+                    wall_hi = wall_hi.min(w.x - half - 0.5);
                 }
             }
+            let mut lo = (a + 1.0).max(wall_lo);
+            let mut hi = (b - 1.0).min(wall_hi);
             if lo > hi {
-                let mid = (a + b) * 0.5;
-                (lo, hi) = (mid, mid);
+                // Narrower than the body: it can still stand overhanging a ledge end (e.g. in
+                // the pocket between a window side and a monitor seam). If not even that, the
+                // body does not fit: not a surface.
+                let over_lo = if a == l.x0 { a - half + 1.0 } else { a + 1.0 };
+                let over_hi = if b == l.x1 { b + half - 1.0 } else { b - 1.0 };
+                (lo, hi) = (over_lo.max(wall_lo), over_hi.min(wall_hi));
+                if lo > hi {
+                    continue;
+                }
             }
             out.push(Surface { x0: a, x1: b, y: l.y, kind: l.kind, owner: l.owner, lo, hi, ledge_x0: l.x0, ledge_x1: l.x1 });
         }

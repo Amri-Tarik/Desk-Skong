@@ -174,7 +174,8 @@ fn high_platforms(width: f32, gap: f32) -> Terrain {
 
 #[test]
 fn gap_only_crossable_with_dash() {
-    let t = high_platforms(1920.0, 1150.0);
+    // Wide monitor: its edges are too far from the platforms to climb up beside them.
+    let t = high_platforms(2800.0, 1150.0);
     let ch = knight(&t, 300.0, 0.0);
     assert!(plan_to(&t, &ch, NavGoal::OnWindow(2), TravelStyle::Stroll).is_none());
     let mut ch = knight(&t, 300.0, 0.0);
@@ -218,7 +219,7 @@ fn shadow_dash_through_a_window_wall() {
 
 #[test]
 fn superdash_only_when_hurrying() {
-    let t = high_platforms(2560.0, 1500.0);
+    let t = high_platforms(3200.0, 1500.0);
     let ch = knight(&t, 300.0, 0.0);
     assert!(plan_to(&t, &ch, NavGoal::OnWindow(2), TravelStyle::Normal).is_none());
     let mut ch = knight(&t, 300.0, 0.0);

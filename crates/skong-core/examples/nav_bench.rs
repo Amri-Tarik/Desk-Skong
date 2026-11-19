@@ -102,12 +102,15 @@ fn main() {
             }
         }
         println!(
-            "seed {seed}: {} surfaces, {} edges, {} pairs, {} sims ({} ticks) | build {best:.2} ms | rebuild after drag {inc:.2} ms ({} sims, {} cache hits) | plan {:.1} us avg; windows reachable stroll/normal/hurry {}/{}/{} of {}",
+            "seed {seed}: {} surfaces, {} edges, {} pairs, {} sims ({} ticks; climbs {} sims, {} ticks, {} brittle) | build {best:.2} ms | rebuild after drag {inc:.2} ms ({} sims, {} cache hits) | plan {:.1} us avg; windows reachable stroll/normal/hurry {}/{}/{} of {}",
             s.surfaces,
             s.edges,
             s.pairs,
             s.sims,
             s.ticks,
+            s.climb_sims,
+            s.climb_ticks,
+            s.brittle,
             r.sims,
             r.cache_hits,
             plan_ms * 1000.0 / plans as f32,

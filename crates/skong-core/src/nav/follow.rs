@@ -1,7 +1,7 @@
 //! Route following: replays each edge's script with the executor that validated it, checks
 //! every landing, and re-plans on drift, timeouts or a new terrain generation.
 use super::script::{Exec, Outcome, Stage, steer};
-use super::{FollowStatus, NavGoal, NavGraph, Route, TravelStyle};
+use super::{Edge, FollowStatus, MoveKind, NavGoal, NavGraph, Route, TravelStyle, search};
 use crate::controller::{Character, MoveInput, MoveState};
 use crate::terrain::Terrain;
 
@@ -9,8 +9,13 @@ use crate::terrain::Terrain;
 const ARRIVE_PX: f32 = 4.0;
 /// Final approach steering gain (game units).
 const ARRIVE_GAIN: f32 = 0.25;
-/// Consecutive drift / timeout re-plans before giving up.
-const MAX_FAILURES: u32 = 4;
+/// Drift / timeout re-plans (in total, for one goal) before giving up.
+const MAX_DRIFTS: u32 = 12;
+/// An edge that slipped this many times is avoided (penalty), then excluded.
+const SLIPS_AVOID: u8 = 2;
+const SLIPS_EXCLUDE: u8 = 3;
+/// Extra cost (s) for an edge being avoided: alternatives win unless much slower.
+const AVOID_COST: f32 = 5.0;
 /// Slack (s) on top of the expected duration of a stage before it counts as stuck.
 const STAGE_SLACK: f32 = 3.0;
 /// Worst wait for dash / shadow dash cooldowns at a take-off (s).
@@ -38,7 +43,21 @@ pub struct PathFollower {
     /// Time in the current stage (approach / script / final walk) and its budget.
     stage_time: f32,
     stage_limit: f32,
-    failures: u32,
+    /// Drift re-plans so far.
+    drifts: u32,
+    /// Re-plans so far (any reason).
+    replans: u32,
+    /// Edges whose script failed while following, with their failure counts. A first slip
+    /// is retried as is (usually a fixable miss), repeated ones are avoided, then excluded.
+    slips: Vec<(EdgeKey, u8)>,
+}
+
+/// Identity of an edge across re-plans (and graph rebuilds that leave it unchanged).
+type EdgeKey = (MoveKind, i32, i32, i32);
+
+fn edge_key(e: &Edge) -> EdgeKey {
+    let q = |v: f32| (v / 4.0).round() as i32;
+    (e.kind, q(e.takeoff), q(e.land.x), q(e.land.y))
 }
 
 impl PathFollower {
@@ -57,6 +76,26 @@ impl PathFollower {
         self.goal
     }
 
+    /// Kind of the edge being executed (approach included); `None` on the final walk.
+    pub fn current_move(&self) -> Option<MoveKind> {
+        self.route.steps.get(self.step).map(|s| s.edge.kind)
+    }
+
+    /// May the app turn a fall into a dive now? Only where a straight drop is the plan
+    /// (walk-offs, drops, drop-throughs; or a fall after a slip, before re-planning): a dive
+    /// lands where that fall would. Mid-jump or mid-climb a dive would wreck the move.
+    pub fn dive_ok(&self) -> bool {
+        match self.route.steps.get(self.step) {
+            None => true,
+            Some(step) => self.replan.is_some() || matches!(step.edge.kind, MoveKind::Walk | MoveKind::Drop | MoveKind::DropThrough),
+        }
+    }
+
+    /// Re-plans so far (terrain changes, drift, timeouts).
+    pub fn replans(&self) -> u32 {
+        self.replans
+    }
+
     pub fn style(&self) -> TravelStyle {
         self.style
     }
@@ -73,11 +112,12 @@ impl PathFollower {
         if let (Some(exec), Some(step)) = (self.exec.as_mut(), self.route.steps.get(self.step)) {
             let was_script = exec.stage == Stage::Script;
             match exec.outcome(ch, &step.from, &step.to) {
-                Outcome::Done => {
-                    self.failures = 0;
-                    self.start_step(self.step + 1);
+                Outcome::Done => self.start_step(self.step + 1),
+                Outcome::Wrong if self.replan == Some(Replan::Drift) => {}
+                Outcome::Wrong => {
+                    self.slipped(step.edge);
+                    self.request(Replan::Drift);
                 }
-                Outcome::Wrong => self.request(Replan::Drift),
                 Outcome::Continue => {
                     if !was_script && exec.stage == Stage::Script {
                         self.stage_time = 0.0;
@@ -89,11 +129,14 @@ impl PathFollower {
         if graph.generation != self.route.generation && !in_script {
             self.request(Replan::Stale);
         }
-        if self.stage_time > self.stage_limit {
+        if self.stage_time > self.stage_limit && self.replan != Some(Replan::Drift) {
+            if in_script && let Some(step) = self.route.steps.get(self.step) {
+                self.slipped(step.edge);
+            }
             self.request(Replan::Drift);
         }
         if let Some(reason) = self.replan {
-            if !ch.is_grounded() || ch.state == MoveState::HardLanding {
+            if !ch.is_grounded() || matches!(ch.state, MoveState::HardLanding | MoveState::Dive { .. }) {
                 return (idle, FollowStatus::Moving);
             }
             if let Some(status) = self.do_replan(reason, ch, graph) {
@@ -150,11 +193,18 @@ impl PathFollower {
     /// Re-plan from the current state; `Some(status)` when following has ended.
     fn do_replan(&mut self, reason: Replan, ch: &Character, graph: &NavGraph) -> Option<FollowStatus> {
         self.replan = None;
+        self.replans += 1;
         if reason == Replan::Drift {
-            self.failures += 1;
+            self.drifts += 1;
         }
+        let slips = &self.slips;
+        let extra = |e: &Edge| match slips.iter().find(|(k, _)| *k == edge_key(e)) {
+            Some(&(_, n)) if n >= SLIPS_EXCLUDE => f32::INFINITY,
+            Some(&(_, n)) if n >= SLIPS_AVOID => AVOID_COST,
+            _ => 0.0,
+        };
         let route = match self.goal {
-            Some(goal) if self.failures <= MAX_FAILURES => graph.plan(ch, goal, self.style),
+            Some(goal) if self.drifts <= MAX_DRIFTS => search::plan_with(graph, ch, goal, self.style, &extra),
             _ => None,
         };
         let Some(route) = route else {
@@ -164,6 +214,15 @@ impl PathFollower {
         self.route = route;
         self.start_step(0);
         None
+    }
+
+    /// Count a failure of `edge`'s script.
+    fn slipped(&mut self, edge: Edge) {
+        let k = edge_key(&edge);
+        match self.slips.iter_mut().find(|(e, _)| *e == k) {
+            Some((_, n)) => *n = n.saturating_add(1),
+            None => self.slips.push((k, 1)),
+        }
     }
 
     fn start_step(&mut self, i: usize) {
