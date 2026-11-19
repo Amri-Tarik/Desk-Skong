@@ -50,3 +50,10 @@ pub fn single_instance() -> Option<InstanceGuard> {
         Some(InstanceGuard(h))
     }
 }
+
+/// Local wall-clock hour (0..24) with fraction, e.g. 21.5 = 9:30 pm.
+pub fn local_hour() -> f32 {
+    // SAFETY: plain query into a returned struct.
+    let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
+    t.wHour as f32 + t.wMinute as f32 / 60.0
+}

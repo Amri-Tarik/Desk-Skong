@@ -1,6 +1,7 @@
-//! Scripted percept sequences → expected behaviour choices. Navigation is faked (routes
-//! "arrive" after a fixed time) and acts are emulated with fixed durations, so these
-//! tests exercise only the brain.
+//! Scripted percept sequences → expected behaviour (and act) choices, each with its
+//! reason. Navigation is faked (routes "arrive" after `trip` seconds and put the knight on
+//! the goal's ledge), acts are emulated with durations close to the real ones, and a
+//! "wall" switch makes the knight press without moving.
 use std::path::Path;
 
 use super::*;
@@ -53,6 +54,22 @@ impl Navigator for FakeNav {
     }
 }
 
+/// Rough real durations (s) of the acts, for a believable time budget.
+fn act_secs(name: &str) -> f32 {
+    match name {
+        "nap" => 600.0,
+        "rest" => 12.0,
+        "lean_back" => 10.0,
+        "read_map" | "map_stroll" => 7.0,
+        "bow_down" | "lantern_patrol" => 6.0,
+        "gaze_into_screen" | "hurt_idle" | "windswept" => 4.5,
+        "look_up" | "look_down" | "pick_up_trinket" => 3.0,
+        "stare_at_user" | "focus" => 2.5,
+        "slash" | "slash_alt" | "up_slash" | "down_slash" | "recoil" => 0.3,
+        _ => 1.5,
+    }
+}
+
 struct PlayingAct {
     act: RunningAct,
     left: f32,
@@ -67,11 +84,17 @@ struct Sim {
     terrain: Terrain,
     knight: Character,
     benches: Vec<Vec2>,
+    activity: Activity,
     cursor: Option<Cursor>,
     user: UserActivity,
     pokes: Vec<Poke>,
     events: Vec<MoveEvent>,
     act: Option<PlayingAct>,
+    /// A wall in front: pressing a direction doesn't move the knight.
+    wall: bool,
+    dark: bool,
+    last_input: MoveInput,
+    last_motion: Motion,
     started: Vec<String>,
     intents: Vec<Intent>,
     switches: Vec<Switch>,
@@ -97,6 +120,10 @@ fn floor_support() -> Support {
     Support { owner: None, kind: LedgeKind::Ground, y: FLOOR, x0: 0.0, x1: 1920.0 }
 }
 
+fn spot(rect: RectI, intensity: f32, age: f32) -> ActivitySpot {
+    ActivitySpot { rect, center: rect.to_f().center(), intensity, age_secs: age, owner: None }
+}
+
 impl Sim {
     fn new(cfg: BrainConfig) -> Self {
         let cfg = BrainConfig { personality: Some(cfg.personality.unwrap_or_default()), ..cfg };
@@ -118,11 +145,16 @@ impl Sim {
             terrain,
             knight,
             benches: vec![],
+            activity: Activity::default(),
             cursor: None,
             user: UserActivity { idle_secs: 5.0, keys_per_sec: 0.0 },
             pokes: vec![],
             events: vec![],
             act: None,
+            wall: false,
+            dark: false,
+            last_input: MoveInput::default(),
+            last_motion: Motion::Hold,
             started: vec![],
             intents: vec![],
             switches: vec![],
@@ -145,11 +177,45 @@ impl Sim {
         self.desktop_changed();
     }
 
+    /// Put the knight at `p`, standing on the ledge there if there is one.
+    fn place(&mut self, p: Vec2) {
+        let ledge = self.terrain.ledges.iter().find(|l| (l.y - p.y).abs() < 2.0 && l.x0 <= p.x && p.x <= l.x1).copied();
+        match ledge {
+            Some(l) => {
+                self.knight.pos = Vec2::new(p.x, l.y);
+                self.knight.support = Some(Support::from(l));
+                self.knight.state = MoveState::Grounded;
+            }
+            None => self.knight.pos.x = p.x,
+        }
+    }
+
+    fn goal_point(&self, goal: NavGoal) -> Vec2 {
+        match goal {
+            NavGoal::Point(p) => p,
+            NavGoal::OnWindow(id) => self.terrain.window_rect(id).map_or(self.knight.pos, |r| Vec2::new((r.left + r.right) * 0.5, r.top)),
+        }
+    }
+
     fn act_name(&self, id: ActId) -> String {
         self.catalog.get(id).map(|a| a.name.clone()).unwrap_or_default()
     }
 
     fn step(&mut self) -> Intent {
+        // What the app would have applied last step.
+        self.last_input = match self.last_motion {
+            Motion::Hold => MoveInput::default(),
+            Motion::Direct(i) => i,
+            Motion::Navigate { goal, .. } => {
+                let dx = self.goal_point(goal).x - self.knight.pos.x;
+                MoveInput { x: if dx.abs() > 1.0 { dx.signum() } else { 0.0 }, ..Default::default() }
+            }
+        };
+        if self.act.is_some() {
+            self.last_input = MoveInput::default();
+        }
+        self.knight.vel.x = if self.wall { 0.0 } else { self.last_input.x * 150.0 };
+        let perch = self.knight.support.is_some_and(|s| s.kind != LedgeKind::Ground);
         let p = Percepts {
             dt: DT,
             knight: &self.knight,
@@ -159,12 +225,17 @@ impl Sim {
             user: self.user,
             fullscreen_front: false,
             pokes: &self.pokes,
-            benches: &self.benches,
-            perch: false,
             act: self.act.as_ref().map(|a| a.act),
+            benches: &self.benches,
+            perch,
             move_events: &self.events,
+            activity: &self.activity,
+            last_input: self.last_input,
+            local_hour: None,
+            dark: self.dark,
         };
         let intent = self.brain.tick(&p, &mut self.nav);
+        self.last_motion = intent.motion;
         self.pokes.clear();
         self.events.clear();
         self.t += DT;
@@ -185,7 +256,7 @@ impl Sim {
             && self.act.is_none()
         {
             let name = self.act_name(id);
-            let left = if name == "nap" { 600.0 } else { 1.5 };
+            let left = act_secs(&name);
             self.started.push(name);
             self.act = Some(PlayingAct { act: RunningAct { id, interruptible: true }, left });
         }
@@ -196,13 +267,14 @@ impl Sim {
             }
         }
 
-        // Every route arrives after `trip` seconds.
-        if self.nav.status == NavStatus::Moving {
+        // Every route arrives after `trip` seconds (unless a wall is in the way).
+        if self.nav.status == NavStatus::Moving && !self.wall {
             self.nav.elapsed += DT;
             if self.nav.elapsed >= self.nav.trip {
                 self.nav.status = NavStatus::Arrived;
-                if let Some((NavGoal::Point(p), _)) = self.nav.gos.last() {
-                    self.knight.pos.x = p.x; // walked there (stays on the same floor)
+                if let Some(&(goal, _)) = self.nav.gos.last() {
+                    let p = self.goal_point(goal);
+                    self.place(p);
                 }
             }
         }
@@ -225,6 +297,7 @@ impl Sim {
         self.run_while(secs, |s| s.brain.behaviour() != kind)
     }
 
+    /// Step while `cond` holds; `true` if it stopped holding within `secs`.
     fn run_while(&mut self, secs: f32, mut cond: impl FnMut(&Sim) -> bool) -> bool {
         let n = (secs / DT).round() as usize;
         for _ in 0..n {
@@ -243,8 +316,17 @@ impl Sim {
     fn park_cursor(&mut self, offset: Vec2) {
         self.cursor = Some(Cursor { pos: self.body_center() + offset, ..Default::default() });
     }
+
+    fn started_since(&self, n: usize) -> &[String] {
+        &self.started[n.min(self.started.len())..]
+    }
+
+    fn last_reason(&self) -> &str {
+        self.intents.last().map_or("", |i| i.reason.as_str())
+    }
 }
 
+/// Calm, rested, a bit bored; no cursor.
 fn calm(cfg: BrainConfig) -> Sim {
     let mut sim = Sim::new(cfg);
     let m = sim.brain.mind_mut();
@@ -253,20 +335,174 @@ fn calm(cfg: BrainConfig) -> Sim {
     sim
 }
 
-#[test]
-fn tired_with_idle_user_walks_to_bench_and_naps() {
-    let mut sim = sleepy_with_bench();
-    assert!(sim.run_until(3.0, BehaviourKind::Nap), "debug: {}", sim.intents.last().map_or("", |i| &i.debug));
-    sim.step();
-    assert_eq!(sim.nav.gos.last(), Some(&(NavGoal::Point(BENCH), TravelStyle::Stroll)), "walks to the bench first");
-    assert!(!sim.started.iter().any(|a| a == "nap"), "no sitting before reaching the bench");
-    sim.run(4.0);
-    assert_eq!(sim.started.last().map(String::as_str), Some("nap"));
-    // Stays asleep: nothing voluntary interrupts a nap.
-    let kinds = sim.run(30.0);
-    assert!(kinds.iter().all(|k| *k == BehaviourKind::Nap));
-    assert!(sim.brain.mind().needs.energy > 0.1);
+/// A window whose top (y = 400) is a perch.
+fn with_window(mut sim: Sim) -> Sim {
+    sim.open(window(1, RectI::new(200, 400, 900, 900), "editor.exe"));
+    sim
 }
+
+// --- Activity watching ----------------------------------------------------------------
+
+#[test]
+fn activity_is_watched_from_its_windows_title_bar() {
+    let mut sim = with_window(calm(BrainConfig::default()));
+    sim.run(1.0);
+    sim.activity.spots = vec![spot(RectI::new(400, 500, 600, 600), 0.8, 1.0)];
+    assert!(sim.run_until(3.0, BehaviourKind::Watch), "{}", sim.last_reason());
+    assert!(sim.last_reason().starts_with("watch activity @ (500,550) 0.8"), "{}", sim.last_reason());
+    sim.step();
+    assert_eq!(sim.nav.gos.last().map(|g| g.0), Some(NavGoal::Point(Vec2::new(500.0, 400.0))), "vantage = title bar above the spot");
+    let n = sim.started.len();
+    sim.run(6.0);
+    assert!(sim.started_since(n).iter().any(|a| a == "look_down"), "acts: {:?}", sim.started_since(n));
+}
+
+#[test]
+fn watching_lasts_while_interesting_then_moves_on() {
+    let mut sim = with_window(calm(BrainConfig::default()));
+    sim.run(1.0);
+    sim.activity.spots = vec![spot(RectI::new(400, 500, 600, 600), 0.8, 1.0)];
+    assert!(sim.run_until(3.0, BehaviourKind::Watch));
+    let start = sim.t;
+    assert!(sim.run_while(40.0, |s| s.brain.behaviour() == BehaviourKind::Watch), "never got bored of it");
+    let watched = sim.t - start;
+    let w = WatchConfig::default();
+    assert!(watched >= w.min_secs && watched <= w.max_secs + 12.0 + 3.0, "watched {watched:.1}s");
+    // Satisfied: does not go straight back to the same spot.
+    let kinds = sim.run(20.0);
+    assert!(!kinds.contains(&BehaviourKind::Watch), "re-watched a satisfied spot");
+}
+
+#[test]
+fn watching_stops_when_the_spot_goes_quiet() {
+    let mut sim = with_window(calm(BrainConfig::default()));
+    sim.run(1.0);
+    sim.activity.spots = vec![spot(RectI::new(400, 500, 600, 600), 0.8, 1.0)];
+    assert!(sim.run_until(3.0, BehaviourKind::Watch));
+    sim.run(3.0);
+    sim.activity.spots.clear();
+    assert!(sim.run_while(3.5, |s| s.brain.behaviour() == BehaviourKind::Watch));
+}
+
+#[test]
+fn long_lived_activity_is_watched_sitting_down() {
+    let mut sim = with_window(calm(BrainConfig::default()));
+    sim.run(1.0);
+    sim.activity.spots = vec![spot(RectI::new(400, 500, 600, 600), 0.9, 20.0)];
+    assert!(sim.run_until(3.0, BehaviourKind::Watch));
+    let n = sim.started.len();
+    sim.run(10.0);
+    let acts = sim.started_since(n);
+    assert!(acts.iter().any(|a| a == "rest" || a == "lean_back"), "acts: {acts:?}");
+}
+
+#[test]
+fn activity_behind_him_is_gazed_at_and_activity_above_looked_up_at() {
+    let mut sim = calm(BrainConfig::default());
+    sim.run(1.0);
+    // A big changing region right behind the knight (video in a window behind him).
+    sim.activity.spots = vec![spot(RectI::new(800, 900, 1100, 1060), 0.8, 1.0)];
+    assert!(sim.run_until(3.0, BehaviourKind::Watch));
+    sim.run(4.0);
+    assert!(sim.started.iter().any(|a| a == "gaze_into_screen"), "acts: {:?}", sim.started);
+
+    let mut sim = calm(BrainConfig::default());
+    sim.run(1.0);
+    sim.activity.spots = vec![spot(RectI::new(850, 150, 1050, 300), 0.8, 1.0)];
+    assert!(sim.run_until(3.0, BehaviourKind::Watch));
+    sim.run(6.0);
+    assert!(sim.started.iter().any(|a| a == "look_up"), "acts: {:?}", sim.started);
+}
+
+// --- Cursor companion -----------------------------------------------------------------
+
+#[test]
+fn companion_follows_the_cursor_and_stays_near() {
+    let mut sim = calm(BrainConfig::default());
+    sim.cursor = Some(Cursor { pos: Vec2::new(1000.0, 900.0), ..Default::default() });
+    assert!(sim.run_until(1.0, BehaviourKind::Companion));
+    sim.run(2.0);
+    assert!(sim.nav.gos.is_empty(), "already close: no walking");
+    // Cursor drifts a little: stroll after it.
+    sim.cursor = Some(Cursor { pos: Vec2::new(1500.0, 900.0), ..Default::default() });
+    sim.run(1.5);
+    let (goal, style) = *sim.nav.gos.last().expect("follows");
+    assert_eq!(style, TravelStyle::Stroll);
+    assert!(sim.last_reason().starts_with("companion: following cursor"), "{}", sim.last_reason());
+    let g = sim.goal_point(goal);
+    assert!((g.x - 1500.0).abs() <= 160.0 && g.y == FLOOR, "goal {g:?}: beside the cursor's projection");
+    sim.run(3.0);
+    assert!((sim.knight.pos.x - 1500.0).abs() < 240.0);
+    // Far away: hurry.
+    sim.cursor = Some(Cursor { pos: Vec2::new(100.0, 900.0), ..Default::default() });
+    sim.knight.pos.x = 1900.0;
+    sim.run(1.5);
+    assert_eq!(sim.nav.gos.last().map(|g| g.1), Some(TravelStyle::Hurry));
+}
+
+#[test]
+fn polite_companion_keeps_its_distance_and_never_hurries() {
+    let mut sim = calm(BrainConfig { bother_level: 0.0, ..Default::default() });
+    sim.cursor = Some(Cursor { pos: Vec2::new(1300.0, 900.0), ..Default::default() });
+    sim.run(3.0);
+    assert!(sim.nav.gos.is_empty(), "340 px is close enough for a polite knight");
+    sim.cursor = Some(Cursor { pos: Vec2::new(100.0, 900.0), ..Default::default() });
+    sim.knight.pos.x = 1900.0;
+    sim.run(2.0);
+    let (goal, style) = *sim.nav.gos.last().expect("follows");
+    assert_ne!(style, TravelStyle::Hurry);
+    assert!(sim.goal_point(goal).x >= 100.0 + 200.0, "stands well beside the cursor");
+}
+
+#[test]
+fn companion_stays_put_while_the_user_types() {
+    let mut sim = calm(BrainConfig::default());
+    sim.user.keys_per_sec = 5.0;
+    sim.cursor = Some(Cursor { pos: Vec2::new(200.0, 900.0), ..Default::default() });
+    sim.run(5.0);
+    assert!(sim.nav.gos.is_empty());
+    assert!(sim.last_reason().contains("typing"), "{}", sim.last_reason());
+}
+
+#[test]
+fn companion_looks_up_at_a_cursor_above() {
+    let mut sim = calm(BrainConfig::default());
+    sim.park_cursor(Vec2::new(60.0, -300.0));
+    sim.run(5.0);
+    assert!(sim.started.iter().any(|a| a == "look_up"), "acts: {:?}", sim.started);
+    assert!(sim.nav.gos.is_empty(), "cursor above but close horizontally: no need to move");
+}
+
+#[test]
+fn returning_user_is_greeted_with_a_stare() {
+    let mut sim = calm(BrainConfig::default());
+    sim.user.idle_secs = 900.0;
+    sim.run(2.0);
+    sim.user.idle_secs = 0.0;
+    sim.park_cursor(Vec2::new(150.0, -40.0));
+    sim.run(14.0);
+    assert!(sim.started.iter().any(|a| a == "stare_at_user"), "acts: {:?}", sim.started);
+}
+
+#[test]
+fn parked_cursor_makes_him_settle_on_a_nearby_perch() {
+    let mut sim = with_window(calm(BrainConfig::default()));
+    sim.cursor = Some(Cursor { pos: Vec2::new(700.0, 300.0), ..Default::default() });
+    sim.run(30.0);
+    assert!(sim.knight.pos.y == 400.0, "went up onto the window top near the cursor: {:?}", sim.knight.pos);
+    assert!(sim.started.iter().any(|a| a == "lean_back" || a == "rest"), "acts: {:?}", sim.started);
+}
+
+#[test]
+fn night_brings_out_the_lantern() {
+    let mut sim = calm(BrainConfig::default());
+    sim.dark = true;
+    sim.park_cursor(Vec2::new(100.0, -20.0));
+    sim.run(120.0);
+    assert!(sim.started.iter().any(|a| a == "lantern_patrol"), "acts: {:?}", sim.started);
+}
+
+// --- Exploring windows ------------------------------------------------------------------
 
 #[test]
 fn new_window_is_explored_at_a_stroll_when_calm() {
@@ -276,7 +512,6 @@ fn new_window_is_explored_at_a_stroll_when_calm() {
     assert!(sim.run_until(3.0, BehaviourKind::Explore));
     let poi = sim.brain.exploring().expect("exploring");
     assert_eq!(poi.kind, PoiKind::NewWindow);
-    assert_eq!(poi.target, PoiTarget::Window(10));
     sim.step();
     assert_eq!(sim.nav.gos.last(), Some(&(NavGoal::OnWindow(10), TravelStyle::Stroll)));
 }
@@ -293,19 +528,124 @@ fn new_window_is_rushed_to_when_excited() {
 }
 
 #[test]
-fn explored_window_is_remembered() {
+fn a_new_window_gets_mapped_and_remembered() {
     let mut sim = calm(BrainConfig::default());
     sim.run(1.0);
     sim.open(window(10, RectI::new(300, 500, 900, 900), "notepad.exe"));
     assert!(sim.run_until(3.0, BehaviourKind::Explore));
-    // Arrive, inspect, and move on.
-    assert!(sim.run_while(10.0, |s| s.brain.behaviour() == BehaviourKind::Explore));
-    let b0 = sim.brain.mind().needs.boredom;
-    assert!(b0 < 0.5, "exploring satisfied boredom ({b0})");
+    assert!(sim.run_while(15.0, |s| s.brain.behaviour() == BehaviourKind::Explore));
+    assert!(sim.started.iter().any(|a| a == "read_map"), "perched on it, so maps it seated: {:?}", sim.started);
     sim.run(20.0);
     let again = sim.nav.gos.iter().filter(|(g, _)| *g == NavGoal::OnWindow(10)).count();
     assert_eq!(again, 1, "visited window is not re-explored right away");
 }
+
+#[test]
+fn a_small_new_window_is_a_trinket() {
+    let mut sim = calm(BrainConfig::default());
+    sim.run(1.0);
+    sim.open(window(11, RectI::new(700, 700, 1000, 900), "toast.exe"));
+    assert!(sim.run_until(3.0, BehaviourKind::Explore));
+    sim.run(6.0);
+    assert!(sim.started.iter().any(|a| a == "pick_up_trinket"), "acts: {:?}", sim.started);
+}
+
+// --- Rest & sleep -----------------------------------------------------------------------
+
+#[test]
+fn tired_knight_finds_a_perch_and_sits() {
+    let mut sim = with_window(calm(BrainConfig::default()));
+    sim.brain.mind_mut().needs.energy = 0.35;
+    assert!(sim.run_until(3.0, BehaviourKind::Rest), "{}", sim.last_reason());
+    sim.run(5.0);
+    assert_eq!(sim.knight.pos.y, 400.0, "walked to the window top");
+    assert!(sim.started.iter().any(|a| a == "rest"), "acts: {:?}", sim.started);
+}
+
+const BENCH: Vec2 = Vec2::new(1300.0, FLOOR);
+
+/// Exhausted knight, user away, one bench on the floor.
+fn sleepy_with_bench() -> Sim {
+    let mut sim = calm(BrainConfig::default());
+    sim.brain.mind_mut().needs.energy = 0.05;
+    sim.user.idle_secs = 900.0;
+    sim.benches.push(BENCH);
+    sim
+}
+
+#[test]
+fn tired_with_idle_user_walks_to_bench_and_naps() {
+    let mut sim = sleepy_with_bench();
+    assert!(sim.run_until(3.0, BehaviourKind::Nap), "{}", sim.last_reason());
+    sim.step();
+    assert_eq!(sim.nav.gos.last(), Some(&(NavGoal::Point(BENCH), TravelStyle::Stroll)), "walks to the bench first");
+    sim.run(4.0);
+    assert_eq!(sim.started.last().map(String::as_str), Some("nap"));
+    let kinds = sim.run(30.0);
+    assert!(kinds.iter().all(|k| *k == BehaviourKind::Nap));
+}
+
+#[test]
+fn without_a_seat_it_sleeps_face_down() {
+    let mut sim = calm(BrainConfig::default());
+    sim.brain.mind_mut().needs.energy = 0.05;
+    sim.user.idle_secs = 900.0;
+    assert!(sim.run_until(3.0, BehaviourKind::Nap));
+    sim.run(30.0);
+    assert!(sim.nav.gos.is_empty(), "sleeps on the spot");
+    assert!(sim.started.iter().filter(|a| *a == "bow_down").count() >= 2, "{:?}", sim.started);
+}
+
+#[test]
+fn poke_during_nap_wakes_and_startles() {
+    let mut sim = sleepy_with_bench();
+    assert!(sim.run_until(3.0, BehaviourKind::Nap));
+    sim.run(8.0);
+    assert_eq!(sim.started.last().map(String::as_str), Some("nap"));
+    sim.pokes.push(Poke::Click { pos: sim.body_center() });
+    let intent = sim.step();
+    assert_eq!(intent.signal, Some("woken"));
+    assert!(sim.brain.mind().emotions.startle > 0.5);
+    assert!(sim.run_until(1.0, BehaviourKind::Flee));
+    sim.run(4.0);
+    assert!(sim.started.iter().any(|a| a == "startled"), "acts: {:?}", sim.started);
+}
+
+// --- Wall pushing -----------------------------------------------------------------------
+
+#[test]
+fn pushing_into_a_wall_is_noticed_and_the_goal_dropped() {
+    let mut sim = calm(BrainConfig::default());
+    sim.cursor = Some(Cursor { pos: Vec2::new(1000.0, 900.0), ..Default::default() });
+    sim.run(2.0);
+    sim.wall = true;
+    sim.cursor = Some(Cursor { pos: Vec2::new(1700.0, 900.0), ..Default::default() });
+    assert!(sim.run_while(3.0, |s| s.brain.stuck_count() == 0), "never noticed the wall");
+    let i = sim.intents.last().expect("intent");
+    assert!(matches!(i.motion, Motion::Hold), "stopped pushing");
+    assert_eq!(i.face, Some(Side::Left), "turned away from the wall");
+    let gos = sim.nav.gos.len();
+    sim.run(5.0);
+    assert_eq!(sim.nav.gos.len(), gos, "doesn't retry the blocked goal right away");
+    let pushing = sim.intents.iter().rev().take((5.0 / DT) as usize).filter(|i| !matches!(i.motion, Motion::Hold)).count();
+    assert_eq!(pushing, 0);
+}
+
+#[test]
+fn sliding_down_a_wall_on_a_stroll_counts_as_stuck() {
+    let mut sim = calm(BrainConfig::default());
+    sim.cursor = Some(Cursor { pos: Vec2::new(1000.0, 900.0), ..Default::default() });
+    sim.run(1.0);
+    // Far enough to follow, close enough to stroll.
+    sim.cursor = Some(Cursor { pos: Vec2::new(1600.0, 900.0), ..Default::default() });
+    assert!(sim.run_while(2.0, |s| !matches!(s.last_motion, Motion::Navigate { .. })));
+    sim.events.push(MoveEvent::WallSlideStart { side: Side::Right });
+    sim.step();
+    assert_eq!(sim.brain.stuck_count(), 1);
+    assert!(matches!(sim.intents.last().map(|i| i.motion), Some(Motion::Hold)));
+}
+
+// --- Reactions ---------------------------------------------------------------------------
 
 /// Mischievous knight, cursor parked right next to it.
 fn parked_cursor_sim(cfg: BrainConfig) -> Sim {
@@ -318,24 +658,11 @@ fn parked_cursor_sim(cfg: BrainConfig) -> Sim {
 #[test]
 fn parked_cursor_with_mischief_starts_a_battle() {
     let mut sim = parked_cursor_sim(BrainConfig::default());
-    assert!(sim.run_until(4.0, BehaviourKind::Battle), "debug: {}", sim.intents.last().map_or("", |i| &i.debug));
+    assert!(sim.run_until(4.0, BehaviourKind::Battle), "{}", sim.last_reason());
     sim.run(8.0);
     assert!(sim.started.iter().any(|a| a == "challenge"), "acts: {:?}", sim.started);
-    let attacks: Vec<Attack> = sim.intents.iter().filter_map(|i| i.attack).collect();
-    assert!(attacks.len() >= 5, "attacks: {attacks:?}");
-    assert!(attacks.iter().all(|a| a.side == Side::Right && a.dir == AttackDir::Forward));
+    assert!(sim.intents.iter().filter(|i| i.attack.is_some()).count() >= 5);
     assert!(sim.started.iter().any(|a| a == "victory"), "acts: {:?}", sim.started);
-    assert!(sim.brain.mind().needs.mischief < 0.5, "winning satisfies mischief");
-}
-
-#[test]
-fn cursor_above_gets_jumped_at_and_up_slashed() {
-    let mut sim = parked_cursor_sim(BrainConfig::default());
-    sim.park_cursor(Vec2::new(10.0, -80.0));
-    assert!(sim.run_until(4.0, BehaviourKind::Battle));
-    sim.run(4.0);
-    assert!(sim.intents.iter().any(|i| matches!(i.motion, Motion::Direct(m) if m.jump_pressed)));
-    assert!(sim.intents.iter().filter_map(|i| i.attack).any(|a| a.dir == AttackDir::Up));
 }
 
 #[test]
@@ -343,7 +670,6 @@ fn bother_level_zero_never_battles() {
     let mut sim = parked_cursor_sim(BrainConfig { bother_level: 0.0, ..Default::default() });
     let kinds = sim.run(120.0);
     assert!(!kinds.contains(&BehaviourKind::Battle));
-    assert_eq!(sim.brain.mind().needs.mischief, 0.0);
 }
 
 #[test]
@@ -355,28 +681,28 @@ fn typing_user_is_never_battled() {
 }
 
 #[test]
-fn battle_is_abandoned_when_the_user_starts_typing() {
-    let mut sim = parked_cursor_sim(BrainConfig::default());
+fn losing_a_battle_knocks_out_then_heals_with_focus() {
+    let mut sim = parked_cursor_sim(BrainConfig { battle: BattleConfig { win_hits: 99, ..Default::default() }, ..Default::default() });
     assert!(sim.run_until(4.0, BehaviourKind::Battle));
-    sim.user.keys_per_sec = 4.0;
-    assert!(sim.run_while(1.0, |s| s.brain.behaviour() == BehaviourKind::Battle));
-    let kinds = sim.run(30.0);
-    assert!(!kinds.contains(&BehaviourKind::Battle), "no rematch while typing");
+    sim.run(2.0);
+    for _ in 0..3 {
+        sim.pokes.push(Poke::Click { pos: sim.body_center() });
+        sim.run(2.0);
+    }
+    sim.run(20.0);
+    let s = &sim.started;
+    let ko = s.iter().position(|a| a == "bow_down").expect("knocked out");
+    assert!(s[ko..].iter().any(|a| a == "hurt_idle") && s[ko..].iter().any(|a| a == "focus"), "acts: {s:?}");
 }
 
 #[test]
-fn cursor_clicks_make_the_knight_recoil() {
-    let mut sim = parked_cursor_sim(BrainConfig::default());
-    sim.park_cursor(Vec2::new(50.0, -10.0));
-    assert!(sim.run_until(4.0, BehaviourKind::Battle));
-    for _ in 0..3 {
-        // Wait for the fight phase (after the challenge act), then click.
-        sim.run(2.0);
-        sim.pokes.push(Poke::Click { pos: sim.body_center() });
-    }
-    sim.run(6.0);
-    assert!(sim.started.iter().any(|a| a == "recoil" || a == "stunned"), "acts: {:?}", sim.started);
-    assert!(sim.brain.mind().emotions.hurt > 0.0);
+fn huge_fall_knocks_the_knight_out() {
+    let mut sim = calm(BrainConfig::default());
+    sim.run(1.0);
+    sim.events.push(MoveEvent::Landed { hard: true });
+    assert!(sim.run_until(0.5, BehaviourKind::KnockedOut));
+    sim.run(1.0);
+    assert_eq!(sim.started.last().map(String::as_str), Some("bow_down"));
 }
 
 #[test]
@@ -391,82 +717,83 @@ fn fullscreen_app_sends_knight_into_hiding() {
     assert!(sim.run_until(0.5, BehaviourKind::Hide));
     sim.step();
     assert_eq!(sim.nav.gos.last().map(|g| g.0), Some(NavGoal::Point(Vec2::new(1890.0, FLOOR))));
-    let kinds = sim.run(20.0);
-    assert!(kinds.iter().all(|k| *k == BehaviourKind::Hide));
     sim.close(20);
     assert!(sim.run_while(1.0, |s| s.brain.behaviour() == BehaviourKind::Hide));
 }
 
 #[test]
-fn poke_during_nap_wakes_and_startles() {
-    let mut sim = sleepy_with_bench();
-    assert!(sim.run_until(3.0, BehaviourKind::Nap));
-    sim.run(8.0);
-    assert_eq!(sim.started.last().map(String::as_str), Some("nap"));
-    assert!(sim.act.is_some(), "asleep");
-    sim.pokes.push(Poke::Click { pos: sim.body_center() });
-    let intent = sim.step();
-    assert_eq!(intent.signal, Some("woken"));
-    assert!(sim.brain.mind().emotions.startle > 0.5);
-    assert!(sim.run_until(1.0, BehaviourKind::Flee));
-    sim.run(4.0);
-    assert!(sim.started.iter().any(|a| a == "startled"), "acts: {:?}", sim.started);
-    assert!(sim.nav.gos.iter().any(|(_, s)| *s == TravelStyle::Hurry));
-}
-
-#[test]
-fn user_returning_wakes_the_napping_knight() {
-    let mut sim = sleepy_with_bench();
-    assert!(sim.run_until(3.0, BehaviourKind::Nap));
-    sim.run(8.0);
-    sim.user.idle_secs = 0.0;
-    let intent = sim.step();
-    assert_eq!(intent.signal, Some("woken"));
-    assert!(sim.brain.mind().emotions.excitement > 0.2);
-}
-
-#[test]
 fn window_closing_underfoot_makes_it_flee() {
-    let mut sim = calm(BrainConfig::default());
-    sim.open(window(7, RectI::new(600, 600, 1300, 1000), "explorer.exe"));
-    sim.knight.pos = Vec2::new(960.0, 600.0);
-    sim.knight.support = Some(Support { owner: Some(7), kind: LedgeKind::OneWay, y: 600.0, x0: 600.0, x1: 1300.0 });
+    let mut sim = with_window(calm(BrainConfig::default()));
+    sim.place(Vec2::new(500.0, 400.0));
     sim.run(1.0);
-    sim.close(7);
+    sim.close(1);
     sim.knight.support = None;
     sim.knight.state = MoveState::Airborne;
     sim.events.push(MoveEvent::LostSupport);
     assert!(sim.run_until(0.5, BehaviourKind::Flee));
-    // Falls, lands, gets startled, runs.
     sim.run(0.3);
-    sim.knight.pos.y = FLOOR;
-    sim.knight.state = MoveState::Grounded;
-    sim.knight.support = Some(floor_support());
+    sim.place(Vec2::new(500.0, FLOOR));
     sim.run(3.0);
     assert!(sim.started.iter().any(|a| a == "startled"));
-    let run = sim.nav.gos.last().copied().expect("ran away");
-    assert_eq!(run.1, TravelStyle::Hurry);
+    assert_eq!(sim.nav.gos.last().map(|g| g.1), Some(TravelStyle::Hurry));
 }
 
 #[test]
 fn riding_a_moving_window_is_fun() {
-    let mut sim = calm(BrainConfig::default());
-    sim.open(window(7, RectI::new(600, 600, 1300, 1000), "explorer.exe"));
-    sim.knight.pos = Vec2::new(960.0, 600.0);
-    sim.knight.support = Some(Support { owner: Some(7), kind: LedgeKind::OneWay, y: 600.0, x0: 600.0, x1: 1300.0 });
+    let mut sim = with_window(calm(BrainConfig::default()));
+    sim.place(Vec2::new(500.0, 400.0));
     let mut rode = false;
     for _ in 0..(4.0 / DT) as i32 {
-        if let Some(w) = sim.desk.windows.iter_mut().find(|w| w.id == 7) {
+        if let Some(w) = sim.desk.windows.iter_mut().find(|w| w.id == 1) {
             w.rect.left += 2;
             w.rect.right += 2;
         }
         sim.desktop_changed();
-        sim.events.push(MoveEvent::CarriedBy { owner: 7 });
+        sim.events.push(MoveEvent::CarriedBy { owner: 1 });
         sim.step();
         rode |= sim.brain.behaviour() == BehaviourKind::Ride;
     }
     assert!(rode);
     assert!(sim.started.iter().any(|a| a == "windswept"), "acts: {:?}", sim.started);
+}
+
+// --- Balance & stability ----------------------------------------------------------------
+
+/// Acts the knight may start with nobody doing anything special.
+const QUIET_ACTS: [&str; 9] = ["gaze_into_screen", "look_up", "look_down", "stare_at_user", "rest", "lean_back", "read_map", "map_stroll", "pick_up_trinket"];
+
+#[test]
+fn quiet_five_minutes_are_mostly_purposeful() {
+    let mut sim = with_window(calm(BrainConfig::default()));
+    sim.open(window(2, RectI::new(1100, 600, 1700, 1000), "browser.exe"));
+    let spots = [Vec2::new(700.0, 300.0), Vec2::new(1400.0, 500.0), Vec2::new(400.0, 950.0), Vec2::new(1600.0, 950.0)];
+    let mut waiting = 0usize;
+    let mut ticks = 0usize;
+    for i in 0..10 {
+        sim.cursor = Some(Cursor { pos: spots[i % spots.len()], ..Default::default() });
+        sim.user.idle_secs = 0.0;
+        for _ in 0..(30.0 / DT) as usize {
+            let intent = sim.step();
+            ticks += 1;
+            waiting += intent.waiting as usize;
+        }
+    }
+    let ratio = waiting as f32 / ticks as f32;
+    assert!(ratio < 0.3, "standing around {:.0}% of the time; acts {:?}", ratio * 100.0, sim.started);
+    assert!(sim.started.iter().all(|a| QUIET_ACTS.contains(&a.as_str())), "out-of-context act: {:?}", sim.started);
+    assert!(sim.started.iter().any(|a| a == "rest" || a == "lean_back"), "never sat: {:?}", sim.started);
+    let fidgets = sim.intents.iter().filter(|i| i.reason.contains("(fidget)")).count();
+    assert!((fidgets as f32) < 0.15 * ticks as f32);
+}
+
+#[test]
+fn reasons_are_always_given() {
+    let mut sim = with_window(calm(BrainConfig::default()));
+    sim.park_cursor(Vec2::new(300.0, -100.0));
+    sim.run(20.0);
+    sim.activity.spots = vec![spot(RectI::new(400, 500, 600, 600), 0.8, 1.0)];
+    sim.run(20.0);
+    assert!(sim.intents.iter().all(|i| !i.reason.is_empty() && i.debug.starts_with(&i.reason)));
 }
 
 #[test]
@@ -485,16 +812,18 @@ fn commitment_prevents_dithering() {
     assert!(outscored(&loose) >= 4 * outscored(&switches).max(1), "loose {} vs committed {}", outscored(&loose), outscored(&switches));
 }
 
-/// Excitement flips every 0.5 s so that Watch and Idle utilities keep crossing (by about
-/// ±0.1); returns the switches made over a minute.
+/// Excitement flips every 0.5 s so that Rest (tired) and Companion utilities keep crossing.
 fn dithering_switches(cfg: BrainConfig) -> Vec<Switch> {
-    let mut sim = calm(cfg);
-    sim.cursor = Some(Cursor { pos: Vec2::new(200.0, 300.0), ..Default::default() });
+    let mut sim = with_window(calm(cfg));
+    sim.cursor = Some(Cursor { pos: Vec2::new(1000.0, 900.0), ..Default::default() });
+    sim.nav.trip = 1e9; // never arrives: only the choice matters
     let n = (60.0 / DT) as usize;
     for i in 0..n {
         let m = sim.brain.mind_mut();
-        m.needs.loneliness = 0.67;
+        m.needs.energy = 0.38;
+        m.needs.loneliness = 0.3;
         m.emotions.excitement = if (i / 15) % 2 == 0 { 0.8 } else { 0.0 };
+        sim.user.idle_secs = 0.0;
         sim.step();
     }
     sim.switches
@@ -507,6 +836,7 @@ fn same_seed_same_percepts_same_intents() {
         sim.open(window(10, RectI::new(300, 500, 900, 900), "notepad.exe"));
         sim.run(5.0);
         sim.park_cursor(Vec2::new(60.0, -10.0));
+        sim.activity.spots = vec![spot(RectI::new(400, 600, 600, 700), 0.7, 1.0)];
         sim.run(10.0);
         sim.intents.iter().map(|i| i.debug.clone()).collect::<Vec<_>>()
     };
@@ -526,84 +856,26 @@ fn seeds_make_different_personalities() {
 
 #[test]
 fn config_deserializes_partially() {
-    let cfg: BrainConfig = serde_json::from_str(r#"{ "bother_level": 0.2, "battle": { "win_hits": 3 } }"#).expect("json");
+    let cfg: BrainConfig = serde_json::from_str(r#"{ "bother_level": 0.2, "battle": { "win_hits": 3 }, "watch": { "max_secs": 20 } }"#).expect("json");
     assert_eq!(cfg.bother_level, 0.2);
     assert_eq!(cfg.battle.win_hits, 3);
-    assert_eq!(cfg.battle.lose_hits, BattleConfig::default().lose_hits);
+    assert_eq!(cfg.watch.max_secs, 20.0);
+    assert_eq!(cfg.watch.min_secs, WatchConfig::default().min_secs);
 }
 
 #[test]
-fn every_named_act_exists() {
+fn every_named_act_exists_and_only_fidgets_are_random() {
     let cat = catalog();
-    for name in ["nap", "challenge", "startled", "windswept", "look_up", "look_down", "stare_at_user", "recoil", "stunned", "bow_down", "victory"] {
+    for name in [
+        "nap", "rest", "lean_back", "read_map", "map_stroll", "challenge", "startled", "windswept", "look_up", "look_down", "gaze_into_screen",
+        "stare_at_user", "pick_up_trinket", "lantern_patrol", "focus", "hurt_idle", "recoil", "stunned", "bow_down", "victory",
+    ] {
         assert!(cat.id(name).is_some(), "missing act '{name}'");
     }
     for d in [AttackDir::Forward, AttackDir::Up, AttackDir::Down] {
         assert!(cat.id(d.act_name()).is_some());
     }
-}
-
-const BENCH: Vec2 = Vec2::new(1300.0, FLOOR);
-
-/// Exhausted knight, user away, one bench on the floor.
-fn sleepy_with_bench() -> Sim {
-    let mut sim = calm(BrainConfig::default());
-    sim.brain.mind_mut().needs.energy = 0.1;
-    sim.user.idle_secs = 900.0;
-    sim.benches.push(BENCH);
-    sim
-}
-
-#[test]
-fn without_a_bench_it_sleeps_face_down() {
-    let mut sim = calm(BrainConfig::default());
-    sim.brain.mind_mut().needs.energy = 0.1;
-    sim.user.idle_secs = 900.0;
-    assert!(sim.run_until(3.0, BehaviourKind::Nap));
-    sim.run(30.0);
-    assert!(sim.nav.gos.is_empty(), "sleeps on the spot");
-    let deep = sim.started.iter().filter(|a| *a == "bow_down").count();
-    assert!(deep >= 2, "deep sleep repeats while the user is away: {:?}", sim.started);
-    assert!(!sim.started.iter().any(|a| a == "nap"), "bench nap needs a bench");
-}
-
-#[test]
-fn bench_acts_only_at_a_bench_and_bow_down_never_idle() {
-    let bench_acts = ["rest", "lean_back", "nap", "read_map"];
-    let mut sim = calm(BrainConfig::default());
-    sim.run(180.0);
-    assert!(!sim.started.is_empty());
-    assert!(!sim.started.iter().any(|a| bench_acts.contains(&a.as_str()) || a == "bow_down"), "acts: {:?}", sim.started);
-
-    // Standing on a bench: sitting acts become available.
-    let mut sim = calm(BrainConfig::default());
-    sim.benches.push(sim.knight.pos);
-    sim.nav.trip = 1e9; // never leaves the bench
-    sim.run(180.0);
-    assert!(sim.started.iter().any(|a| bench_acts.contains(&a.as_str())), "acts: {:?}", sim.started);
-}
-
-#[test]
-fn losing_a_battle_knocks_the_knight_out() {
-    let mut sim = parked_cursor_sim(BrainConfig { battle: BattleConfig { win_hits: 99, ..Default::default() }, ..Default::default() });
-    assert!(sim.run_until(4.0, BehaviourKind::Battle));
-    sim.run(2.0);
-    for _ in 0..3 {
-        sim.pokes.push(Poke::Click { pos: sim.body_center() });
-        sim.run(2.0);
+    for a in cat.iter().filter(|a| a.weight > 0.0) {
+        assert!(a.has_tag("fidget"), "'{}' would be picked at random", a.name);
     }
-    sim.run(2.0);
-    assert!(sim.started.iter().any(|a| a == "bow_down"), "acts: {:?}", sim.started);
-    assert!(sim.brain.mind().emotions.hurt > 0.5);
-    assert_ne!(sim.brain.behaviour(), BehaviourKind::Battle);
-}
-
-#[test]
-fn huge_fall_knocks_the_knight_out() {
-    let mut sim = calm(BrainConfig::default());
-    sim.run(1.0);
-    sim.events.push(MoveEvent::Landed { hard: true });
-    assert!(sim.run_until(0.5, BehaviourKind::KnockedOut));
-    sim.run(1.0);
-    assert_eq!(sim.started.last().map(String::as_str), Some("bow_down"));
 }

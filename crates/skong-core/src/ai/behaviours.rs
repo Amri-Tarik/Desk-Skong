@@ -1,12 +1,18 @@
 //! Behaviours: small state machines that turn the brain's choice into per-tick intent.
 //! Selection (utilities, commitment) lives in [`super::Brain`]; this module only knows
 //! how to *do* each behaviour once chosen.
+//!
+//! Every act a behaviour starts has a reason that the behaviour can name (it shows up in
+//! `Intent::debug`). Plain standing between acts is short (a [`Beat`] gap) and flagged as
+//! `Intent::waiting`.
 use crate::acts::ActId;
 use crate::controller::Side;
 use crate::geom::Vec2;
 use crate::nav::{NavGoal, TravelStyle};
 
+use super::activity::ActivityTracker;
 use super::battle::Battle;
+use super::companion::Companion;
 use super::config::BrainConfig;
 use super::interest::{InterestMap, Poi, PoiKind, PoiTarget};
 use super::navigator::{NavStatus, Navigator};
@@ -14,21 +20,25 @@ use super::needs::Mind;
 use super::percept::{Percepts, Senses};
 use super::repertoire::Repertoire;
 use super::rng::Rng;
+use super::spots::{self, View};
+use super::watch::WatchSpot;
 use super::{Intent, Motion};
 
 /// What the knight is up to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum BehaviourKind {
-    /// Stand around, fidget with mood-picked acts.
+    /// Nothing to do and nobody around: short fidgets, sits if he can.
     Idle,
-    /// Amble to a random nearby spot.
-    Wander,
-    /// Travel to a point of interest and inspect it.
-    Explore,
-    /// Sleep (the "nap" act) until rested or woken.
-    Nap,
-    /// Go near the cursor and watch it.
+    /// Default with a user present: stay near the cursor, react to it.
+    Companion,
+    /// Watch a region of the screen that is changing.
     Watch,
+    /// Travel to a point of interest (window, ledge) and do the fitting thing there.
+    Explore,
+    /// Tired or settling: find a seat and sit.
+    Rest,
+    /// Sleep (bench / perch nap, or face-down deep sleep).
+    Nap,
     /// Challenge and fight the cursor.
     Battle,
     /// Startled: jump, then run away from the threat.
@@ -39,34 +49,40 @@ pub enum BehaviourKind {
     Ride,
     /// Knocked flat by a huge fall.
     KnockedOut,
+    /// Hurt: nurse it, then focus to heal.
+    Recover,
 }
 
 impl BehaviourKind {
-    pub const ALL: [BehaviourKind; 10] = [
+    pub const ALL: [BehaviourKind; 12] = [
         BehaviourKind::Idle,
-        BehaviourKind::Wander,
-        BehaviourKind::Explore,
-        BehaviourKind::Nap,
+        BehaviourKind::Companion,
         BehaviourKind::Watch,
+        BehaviourKind::Explore,
+        BehaviourKind::Rest,
+        BehaviourKind::Nap,
         BehaviourKind::Battle,
         BehaviourKind::Flee,
         BehaviourKind::Hide,
         BehaviourKind::Ride,
         BehaviourKind::KnockedOut,
+        BehaviourKind::Recover,
     ];
 
     pub fn label(self) -> &'static str {
         match self {
             BehaviourKind::Idle => "idle",
-            BehaviourKind::Wander => "wander",
-            BehaviourKind::Explore => "explore",
-            BehaviourKind::Nap => "nap",
+            BehaviourKind::Companion => "companion",
             BehaviourKind::Watch => "watch",
+            BehaviourKind::Explore => "explore",
+            BehaviourKind::Rest => "rest",
+            BehaviourKind::Nap => "nap",
             BehaviourKind::Battle => "battle",
             BehaviourKind::Flee => "flee",
             BehaviourKind::Hide => "hide",
             BehaviourKind::Ride => "ride",
             BehaviourKind::KnockedOut => "knocked out",
+            BehaviourKind::Recover => "recover",
         }
     }
 
@@ -93,6 +109,7 @@ pub(crate) struct Ctx<'a, 'p> {
     pub rng: &'a mut Rng,
     pub rep: &'a mut Repertoire,
     pub interest: &'a mut InterestMap,
+    pub spots: &'a mut ActivityTracker,
     pub out: &'a mut Intent,
 }
 
@@ -130,16 +147,30 @@ impl Ctx<'_, '_> {
         }
     }
 
-    /// Pick an act by mood (optionally preferring a tag).
-    pub fn pick_act(&mut self, prefer: Option<&str>) -> Option<ActId> {
+    /// A plain fidget (the only acts with a random-pick weight).
+    pub fn fidget(&mut self) -> Option<ActWait> {
         let situation = (self.grounded(), self.senses.can_sit());
-        self.rep.pick(self.mind, self.senses.user_away, situation, prefer, self.now, self.rng)
+        self.rep.pick(self.mind, self.senses.user_away, situation, Some("fidget"), self.now, self.rng).map(ActWait::new)
+    }
+
+    /// The seated act that fits: "rest" when tired, otherwise "lean_back".
+    pub fn seated_act(&mut self) -> Option<ActWait> {
+        let name = if self.mind.tiredness() > 0.5 { "rest" } else { "lean_back" };
+        ActWait::named(self, name)
+    }
+
+    pub fn face_toward(&mut self, x: f32) {
+        self.out.face = Side::of(x - self.p.knight.pos.x).or(self.out.face);
     }
 
     pub fn face_cursor(&mut self) {
         if let Some(c) = self.senses.cursor {
             self.out.face = Side::of(c.offset.x);
         }
+    }
+
+    pub fn range(&mut self, r: [f32; 2]) -> f32 {
+        self.rng.range(r[0], r[1].max(r[0]))
     }
 }
 
@@ -186,6 +217,59 @@ impl ActWait {
     }
 }
 
+/// Rhythm of purposeful acts separated by short gaps of plain standing.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Beat {
+    gap: f32,
+    act: Option<ActWait>,
+    /// Name of the act playing (for the reason line).
+    pub doing: Option<ActId>,
+}
+
+impl Beat {
+    pub fn new(first_gap: f32) -> Self {
+        Self { gap: first_gap, act: None, doing: None }
+    }
+
+    /// Run the current act or count down the gap; `true` when it is time to pick the next
+    /// act. `gap` is the range of the next pause.
+    pub fn tick(&mut self, ctx: &mut Ctx, gap: [f32; 2]) -> bool {
+        if let Some(w) = &mut self.act {
+            if w.tick(ctx) {
+                self.act = None;
+                self.doing = None;
+                self.gap = ctx.range(gap);
+            }
+            return false;
+        }
+        self.gap -= ctx.dt();
+        if self.gap > 0.0 {
+            ctx.out.waiting = true;
+            return false;
+        }
+        true
+    }
+
+    /// Play this act (if any); otherwise wait another gap.
+    pub fn play(&mut self, ctx: &mut Ctx, act: Option<ActWait>, gap: [f32; 2]) {
+        match act {
+            Some(w) => {
+                self.doing = Some(w.id);
+                self.act = Some(w);
+            }
+            None => self.gap = ctx.range(gap),
+        }
+    }
+
+    pub fn busy(&self) -> bool {
+        self.act.is_some()
+    }
+
+    pub fn doing_name<'c>(&self, ctx: &'c Ctx) -> Option<&'c str> {
+        self.doing.and_then(|id| ctx.rep.catalog.get(id)).map(|a| a.name.as_str())
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TravelStep {
     Moving,
@@ -193,7 +277,8 @@ pub(crate) enum TravelStep {
     Failed,
 }
 
-/// Navigation towards one goal with a timeout.
+/// Navigation towards one goal with a timeout. Fails at once when the brain notices the
+/// knight pushing into a wall (the brain also blocks the goal for a while).
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Travel {
     pub goal: NavGoal,
@@ -208,6 +293,11 @@ impl Travel {
         Self { goal, style, started: false, elapsed: 0.0, timeout }
     }
 
+    /// Travel with a timeout estimated from the straight-line distance.
+    pub fn to(ctx: &Ctx, to: Vec2, style: TravelStyle) -> Self {
+        Self::new(NavGoal::Point(to), style, timeout_for(ctx, to, style))
+    }
+
     /// Change destination; the next tick re-issues `go`.
     pub fn retarget(&mut self, goal: NavGoal) {
         self.goal = goal;
@@ -215,11 +305,15 @@ impl Travel {
     }
 
     pub fn tick(&mut self, ctx: &mut Ctx) -> TravelStep {
+        if ctx.senses.stuck {
+            return TravelStep::Failed;
+        }
         if !ctx.free_to_move() {
             return TravelStep::Moving;
         }
         if !self.started {
             if !ctx.nav.go(ctx.p.knight, self.goal, self.style) {
+                block(ctx, self.goal, 30.0);
                 return TravelStep::Failed;
             }
             self.started = true;
@@ -227,6 +321,7 @@ impl Travel {
         self.elapsed += ctx.dt();
         if self.elapsed > self.timeout {
             ctx.nav.stop();
+            block(ctx, self.goal, 30.0);
             return TravelStep::Failed;
         }
         match ctx.nav.status() {
@@ -240,94 +335,79 @@ impl Travel {
     }
 }
 
+/// Remember a goal as unreachable for `secs`.
+pub(crate) fn block(ctx: &mut Ctx, goal: NavGoal, secs: f32) {
+    let target = match goal {
+        NavGoal::Point(p) => PoiTarget::Spot(p),
+        NavGoal::OnWindow(id) => PoiTarget::Window(id),
+    };
+    ctx.interest.block(target, ctx.now + secs);
+}
+
 /// Travel timeout from a straight-line guess (planner etas are better but optional).
 fn timeout_for(ctx: &Ctx, to: Vec2, style: TravelStyle) -> f32 {
     let speed = ctx.p.knight.params.gait_speed_px(style.gait()).max(1.0);
     4.0 + 3.0 * ctx.p.knight.pos.distance(to) / speed
 }
 
+/// Travel style by mood and distance: short hops are strolls, long trips at least a run.
+pub(crate) fn style_for(ctx: &Ctx, to: Vec2) -> TravelStyle {
+    let d = ctx.p.knight.pos.distance(to);
+    match ctx.mind.travel_style() {
+        TravelStyle::Stroll if d > 1200.0 && ctx.mind.needs.energy > 0.3 => TravelStyle::Normal,
+        TravelStyle::Hurry if d < 250.0 => TravelStyle::Normal,
+        s => s,
+    }
+}
+
+/// Nearest reachable seat (bench first if one is close) around `near`.
+pub(crate) fn find_seat(ctx: &Ctx, near: Vec2, range: f32) -> Option<Vec2> {
+    let k = ctx.p.knight;
+    spots::seats(ctx.p.terrain, k, near, ctx.p.benches, range)
+        .into_iter()
+        .find(|s| !ctx.interest.is_blocked(PoiTarget::Spot(*s)) && s.distance(k.pos) > 3.0)
+}
+
 // --- Idle ---------------------------------------------------------------------------
 
+/// Nobody around and nothing to look at: sit if possible, else the odd fidget (or a
+/// lantern walk at night).
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Idle {
-    left: f32,
-    next_act_in: f32,
-    act: Option<ActWait>,
+    beat: Beat,
 }
 
 impl Idle {
-    /// Placeholder that finishes at once, so the first tick chooses freely.
-    pub fn initial() -> Self {
-        Self { left: 0.0, next_act_in: 1.0, act: None }
+    /// Placeholder before the first decision.
+    pub fn placeholder() -> Self {
+        Self { beat: Beat::new(0.0) }
     }
 
     pub fn start(ctx: &mut Ctx) -> Self {
-        let lazy = 1.0 + ctx.mind.tiredness();
-        Self { left: ctx.rng.range(3.0, 8.0) * lazy, next_act_in: ctx.rng.range(0.5, 2.5), act: None }
+        let gap = ctx.range(ctx.cfg.idle_gap);
+        Self { beat: Beat::new(gap) }
     }
 
     pub fn tick(&mut self, ctx: &mut Ctx) -> Status {
-        self.left -= ctx.dt();
-        if let Some(w) = &mut self.act {
-            if w.tick(ctx) {
-                self.act = None;
-            }
-            return Status::Running;
+        let gap = ctx.cfg.idle_gap;
+        if self.beat.tick(ctx, gap) {
+            let act = if ctx.senses.can_sit() {
+                ctx.seated_act()
+            } else if ctx.senses.dark && ctx.rng.chance(0.3) {
+                ActWait::named(ctx, "lantern_patrol")
+            } else {
+                ctx.fidget()
+            };
+            self.beat.play(ctx, act, gap);
         }
-        self.next_act_in -= ctx.dt();
-        if self.next_act_in <= 0.0 {
-            self.next_act_in = ctx.rng.range(3.0, 6.0);
-            if ctx.rng.chance(0.55)
-                && let Some(id) = ctx.pick_act(None)
-            {
-                self.act = Some(ActWait::new(id));
-                return Status::Running;
-            }
-        }
-        if ctx.senses.cursor.is_some_and(|c| c.dist() < 400.0) && ctx.p.act.is_none() {
-            ctx.face_cursor();
-        }
-        if self.left <= 0.0 { Status::Done } else { Status::Running }
-    }
-}
-
-// --- Wander -------------------------------------------------------------------------
-
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct Wander {
-    travel: Travel,
-}
-
-impl Wander {
-    pub fn start(ctx: &mut Ctx) -> Self {
-        let k = ctx.p.knight;
-        let near_ledges: Vec<(usize, f32)> = ctx
-            .p
-            .terrain
-            .ledges
-            .iter()
-            .enumerate()
-            .filter(|(_, l)| (l.x0 + l.x1) * 0.5 - k.pos.x < 700.0 && k.pos.x - (l.x0 + l.x1) * 0.5 < 700.0 && l.x1 - l.x0 > 60.0)
-            .map(|(i, _)| (i, 1.0))
-            .collect();
-        let target = match (ctx.rng.chance(0.3), ctx.rng.pick_weighted(&near_ledges)) {
-            (true, Some(i)) => {
-                let l = ctx.p.terrain.ledges[i];
-                Vec2::new(ctx.rng.range(l.x0 + 20.0, (l.x1 - 20.0).max(l.x0 + 21.0)), l.y)
-            }
-            _ => {
-                let (lo, hi) = k.support.map_or((k.pos.x - 400.0, k.pos.x + 400.0), |s| (s.x0 + 25.0, s.x1 - 25.0));
-                Vec2::new(ctx.rng.range(lo, hi.max(lo + 1.0)), k.pos.y)
-            }
-        };
-        let style = ctx.mind.travel_style();
-        Self { travel: Travel::new(NavGoal::Point(target), style, timeout_for(ctx, target, style)) }
+        Status::Running
     }
 
-    pub fn tick(&mut self, ctx: &mut Ctx) -> Status {
-        match self.travel.tick(ctx) {
-            TravelStep::Moving => Status::Running,
-            TravelStep::Arrived | TravelStep::Failed => Status::Done,
+    pub fn reason(&self, ctx: &Ctx) -> String {
+        match self.beat.doing_name(ctx) {
+            Some("lantern_patrol") => "idle: dark, lantern walk".into(),
+            Some(n) => format!("idle: {n}"),
+            None => "idle: nothing going on".into(),
         }
     }
 }
@@ -340,24 +420,20 @@ enum ExplorePhase {
     Inspect { act: Option<ActWait>, left: f32 },
 }
 
+/// Go to a point of interest and do the thing that fits it there.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Explore {
     pub poi: Poi,
     phase: ExplorePhase,
+    what: &'static str,
 }
 
 impl Explore {
     pub fn start(ctx: &mut Ctx, poi: Poi) -> Self {
-        let style = ctx.mind.travel_style();
         let to = poi.target.position(ctx.p.terrain).unwrap_or(ctx.p.knight.pos);
-        Self { poi, phase: ExplorePhase::Travel(Travel::new(poi.target.goal(), style, timeout_for(ctx, to, style))) }
-    }
-
-    pub fn style(&self) -> Option<TravelStyle> {
-        match self.phase {
-            ExplorePhase::Travel(t) => Some(t.style),
-            ExplorePhase::Inspect { .. } => None,
-        }
+        let style = style_for(ctx, to);
+        let travel = Travel::new(poi.target.goal(), style, timeout_for(ctx, to, style));
+        Self { poi, phase: ExplorePhase::Travel(travel), what: "" }
     }
 
     pub fn tick(&mut self, ctx: &mut Ctx) -> Status {
@@ -389,30 +465,90 @@ impl Explore {
         }
     }
 
+    /// The act that fits the place (each with its reason).
     fn arrive(&mut self, ctx: &mut Ctx) {
         let novelty = self.poi.novelty;
         ctx.interest.visit(self.poi.target, ctx.now, ctx.p.desktop);
         ctx.mind.adjust(|n| &mut n.boredom, -(0.15 + 0.45 * novelty));
-        let prefer = match self.poi.kind {
+        let small = match self.poi.target {
+            PoiTarget::Window(id) => ctx.p.desktop.window(id).is_some_and(|w| w.rect.width() * w.rect.height() <= 420 * 320),
+            PoiTarget::Spot(_) => false,
+        };
+        let (what, name) = match self.poi.kind {
+            PoiKind::NewWindow if small => ("found a small new thing", "pick_up_trinket"),
+            PoiKind::NewWindow | PoiKind::Unvisited if ctx.senses.can_sit() => ("mapping a new window", "read_map"),
+            PoiKind::NewWindow | PoiKind::Unvisited => ("mapping a new window", "map_stroll"),
             PoiKind::ActiveWindow => {
                 // Squatting on the title bar of whatever the user is working on.
                 ctx.mind.adjust(|n| &mut n.mischief, -0.35);
                 ctx.mind.excite(0.1);
-                "playful"
+                if ctx.senses.can_sit() { ("squatting on your window", "lean_back") } else { ("squatting on your window", "stare_at_user") }
             }
-            PoiKind::HighLedge => "bold",
-            PoiKind::Corner => "calm",
-            PoiKind::Bench => "bench",
-            PoiKind::NewWindow | PoiKind::MovingWindow | PoiKind::Unvisited => "curious",
+            PoiKind::MovingWindow => {
+                let eye = ctx.p.knight.body().center();
+                let rect = match self.poi.target {
+                    PoiTarget::Window(id) => ctx.p.desktop.window(id).map(|w| w.rect),
+                    PoiTarget::Spot(_) => None,
+                };
+                ("eyeing a moving window", rect.map_or("look_down", |r| View::of(r, r.to_f().center(), eye).act()))
+            }
+            PoiKind::HighLedge => ("looking down from up high", "look_down"),
         };
-        let act = if self.poi.kind == PoiKind::Bench {
-            // `at_bench` lags a tick behind arrival; ActWait retries until it holds.
-            ctx.rep.pick(ctx.mind, ctx.senses.user_away, (true, true), Some(prefer), ctx.now, ctx.rng)
-        } else {
-            ctx.pick_act(Some(prefer))
+        self.what = what;
+        let act = ActWait::named(ctx, name);
+        self.phase = ExplorePhase::Inspect { act, left: 0.5 };
+    }
+
+    pub fn reason(&self) -> String {
+        match self.phase {
+            ExplorePhase::Travel(t) => format!("explore {} ({:?})", self.poi.kind.label(), t.style),
+            ExplorePhase::Inspect { .. } => format!("explore {}: {}", self.poi.kind.label(), self.what),
         }
-        .map(ActWait::new);
-        self.phase = ExplorePhase::Inspect { act, left: 1.0 };
+    }
+}
+
+// --- Rest ---------------------------------------------------------------------------
+
+/// Tired or settling in: walk to the nearest seat (bench or perch) and sit.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Rest {
+    travel: Option<Travel>,
+    beat: Beat,
+}
+
+impl Rest {
+    pub fn start(ctx: &mut Ctx) -> Self {
+        let travel = if ctx.senses.can_sit() {
+            None
+        } else {
+            find_seat(ctx, ctx.p.knight.pos, 900.0).map(|s| Travel::to(ctx, s, TravelStyle::Stroll))
+        };
+        Self { travel, beat: Beat::new(0.2) }
+    }
+
+    pub fn tick(&mut self, ctx: &mut Ctx) -> Status {
+        if let Some(t) = &mut self.travel {
+            match t.tick(ctx) {
+                TravelStep::Moving => return Status::Running,
+                TravelStep::Arrived => self.travel = None,
+                TravelStep::Failed => return Status::Done,
+            }
+        }
+        if ctx.mind.tiredness() < 0.2 && !self.beat.busy() {
+            return Status::Done;
+        }
+        if self.beat.tick(ctx, [0.5, 1.5]) {
+            if !ctx.senses.can_sit() {
+                return Status::Done; // seat gone (window moved / closed)
+            }
+            let act = ctx.seated_act();
+            self.beat.play(ctx, act, [0.5, 1.5]);
+        }
+        Status::Running
+    }
+
+    pub fn reason(&self) -> String {
+        if self.travel.is_some() { "rest: walking to a seat".into() } else { "rest: sitting".into() }
     }
 }
 
@@ -420,15 +556,15 @@ impl Explore {
 
 #[derive(Clone, Copy, Debug)]
 enum NapPhase {
-    /// Walk to the nearest bench first: sitting clips are the bench pose.
-    ToBench(Travel),
-    /// The "nap" act on a bench; ends on the "woken" signal (a brain reflex) or by itself.
-    Bench(Option<ActWait>),
-    /// No bench: lie face-down ("bow_down", tag deep_sleep), repeated while sleepy.
+    /// Walk to the nearest seat first: sleeping clips are the seated pose.
+    ToSeat(Travel),
+    /// The "nap" act; ends on the "woken" signal (a brain reflex) or by itself.
+    Seated(Option<ActWait>),
+    /// No seat: lie face-down ("bow_down", tag deep_sleep), repeated while sleepy.
     Deep(Option<ActWait>),
 }
 
-/// Sleep: bench nap when a bench is around, deep sleep on the spot otherwise.
+/// Sleep: seated nap when a bench / perch is around, deep sleep on the spot otherwise.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Nap {
     phase: NapPhase,
@@ -436,25 +572,23 @@ pub(crate) struct Nap {
 }
 
 impl Nap {
-    /// Benches farther than this are not worth the walk when sleepy (px).
-    const BENCH_RANGE: f32 = 1600.0;
+    /// Seats farther than this are not worth the walk when sleepy (px).
+    const SEAT_RANGE: f32 = 1600.0;
 
     pub fn start(ctx: &mut Ctx) -> Self {
-        let k = ctx.p.knight;
-        let bench = ctx
-            .p
-            .benches
-            .iter()
-            .copied()
-            .filter(|b| b.distance(k.pos) <= Self::BENCH_RANGE)
-            .min_by(|a, b| a.distance(k.pos).total_cmp(&b.distance(k.pos)));
-        let phase = match (ctx.senses.at_bench, bench) {
-            (Some(_), _) => NapPhase::Bench(ActWait::named(ctx, "nap")),
-            (None, Some(b)) => {
-                let style = if ctx.mind.tiredness() > 0.7 { TravelStyle::Stroll } else { ctx.mind.travel_style() };
-                NapPhase::ToBench(Travel::new(NavGoal::Point(b), style, timeout_for(ctx, b, style)))
+        let phase = if ctx.senses.can_sit() {
+            NapPhase::Seated(ActWait::named(ctx, "nap"))
+        } else {
+            // A bench beats a perch when both are around.
+            let k = ctx.p.knight;
+            let bench = ctx.p.benches.iter().copied().filter(|b| b.distance(k.pos) <= Self::SEAT_RANGE).min_by(|a, b| a.distance(k.pos).total_cmp(&b.distance(k.pos)));
+            match bench.or_else(|| find_seat(ctx, k.pos, Self::SEAT_RANGE)) {
+                Some(s) => {
+                    let style = if ctx.mind.tiredness() > 0.7 { TravelStyle::Stroll } else { ctx.mind.travel_style() };
+                    NapPhase::ToSeat(Travel::to(ctx, s, style))
+                }
+                None => NapPhase::Deep(ActWait::named(ctx, "bow_down")),
             }
-            (None, None) => NapPhase::Deep(ActWait::named(ctx, "bow_down")),
         };
         Self { phase, woken: false }
     }
@@ -462,19 +596,19 @@ impl Nap {
     pub fn tick(&mut self, ctx: &mut Ctx) -> Status {
         self.woken |= ctx.senses.woken;
         match &mut self.phase {
-            NapPhase::ToBench(t) => {
+            NapPhase::ToSeat(t) => {
                 if self.woken {
                     ctx.nav.stop();
                     return Status::Done;
                 }
                 match t.tick(ctx) {
                     TravelStep::Moving => {}
-                    TravelStep::Arrived => self.phase = NapPhase::Bench(ActWait::named(ctx, "nap")),
+                    TravelStep::Arrived => self.phase = NapPhase::Seated(ActWait::named(ctx, "nap")),
                     TravelStep::Failed => self.phase = NapPhase::Deep(ActWait::named(ctx, "bow_down")),
                 }
                 Status::Running
             }
-            NapPhase::Bench(act) => {
+            NapPhase::Seated(act) => {
                 ctx.nav.stop();
                 if act.as_mut().is_none_or(|w| w.tick(ctx)) { Status::Done } else { Status::Running }
             }
@@ -492,9 +626,18 @@ impl Nap {
             }
         }
     }
+
+    pub fn reason(&self, ctx: &Ctx) -> String {
+        let why = if ctx.senses.user_away { "user away" } else { "tired" };
+        match self.phase {
+            NapPhase::ToSeat(_) => format!("nap ({why}): walking to a seat"),
+            NapPhase::Seated(_) => format!("nap ({why}): asleep on a seat"),
+            NapPhase::Deep(_) => format!("nap ({why}): deep sleep, no seat"),
+        }
+    }
 }
 
-// --- KnockedOut ---------------------------------------------------------------------
+// --- KnockedOut / Recover -----------------------------------------------------------
 
 /// Flat on the floor after a huge fall ("bow_down", tag knocked_out).
 #[derive(Clone, Copy, Debug)]
@@ -514,78 +657,38 @@ impl KnockedOut {
     }
 }
 
-// --- Watch --------------------------------------------------------------------------
-
+/// After being hurt: `hurt_idle` for a bit, then `focus` to heal.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Watch {
-    left: f32,
-    travel: Option<Travel>,
-    goal_at: Vec2,
-    looked: bool,
-    act: Option<ActWait>,
+pub(crate) struct Recover {
+    sore: Option<ActWait>,
+    focus: Option<ActWait>,
 }
 
-impl Watch {
-    const NEAR: f32 = 220.0;
-
+impl Recover {
     pub fn start(ctx: &mut Ctx) -> Self {
-        Self { left: ctx.rng.range(6.0, 15.0), travel: None, goal_at: Vec2::ZERO, looked: false, act: None }
+        Self { sore: ActWait::named(ctx, "hurt_idle"), focus: ActWait::named(ctx, "focus") }
     }
 
     pub fn tick(&mut self, ctx: &mut Ctx) -> Status {
-        self.left -= ctx.dt();
-        let Some(c) = ctx.senses.cursor else { return Status::Done };
-        if self.left <= 0.0 {
-            return Status::Done;
-        }
-        if let Some(w) = &mut self.act {
+        ctx.nav.stop();
+        if let Some(w) = &mut self.sore {
             if w.tick(ctx) {
-                self.act = None;
+                self.sore = None;
             }
             return Status::Running;
         }
-        if c.offset.x.abs() > Self::NEAR {
-            let goal = NavGoal::Point(c.pos);
-            let style = ctx.mind.travel_style();
-            match &mut self.travel {
-                Some(t) if self.goal_at.distance(c.pos) > 150.0 => {
-                    t.retarget(goal);
-                    self.goal_at = c.pos;
-                }
-                Some(_) => {}
-                None => {
-                    self.travel = Some(Travel::new(goal, style, 20.0));
-                    self.goal_at = c.pos;
-                }
-            }
-            if let Some(t) = &mut self.travel
-                && t.tick(ctx) != TravelStep::Moving
-            {
-                self.travel = None;
-                if c.offset.x.abs() > 2.0 * Self::NEAR {
-                    return Status::Done; // unreachable / too far: lose interest
-                }
+        if let Some(w) = &mut self.focus {
+            if w.tick(ctx) {
+                self.focus = None;
+                ctx.mind.emotions.hurt *= 0.3; // healed
             }
             return Status::Running;
         }
-        if self.travel.take().is_some() {
-            ctx.nav.stop();
-        }
-        ctx.face_cursor();
-        if !self.looked && ctx.p.act.is_none() {
-            let name = if c.offset.y < -180.0 {
-                Some("look_up")
-            } else if c.offset.y > 180.0 {
-                Some("look_down")
-            } else if ctx.rng.chance(0.3 * ctx.mind.personality.sociability) {
-                Some("stare_at_user")
-            } else {
-                None
-            };
-            self.looked = true;
-            self.act = name.and_then(|n| ActWait::named(ctx, n));
-        }
-        Status::Running
+        Status::Done
+    }
+
+    pub fn reason(&self) -> String {
+        if self.sore.is_some() { "recover: hurt".into() } else { "recover: focusing to heal".into() }
     }
 }
 
@@ -628,7 +731,7 @@ impl Flee {
                     let b = ctx.p.terrain.bounds;
                     let x = (k.pos.x + away * 380.0).clamp(b.left + 40.0, (b.right - 40.0).max(b.left + 41.0));
                     let to = Vec2::new(x, k.pos.y);
-                    self.phase = FleePhase::Run(Travel::new(NavGoal::Point(to), TravelStyle::Hurry, timeout_for(ctx, to, TravelStyle::Hurry)));
+                    self.phase = FleePhase::Run(Travel::to(ctx, to, TravelStyle::Hurry));
                 }
                 Status::Running
             }
@@ -645,8 +748,7 @@ impl Flee {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Hide {
     travel: Option<Travel>,
-    act: Option<ActWait>,
-    next_act_in: f32,
+    beat: Beat,
 }
 
 impl Hide {
@@ -659,9 +761,9 @@ impl Hide {
             let right = Vec2::new(m.work.right as f32 - 30.0, m.work.bottom as f32);
             let to = if k.pos.distance(left) <= k.pos.distance(right) { left } else { right };
             let style = if ctx.mind.emotions.startle > 0.3 { TravelStyle::Hurry } else { TravelStyle::Normal };
-            Travel::new(NavGoal::Point(to), style, timeout_for(ctx, to, style))
+            Travel::to(ctx, to, style)
         });
-        Self { travel, act: None, next_act_in: 1.0 }
+        Self { travel, beat: Beat::new(1.0) }
     }
 
     pub fn tick(&mut self, ctx: &mut Ctx) -> Status {
@@ -675,17 +777,17 @@ impl Hide {
             }
             self.travel = None;
         }
-        if let Some(w) = &mut self.act {
-            if w.tick(ctx) {
-                self.act = None;
-            }
-            return Status::Running;
+        if self.beat.tick(ctx, [6.0, 12.0]) {
+            let act = if ctx.mind.tiredness() > 0.5 {
+                ActWait::named(ctx, "bow_down")
+            } else if ctx.senses.can_sit() {
+                ctx.seated_act()
+            } else {
+                None
+            };
+            self.beat.play(ctx, act, [6.0, 12.0]);
         }
-        self.next_act_in -= ctx.dt();
-        if self.next_act_in <= 0.0 {
-            self.next_act_in = ctx.rng.range(8.0, 20.0);
-            self.act = if ctx.mind.tiredness() > 0.5 { ActWait::named(ctx, "bow_down") } else { ctx.pick_act(Some("calm")).map(ActWait::new) };
-        }
+        ctx.out.waiting = false; // keeping out of the way is the point
         Status::Running
     }
 }
@@ -721,57 +823,69 @@ impl Ride {
 #[derive(Clone, Debug)]
 pub(crate) enum Active {
     Idle(Idle),
-    Wander(Wander),
+    Companion(Box<Companion>),
+    Watch(WatchSpot),
     Explore(Explore),
+    Rest(Rest),
     Nap(Nap),
-    Watch(Watch),
     Battle(Box<Battle>),
     Flee(Flee),
     Hide(Hide),
     Ride(Ride),
     KnockedOut(KnockedOut),
+    Recover(Recover),
 }
 
 impl Active {
     pub fn kind(&self) -> BehaviourKind {
         match self {
             Active::Idle(_) => BehaviourKind::Idle,
-            Active::Wander(_) => BehaviourKind::Wander,
-            Active::Explore(_) => BehaviourKind::Explore,
-            Active::Nap(_) => BehaviourKind::Nap,
+            Active::Companion(_) => BehaviourKind::Companion,
             Active::Watch(_) => BehaviourKind::Watch,
+            Active::Explore(_) => BehaviourKind::Explore,
+            Active::Rest(_) => BehaviourKind::Rest,
+            Active::Nap(_) => BehaviourKind::Nap,
             Active::Battle(_) => BehaviourKind::Battle,
             Active::Flee(_) => BehaviourKind::Flee,
             Active::Hide(_) => BehaviourKind::Hide,
             Active::Ride(_) => BehaviourKind::Ride,
             Active::KnockedOut(_) => BehaviourKind::KnockedOut,
+            Active::Recover(_) => BehaviourKind::Recover,
         }
     }
 
     pub fn tick(&mut self, ctx: &mut Ctx) -> Status {
         match self {
             Active::Idle(b) => b.tick(ctx),
-            Active::Wander(b) => b.tick(ctx),
-            Active::Explore(b) => b.tick(ctx),
-            Active::Nap(b) => b.tick(ctx),
+            Active::Companion(b) => b.tick(ctx),
             Active::Watch(b) => b.tick(ctx),
+            Active::Explore(b) => b.tick(ctx),
+            Active::Rest(b) => b.tick(ctx),
+            Active::Nap(b) => b.tick(ctx),
             Active::Battle(b) => b.tick(ctx),
             Active::Flee(b) => b.tick(ctx),
             Active::Hide(b) => b.tick(ctx),
             Active::Ride(b) => b.tick(ctx),
             Active::KnockedOut(b) => b.tick(ctx),
+            Active::Recover(b) => b.tick(ctx),
         }
     }
 
-    /// Short state description for the debug overlay.
-    pub fn detail(&self) -> String {
+    /// Why the knight is doing what he does, for the debug overlay.
+    pub fn reason(&self, ctx: &Ctx) -> String {
         match self {
-            Active::Explore(e) => match e.style() {
-                Some(s) => format!("{} ({s:?})", e.poi.kind.label()),
-                None => format!("{} (inspect)", e.poi.kind.label()),
-            },
-            Active::Battle(b) => b.detail(),
-            _ => String::new(),
+            Active::Idle(b) => b.reason(ctx),
+            Active::Companion(b) => b.reason(ctx),
+            Active::Watch(b) => b.reason(ctx),
+            Active::Explore(b) => b.reason(),
+            Active::Rest(b) => b.reason(),
+            Active::Nap(b) => b.reason(ctx),
+            Active::Battle(b) => format!("battle: {}", b.detail()),
+            Active::Flee(_) => "flee: startled".into(),
+            Active::Hide(_) => "hide: fullscreen app in front".into(),
+            Active::Ride(_) => "ride: window moving".into(),
+            Active::KnockedOut(_) => "knocked out: huge fall".into(),
+            Active::Recover(b) => b.reason(),
         }
     }
 }
