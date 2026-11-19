@@ -3,12 +3,15 @@
 //! Reports arrival rates per style and which move kinds the failures were executing.
 //!
 //! cargo run -p skong-core --example nav_soak --release -- [desktops=40] [scale=0.6] [windows=8]
+//!
+//! `SOAK_REPEAT=k` builds each graph k times and keeps the fastest (steadier timings);
+//! `SOAK_EDGES=1` prints every edge, to compare graphs between versions of the planner.
 use std::collections::BTreeMap;
 
 use skong_core::controller::{Abilities, Character, CharacterParams, MoveInput, MoveState};
 use skong_core::desktop::{DesktopSnapshot, Monitor, WindowInfo};
 use skong_core::geom::{RectI, Vec2};
-use skong_core::nav::{FollowStatus, MoveKind, NavGoal, NavGraph, PathFollower, TravelStyle};
+use skong_core::nav::{BuildStats, FollowStatus, MoveKind, NavGoal, NavGraph, PathFollower, TravelStyle};
 use skong_core::terrain::{Terrain, TerrainOptions};
 
 const DT: f32 = 1.0 / 120.0;
@@ -82,6 +85,7 @@ fn main() {
         return;
     }
     let mut build_ms = Vec::new();
+    let mut build_sims: Vec<BuildStats> = Vec::new();
     let mut superdash_edges = Vec::new();
     let mut superdash_routes: BTreeMap<String, usize> = BTreeMap::new();
     // Routes with a crystal dash launched from a wall.
@@ -97,8 +101,22 @@ fn main() {
         let t = Terrain::from_desktop(&desk, &TerrainOptions::default());
         let start_x = rng.next(-1800, 2500) as f32;
         let Some(ch0) = settle(&t, Character::new(params, Abilities::default(), Vec2::new(start_x, 0.0))) else { continue };
-        let g = NavGraph::build(&t, &ch0);
-        build_ms.push(g.stats().millis);
+        let mut g = NavGraph::build(&t, &ch0);
+        // `SOAK_REPEAT=k`: build k times and keep the fastest (steadier timings).
+        let repeat = std::env::var("SOAK_REPEAT").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(1);
+        let mut ms = g.stats().millis;
+        for _ in 1..repeat {
+            g = NavGraph::build(&t, &ch0);
+            ms = ms.min(g.stats().millis);
+        }
+        build_ms.push(ms);
+        build_sims.push(g.stats());
+        // `SOAK_EDGES=1`: print every edge (compare graphs between builds of the planner).
+        if std::env::var("SOAK_EDGES").is_ok() {
+            for e in g.edges() {
+                println!("seed {seed}: {} -> {} {:?} {:?} takeoff {:?} land {:?} {:?}", e.from, e.to, e.kind, e.gait, e.takeoff, e.land, e.duration);
+            }
+        }
         superdash_edges.push(g.edge_counts()[MoveKind::ALL.iter().position(|k| *k == MoveKind::Superdash).unwrap_or(0)]);
         wall_launch_edges.push(g.edges().iter().filter(|e| e.kind == MoveKind::Superdash && e.climb.is_some()).count());
         // Window tops, plus a few points on the floors (long level runs: where a hurry
@@ -217,6 +235,15 @@ fn main() {
     if let (Some(med), Some(max)) = (build_ms.get(build_ms.len() / 2), build_ms.last()) {
         println!("graph build: median {med:.2} ms, max {max:.2} ms over {} desktops", build_ms.len());
     }
+    let n = build_sims.len().max(1);
+    let mean = |f: fn(&BuildStats) -> usize| build_sims.iter().map(f).sum::<usize>() / n;
+    println!(
+        "per build (mean): {} sims, {} ticks; climbs {} sims, {} ticks",
+        mean(|s| s.sims),
+        mean(|s| s.ticks),
+        mean(|s| s.climb_sims),
+        mean(|s| s.climb_ticks),
+    );
 }
 
 /// `SOAK_DUMP=seed:window`: print the terrain, graph and edges around one case.
