@@ -219,6 +219,8 @@ impl Panel {
             };
             toggle(ui, s.manual, "Manual control  [K]", Command::ToggleManual);
             toggle(ui, s.click_through, "Click-through  [C]", Command::ToggleClickThrough);
+            toggle(ui, s.fight_mode, "Fight the cursor", Command::ToggleFightMode);
+            toggle(ui, s.share_visible, "Visible in screen shares", Command::ToggleShareVisible);
             toggle(ui, s.paused, "Pause  [P]", Command::TogglePause);
             toggle(ui, s.vision, "Vision (content terrain)", Command::ToggleVision);
             toggle(ui, s.overlay, "Debug overlay  [D]", Command::ToggleDebugOverlay);
