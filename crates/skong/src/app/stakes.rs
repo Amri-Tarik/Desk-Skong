@@ -39,7 +39,9 @@ pub struct Stakes {
     /// Shattered windows and Geo showers.
     sources: GeoSources,
     /// Windows of the last desktop snapshot (to tell which ones closed).
-    windows: HashMap<WindowId, RectI>,
+    windows: HashMap<WindowId, (RectI, bool)>,
+    /// Monitors with a fullscreen game (nothing of ours goes there).
+    games: Vec<RectI>,
     desk_generation: u64,
     /// Terrain generation the Shade was last settled for (0 = settle now).
     settled_for: u64,
@@ -75,6 +77,7 @@ impl Stakes {
             geo: GeoField::new(seed()),
             sources: GeoSources::new(cfg.sources, seed()),
             windows: HashMap::new(),
+            games: Vec::new(),
             desk_generation: 0,
             settled_for: 0,
             areas: Vec::new(),
@@ -87,6 +90,14 @@ impl Stakes {
             dirty: false,
             since_save: 0.0,
             since_raise: 0.0,
+        }
+    }
+
+    /// Fullscreen games on these monitors: hide our sprites there, keep Geo off them.
+    pub fn hide_on(&mut self, monitors: &[RectI]) {
+        self.games = monitors.to_vec();
+        if let Some(v) = self.view.as_mut() {
+            v.hide_on(&monitors.iter().map(|m| m.to_f()).collect::<Vec<_>>());
         }
     }
 
@@ -180,7 +191,8 @@ impl Pet {
         let origin = self.knight_origin();
         let st = &mut self.stakes;
         st.areas.clear();
-        st.areas.extend(self.watcher.snapshot().monitors.iter().map(|m| m.work.to_f()));
+        let games = &st.games;
+        st.areas.extend(self.watcher.snapshot().monitors.iter().filter(|m| !games.contains(&m.rect)).map(|m| m.work.to_f()));
         let mut drawn = None;
         if let Some(sh) = st.shade.as_mut() {
             sh.scale = scale;
@@ -219,12 +231,14 @@ impl Pet {
         if desk.generation != st.desk_generation {
             let first = st.desk_generation == 0;
             st.desk_generation = desk.generation;
-            let now: HashMap<WindowId, RectI> = desk.windows.iter().map(|w| (w.id, w.rect)).collect();
-            for (id, rect) in &st.windows {
-                if first || now.contains_key(id) || !skong_win::desktop::window_closed(*id) {
+            let now: HashMap<WindowId, (RectI, bool)> = desk.windows.iter().map(|w| (w.id, (w.rect, w.fullscreen))).collect();
+            for (id, &(rect, fullscreen)) in &st.windows {
+                // Games (fullscreen) closing don't shatter, nor anything on a game monitor.
+                let on_game = st.games.iter().any(|g| !g.intersect(&rect).is_empty());
+                if first || fullscreen || on_game || now.contains_key(id) || !skong_win::desktop::window_closed(*id) {
                     continue;
                 }
-                if let Some(d) = st.sources.on_closed(*rect, loose) {
+                if let Some(d) = st.sources.on_closed(rect, loose) {
                     log::info!("a closed window shatters into {} geo", d.amount);
                     st.geo.spill(&d);
                 }
@@ -232,7 +246,9 @@ impl Pet {
             st.windows = now;
         }
         let s = self.brain.senses();
-        if let Some(d) = st.sources.tick(dt, !s.user_away, s.fullscreen || s.user_busy, loose, self.terrain.bounds) {
+        // Showers fall on one (game-free) monitor.
+        let sky = if st.areas.is_empty() { self.terrain.bounds } else { st.areas[seed() as usize % st.areas.len()] };
+        if let Some(d) = st.sources.tick(dt, !s.user_away, s.fullscreen || s.user_busy, loose, sky) {
             log::info!("a geo shower: {} geo", d.amount);
             st.geo.spill(&d);
         }
@@ -333,7 +349,8 @@ impl Pet {
             StakesCommand::SpillGeo => {
                 let st = &mut self.stakes;
                 st.geo.scale = self.settings.scale;
-                let d: GeoDrop = st.sources.shower(self.terrain.bounds);
+                let sky = if st.areas.is_empty() { self.terrain.bounds } else { st.areas[seed() as usize % st.areas.len()] };
+                let d: GeoDrop = st.sources.shower(sky);
                 st.geo.spill(&d);
             }
             StakesCommand::DropGeo => {

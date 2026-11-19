@@ -355,6 +355,7 @@ impl Pet {
         let games_changed = self.games.update(self.watcher.snapshot());
         if games_changed {
             self.benches.hide_on(&self.games.game_monitors);
+            self.stakes.hide_on(&self.games.game_monitors);
         }
         if self.content.poll(self.watcher.snapshot(), desk_changed) || desk_changed || games_changed {
             let mut new = self.content.terrain(self.watcher.snapshot(), &self.topts);

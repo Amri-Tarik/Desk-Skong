@@ -6,7 +6,7 @@ use std::path::Path;
 use anyhow::Result;
 use skong_core::anim::{AnimEvent, Animator, ClipId, ClipLibrary};
 use skong_core::assets::{Frame, Skin, SpriteBank, SpriteKey};
-use skong_core::geom::Vec2;
+use skong_core::geom::{RectF, Vec2};
 use skong_core::stakes::{GeoField, Shade, ShadeTick};
 use skong_core::terrain::Terrain;
 use skong_win::sprite_window::SpriteWindow;
@@ -27,16 +27,24 @@ struct Sprite {
 }
 
 impl Sprite {
-    fn draw(&mut self, lib: &ClipLibrary, frames: &HashMap<SpriteKey, Frame>, at: Vec2, flip: bool, feet: bool) -> Result<()> {
+    fn draw(&mut self, lib: &ClipLibrary, frames: &HashMap<SpriteKey, Frame>, at: Vec2, flip: bool, feet: bool, blocked: &[RectF]) -> Result<()> {
         let Some(key) = self.anim.current(lib) else { return Ok(()) };
         let Some(frame) = frames.get(&key) else { return Ok(()) };
-        draw_frame(&mut self.win, &mut self.drawn, &mut self.shown, key, frame, at, flip, feet)
+        draw_frame(&mut self.win, &mut self.drawn, &mut self.shown, key, frame, at, flip, feet, blocked)
     }
 }
 
 /// Present `frame` with its origin at `at` (or its bottom edge on `at.y` when `feet`).
+/// Hidden while `at` is on a `blocked` monitor (a fullscreen game).
 #[allow(clippy::too_many_arguments)]
-fn draw_frame(win: &mut SpriteWindow, drawn: &mut Option<(SpriteKey, bool)>, shown: &mut bool, key: SpriteKey, frame: &Frame, at: Vec2, flip: bool, feet: bool) -> Result<()> {
+fn draw_frame(win: &mut SpriteWindow, drawn: &mut Option<(SpriteKey, bool)>, shown: &mut bool, key: SpriteKey, frame: &Frame, at: Vec2, flip: bool, feet: bool, blocked: &[RectF]) -> Result<()> {
+    if blocked.iter().any(|r| r.contains(at)) {
+        if *shown {
+            win.set_visible(false);
+            *shown = false;
+        }
+        return Ok(());
+    }
     let below = frame.image.height as f32 - frame.anchor[1];
     let origin = if feet { Vec2::new(at.x, at.y - below) } else { at };
     let x = (origin.x - frame.anchor_x(flip)).round() as i32;
@@ -98,6 +106,8 @@ pub struct View {
     pool: Vec<SpriteWindow>,
     events: Vec<AnimEvent>,
     capturable: bool,
+    /// Monitors with a fullscreen game: nothing of ours shows there.
+    blocked: Vec<RectF>,
 }
 
 /// Fireball speed and range at scale 1 (px/s, px).
@@ -124,6 +134,7 @@ impl View {
             pool: Vec::new(),
             events: Vec::new(),
             capturable,
+            blocked: Vec::new(),
         })
     }
 
@@ -206,7 +217,7 @@ impl View {
             }
             self.events.clear();
             s.anim.update(&self.shade_lib, dt, &mut self.events);
-            s.draw(&self.shade_lib, &self.frames, sh.pos, flip, false)?;
+            s.draw(&self.shade_lib, &self.frames, sh.pos, flip, false, &self.blocked)?;
             self.shade = Some(s);
         }
         match tick.effect {
@@ -217,7 +228,7 @@ impl View {
                 if let Some(mut s) = self.shade_fx.take() {
                     self.events.clear();
                     s.anim.update(&self.shade_lib, dt, &mut self.events);
-                    s.draw(&self.shade_lib, &self.frames, sh.pos, flip, false)?;
+                    s.draw(&self.shade_lib, &self.frames, sh.pos, flip, false, &self.blocked)?;
                     self.shade_fx = Some(s);
                 }
             }
@@ -260,7 +271,7 @@ impl View {
                     }
                     continue;
                 }
-                s.draw(&self.geo_lib, &self.frames, c.pos, false, true)?;
+                s.draw(&self.geo_lib, &self.frames, c.pos, false, true, &self.blocked)?;
             }
         }
         Ok(())
@@ -316,7 +327,7 @@ impl View {
                     }
                 }
             }
-            shot.sprite.draw(&self.spells_lib, &self.frames, shot.pos, shot.vel.x > 0.0, false)?;
+            shot.sprite.draw(&self.spells_lib, &self.frames, shot.pos, shot.vel.x > 0.0, false, &self.blocked)?;
         }
         for i in done.into_iter().rev() {
             let s = self.shots.swap_remove(i).sprite;
@@ -336,7 +347,7 @@ impl View {
                 done.push(i);
                 continue;
             }
-            f.sprite.draw(lib, &self.frames, f.at, f.flip, false)?;
+            f.sprite.draw(lib, &self.frames, f.at, f.flip, false, &self.blocked)?;
         }
         for i in done.into_iter().rev() {
             let s = self.flashes.swap_remove(i).sprite;
@@ -351,7 +362,7 @@ impl View {
                     self.pool.push(h.win);
                 }
             } else if let Some(frame) = knight.frame(h.key) {
-                draw_frame(&mut h.win, &mut h.drawn, &mut h.shown, h.key, frame, h.at, false, true)?;
+                draw_frame(&mut h.win, &mut h.drawn, &mut h.shown, h.key, frame, h.at, false, true, &self.blocked)?;
             }
         }
         Ok(())
@@ -361,6 +372,25 @@ impl View {
     pub fn raise_all(&self) {
         for s in self.shade.iter().chain(self.coins.values()) {
             s.win.raise();
+        }
+    }
+}
+
+impl View {
+    /// Fullscreen games on these monitors: hide everything now; drawing keeps whatever is
+    /// on them hidden until the game goes away.
+    pub fn hide_on(&mut self, monitors: &[RectF]) {
+        self.blocked = monitors.to_vec();
+        let all = self.shade.iter_mut().chain(self.shade_fx.iter_mut()).chain(self.coins.values_mut()).chain(self.shots.iter_mut().map(|s| &mut s.sprite)).chain(self.flashes.iter_mut().map(|f| &mut f.sprite));
+        for s in all {
+            if s.shown {
+                s.win.set_visible(false);
+                s.shown = false;
+            }
+        }
+        if let Some(h) = &mut self.head {
+            h.win.set_visible(false);
+            h.shown = false;
         }
     }
 }
