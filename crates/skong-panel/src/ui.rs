@@ -407,6 +407,15 @@ impl Panel {
                         self.reset_armed = false;
                     }
                 });
+                // The secret boss, for testing (spoilers live here only, never in the tray).
+                ui.horizontal(|ui| {
+                    if ui.add_enabled(connected, egui::Button::new("Summon the troupe master")).on_hover_text("straight to the show, at the next good moment").clicked() {
+                        self.cmd(Command::SummonGrimm { lantern: false });
+                    }
+                    if ui.add_enabled(connected, egui::Button::new("Light a scarlet flame")).on_hover_text("his lantern near the knight; striking it summons him").clicked() {
+                        self.cmd(Command::SummonGrimm { lantern: true });
+                    }
+                });
             });
         });
     }

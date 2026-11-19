@@ -13,7 +13,9 @@
 //! * Scheduling reuses [`crate::npc::VisitScheduler`] (presence time, never during
 //!   fullscreen apps or fast typing).
 //! * [`GauntletDirector`] — the gauntlet: waves of enemies, a reward (see [`gauntlet`]).
+//! * [`grimm`] — the secret boss: a scarlet flame, the Troupe Master, his flames.
 pub mod gauntlet;
+pub mod grimm;
 mod sim;
 #[cfg(test)]
 mod tests;

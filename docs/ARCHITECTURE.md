@@ -38,7 +38,7 @@ default scale 0.6).
 | `shiny` | Shinies: short-lived glints on lasting ledges / the floor (shared occupancy, never on game monitors, reachable), spawn timer and rewards, the procedural twinkle (`glint`). Not persisted. |
 | `dreamgate` | Dream Gate fallback travel: gate spots (settled ledge, headroom) and the app-side `GateRuntime` (gate glow, the jump as the warp act ends). The brain side (`ai::dream_gate`) picks an unreachable engagement prize, with a cooldown. |
 | `stakes` | Shade simulation, Geo coins/physics/wallet, spellbook (soul, spells, nail arts), sources (battles, shattered windows, showers). |
-| `enemy` | Enemies (`data/enemies.json`): arrival planning (walk in from a monitor edge, drop onto a settled ledge, fly in), the sim (ride windows, patrol / hover, notice, chase, wind-up + lunge, recoil + flash, death clip, corpse fade), contact bumps; seen by the brain as `Foe`s (`ai::fight`, the `Fight` behaviour). Zote's spar lives in `npc::spar` + the visitor actor. `enemy::gauntlet`: the gauntlet director (triggers, start rules, waves, reward, aborts; pure, driven by `enemies.rs`), seen by the brain as a `GauntletCue` (`ai::gauntlet`, the `Gauntlet` ceremony behaviour). |
+| `enemy` | Enemies (`data/enemies.json`): arrival planning (walk in from a monitor edge, drop onto a settled ledge, fly in), the sim (ride windows, patrol / hover, notice, chase, wind-up + lunge, recoil + flash, death clip, corpse fade), contact bumps; seen by the brain as `Foe`s (`ai::fight`, the `Fight` behaviour). Zote's spar lives in `npc::spar` + the visitor actor. `enemy::gauntlet`: the gauntlet director (triggers, start rules, waves, reward, aborts; pure, driven by `enemies.rs`), seen by the brain as a `GauntletCue` (`ai::gauntlet`, the `Gauntlet` ceremony behaviour). `enemy::grimm`: the secret boss (`data/grimm.json`): `GrimmDirector` (the scarlet lantern once enough achievements are unlocked, debug summons, start rules, aborts, endings) and `Grimm` (teleports, dive / ground dash, slashes + uppercut, firebats, flame pillars, spikes, the balloon at each phase; every spot relative to the knight's ledge, flames ignore windows). Seen by the brain as `FoeKind::Lantern` (struck to summon him), `FoeKind::Boss` (fought at 0.98, lethal: `fight.boss_masks`) and `FoeKind::Hazard` (his flames: `Fight::evade` dodges, jumps, steps off pillars, keeps clear of the balloon). |
 | `achievements` | Hidden achievements (`data/achievements.json`): the `Tracker` consumes a small `AchievementEvent` stream and holds every criterion (counts, "every region", "never touched the floor"); progress saves as `AchievementSave`. |
 | `canvas`, `geom`, `desktop` | Premultiplied BGRA images, rects/vectors, desktop snapshot types. |
 
@@ -73,7 +73,7 @@ per monitor, pipe server threads for panels. The tick only does non-blocking han
 
 Key app files: `app.rs` (Pet + tick + commands + tray), `app/panel.rs` (status/IPC glue),
 `app/stakes.rs`, `app/discover.rs` (discoveries + shinies), `app/achievements.rs` (the one place
-events become achievement events; announce, save, panel copy), `enemies.rs` + `app/enemy.rs` (enemies, strikes, spar glue), `benches.rs`, `shinies.rs`, `fx.rs` (pooled effect windows),
+events become achievement events; announce, save, panel copy), `enemies.rs` + `app/enemy.rs` (enemies, strikes, spar glue), `grimm.rs` + `app/grimm.rs` (the secret boss: art loaded on a background thread when a show draws near, his windows, lines in speech bubbles; world glue), `benches.rs`, `shinies.rs`, `fx.rs` (pooled effect windows),
 `gameguard.rs`, `navbuild.rs`, `grab.rs`, `control.rs` (pipe server), `logring.rs`
 (logger + ring buffer for panels), `settings.rs`, `keyboard.rs`, `browser.rs` (`--browse`).
 
@@ -88,6 +88,7 @@ events become achievement events; announce, save, panel copy), `enemies.rs` + `a
 | `effects.json` | Hero effects with prefab offsets/scales/rotations. |
 | `props.json` | Bench styles (sprite, seat height), discovery art, and shiny rates (`shinies`). |
 | `achievements.json` | Hidden achievements: id, title + description (shown once unlocked), vague hint, `goal` (schema in its `$comment`). |
+| `grimm.json` | The secret boss: art libraries and scale, hp, phases, tempo, reward, aborts, the lantern's rules, his (original) lines (schema in its `$comment`). |
 
 Local, git-ignored: `skins/Vanilla/` (exported atlases, `props/` sprites), community skins
 under `skins/`, `%APPDATA%\Desk-Skong\{settings,world,achievements}.json`.

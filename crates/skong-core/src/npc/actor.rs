@@ -795,6 +795,7 @@ impl Npc {
             attacking: matches!(s.stage, SparStage::Antic | SparStage::Charge),
             winding_up: s.stage == SparStage::Antic,
             lunging: s.stage == SparStage::Charge,
+            ..Default::default()
         })
     }
 

@@ -1,0 +1,1901 @@
+{
+  "name": "Grimm Anim",
+  "clips": [
+    {
+      "name": "LookBack",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 95,
+          "sprite": "Grimm_idle_right0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 79,
+          "sprite": "Grimm_idle0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 83,
+          "sprite": "Grimm_idle0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 87,
+          "sprite": "Grimm_idle0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 82,
+          "sprite": "Grimm_idle0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 86,
+          "sprite": "Grimm_idle0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 80,
+          "sprite": "Grimm_idle0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 81,
+          "sprite": "Grimm_idle0006"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 88,
+          "sprite": "Grimm_idle0007"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 85,
+          "sprite": "Grimm_idle0008"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 89,
+          "sprite": "Grimm_idle0009"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 78,
+          "sprite": "Grimm_idle0010"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 84,
+          "sprite": "Grimm_idle0011"
+        }
+      ]
+    },
+    {
+      "name": "Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 92,
+          "sprite": "Grimm_idle_right0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 102,
+          "sprite": "Grimm_idle_right0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 97,
+          "sprite": "Grimm_idle_right0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 96,
+          "sprite": "Grimm_idle_right0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 98,
+          "sprite": "Grimm_idle_right0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 101,
+          "sprite": "Grimm_idle_right0006"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 100,
+          "sprite": "Grimm_idle_right0007"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 90,
+          "sprite": "Grimm_idle_right0008"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 93,
+          "sprite": "Grimm_idle_right0009"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 99,
+          "sprite": "Grimm_idle_right0010"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 91,
+          "sprite": "Grimm_idle_right0011"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 94,
+          "sprite": "Grimm_idle_right0012"
+        }
+      ]
+    },
+    {
+      "name": "Slash Antic",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 111,
+          "sprite": "Grimm_slash_antic0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 113,
+          "sprite": "Grimm_slash_antic0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 112,
+          "sprite": "Grimm_slash_antic0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 114,
+          "sprite": "Grimm_slash_antic0003"
+        }
+      ]
+    },
+    {
+      "name": "Antic Return",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 43,
+          "sprite": "Grimm_cast0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 44,
+          "sprite": "Grimm_cast0000"
+        }
+      ]
+    },
+    {
+      "name": "Tele In",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 125,
+          "sprite": "Grimm_teleport0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 120,
+          "sprite": "Grimm_teleport0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 124,
+          "sprite": "Grimm_teleport0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 121,
+          "sprite": "Grimm_teleport0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 123,
+          "sprite": "Grimm_teleport0006"
+        }
+      ]
+    },
+    {
+      "name": "Tele Out",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 121,
+          "sprite": "Grimm_teleport0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 126,
+          "sprite": "Grimm_teleport0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 122,
+          "sprite": "Grimm_teleport0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 124,
+          "sprite": "Grimm_teleport0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 120,
+          "sprite": "Grimm_teleport0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 125,
+          "sprite": "Grimm_teleport0000"
+        }
+      ]
+    },
+    {
+      "name": "TeleToIdle",
+      "fps": 12,
+      "loop_start": 8,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 125,
+          "sprite": "Grimm_teleport0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 120,
+          "sprite": "Grimm_teleport0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 124,
+          "sprite": "Grimm_teleport0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 122,
+          "sprite": "Grimm_teleport0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 126,
+          "sprite": "Grimm_teleport0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 121,
+          "sprite": "Grimm_teleport0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 123,
+          "sprite": "Grimm_teleport0006"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 95,
+          "sprite": "Grimm_idle_right0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 92,
+          "sprite": "Grimm_idle_right0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 102,
+          "sprite": "Grimm_idle_right0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 97,
+          "sprite": "Grimm_idle_right0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 96,
+          "sprite": "Grimm_idle_right0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 98,
+          "sprite": "Grimm_idle_right0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 101,
+          "sprite": "Grimm_idle_right0006"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 100,
+          "sprite": "Grimm_idle_right0007"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 90,
+          "sprite": "Grimm_idle_right0008"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 93,
+          "sprite": "Grimm_idle_right0009"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 99,
+          "sprite": "Grimm_idle_right0010"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 91,
+          "sprite": "Grimm_idle_right0011"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 94,
+          "sprite": "Grimm_idle_right0012"
+        }
+      ]
+    },
+    {
+      "name": "Cast Antic",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 44,
+          "sprite": "Grimm_cast0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 43,
+          "sprite": "Grimm_cast0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 41,
+          "sprite": "Grimm_cast0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 46,
+          "sprite": "Grimm_cast0003"
+        }
+      ]
+    },
+    {
+      "name": "Hand Out",
+      "fps": 16,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 26,
+          "sprite": "Grimm_arm0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 25,
+          "sprite": "Grimm_arm0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 28,
+          "sprite": "Grimm_arm0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 30,
+          "sprite": "Grimm_arm0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 27,
+          "sprite": "Grimm_arm0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 29,
+          "sprite": "Grimm_arm0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 31,
+          "sprite": "Grimm_arm0006"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 24,
+          "sprite": "Grimm_arm0007"
+        }
+      ]
+    },
+    {
+      "name": "Hand In",
+      "fps": 16,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 29,
+          "sprite": "Grimm_arm0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 27,
+          "sprite": "Grimm_arm0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 30,
+          "sprite": "Grimm_arm0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 28,
+          "sprite": "Grimm_arm0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 25,
+          "sprite": "Grimm_arm0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 26,
+          "sprite": "Grimm_arm0000"
+        }
+      ]
+    },
+    {
+      "name": "LookBackReturn",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 95,
+          "sprite": "Grimm_idle_right0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 92,
+          "sprite": "Grimm_idle_right0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 102,
+          "sprite": "Grimm_idle_right0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 97,
+          "sprite": "Grimm_idle_right0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 96,
+          "sprite": "Grimm_idle_right0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 98,
+          "sprite": "Grimm_idle_right0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 101,
+          "sprite": "Grimm_idle_right0006"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 100,
+          "sprite": "Grimm_idle_right0007"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 90,
+          "sprite": "Grimm_idle_right0008"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 93,
+          "sprite": "Grimm_idle_right0009"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 99,
+          "sprite": "Grimm_idle_right0010"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 91,
+          "sprite": "Grimm_idle_right0011"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 94,
+          "sprite": "Grimm_idle_right0012"
+        }
+      ]
+    },
+    {
+      "name": "Cast",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 42,
+          "sprite": "Grimm_cast0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 45,
+          "sprite": "Grimm_cast0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 39,
+          "sprite": "Grimm_cast0006"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 40,
+          "sprite": "Grimm_cast0007"
+        }
+      ]
+    },
+    {
+      "name": "Cast Return",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 43,
+          "sprite": "Grimm_cast0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 44,
+          "sprite": "Grimm_cast0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 79,
+          "sprite": "Grimm_idle0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 83,
+          "sprite": "Grimm_idle0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 87,
+          "sprite": "Grimm_idle0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 82,
+          "sprite": "Grimm_idle0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 86,
+          "sprite": "Grimm_idle0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 80,
+          "sprite": "Grimm_idle0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 81,
+          "sprite": "Grimm_idle0006"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 88,
+          "sprite": "Grimm_idle0007"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 85,
+          "sprite": "Grimm_idle0008"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 89,
+          "sprite": "Grimm_idle0009"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 78,
+          "sprite": "Grimm_idle0010"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 84,
+          "sprite": "Grimm_idle0011"
+        }
+      ]
+    },
+    {
+      "name": "Bow",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 34,
+          "sprite": "Grimm_bow0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 38,
+          "sprite": "Grimm_bow0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 33,
+          "sprite": "Grimm_bow0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 37,
+          "sprite": "Grimm_bow0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 35,
+          "sprite": "Grimm_bow0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 36,
+          "sprite": "Grimm_bow0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 32,
+          "sprite": "Grimm_bow0006"
+        }
+      ]
+    },
+    {
+      "name": "Bow Return",
+      "fps": 12,
+      "loop_start": 4,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 37,
+          "sprite": "Grimm_bow0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 33,
+          "sprite": "Grimm_bow0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 38,
+          "sprite": "Grimm_bow0001"
+        }
+      ]
+    },
+    {
+      "name": "Hand Click",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 128,
+          "sprite": "Grimm_arm0008"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 127,
+          "sprite": "Grimm_arm0009"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 24,
+          "sprite": "Grimm_arm0007"
+        }
+      ]
+    },
+    {
+      "name": "Slash 1",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 108,
+          "sprite": "Grimm_slash0000"
+        }
+      ]
+    },
+    {
+      "name": "Slash 2",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 109,
+          "sprite": "Grimm_slash0001"
+        }
+      ]
+    },
+    {
+      "name": "Slash 3",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 107,
+          "sprite": "Grimm_slash0002"
+        }
+      ]
+    },
+    {
+      "name": "Slash Recover",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 110,
+          "sprite": "Grimm_slash0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 121,
+          "sprite": "Grimm_teleport0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 111,
+          "sprite": "Grimm_slash_antic0000"
+        }
+      ]
+    },
+    {
+      "name": "Firebat",
+      "fps": 15,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 50,
+          "sprite": "Flame_bat0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 51,
+          "sprite": "Flame_bat0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 48,
+          "sprite": "Flame_bat0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 47,
+          "sprite": "Flame_bat0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 49,
+          "sprite": "Flame_bat0004"
+        }
+      ]
+    },
+    {
+      "name": "Air Dash Antic",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 17,
+          "sprite": "Grimm_air_dash0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 19,
+          "sprite": "Grimm_air_dash0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 11,
+          "sprite": "Grimm_air_dash0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 21,
+          "sprite": "Grimm_air_dash0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 13,
+          "sprite": "Grimm_air_dash0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 15,
+          "sprite": "Grimm_air_dash0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 22,
+          "sprite": "Grimm_air_dash0006"
+        }
+      ]
+    },
+    {
+      "name": "Air Dash",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 23,
+          "sprite": "Grimm_air_dash0007"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 14,
+          "sprite": "Grimm_air_dash0008"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 12,
+          "sprite": "Grimm_air_dash0009"
+        }
+      ]
+    },
+    {
+      "name": "G Dash Antic",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 10,
+          "sprite": "Grimm_air_dash0010"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 16,
+          "sprite": "Grimm_air_dash0011"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 9,
+          "sprite": "Grimm_air_dash0012"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 18,
+          "sprite": "Grimm_air_dash0013"
+        }
+      ]
+    },
+    {
+      "name": "G Dash",
+      "fps": 15,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 20,
+          "sprite": "Grimm_air_dash0014"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 7,
+          "sprite": "Grimm_air_dash0015"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 8,
+          "sprite": "Grimm_air_dash0016"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 6,
+          "sprite": "Grimm_air_dash0017"
+        }
+      ]
+    },
+    {
+      "name": "Capespike Cast",
+      "fps": 15,
+      "loop_start": 7,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 123,
+          "sprite": "Grimm_teleport0006"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 121,
+          "sprite": "Grimm_teleport0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 126,
+          "sprite": "Grimm_teleport0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 133,
+          "sprite": "Grimm_Boss_ground_spike_attack0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 131,
+          "sprite": "Grimm_Boss_ground_spike_attack0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 134,
+          "sprite": "Grimm_Boss_ground_spike_attack0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 130,
+          "sprite": "Grimm_Boss_ground_spike_attack0006"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 135,
+          "sprite": "Grimm_Boss_ground_spike_attack0007"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 129,
+          "sprite": "Grimm_Boss_ground_spike_attack0008"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 132,
+          "sprite": "Grimm_Boss_ground_spike_attack0009"
+        }
+      ]
+    },
+    {
+      "name": "Spike Ready",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 148,
+          "sprite": "Grimm_ground_spike0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 145,
+          "sprite": "Grimm_ground_spike0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 142,
+          "sprite": "Grimm_ground_spike0002"
+        }
+      ]
+    },
+    {
+      "name": "Capespike End",
+      "fps": 15,
+      "loop_start": 6,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 130,
+          "sprite": "Grimm_Boss_ground_spike_attack0006"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 134,
+          "sprite": "Grimm_Boss_ground_spike_attack0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 131,
+          "sprite": "Grimm_Boss_ground_spike_attack0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 133,
+          "sprite": "Grimm_Boss_ground_spike_attack0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 126,
+          "sprite": "Grimm_teleport0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 121,
+          "sprite": "Grimm_teleport0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 123,
+          "sprite": "Grimm_teleport0006"
+        }
+      ]
+    },
+    {
+      "name": "Spike Antic",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 139,
+          "sprite": "Grimm_ground_spike0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 136,
+          "sprite": "Grimm_ground_spike0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 143,
+          "sprite": "Grimm_ground_spike0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 147,
+          "sprite": "Grimm_ground_spike0006"
+        }
+      ]
+    },
+    {
+      "name": "Spike Up",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 144,
+          "sprite": "Grimm_ground_spike0007"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 138,
+          "sprite": "Grimm_ground_spike0008"
+        }
+      ]
+    },
+    {
+      "name": "Spike Down",
+      "fps": 25,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 146,
+          "sprite": "Grimm_ground_spike0009"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 140,
+          "sprite": "Grimm_ground_spike0010"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 149,
+          "sprite": "Grimm_ground_spike0011"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 141,
+          "sprite": "Grimm_ground_spike0012"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 137,
+          "sprite": "Grimm_ground_spike0013"
+        }
+      ]
+    },
+    {
+      "name": "Balloon Antic",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 154,
+          "sprite": "Grimm_boss_balloon_attack0000"
+        }
+      ]
+    },
+    {
+      "name": "Balloon",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 151,
+          "sprite": "Grimm_boss_balloon_attack0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 152,
+          "sprite": "Grimm_boss_balloon_attack0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 153,
+          "sprite": "Grimm_boss_balloon_attack0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 150,
+          "sprite": "Grimm_boss_balloon_attack0004"
+        }
+      ]
+    },
+    {
+      "name": "Balloon End",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 151,
+          "sprite": "Grimm_boss_balloon_attack0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 154,
+          "sprite": "Grimm_boss_balloon_attack0000"
+        }
+      ]
+    },
+    {
+      "name": "Absorb Start",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 77,
+          "sprite": "Grimm_flame_pillar0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 63,
+          "sprite": "Grimm_flame_pillar0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 66,
+          "sprite": "Grimm_flame_pillar0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 71,
+          "sprite": "Grimm_flame_pillar0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 76,
+          "sprite": "Grimm_flame_pillar0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 75,
+          "sprite": "Grimm_flame_pillar0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 74,
+          "sprite": "Grimm_flame_pillar0006"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 64,
+          "sprite": "Grimm_flame_pillar0007"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 70,
+          "sprite": "Grimm_flame_pillar0008"
+        }
+      ]
+    },
+    {
+      "name": "Absorb",
+      "fps": 12,
+      "loop_start": 5,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 68,
+          "sprite": "Grimm_flame_pillar0009"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 67,
+          "sprite": "Grimm_flame_pillar0010"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 73,
+          "sprite": "Grimm_flame_pillar0011"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 69,
+          "sprite": "Grimm_flame_pillar0012"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 167,
+          "sprite": "grimm_boss_flame_pillar_talk_loop0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 164,
+          "sprite": "grimm_boss_flame_pillar_talk_loop0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 165,
+          "sprite": "grimm_boss_flame_pillar_talk_loop0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 166,
+          "sprite": "grimm_boss_flame_pillar_talk_loop0003"
+        }
+      ]
+    },
+    {
+      "name": "Roar Antic",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 106,
+          "sprite": "Grimm_roar0000"
+        }
+      ]
+    },
+    {
+      "name": "Roar",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 104,
+          "sprite": "Grimm_roar0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 103,
+          "sprite": "Grimm_roar0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 105,
+          "sprite": "Grimm_roar0003"
+        }
+      ]
+    },
+    {
+      "name": "Evade Antic",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 123,
+          "sprite": "Grimm_teleport0006"
+        }
+      ]
+    },
+    {
+      "name": "Evade",
+      "fps": 15,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 0,
+          "sprite": "Grimm_evade0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 5,
+          "sprite": "Grimm_evade0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 2,
+          "sprite": "Grimm_evade0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 3,
+          "sprite": "Grimm_evade0004"
+        }
+      ]
+    },
+    {
+      "name": "Evade End",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 4,
+          "sprite": "Grimm_evade0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 123,
+          "sprite": "Grimm_teleport0006"
+        }
+      ]
+    },
+    {
+      "name": "Explode Antic",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 117,
+          "sprite": "Grimm_stun_explode0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 119,
+          "sprite": "Grimm_stun_explode0001"
+        }
+      ]
+    },
+    {
+      "name": "Explode",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 116,
+          "sprite": "Grimm_stun_explode0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 115,
+          "sprite": "Grimm_stun_explode0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 118,
+          "sprite": "Grimm_stun_explode0004"
+        }
+      ]
+    },
+    {
+      "name": "Bat Fly",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 156,
+          "sprite": "Grimm_stun_bat0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 161,
+          "sprite": "Grimm_stun_bat0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 158,
+          "sprite": "Grimm_stun_bat0003"
+        }
+      ]
+    },
+    {
+      "name": "Bat TurnToFly",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 155,
+          "sprite": "Grimm_stun_bat0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 163,
+          "sprite": "Grimm_stun_bat0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 156,
+          "sprite": "Grimm_stun_bat0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 161,
+          "sprite": "Grimm_stun_bat0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 158,
+          "sprite": "Grimm_stun_bat0003"
+        }
+      ]
+    },
+    {
+      "name": "Bat End",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 162,
+          "sprite": "Grimm_stun_bat0007"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 159,
+          "sprite": "Grimm_stun_bat0008"
+        }
+      ]
+    },
+    {
+      "name": "Reforming",
+      "fps": 15,
+      "loop_start": 3,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 125,
+          "sprite": "Grimm_teleport0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 120,
+          "sprite": "Grimm_teleport0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 124,
+          "sprite": "Grimm_teleport0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 122,
+          "sprite": "Grimm_teleport0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 126,
+          "sprite": "Grimm_teleport0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 122,
+          "sprite": "Grimm_teleport0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 124,
+          "sprite": "Grimm_teleport0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 120,
+          "sprite": "Grimm_teleport0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 125,
+          "sprite": "Grimm_teleport0000"
+        }
+      ]
+    },
+    {
+      "name": "Reform End",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 120,
+          "sprite": "Grimm_teleport0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 125,
+          "sprite": "Grimm_teleport0000"
+        }
+      ]
+    },
+    {
+      "name": "Spike Cancel",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 139,
+          "sprite": "Grimm_ground_spike0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 148,
+          "sprite": "Grimm_ground_spike0000"
+        }
+      ]
+    },
+    {
+      "name": "Death Stun",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 119,
+          "sprite": "Grimm_stun_explode0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 54,
+          "sprite": "Grimm_death_stun0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 52,
+          "sprite": "Grimm_death_stun0001"
+        }
+      ]
+    },
+    {
+      "name": "G Dash Effect",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 56,
+          "sprite": "ground_dash_effect0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 174,
+          "sprite": "ground_dash_effect0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 173,
+          "sprite": "ground_dash_effect0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 175,
+          "sprite": "ground_dash_effect0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 58,
+          "sprite": "ground_dash_effect0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 177,
+          "sprite": "ground_dash_effect0005"
+        }
+      ]
+    },
+    {
+      "name": "Absorb End",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 65,
+          "sprite": "Grimm_flame_pillar0014"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 95,
+          "sprite": "Grimm_idle_right0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 79,
+          "sprite": "Grimm_idle0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 83,
+          "sprite": "Grimm_idle0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 87,
+          "sprite": "Grimm_idle0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 82,
+          "sprite": "Grimm_idle0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 86,
+          "sprite": "Grimm_idle0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 80,
+          "sprite": "Grimm_idle0005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 81,
+          "sprite": "Grimm_idle0006"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 88,
+          "sprite": "Grimm_idle0007"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 85,
+          "sprite": "Grimm_idle0008"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 89,
+          "sprite": "Grimm_idle0009"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 78,
+          "sprite": "Grimm_idle0010"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 84,
+          "sprite": "Grimm_idle0011"
+        }
+      ]
+    },
+    {
+      "name": "A Dash Effect",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 172,
+          "sprite": "air_dash_effects0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 176,
+          "sprite": "air_dash_effects0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 179,
+          "sprite": "air_dash_effects0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 178,
+          "sprite": "air_dash_effects0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 59,
+          "sprite": "air_dash_effects0004"
+        }
+      ]
+    },
+    {
+      "name": "Uppercut Antic",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 171,
+          "sprite": "Grimm_anims_v050000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 169,
+          "sprite": "Grimm_anims_v050001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 170,
+          "sprite": "Grimm_anims_v050002"
+        }
+      ]
+    },
+    {
+      "name": "Uppercut",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 180,
+          "sprite": "Grimm_anims_v050003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 168,
+          "sprite": "Grimm_anims_v050004"
+        }
+      ]
+    },
+    {
+      "name": "Uppercut End",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 181,
+          "sprite": "Grimm_anims_v050005"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 125,
+          "sprite": "Grimm_teleport0000"
+        }
+      ]
+    },
+    {
+      "name": "Pillar",
+      "fps": 25,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 53,
+          "sprite": "Flame_Pillar_flash0000"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 61,
+          "sprite": "Flame_Pillar_flash0001"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 57,
+          "sprite": "Flame_Pillar_flash0002"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 62,
+          "sprite": "Flame_Pillar_flash0003"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 60,
+          "sprite": "Flame_Pillar_flash0004"
+        },
+        {
+          "collection": "Grimm Cln",
+          "sprite_id": 55,
+          "sprite": "Flame_Pillar_flash0005"
+        }
+      ]
+    }
+  ]
+}

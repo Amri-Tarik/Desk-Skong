@@ -48,10 +48,12 @@ pub mod ids {
     pub const WALL_JUMP_CHAIN: &str = "wall_jump_chain";
     pub const SUPER_HARD_LANDING: &str = "super_hard_landing";
     pub const EVERY_ENEMY: &str = "every_enemy";
+    pub const TROUPE_MASTER: &str = "troupe_master";
+    pub const TROUPE_ENCORE: &str = "troupe_encore";
 
     pub const ALL: &[&str] = &[
         HORNET_TALK, DREAM_WINDOW, DREAM_VISITOR, FIRST_SPELL, POGO, VENGEFLY_AIRBORNE, FALL_AND_RECLAIM, WINDOW_RIDE, CURSOR_DEFEAT, CURSOR_VICTOR, DASH_ACROSS_MONITORS, WALL_CRYSTAL_DASH, DREAM_GATE, EVERY_REGION, EVERY_BENCH, EVERY_VISITOR, SLY_LESSON, ZOTE_SPAR, GAUNTLET,
-        UNN_FORM, HIGHLIGHTED_TEXT, GAME_RETREAT, SHATTERED_WINDOW, GEO_HOARD, NAP_POKE, THROW, AIR_MAIL, MIDAIR_CATCH, STEP_BEHIND, WALL_JUMP_CHAIN, SUPER_HARD_LANDING, EVERY_ENEMY,
+        UNN_FORM, HIGHLIGHTED_TEXT, GAME_RETREAT, SHATTERED_WINDOW, GEO_HOARD, NAP_POKE, THROW, AIR_MAIL, MIDAIR_CATCH, STEP_BEHIND, WALL_JUMP_CHAIN, SUPER_HARD_LANDING, EVERY_ENEMY, TROUPE_MASTER, TROUPE_ENCORE,
     ];
 }
 use ids::*;
@@ -202,6 +204,10 @@ pub enum AchievementEvent {
     SuperHardLanding,
     /// He stepped behind a drawn line.
     SteppedBehind,
+    /// He beat the Troupe Master.
+    TroupeMasterBeaten,
+    /// The Troupe Master beat him.
+    FellToTroupeMaster,
 }
 
 /// Unlock state and every criterion.
@@ -385,6 +391,8 @@ impl Tracker {
             }
             E::SuperHardLanding => unlock(SUPER_HARD_LANDING),
             E::SteppedBehind => unlock(STEP_BEHIND),
+            E::TroupeMasterBeaten => unlock(TROUPE_MASTER),
+            E::FellToTroupeMaster => unlock(TROUPE_ENCORE),
         }
         let mut fresh = Vec::new();
         for id in new {

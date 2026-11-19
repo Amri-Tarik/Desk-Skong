@@ -33,8 +33,9 @@ impl Pet {
         let Some(v) = self.visitors.as_mut() else { return };
         let busy = self.grab.held_pos().is_some()
             || matches!(self.brain.behaviour(), BehaviourKind::Nap | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Flee | BehaviourKind::Fight | BehaviourKind::Gauntlet)
-            // No visits in the middle of a gauntlet.
-            || self.enemies.as_ref().is_some_and(|e| e.gauntlet_active());
+            // No visits in the middle of a gauntlet, or with the troupe in town.
+            || self.enemies.as_ref().is_some_and(|e| e.gauntlet_active())
+            || self.troupe.as_ref().is_some_and(|t| t.active());
         let (discoveries, terrain) = (&self.discoveries, &self.terrain);
         let settled = |f: &skong_core::portal::Footing| discoveries.settled(terrain, f.owner, f.y, f.x0, f.x1);
         let world = World {

@@ -17,6 +17,7 @@ mod dream_gate;
 mod fight;
 mod gauntlet;
 mod greet;
+mod grimm;
 mod highlight;
 mod shiny;
 mod train;

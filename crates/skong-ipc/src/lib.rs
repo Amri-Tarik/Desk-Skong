@@ -60,6 +60,9 @@ pub enum Command {
     SendEnemy,
     /// Start a gauntlet (waves of enemies, a reward) at the next good moment.
     StartGauntlet,
+    /// Debug (the panel's hidden Debug section only): the secret boss at the next good
+    /// moment; `lantern`: light his scarlet flame first instead of skipping to the show.
+    SummonGrimm { lantern: bool },
     /// The knight dream-nails the window he stands on (thought bubble).
     DreamNail,
     /// Path-find to the cursor (Stroll, or Hurry with the full movement kit).
@@ -337,6 +340,7 @@ mod tests {
             Command::SetOverlayLayers(OverlayLayers { terrain: false, nav: true, route: true }),
             Command::ToggleDebugOverlay,
             Command::StartGauntlet,
+            Command::SummonGrimm { lantern: true },
             Command::ResetAchievements,
             Command::Quit,
         ] {

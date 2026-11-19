@@ -1,0 +1,119 @@
+{
+  "name": "Flameball Anim",
+  "clips": [
+    {
+      "name": "Idle",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Flameball Cln",
+          "sprite_id": 2,
+          "sprite": "grimm_fireball0000"
+        },
+        {
+          "collection": "Flameball Cln",
+          "sprite_id": 3,
+          "sprite": "grimm_fireball0001"
+        },
+        {
+          "collection": "Flameball Cln",
+          "sprite_id": 4,
+          "sprite": "grimm_fireball0002"
+        },
+        {
+          "collection": "Flameball Cln",
+          "sprite_id": 10,
+          "sprite": "grimm_fireball0003"
+        },
+        {
+          "collection": "Flameball Cln",
+          "sprite_id": 1,
+          "sprite": "grimm_fireball0004"
+        },
+        {
+          "collection": "Flameball Cln",
+          "sprite_id": 7,
+          "sprite": "grimm_fireball0005"
+        },
+        {
+          "collection": "Flameball Cln",
+          "sprite_id": 0,
+          "sprite": "grimm_fireball0006"
+        },
+        {
+          "collection": "Flameball Cln",
+          "sprite_id": 5,
+          "sprite": "grimm_fireball0007"
+        }
+      ]
+    },
+    {
+      "name": "Pillar",
+      "fps": 25,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Flameball Cln",
+          "sprite_id": 12,
+          "sprite": "Flame_Pillar_flash0000"
+        },
+        {
+          "collection": "Flameball Cln",
+          "sprite_id": 16,
+          "sprite": "Flame_Pillar_flash0001"
+        },
+        {
+          "collection": "Flameball Cln",
+          "sprite_id": 14,
+          "sprite": "Flame_Pillar_flash0002"
+        },
+        {
+          "collection": "Flameball Cln",
+          "sprite_id": 17,
+          "sprite": "Flame_Pillar_flash0003"
+        },
+        {
+          "collection": "Flameball Cln",
+          "sprite_id": 15,
+          "sprite": "Flame_Pillar_flash0004"
+        },
+        {
+          "collection": "Flameball Cln",
+          "sprite_id": 13,
+          "sprite": "Flame_Pillar_flash0005"
+        }
+      ]
+    },
+    {
+      "name": "Impact",
+      "fps": 16,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Flameball Cln",
+          "sprite_id": 8,
+          "sprite": "grimm_fireball_explode0000"
+        },
+        {
+          "collection": "Flameball Cln",
+          "sprite_id": 9,
+          "sprite": "grimm_fireball_explode0001"
+        },
+        {
+          "collection": "Flameball Cln",
+          "sprite_id": 11,
+          "sprite": "grimm_fireball_explode0002"
+        },
+        {
+          "collection": "Flameball Cln",
+          "sprite_id": 6,
+          "sprite": "grimm_fireball_explode0003"
+        }
+      ]
+    }
+  ]
+}

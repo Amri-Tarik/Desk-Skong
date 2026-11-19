@@ -58,6 +58,8 @@ fn one_shot_achievements_unlock_once_with_their_time() {
         (E::PokedWhileNapping, NAP_POKE),
         (E::SuperHardLanding, SUPER_HARD_LANDING),
         (E::SteppedBehind, STEP_BEHIND),
+        (E::TroupeMasterBeaten, TROUPE_MASTER),
+        (E::FellToTroupeMaster, TROUPE_ENCORE),
     ];
     for (ev, id) in cases {
         assert_eq!(feed(&mut t, std::slice::from_ref(&ev)), [id], "{ev:?}");

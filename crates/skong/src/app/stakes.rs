@@ -110,6 +110,11 @@ impl Stakes {
     }
 
     /// Geo coins bursting out at `at` (e.g. a broken geo deposit).
+    /// A Shade is out there waiting for him.
+    pub fn has_shade(&self) -> bool {
+        self.shade.as_ref().is_some_and(|s| s.alive())
+    }
+
     pub fn burst(&mut self, at: Vec2, amount: u32, scale: f32) {
         self.geo.scale = scale;
         self.geo.burst(at, amount);
