@@ -39,7 +39,8 @@ impl PlaceKind {
     fn cooldown(self) -> f32 {
         match self {
             PlaceKind::Bench => 120.0,
-            PlaceKind::Deposit => 90.0,
+            // A rock he didn't finish (a swing that missed): back at it soon, not in 90 s.
+            PlaceKind::Deposit => 10.0,
         }
     }
 }
@@ -164,10 +165,17 @@ impl Brain {
         let mut ranked: Vec<(KnownPlace, f32, bool)> = mem
             .places
             .iter()
-            .filter(|pl| !self.interest.is_blocked(PoiTarget::Spot(pl.at)))
+            .filter(|pl| {
+                let blocked = self.interest.is_blocked(PoiTarget::Spot(pl.at));
+                if blocked {
+                    log::trace!("places: {} #{} at {:?}: blocked (failed recently)", pl.kind.label(), pl.id, pl.at);
+                }
+                !blocked
+            })
             .filter_map(|pl| {
                 let fresh = mem.needs_notice(pl) && pl.at.distance(knight.pos) < 1600.0;
                 if !fresh && Some(pl.id) != visiting && mem.cooling(pl, self.now) {
+                    log::trace!("places: {} #{} at {:?}: cooling down", pl.kind.label(), pl.id, pl.at);
                     return None;
                 }
                 let w = match fresh {
@@ -188,8 +196,12 @@ impl Brain {
                 let eta = if here {
                     0.0
                 } else {
-                    let r = nav.reach(knight, NavGoal::Point(place.at), style)?;
+                    let Some(r) = nav.reach(knight, NavGoal::Point(place.at), style) else {
+                        log::trace!("places: {} #{} at {:?}: no {style:?} route", place.kind.label(), place.id, place.at);
+                        return None;
+                    };
                     if r.end.is_some() && !r.lands_on(place.at, SEAT_TOL + 2.0) {
+                        log::trace!("places: {} #{} at {:?}: route ends at {:?}, not on it", place.kind.label(), place.id, place.at, r.end);
                         return None;
                     }
                     r.eta
@@ -234,7 +246,9 @@ pub(crate) struct Visit {
 }
 
 impl Visit {
-    const STRIKES: u32 = 3;
+    /// Swings per visit at most: he keeps at it until the rock breaks (it has 3 HP; a
+    /// swing that doesn't register must not leave it half-mined).
+    const STRIKES: u32 = 6;
 
     pub fn start(ctx: &mut Ctx, choice: PlaceChoice) -> Self {
         let place = choice.place;

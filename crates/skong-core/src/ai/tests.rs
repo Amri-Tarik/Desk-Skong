@@ -1113,9 +1113,23 @@ fn playful_knight_mines_a_geo_deposit() {
     let rock = KnownPlace { center: Vec2::new(1250.0, FLOOR), ..place(4, PlaceKind::Deposit, Vec2::new(1200.0, FLOOR), 0.0, false) };
     sim.brain.set_places(&[rock]);
     assert!(sim.run_until(3.0, BehaviourKind::Visit), "{}", sim.last_reason());
+    let struck = |sim: &Sim| sim.intents.iter().filter(|i| i.discovery == Some(DiscoveryEvent::Struck(4))).count();
+    // A rock that doesn't break (swings not registering): he keeps at it, up to 6 swings.
     sim.run(6.0);
+    assert_eq!(struck(&sim), 6, "keeps swinging until it breaks");
+    // A fresh rock that breaks on the 3rd swing: he stops right there.
+    let mut sim = calm(BrainConfig::default());
+    sim.brain.mind_mut().needs.mischief = 0.8;
+    sim.brain.set_places(&[rock]);
+    assert!(sim.run_until(3.0, BehaviourKind::Visit), "{}", sim.last_reason());
+    for _ in 0..(6.0 / DT) as usize {
+        sim.step();
+        if struck(&sim) == 3 {
+            sim.brain.set_places(&[]);
+        }
+    }
+    assert_eq!(struck(&sim), 3, "stops once it broke");
     let strikes: Vec<&Intent> = sim.intents.iter().filter(|i| i.discovery == Some(DiscoveryEvent::Struck(4))).collect();
-    assert_eq!(strikes.len(), 3, "a few slashes");
     assert!(strikes.iter().all(|i| i.attack.is_some_and(|a| a.side == Side::Right && a.dir == AttackDir::Forward)));
     assert!(sim.brain.mind().needs.mischief < 0.5, "got it out of his system");
 }
