@@ -38,6 +38,7 @@ use crate::emotes::{Emote, Emotes};
 use skong_core::ai::BehaviourKind;
 use crate::benches::{Benches, SEAT_BELOW_ORIGIN};
 use crate::discoveries::Discoveries;
+use crate::shinies::ShinyProps;
 use crate::navbuild::NavBuilder;
 use crate::control::ControlServer;
 use crate::overlay::PetOverlay;
@@ -146,6 +147,8 @@ struct Pet {
     emote_test: bool,
     /// Things found in windows (benches, hot springs, geo deposits).
     discoveries: Discoveries,
+    /// Shinies on the ground for the knight to pick up.
+    shinies: ShinyProps,
     /// Who stands where: props, NPCs, ... (nothing is placed inside something else).
     occupancy: skong_core::occupancy::Occupancy,
     fx: Fx,
@@ -251,6 +254,7 @@ pub fn run(args: &Args) -> Result<()> {
     let benches = Benches::load(&args.data.join("../props.json"), data.vanilla().map(|s| s.dir.as_path()), settings.scale)?;
     let emotes = Emotes::new(&args.data, data.vanilla(), 64.0 * settings.scale, args.capturable)?;
     let discoveries = Discoveries::load(&args.data, &args.data.join("../props.json"), data.vanilla().map(|s| s.dir.as_path()), settings.scale);
+    let shinies = ShinyProps::load(&args.data.join("../props.json"), settings.scale, seed() as u64);
 
     let mut brain = Brain::new(BrainConfig::default(), ActCatalog::from_library(&data.acts), seed());
     brain.set_bother_level(settings.bother);
@@ -277,6 +281,7 @@ pub fn run(args: &Args) -> Result<()> {
         emote_seen: (-1.0, None),
         emote_test: args.emote_test,
         discoveries,
+        shinies,
         occupancy: Default::default(),
         fx,
         games: GameGuard::new(),
@@ -321,6 +326,7 @@ pub fn run(args: &Args) -> Result<()> {
 
     pet.benches.capturable = args.capturable;
     pet.discoveries.capturable = args.capturable;
+    pet.shinies.capturable = args.capturable;
     if args.panel.unwrap_or(pet.settings.open_panel) {
         pet.apply(Command::OpenPanel)?;
     }
@@ -369,6 +375,7 @@ pub fn run(args: &Args) -> Result<()> {
             pet.benches.raise_all();
             pet.raise_visitors();
             pet.discoveries.raise_all();
+            pet.shinies.raise_all();
             pet.win.raise();
             pet.emotes.raise();
             log::debug!(
@@ -410,6 +417,7 @@ impl Pet {
             self.benches.hide_on(&self.games.game_monitors);
             self.stakes.hide_on(&self.games.game_monitors);
             self.discoveries.hide_on(&self.games.game_monitors);
+            self.shinies.hide_on(&self.games.game_monitors);
         }
         if self.content.poll(self.watcher.snapshot(), desk_changed) || desk_changed || games_changed {
             let mut new = self.content.terrain(self.watcher.snapshot(), &self.topts);
@@ -557,7 +565,7 @@ impl Pet {
             match sw.to {
                 BehaviourKind::Loot => self.emotes.show(Emote::Geo),
                 BehaviourKind::Flee | BehaviourKind::Greet | BehaviourKind::ShadeHunt => self.emotes.show(Emote::Bang),
-                BehaviourKind::Explore | BehaviourKind::Watch => self.emotes.show(Emote::Question),
+                BehaviourKind::Explore | BehaviourKind::Watch | BehaviourKind::Shiny => self.emotes.show(Emote::Question),
                 _ => {}
             }
         }
@@ -981,6 +989,7 @@ impl Pet {
                 self.loco = Locomotion::new(&self.data.lib, &params)?;
                 self.benches.rescale(s);
                 self.discoveries.rescale(s);
+                self.shinies.rescale(s);
                 self.emotes.rescale(&self.data.args_data, self.data.vanilla(), 64.0 * s);
                 self.navb.reset(&self.terrain, &self.ch);
                 self.settings.save();

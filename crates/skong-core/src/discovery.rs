@@ -132,12 +132,12 @@ impl Default for Rules {
 }
 
 /// Keep finds this far from a ledge's ends (px).
-const EDGE_MARGIN: f32 = 24.0;
+pub(crate) const EDGE_MARGIN: f32 = 24.0;
 /// Leave this much room above a find (the knight standing on it): a maximized window's
 /// title bar at the very top of the screen does not qualify (px).
-const HEADROOM: f32 = 48.0;
+pub(crate) const HEADROOM: f32 = 48.0;
 /// A content ledge may drift this much (re-detection jitter) and still carry its find (px).
-const LEDGE_SLACK: f32 = 6.0;
+pub(crate) const LEDGE_SLACK: f32 = 6.0;
 /// Surfaces must have been on screen this long to carry a find (s).
 pub const LASTING_SECS: f32 = 30.0;
 
@@ -220,15 +220,16 @@ pub fn app_key(w: &WindowInfo) -> Option<String> {
 }
 
 /// splitmix64: tiny, deterministic, good enough for rolls.
-struct Mix(u64);
+#[derive(Clone, Debug)]
+pub(crate) struct Mix(pub(crate) u64);
 
 impl Mix {
-    fn new(seed: u64, key: &str) -> Self {
+    pub(crate) fn new(seed: u64, key: &str) -> Self {
         // FNV-1a over the key, folded into the seed.
         let h = key.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ b as u64).wrapping_mul(0x0100_0000_01b3));
         Mix(seed ^ h)
     }
-    fn next(&mut self) -> u64 {
+    pub(crate) fn next(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
         let mut z = self.0;
         z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
@@ -236,10 +237,10 @@ impl Mix {
         z ^ (z >> 31)
     }
     /// Uniform in [0, 1).
-    fn f32(&mut self) -> f32 {
+    pub(crate) fn f32(&mut self) -> f32 {
         (self.next() >> 40) as f32 / (1u64 << 24) as f32
     }
-    fn pick(&mut self, weights: &[f32]) -> usize {
+    pub(crate) fn pick(&mut self, weights: &[f32]) -> usize {
         let total: f32 = weights.iter().map(|w| w.max(0.0)).sum();
         let mut r = self.f32() * total;
         for (i, w) in weights.iter().enumerate() {

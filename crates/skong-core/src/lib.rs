@@ -24,6 +24,7 @@ pub mod npc;
 pub mod occupancy;
 pub mod portal;
 pub mod props;
+pub mod shiny;
 pub mod stakes;
 pub mod terrain;
 pub mod vision;
