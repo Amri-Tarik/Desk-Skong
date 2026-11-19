@@ -25,7 +25,6 @@ pub struct ControlServer {
     /// Keys of the panel currently driving the knight.
     keys: Option<(ClientId, ManualKeys)>,
     /// Manual mode was switched on because a panel started driving.
-    auto_manual: bool,
     last_status: Instant,
     usage: UsageSampler,
 }
@@ -47,7 +46,6 @@ impl ControlServer {
             hello: Hello::default(),
             sent_seq: ring.map_or(0, LogRing::next_seq),
             keys: None,
-            auto_manual: false,
             last_status: Instant::now(),
             usage: UsageSampler::new(),
         }
@@ -69,7 +67,7 @@ impl ControlServer {
 
     /// Handle panel traffic. `manual` is the pet's current manual-mode flag; returned
     /// commands are applied like hotkeys.
-    pub fn poll(&mut self, manual: bool) -> Vec<Command> {
+    pub fn poll(&mut self) -> Vec<Command> {
         let Some(server) = self.server.as_mut() else { return Vec::new() };
         let mut cmds = Vec::new();
         for ev in server.poll() {
@@ -92,13 +90,13 @@ impl ControlServer {
                     self.last_status = Instant::now() - STATUS_EVERY; // status right away
                 }
                 ServerEvent::Line(id, line) => match decode::<PanelMsg>(&line) {
-                    Ok(msg) => Self::handle(&mut self.keys, &mut self.auto_manual, id, msg, manual, &mut cmds),
+                    Ok(msg) => Self::handle(&mut self.keys, id, msg, &mut cmds),
                     Err(e) => log::warn!("control panel #{id}: bad message ({e}): {}", line.chars().take(120).collect::<String>()),
                 },
                 ServerEvent::Disconnected(id) => {
                     log::info!("control panel #{id} disconnected");
                     let release = PanelMsg::ManualInput { active: false, keys: ManualKeys::default() };
-                    Self::handle(&mut self.keys, &mut self.auto_manual, id, release, manual, &mut cmds);
+                    Self::handle(&mut self.keys, id, release, &mut cmds);
                 }
             }
         }
@@ -116,22 +114,15 @@ impl ControlServer {
         cmds
     }
 
-    fn handle(keys: &mut Option<(ClientId, ManualKeys)>, auto_manual: &mut bool, id: ClientId, msg: PanelMsg, manual: bool, cmds: &mut Vec<Command>) {
+    fn handle(keys: &mut Option<(ClientId, ManualKeys)>, id: ClientId, msg: PanelMsg, cmds: &mut Vec<Command>) {
         match msg {
             PanelMsg::Command(c) => cmds.push(c),
-            PanelMsg::ManualInput { active: true, keys: k } => {
-                *keys = Some((id, k));
-                if !manual && !*auto_manual {
-                    *auto_manual = true;
-                    cmds.push(Command::SetManual(true));
-                }
-            }
+            // Panel keys only drive the knight while manual mode is on; the panel never
+            // switches manual mode by itself (it's a user toggle, off by default).
+            PanelMsg::ManualInput { active: true, keys: k } => *keys = Some((id, k)),
             PanelMsg::ManualInput { active: false, .. } => {
                 if keys.is_some_and(|(owner, _)| owner == id) {
                     *keys = None;
-                    if std::mem::take(auto_manual) {
-                        cmds.push(Command::SetManual(false));
-                    }
                 }
             }
             PanelMsg::SetLogLevel(l) => logring::set_panel_level(l),
@@ -163,25 +154,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn driving_panel_toggles_manual_only_if_it_enabled_it() {
-        let (mut keys, mut auto, mut cmds) = (None, false, Vec::new());
+    fn panel_keys_never_switch_manual_mode() {
+        let (mut keys, mut cmds) = (None, Vec::new());
         let k = ManualKeys { left: true, ..Default::default() };
-        ControlServer::handle(&mut keys, &mut auto, 1, PanelMsg::ManualInput { active: true, keys: k }, false, &mut cmds);
-        ControlServer::handle(&mut keys, &mut auto, 1, PanelMsg::ManualInput { active: true, keys: k }, true, &mut cmds);
-        assert_eq!(cmds, [Command::SetManual(true)]);
+        ControlServer::handle(&mut keys, 1, PanelMsg::ManualInput { active: true, keys: k }, &mut cmds);
+        assert!(cmds.is_empty(), "manual mode is a user toggle only");
         assert_eq!(keys, Some((1, k)));
         // Another panel releasing doesn't steal the wheel.
-        ControlServer::handle(&mut keys, &mut auto, 2, PanelMsg::ManualInput { active: false, keys: k }, true, &mut cmds);
+        ControlServer::handle(&mut keys, 2, PanelMsg::ManualInput { active: false, keys: k }, &mut cmds);
         assert!(keys.is_some());
-        ControlServer::handle(&mut keys, &mut auto, 1, PanelMsg::ManualInput { active: false, keys: k }, true, &mut cmds);
-        assert_eq!(cmds, [Command::SetManual(true), Command::SetManual(false)]);
-        assert!(keys.is_none());
-        // Already in manual mode: driving leaves the user's choice alone.
-        cmds.clear();
-        ControlServer::handle(&mut keys, &mut auto, 3, PanelMsg::ManualInput { active: true, keys: k }, true, &mut cmds);
-        ControlServer::handle(&mut keys, &mut auto, 3, PanelMsg::ManualInput { active: false, keys: k }, true, &mut cmds);
-        assert!(cmds.is_empty());
-        ControlServer::handle(&mut keys, &mut auto, 3, PanelMsg::Command(Command::Wake), true, &mut cmds);
+        ControlServer::handle(&mut keys, 1, PanelMsg::ManualInput { active: false, keys: k }, &mut cmds);
+        assert!(keys.is_none() && cmds.is_empty());
+        ControlServer::handle(&mut keys, 3, PanelMsg::Command(Command::Wake), &mut cmds);
         assert_eq!(cmds, [Command::Wake]);
     }
 }
