@@ -19,7 +19,8 @@ pub enum StakesCommand {
     Die,
     /// Burst some Geo out of the cursor position.
     DropGeo,
-    /// A Geo shower now (coins rain in through the top of the screen).
+    /// A Geo shower now: coins tumble out of a subtle portal over a settled, reachable
+    /// ledge (tray "Geo shower", panel "Geo shower").
     SpillGeo,
     /// Send the knight after his Shade now.
     HuntShade,

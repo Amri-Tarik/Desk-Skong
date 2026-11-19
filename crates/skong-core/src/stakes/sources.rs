@@ -131,7 +131,7 @@ impl GeoSources {
         let w = (bounds.width() * 0.15).max(80.0);
         let x = self.rng.range(bounds.left + w, (bounds.right - w).max(bounds.left + w + 1.0));
         let amount = self.amount(self.cfg.shower_geo);
-        // The app moves showers to a reachable portal spot (`npcs::Visitors::arrival_spot`).
+        // The app moves showers to a reachable portal spot (`npcs::Visitors::shower_portal`).
         GeoDrop { rect: RectF::new(x - w * 0.5, bounds.top - 10.0, x + w * 0.5, bounds.top), amount, shower: true }
     }
 

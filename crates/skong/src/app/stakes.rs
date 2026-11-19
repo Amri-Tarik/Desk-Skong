@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 use skong_core::desktop::WindowId;
 use skong_core::geom::{RectF, RectI};
+use skong_core::portal::Footing;
 use skong_core::stakes::{DeathKind, GeoDrop, GeoField, GeoSources, Shade, StakesSave};
 use skong_ipc::{SPELLS, StakesCommand, StakesInfo};
 use skong_win::desktop::WindowGone;
@@ -32,6 +33,9 @@ const DEATH_ACTS: [&str; 3] = ["death", "spike_death", "acid_death"];
 const LOOPING_FX: [&str; 2] = ["cyclone", "na_charge"];
 /// How long the mask piece lies on the ground (s).
 const HEAD_SECS: f32 = 6.0;
+/// From a shower's portal opening until its coins tumble out (s): a brief, quiet gathering
+/// of dust, not a show.
+const SHOWER_OPENING: f32 = 0.3;
 
 pub struct Stakes {
     pub save: StakesSave,
@@ -39,6 +43,8 @@ pub struct Stakes {
     geo: GeoField,
     /// Shattered windows and Geo showers.
     sources: GeoSources,
+    /// Showers whose portal is opening: seconds until the coins come out, and the drop.
+    showers: Vec<(f32, GeoDrop)>,
     /// Windows of the last desktop snapshot (to tell which ones closed).
     windows: HashMap<WindowId, (RectI, bool)>,
     /// Monitors with a fullscreen game (nothing of ours goes there).
@@ -82,6 +88,7 @@ impl Stakes {
             shade,
             geo: GeoField::new(seed()),
             sources: GeoSources::new(cfg.sources, seed()),
+            showers: Vec::new(),
             windows: HashMap::new(),
             games: Vec::new(),
             desk_generation: 0,
@@ -269,13 +276,15 @@ impl Pet {
         let s = self.brain.senses();
         // Showers fall on one (game-free) monitor.
         let sky = if st.areas.is_empty() { self.terrain.bounds } else { st.areas[seed() as usize % st.areas.len()] };
-        if let Some(mut d) = st.sources.tick(dt, !s.user_away, s.fullscreen || s.user_busy, loose, sky) {
-            log::info!("a geo shower: {} geo", d.amount);
-            // Through a portal at a reachable spot (see `npcs::Visitors::arrival_spot`).
-            let graph = self.nav.graph().map(|g| g.as_ref());
-            if let Some(p) = self.visitors.as_mut().and_then(|v| v.arrival_spot((&self.terrain, desk, &self.games.game_monitors, &self.occupancy), &self.ch, graph, &mut self.fx)) {
-                d.rect = crate::npcs::shower_rect(p, d.rect.width(), scale);
-            }
+        if let Some(d) = st.sources.tick(dt, !s.user_away, s.fullscreen || s.user_busy, loose, sky) {
+            self.open_shower(d);
+        }
+        // Opened shower portals: once the dust has gathered, the coins tumble out.
+        let st = &mut self.stakes;
+        for s in &mut st.showers {
+            s.0 -= dt;
+        }
+        for (_, d) in st.showers.extract_if(.., |s| s.0 <= 0.0) {
             st.geo.spill(&d);
         }
         st.geo.step(dt, &self.terrain, &st.areas);
@@ -382,6 +391,24 @@ impl Pet {
         }
     }
 
+    /// A Geo shower arrives the way visitors do: a subtle portal opens on a settled,
+    /// reachable footing with headroom, and [`SHOWER_OPENING`] later the coins tumble out of
+    /// it. No such spot: no shower (it never rains onto fresh or moving ledges).
+    fn open_shower(&mut self, d: GeoDrop) {
+        let graph = self.nav.graph().map(|g| g.as_ref());
+        let desk = self.watcher.snapshot();
+        let (discoveries, terrain) = (&self.discoveries, &self.terrain);
+        let settled = |f: &Footing| discoveries.settled(terrain, f.owner, f.y, f.x0, f.x1);
+        let at = self.visitors.as_mut().and_then(|v| v.shower_portal((terrain, desk, &self.games.game_monitors, &self.occupancy), &settled, &self.ch, graph, d.rect.width(), &mut self.fx));
+        match at {
+            Some(rect) => {
+                log::info!("a geo shower: {} geo through a portal at ({:.0},{:.0})", d.amount, rect.center().x, rect.bottom);
+                self.stakes.showers.push((SHOWER_OPENING, GeoDrop { rect, ..d }));
+            }
+            None => log::info!("a geo shower ({} geo) found no settled, reachable spot; skipped", d.amount),
+        }
+    }
+
     /// Panel / debug triggers.
     pub(super) fn apply_stakes(&mut self, c: StakesCommand) {
         match c {
@@ -391,13 +418,8 @@ impl Pet {
                 let st = &mut self.stakes;
                 st.geo.scale = self.settings.scale;
                 let sky = if st.areas.is_empty() { self.terrain.bounds } else { st.areas[seed() as usize % st.areas.len()] };
-                let mut d: GeoDrop = st.sources.shower(sky);
-                let graph = self.nav.graph().map(|g| g.as_ref());
-                let desk = self.watcher.snapshot();
-                if let Some(p) = self.visitors.as_mut().and_then(|v| v.arrival_spot((&self.terrain, desk, &self.games.game_monitors, &self.occupancy), &self.ch, graph, &mut self.fx)) {
-                    d.rect = crate::npcs::shower_rect(p, d.rect.width(), self.settings.scale);
-                }
-                st.geo.spill(&d);
+                let d = st.sources.shower(sky);
+                self.open_shower(d);
             }
             StakesCommand::DropGeo => {
                 let at = monitor::cursor_pos().map_or(self.ch.pos - Vec2::new(0.0, 200.0), |(x, y)| Vec2::new(x as f32, y as f32));

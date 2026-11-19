@@ -200,8 +200,13 @@ impl Panel {
             });
             ui.horizontal_wrapped(|ui| {
                 ui.label("Stakes");
-                for (label, c) in [("Die", StakesCommand::Die), ("Drop geo", StakesCommand::DropGeo), ("Spill geo", StakesCommand::SpillGeo), ("Fight shade", StakesCommand::HuntShade)] {
-                    if ui.button(label).clicked() {
+                for (label, tip, c) in [
+                    ("Die", "kill the knight (he leaves a shade)", StakesCommand::Die),
+                    ("Drop geo", "burst geo out of the cursor", StakesCommand::DropGeo),
+                    ("Geo shower", "geo tumbles out of a portal over a settled ledge he can reach", StakesCommand::SpillGeo),
+                    ("Fight shade", "send him after his shade", StakesCommand::HuntShade),
+                ] {
+                    if ui.button(label).on_hover_text(tip).clicked() {
                         self.cmd(Command::Stakes(c));
                     }
                 }

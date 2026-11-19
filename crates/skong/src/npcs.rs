@@ -19,7 +19,7 @@ use skong_core::geom::{RectF, RectI, Vec2};
 use skong_core::nav::{NavGoal, NavGraph, TravelStyle};
 use skong_core::occupancy::{ClaimKey, ClaimKind, Occupancy};
 use skong_core::npc::{Arrival, Lesson, Npc, NpcEnv, NpcEvent, NpcPhase, NpcSet, Placement, TalkContext, VisitConditions, VisitScheduler, plan_placement};
-use skong_core::portal::{Footing, Portal, PortalPhase, PortalSpot, PortalStyle, SpotOptions, pick_spot};
+use skong_core::portal::{Footing, Portal, PortalPhase, PortalSpot, PortalStyle, SpotOptions, arrival_footings, has_headroom, pick_spot};
 use skong_core::terrain::Terrain;
 use skong_win::sprite_window::SpriteWindow;
 
@@ -70,6 +70,10 @@ pub struct World<'a> {
     /// [`skong_core::lasting::SETTLED_SECS`])? Dragged windows and scrolling content aren't.
     pub settled: &'a dyn Fn(&Footing) -> bool,
 }
+
+/// Room (units) an arrival needs above its footing, so nothing opens high enough to clip
+/// off the top of its monitor.
+const ARRIVAL_HEADROOM: f32 = 3.6;
 
 /// Space a visitor (or a portal arrival) needs around its feet `p`, scaled by `ppu`.
 fn footprint(p: Vec2, ppu: f32) -> RectF {
@@ -352,21 +356,25 @@ impl Visitors {
         self.bubbles.update(dt);
     }
 
-    /// A reachable spot for something to arrive (e.g. a Geo shower), away from games;
-    /// plays the arrival effect there. `None` when nothing fits.
-    pub fn arrival_spot(&mut self, (terrain, desk, game_monitors, occ): (&Terrain, &DesktopSnapshot, &[RectI], &Occupancy), knight: &Character, graph: Option<&NavGraph>, fx: &mut Fx) -> Option<Vec2> {
-        let footings: Vec<Footing> = match graph {
+    /// Open a Geo shower's portal: a reachable spot on a `settled` footing with headroom
+    /// (the same rules as visitors), away from games. Plays the visitors' subtle portal
+    /// effect a little above the spot and returns the strip the coins tumble out of
+    /// (`width` px wide at most). `None` when nothing fits.
+    pub fn shower_portal(&mut self, (terrain, desk, game_monitors, occ): (&Terrain, &DesktopSnapshot, &[RectI], &Occupancy), settled: &dyn Fn(&Footing) -> bool, knight: &Character, graph: Option<&NavGraph>, width: f32, fx: &mut Fx) -> Option<RectF> {
+        let ppu = self.ppu;
+        let raw: Vec<Footing> = match graph {
             Some(g) => g.surfaces().iter().map(|s| Footing { x0: s.x0, x1: s.x1, y: s.y, owner: s.owner }).collect(),
             None => terrain.ledges.iter().map(|l| Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner }).collect(),
         };
+        let footings = arrival_footings(raw, &desk.monitors, ARRIVAL_HEADROOM * ppu, settled);
         let monitors: Vec<_> = desk.monitors.iter().filter(|m| !game_monitors.contains(&m.rect)).cloned().collect();
         let rng = &mut self.rng;
         let mut random = || rng.f32();
-        let ppu = self.ppu;
         let mut reachable = |p: Vec2| occ.is_free(footprint(p, ppu), None) && graph.is_none_or(|g| g.plan(knight, NavGoal::Point(p), TravelStyle::Hurry).is_some());
         let spot = pick_spot(&footings, knight.pos, &monitors, &SpotOptions::default(), &mut random, &mut reachable)?;
-        portal_fx(fx, self.set.portal_style, spot.at);
-        Some(spot.at)
+        let rect = shower_rect(spot.at, width, ppu);
+        portal_fx(fx, self.set.portal_style, Vec2::new(spot.at.x, rect.bottom));
+        Some(rect)
     }
 
     /// Claim every live visitor's footprint so props, finds and coins keep clear of them.
@@ -420,11 +428,7 @@ impl Visitors {
         };
         let ppu = self.ppu;
         // Settled ledges only, low enough that the visitor's sprite stays on its monitor.
-        let headroom = |f: &Footing| {
-            let x = (0.5 * (f.x0 + f.x1)) as i32;
-            w.desk.monitors.iter().find(|m| m.rect.contains(x, f.y as i32 - 1)).is_none_or(|m| f.y - 3.6 * ppu >= m.rect.top as f32)
-        };
-        let ok = |f: &Footing| (w.settled)(f) && headroom(f);
+        let ok = |f: &Footing| (w.settled)(f) && has_headroom(f, &w.desk.monitors, ARRIVAL_HEADROOM * ppu);
         let footings: Vec<Footing> = match w.graph {
             Some(g) => g.surfaces().iter().map(|s| Footing { x0: s.x0, x1: s.x1, y: s.y, owner: s.owner }).filter(|f| ok(f)).collect(),
             None => w.terrain.ledges.iter().map(|l| Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner }).filter(|f| ok(f)).collect(),
@@ -596,8 +600,7 @@ fn portal_fx(fx: &mut Fx, style: PortalStyle, at: Vec2) {
 
 /// Where a portal Geo shower starts: a strip `width` wide (at most ~2.5 units) a little above
 /// the arrival spot's feet point.
-pub fn shower_rect(feet: Vec2, width: f32, scale: f32) -> RectF {
-    let ppu = 64.0 * scale;
+fn shower_rect(feet: Vec2, width: f32, ppu: f32) -> RectF {
     let w = width.min(2.5 * ppu).max(20.0);
     let top = feet.y - 2.0 * ppu;
     RectF::new(feet.x - w * 0.5, top - 10.0, feet.x + w * 0.5, top)
