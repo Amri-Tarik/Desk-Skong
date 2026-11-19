@@ -1,18 +1,26 @@
-//! The pet brain: a curious little knight that explores your desktop, naps when you
+//! The pet brain: a curious little knight that keeps you company, watches whatever is
+//! happening on your screen, explores new windows, sits down when tired, naps when you
 //! are away, and — if allowed — picks fights with your cursor.
 //!
 //! ```text
-//!  Percepts ──► Senses (diffs, cursor velocity, user presence)
+//!  Percepts ──► Senses (diffs, cursor velocity, user presence, stuck detection)
 //!                 │
-//!                 ├─► reflexes   (pokes, window closed underfoot, wake-ups)
+//!                 ├─► reflexes   (pokes, window closed underfoot, wake-ups, wall pushing)
 //!                 ├─► Mind       (needs: energy/boredom/loneliness/mischief,
 //!                 │               emotions: startle/annoyance/excitement/hurt)
-//!                 ├─► InterestMap (POIs with decaying novelty + visit memory)
+//!                 ├─► ActivityTracker (screen-activity spots with identity + satiation)
+//!                 ├─► InterestMap (window POIs with decaying novelty + visit memory)
 //!                 ▼
 //!   utilities per BehaviourKind ──► selection with commitment + hysteresis
 //!                 ▼
-//!   Active behaviour state machine ──► Intent (motion / act / signal / attack)
+//!   Active behaviour state machine ──► Intent (motion / act / signal / attack / reason)
 //! ```
+//!
+//! **Every act has a reason.** Acts are not drawn from a random pool: each behaviour
+//! starts the act that fits its situation (gaze at the activity it watches, look up at a
+//! cursor above, map a never-visited window, sit when settling, …). Only a couple of
+//! `fidget` acts keep a random weight, used rarely between purposeful actions. The current
+//! reason heads `Intent::debug`.
 //!
 //! * **Deterministic**: given the seed and the same percept sequence, the same intents
 //!   come out (seeded xorshift, ordered maps, brain-internal clock).
@@ -20,8 +28,10 @@
 //!   the planner; [`GraphNavigator`] adapts [`crate::nav`].
 //! * **Acts are referenced by name** through an [`ActCatalog`]; missing acts degrade
 //!   gracefully (the behaviour just skips that flourish).
+mod activity;
 mod battle;
 mod behaviours;
+mod companion;
 mod config;
 mod interest;
 mod navigator;
@@ -29,30 +39,36 @@ mod needs;
 mod percept;
 mod repertoire;
 mod rng;
+mod spots;
+mod watch;
 #[cfg(test)]
 mod tests;
 
 use std::fmt::Write as _;
 
+pub use activity::{Activity, ActivitySpot, ActivityTracker, QUIET, TrackedSpot};
 pub use battle::{BattleScore, Outcome};
 pub use behaviours::BehaviourKind;
-pub use config::{BattleConfig, BrainConfig, NeedRates, Personality};
+pub use config::{BattleConfig, BrainConfig, CompanionConfig, NeedRates, Personality, WatchConfig};
 pub use interest::{InterestMap, Poi, PoiKey, PoiKind, PoiTarget, ScoredPoi};
 pub use navigator::{GraphNavigator, NavStatus, Navigator};
 pub use needs::{Emotions, MOOD_TAGS, Mind, Needs};
-pub use percept::{ClosedWindow, Cursor, CursorSense, DesktopChanges, Percepts, Poke, RunningAct, Senses, UserActivity};
+pub use percept::{ClosedWindow, Cursor, CursorSense, DesktopChanges, Percepts, Poke, RunningAct, STUCK_SECS, Senses, UserActivity};
 pub use repertoire::{ActCatalog, ActInfo};
+pub use spots::{Vantage, View};
 
-use crate::acts::ActId;
+use crate::acts::{ActId, Requirement};
 use crate::controller::{MoveEvent, MoveInput, Side};
 use crate::geom::Vec2;
 use crate::nav::{NavGoal, TravelStyle};
 
 use battle::Battle;
-use behaviours::{Active, Ctx, Explore, Flee, Hide, Idle, KnockedOut, Nap, Ride, Status, Wander, Watch};
-use needs::Activity;
+use behaviours::{Active, Ctx, Explore, Flee, Hide, Idle, KnockedOut, Nap, Recover, Rest, Ride, Status};
+use companion::Companion;
+use needs::Activity as Exertion;
 use repertoire::Repertoire;
 use rng::Rng;
+use watch::WatchSpot;
 
 /// How the knight should move this tick.
 #[derive(Clone, Copy, Debug, Default)]
@@ -108,7 +124,11 @@ pub struct Intent {
     /// Face this way (when standing still).
     pub face: Option<Side>,
     pub behaviour: Option<BehaviourKind>,
-    /// "behaviour detail | mood | top-3 utilities", for an overlay.
+    /// Why the knight does what he does, e.g. "watch activity @ (812,430) 0.8 [...]".
+    pub reason: String,
+    /// Plain standing with nothing in mind (a short gap between purposeful actions).
+    pub waiting: bool,
+    /// "reason | mood + needs | top-3 utilities", for an overlay.
     pub debug: String,
 }
 
@@ -132,12 +152,22 @@ pub struct Switch {
     pub reason: SwitchReason,
 }
 
+/// The best activity spot to watch right now.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct SpotChoice {
+    id: u32,
+    vantage: Vantage,
+    interest: f32,
+    score: f32,
+}
+
 pub struct Brain {
     cfg: BrainConfig,
     mind: Mind,
     rng: Rng,
     rep: Repertoire,
     interest: InterestMap,
+    spots: ActivityTracker,
     senses: Senses,
     active: Active,
     /// Brain clock (sum of dt).
@@ -146,6 +176,7 @@ pub struct Brain {
     think_in: f32,
     utilities: Vec<(BehaviourKind, f32)>,
     best_poi: Option<ScoredPoi>,
+    best_spot: Option<SpotChoice>,
     battle_ready_at: f32,
     nap_ready_at: f32,
     /// Something scary happened here; flee from it.
@@ -154,7 +185,10 @@ pub struct Brain {
     knocked_out: bool,
     recent_clicks: Vec<f32>,
     last_switch: Option<Switch>,
+    last_motion: Motion,
     exertion: f32,
+    /// Times the knight caught himself pushing into a wall.
+    stuck_count: u32,
 }
 
 impl Brain {
@@ -165,20 +199,24 @@ impl Brain {
             rng: Rng::new(seed),
             rep: Repertoire::new(catalog),
             interest: InterestMap::default(),
+            spots: ActivityTracker::default(),
             senses: Senses::default(),
-            active: Active::Idle(Idle::initial()),
+            active: Active::Idle(Idle::placeholder()),
             now: 0.0,
             since_switch: f32::INFINITY,
             think_in: 0.0,
             utilities: Vec::new(),
             best_poi: None,
+            best_spot: None,
             battle_ready_at: 0.0,
             nap_ready_at: 0.0,
             flee_from: None,
             knocked_out: false,
             recent_clicks: Vec::new(),
             last_switch: None,
+            last_motion: Motion::Hold,
             exertion: 0.0,
+            stuck_count: 0,
             cfg,
         }
     }
@@ -208,6 +246,11 @@ impl Brain {
         &self.senses
     }
 
+    /// Tracked screen-activity spots.
+    pub fn activity(&self) -> &ActivityTracker {
+        &self.spots
+    }
+
     /// Utilities from the last evaluation, best first.
     pub fn utilities(&self) -> &[(BehaviourKind, f32)] {
         &self.utilities
@@ -215,6 +258,11 @@ impl Brain {
 
     pub fn last_switch(&self) -> Option<Switch> {
         self.last_switch
+    }
+
+    /// Times the knight caught himself pushing into a wall.
+    pub fn stuck_count(&self) -> u32 {
+        self.stuck_count
     }
 
     pub fn battle_score(&self) -> Option<BattleScore> {
@@ -232,6 +280,14 @@ impl Brain {
         }
     }
 
+    /// The activity spot being watched, if any.
+    pub fn watching(&self) -> Option<&TrackedSpot> {
+        match &self.active {
+            Active::Watch(w) => self.spots.get(w.spot),
+            _ => None,
+        }
+    }
+
     /// One tick. Call every frame (or at a fixed rate) before physics.
     pub fn tick(&mut self, p: &Percepts, nav: &mut dyn Navigator) -> Intent {
         let dt = p.dt.max(0.0);
@@ -239,34 +295,48 @@ impl Brain {
         self.since_switch += dt;
         self.think_in -= dt;
         self.senses.update(p, self.now, &self.cfg);
+        self.spots.update(p.activity, dt);
 
         let mut out = Intent::default();
         self.reflexes(p, &mut out);
+        self.unstick(nav);
         self.interest.observe(self.now, dt, &self.senses, p.desktop, &self.cfg);
 
         let asleep = self.asleep(p);
-        let with_user = !self.senses.user_away && self.senses.cursor.is_some_and(|c| c.dist() < 300.0);
-        self.mind.update(dt, Activity { asleep, exertion: self.exertion, with_user }, self.senses.user_away, &self.cfg);
+        let seated = !asleep && p.act.and_then(|a| self.rep.catalog.get(a.id)).is_some_and(|a| a.requires == Requirement::Seat);
+        let with_user = !self.senses.user_away && self.senses.cursor.is_some_and(|c| c.dist() < 400.0);
+        self.mind.update(dt, Exertion { asleep, seated, exertion: self.exertion, with_user }, self.senses.user_away, &self.cfg);
 
         if self.senses.held {
             nav.stop();
             out.behaviour = Some(self.active.kind());
+            out.reason = "held by the user".into();
             out.debug = format!("held | {}", self.mind.dominant_mood(self.senses.user_away));
+            self.last_motion = Motion::Hold;
             return out;
         }
 
-        if self.think_in <= 0.0 {
+        let first = self.since_switch.is_infinite();
+        if self.think_in <= 0.0 || first {
             self.think_in = self.cfg.think_interval;
-            self.think(p, nav, &mut out, false);
+            self.think(p, nav, &mut out, first);
         }
         // A finished behaviour is replaced right away (at most once per tick).
         for _ in 0..2 {
+            out.waiting = false;
             if self.run_active(p, nav, &mut out) == Status::Running {
                 break;
             }
             self.think(p, nav, &mut out, true);
         }
+        if p.act.is_some() || out.act.is_some() || !matches!(out.motion, Motion::Hold) {
+            out.waiting = false;
+        }
 
+        if self.senses.stuck {
+            // Turn away from the wall (behaviours may have faced the old goal).
+            out.face = Side::of(-p.last_input.x).or(Some(p.knight.facing.opposite()));
+        }
         self.exertion = match out.motion {
             Motion::Hold => 0.0,
             Motion::Direct(_) => 1.0,
@@ -274,12 +344,14 @@ impl Brain {
             Motion::Navigate { style: TravelStyle::Normal, .. } => 0.3,
             Motion::Navigate { style: TravelStyle::Stroll, .. } => 0.1,
         };
+        self.last_motion = out.motion;
         out.behaviour = Some(self.active.kind());
-        out.debug = self.debug_line();
+        out.reason = self.reason(p, nav);
+        out.debug = self.debug_line(&out.reason);
         out
     }
 
-    /// Sleeping: the bench "nap" act, or deep sleep ("bow_down") during a nap.
+    /// Sleeping: the seated "nap" act, or deep sleep ("bow_down") during a nap.
     fn asleep(&self, p: &Percepts) -> bool {
         let Some(act) = p.act else { return false };
         let is = |name: &str| self.rep.catalog.id(name) == Some(act.id);
@@ -317,11 +389,10 @@ impl Brain {
                     self.mind.startle(0.3);
                 }
                 Poke::Release { vel } => {
-                    let speed = vel.length();
-                    if speed > 1200.0 {
+                    if vel.length() > 1200.0 {
                         self.mind.excite(0.4 * self.mind.personality.boldness);
                         self.mind.startle(0.4);
-                        self.mind.hurt(0.2);
+                        self.mind.hurt(0.4);
                         self.mind.annoy(0.2);
                     }
                 }
@@ -354,9 +425,37 @@ impl Brain {
         }
     }
 
+    /// Walking into a wall: pressing a direction without moving, or sliding down a wall on
+    /// a stroll (strolls never wall-jump). Stop, give up that goal for a while, turn away.
+    fn unstick(&mut self, nav: &mut dyn Navigator) {
+        let unintended_wall = self.senses.wall_slide
+            && match self.last_motion {
+                Motion::Navigate { style, .. } => style == TravelStyle::Stroll,
+                Motion::Direct(_) => !matches!(self.active, Active::Battle(_)),
+                Motion::Hold => false,
+            };
+        let moving = !matches!(self.last_motion, Motion::Hold);
+        if !(moving && (self.senses.stuck || unintended_wall)) {
+            self.senses.stuck = false;
+            return;
+        }
+        self.senses.stuck = true;
+        self.stuck_count += 1;
+        if let Motion::Navigate { goal, .. } = self.last_motion {
+            nav.stop();
+            let target = match goal {
+                NavGoal::Point(pt) => PoiTarget::Spot(pt),
+                NavGoal::OnWindow(id) => PoiTarget::Window(id),
+            };
+            self.interest.block(target, self.now + 20.0);
+        }
+        log::debug!("brain: stuck against a wall ({:?}); giving up that goal", self.last_motion);
+    }
+
     /// Score every behaviour and switch if warranted.
     fn think(&mut self, p: &Percepts, nav: &mut dyn Navigator, out: &mut Intent, finished: bool) {
         self.best_poi = self.score_pois(p, nav);
+        self.best_spot = self.score_spots(p, nav, finished);
         self.utilities = self.score_behaviours(p);
         let current = self.active.kind();
         let Some(&(best, best_u)) = self.utilities.first() else { return };
@@ -393,20 +492,30 @@ impl Brain {
         }
         nav.stop();
         let poi = self.best_poi.map(|s| s.poi);
+        let spot = self.best_spot;
         let flee_from = if kind == BehaviourKind::Flee { self.flee_from.take().unwrap_or(p.knight.pos) } else { p.knight.pos };
         let mut ctx = self.ctx(p, nav, out);
-        let active = match (kind, poi) {
-            (BehaviourKind::Explore, Some(poi)) => Active::Explore(Explore::start(&mut ctx, poi)),
-            (BehaviourKind::Wander, _) | (BehaviourKind::Explore, None) => Active::Wander(Wander::start(&mut ctx)),
-            (BehaviourKind::Idle, _) => Active::Idle(Idle::start(&mut ctx)),
-            (BehaviourKind::Nap, _) => Active::Nap(Nap::start(&mut ctx)),
-            (BehaviourKind::Watch, _) => Active::Watch(Watch::start(&mut ctx)),
-            (BehaviourKind::Battle, _) => Active::Battle(Box::new(Battle::start(&mut ctx))),
-            (BehaviourKind::Flee, _) => Active::Flee(Flee::start(&mut ctx, flee_from)),
-            (BehaviourKind::Hide, _) => Active::Hide(Hide::start(&mut ctx)),
-            (BehaviourKind::Ride, _) => Active::Ride(Ride::start(&mut ctx)),
-            (BehaviourKind::KnockedOut, _) => Active::KnockedOut(KnockedOut::start(&mut ctx)),
+        let active = match kind {
+            BehaviourKind::Explore => match poi {
+                Some(poi) => Active::Explore(Explore::start(&mut ctx, poi)),
+                None => Active::Idle(Idle::start(&mut ctx)),
+            },
+            BehaviourKind::Watch => match spot {
+                Some(s) => Active::Watch(WatchSpot::start(&mut ctx, s.id, s.vantage, s.interest)),
+                None => Active::Idle(Idle::start(&mut ctx)),
+            },
+            BehaviourKind::Idle => Active::Idle(Idle::start(&mut ctx)),
+            BehaviourKind::Companion => Active::Companion(Box::new(Companion::start(&mut ctx))),
+            BehaviourKind::Rest => Active::Rest(Rest::start(&mut ctx)),
+            BehaviourKind::Nap => Active::Nap(Nap::start(&mut ctx)),
+            BehaviourKind::Battle => Active::Battle(Box::new(Battle::start(&mut ctx))),
+            BehaviourKind::Flee => Active::Flee(Flee::start(&mut ctx, flee_from)),
+            BehaviourKind::Hide => Active::Hide(Hide::start(&mut ctx)),
+            BehaviourKind::Ride => Active::Ride(Ride::start(&mut ctx)),
+            BehaviourKind::KnockedOut => Active::KnockedOut(KnockedOut::start(&mut ctx)),
+            BehaviourKind::Recover => Active::Recover(Recover::start(&mut ctx)),
         };
+        let kind = active.kind();
         log::debug!("brain: {} -> {} ({reason:?})", from.label(), kind.label());
         self.active = active;
         self.since_switch = 0.0;
@@ -414,9 +523,16 @@ impl Brain {
     }
 
     fn run_active(&mut self, p: &Percepts, nav: &mut dyn Navigator, out: &mut Intent) -> Status {
-        let Brain { cfg, mind, rng, rep, interest, senses, active, now, .. } = self;
-        let mut ctx = Ctx { p, now: *now, cfg, senses, mind, nav, rng, rep, interest, out };
+        let Brain { cfg, mind, rng, rep, interest, spots, senses, active, now, .. } = self;
+        let mut ctx = Ctx { p, now: *now, cfg, senses, mind, nav, rng, rep, interest, spots, out };
         active.tick(&mut ctx)
+    }
+
+    fn reason(&mut self, p: &Percepts, nav: &mut dyn Navigator) -> String {
+        let mut scratch = Intent::default();
+        let Brain { cfg, mind, rng, rep, interest, spots, senses, active, now, .. } = self;
+        let ctx = Ctx { p, now: *now, cfg, senses, mind, nav, rng, rep, interest, spots, out: &mut scratch };
+        active.reason(&ctx)
     }
 
     fn ctx<'a, 'p>(&'a mut self, p: &'a Percepts<'p>, nav: &'a mut dyn Navigator, out: &'a mut Intent) -> Ctx<'a, 'p> {
@@ -430,18 +546,19 @@ impl Brain {
             rng: &mut self.rng,
             rep: &mut self.rep,
             interest: &mut self.interest,
+            spots: &mut self.spots,
             out,
         }
     }
 
-    /// Rank points of interest: cheap interest first, then route-plan the top few.
+    /// Rank window points of interest: cheap interest first, then route-plan the top few.
     fn score_pois(&self, p: &Percepts, nav: &mut dyn Navigator) -> Option<ScoredPoi> {
         let style = self.mind.travel_style();
         let knight = p.knight;
         let speed = knight.params.gait_speed_px(style.gait()).max(1.0);
         let mut ranked: Vec<(Poi, f32)> = self
             .interest
-            .candidates(self.now, knight, (p.desktop, p.terrain, p.benches), &self.cfg)
+            .candidates(self.now, knight, (p.desktop, p.terrain), &self.cfg)
             .into_iter()
             .filter_map(|poi| {
                 let at = poi.target.position(p.terrain)?;
@@ -461,6 +578,52 @@ impl Brain {
             .max_by(|a, b| a.score.total_cmp(&b.score))
     }
 
+    /// Rank active screen spots: interest = intensity × curiosity × (1 − satiation), minus
+    /// travel to the best vantage point.
+    fn score_spots(&self, p: &Percepts, nav: &mut dyn Navigator, finished: bool) -> Option<SpotChoice> {
+        let knight = p.knight;
+        let m = &self.mind;
+        let watching = match &self.active {
+            Active::Watch(w) if !finished => Some(w.spot),
+            _ => None,
+        };
+        let curious = 0.6 + 0.6 * m.needs.boredom * (0.5 + m.personality.curiosity);
+        let style = m.travel_style();
+        let speed = knight.params.gait_speed_px(style.gait()).max(1.0);
+        let mut ranked: Vec<(SpotChoice, f32)> = self
+            .spots
+            .spots()
+            .iter()
+            .filter(|t| t.active() && t.intensity >= self.cfg.watch.min_intensity)
+            .filter_map(|t| {
+                // The spot being watched is judged without its satiation: the watch ends
+                // itself once satisfied, while other spots must clearly beat it.
+                let sat = if Some(t.id) == watching { 0.0 } else { t.satiation };
+                if sat >= 0.95 {
+                    return None;
+                }
+                let interest = (t.intensity * curious * (1.0 - sat)).min(1.0);
+                let vantage = spots::vantage(p.terrain, t.rect, knight.pos)?;
+                if self.interest.is_blocked(PoiTarget::Spot(vantage.point)) {
+                    return None;
+                }
+                let guess = interest - self.cfg.travel_cost_per_sec * knight.pos.distance(vantage.point) / speed;
+                Some((SpotChoice { id: t.id, vantage, interest, score: guess }, guess))
+            })
+            .collect();
+        ranked.sort_by(|a, b| b.1.total_cmp(&a.1));
+        ranked
+            .into_iter()
+            .take(2)
+            .filter_map(|(mut c, _)| {
+                let here = c.vantage.point.distance(knight.pos) < 30.0;
+                let eta = if here { 0.0 } else { nav.estimate(knight, NavGoal::Point(c.vantage.point), style)? };
+                c.score = c.interest - self.cfg.travel_cost_per_sec * eta;
+                Some(c)
+            })
+            .max_by(|a, b| a.score.total_cmp(&b.score))
+    }
+
     fn score_behaviours(&self, p: &Percepts) -> Vec<(BehaviourKind, f32)> {
         let m = &self.mind;
         let n = m.needs;
@@ -476,25 +639,25 @@ impl Brain {
             t * t * (3.0 - 2.0 * t)
         };
 
-        let idle = 0.3 + 0.15 * (1.0 - arousal);
-        let wander = (0.12 + 0.25 * n.boredom + 0.1 * pers.vigour) * (0.5 + 0.5 * n.energy);
-        let explore = self.best_poi.map_or(0.0, |sp| sp.score.clamp(0.0, 0.95) * (0.6 + 0.4 * n.energy));
+        let idle = 0.2;
+        let companion = match s.cursor {
+            Some(_) if !s.user_away && !s.fullscreen => 0.42 + 0.15 * n.loneliness + 0.1 * (pers.sociability - 0.5),
+            _ => 0.0,
+        };
+        let watch = self.best_spot.map_or(0.0, |c| c.score.clamp(0.0, 0.95) * (0.7 + 0.3 * n.energy));
+        let explore = self.best_poi.map_or(0.0, |sp| sp.score.clamp(0.0, 0.9) * (0.6 + 0.4 * n.energy));
 
+        let rest = if s.fullscreen {
+            0.0
+        } else {
+            let settle = if s.user_busy { 0.12 } else { 0.0 } + if s.user_away { 0.25 } else { 0.0 };
+            ((0.75 * smooth(0.35, 0.7, tired) + settle) * (1.0 - 0.7 * arousal)).min(0.85)
+        };
         let nap = if self.now < self.nap_ready_at || s.fullscreen {
             0.0
         } else {
             let away = if s.user_away { 0.35 + 0.25 * tired } else { 0.0 };
-            // Without a bench it sleeps face-down on the spot: a bit less inviting.
-            let spot = if p.benches.is_empty() && !s.user_away { 0.8 } else { 1.0 };
-            ((0.95 * smooth(0.5, 0.9, tired) + away) * (1.0 - 0.8 * arousal) * spot).min(0.99)
-        };
-
-        let watch = match s.cursor {
-            Some(c) if !s.user_away => {
-                let parked = if c.near_for > 1.0 && c.still_for > 1.0 { 0.15 } else { 0.0 };
-                (0.6 * n.loneliness * (0.5 + pers.sociability) + parked + 0.1 * e.excitement).min(0.9)
-            }
-            _ => 0.0,
+            ((0.95 * smooth(0.7, 0.92, tired) + away) * (1.0 - 0.8 * arousal)).min(0.99)
         };
 
         let b = &cfg.battle;
@@ -507,7 +670,7 @@ impl Brain {
                     && !s.fullscreen
                     && n.energy > 0.25
                     && e.startle < 0.5
-                    && e.hurt < 0.5 =>
+                    && e.hurt < 0.35 =>
             {
                 let invite = if c.near_for >= b.park_secs && c.still_for >= b.park_secs {
                     1.0
@@ -526,30 +689,29 @@ impl Brain {
         let hide = if s.fullscreen { 1.3 } else { 0.0 };
         let ride = if s.since_carried(self.now) < 0.6 && p.knight.is_grounded() { 0.65 + 0.2 * e.excitement } else { 0.0 };
         let knocked = if self.knocked_out { 1.25 } else { 0.0 };
+        let recover = if e.hurt > 0.35 { (0.5 + 0.4 * e.hurt).min(0.9) } else { 0.0 };
 
         let mut u = vec![
             (BehaviourKind::Idle, idle),
-            (BehaviourKind::Wander, wander),
-            (BehaviourKind::Explore, explore),
-            (BehaviourKind::Nap, nap),
+            (BehaviourKind::Companion, companion),
             (BehaviourKind::Watch, watch),
+            (BehaviourKind::Explore, explore),
+            (BehaviourKind::Rest, rest),
+            (BehaviourKind::Nap, nap),
             (BehaviourKind::Battle, battle),
             (BehaviourKind::Flee, flee),
             (BehaviourKind::Hide, hide),
             (BehaviourKind::Ride, ride),
             (BehaviourKind::KnockedOut, knocked),
+            (BehaviourKind::Recover, recover),
         ];
         // Stable sort: ties keep declaration order, so selection is deterministic.
         u.sort_by(|a, b| b.1.total_cmp(&a.1));
         u
     }
 
-    fn debug_line(&self) -> String {
-        let mut s = String::from(self.active.kind().label());
-        let detail = self.active.detail();
-        if !detail.is_empty() {
-            let _ = write!(s, " [{detail}]");
-        }
+    fn debug_line(&self, reason: &str) -> String {
+        let mut s = String::from(reason);
         let n = self.mind.needs;
         let _ = write!(
             s,

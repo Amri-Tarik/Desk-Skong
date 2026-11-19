@@ -96,6 +96,10 @@ impl Battle {
             return if act.as_mut().is_none_or(|w| w.tick(ctx)) { Status::Done } else { Status::Running };
         }
 
+        if ctx.senses.stuck {
+            // Running into a wall chasing the cursor: not worth it.
+            return self.finish(ctx, Outcome::GaveUp);
+        }
         let b = ctx.cfg.battle;
         let cursor = match ctx.senses.cursor {
             Some(c) if !ctx.senses.user_busy && !ctx.senses.user_away && self.elapsed <= b.max_duration && c.far_for <= b.give_up_secs => c,

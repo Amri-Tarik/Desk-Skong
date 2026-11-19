@@ -43,6 +43,8 @@ const HALF_LIFE_HURT: f32 = 60.0;
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Activity {
     pub asleep: bool,
+    /// Sitting (bench or perch): recovers energy slowly.
+    pub seated: bool,
     /// 0 = idle, 1 = sprinting / fighting.
     pub exertion: f32,
     /// Near a present user's cursor.
@@ -73,6 +75,8 @@ impl Mind {
 
         if act.asleep {
             n.energy += r.energy_restore * per_min;
+        } else if act.seated {
+            n.energy += 0.35 * r.energy_restore * per_min;
         } else {
             let stamina = 1.3 - 0.6 * p.vigour;
             n.energy -= r.energy_drain * (1.0 + 2.0 * act.exertion) * stamina * per_min;
