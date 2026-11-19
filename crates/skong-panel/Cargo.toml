@@ -1,0 +1,10 @@
+[package]
+name = "skong-panel"
+version.workspace = true
+edition.workspace = true
+description = "Control panel for the Desk-Skong desktop pet"
+
+[dependencies]
+anyhow = "1.0.104"
+eframe = { version = "=0.37.0", default-features = false, features = ["default_fonts", "glow", "clipboard"] }
+skong-ipc = { path = "../skong-ipc" }

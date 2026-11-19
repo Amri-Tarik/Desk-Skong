@@ -625,6 +625,17 @@ pub struct ContentFeed {
     monitors: Vec<Monitor>,
     enabled: bool,
     stats: Vec<CaptureStats>,
+    totals: CaptureTotals,
+    /// Content was switched off: the next poll reports a change (terrain loses it).
+    cleared: bool,
+}
+
+/// Running totals over the feed's lifetime (status displays).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CaptureTotals {
+    pub updates: u64,
+    pub frames: u64,
+    pub last: Option<CaptureStats>,
 }
 
 impl ContentFeed {
@@ -639,6 +650,8 @@ impl ContentFeed {
             monitors: desk.monitors.clone(),
             enabled,
             stats: Vec::new(),
+            totals: CaptureTotals::default(),
+            cleared: false,
         };
         if enabled {
             f.restart(desk);
@@ -664,6 +677,31 @@ impl ContentFeed {
         self.capture.is_some()
     }
 
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// Turn content capture on or off at runtime. Either way the next [`Self::poll`]
+    /// reports a change so terrain is rebuilt with (or without) content.
+    pub fn set_enabled(&mut self, on: bool, desk: &DesktopSnapshot) {
+        if on == self.enabled {
+            return;
+        }
+        self.enabled = on;
+        if on {
+            self.monitors = desk.monitors.clone();
+            self.restart(desk);
+        } else {
+            self.shutdown();
+            self.layer = ContentLayer::default();
+        }
+        self.cleared = true;
+    }
+
+    pub fn totals(&self) -> CaptureTotals {
+        self.totals
+    }
+
     fn secs(&self, t: Instant) -> f64 {
         t.saturating_duration_since(self.epoch).as_secs_f64()
     }
@@ -672,8 +710,9 @@ impl ContentFeed {
     /// `true` when content changed and terrain should be rebuilt.
     pub fn poll(&mut self, desk: &DesktopSnapshot, desk_changed: bool) -> bool {
         self.stats.clear();
+        let cleared = std::mem::take(&mut self.cleared);
         if !self.enabled {
-            return false;
+            return cleared;
         }
         if desk_changed {
             self.layer.observe_desktop(desk, self.secs(Instant::now()));
@@ -687,10 +726,13 @@ impl ContentFeed {
                 return true;
             }
         }
-        let Some(cap) = &self.capture else { return false };
-        let mut changed = false;
+        let Some(cap) = &self.capture else { return cleared };
+        let mut changed = cleared;
         while let Some(u) = cap.try_recv() {
             self.layer.ingest(u.source, &u.surfaces, desk, self.secs(u.captured_at));
+            self.totals.updates += 1;
+            self.totals.frames += u64::from(u.stats.frames);
+            self.totals.last = Some(u.stats);
             self.stats.push(u.stats);
             changed = true;
         }

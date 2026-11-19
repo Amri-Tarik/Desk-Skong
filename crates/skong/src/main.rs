@@ -4,6 +4,9 @@ use std::path::PathBuf;
 use anyhow::{Context, Result, bail};
 
 mod app;
+mod control;
+mod logring;
+mod overlay;
 mod benches;
 mod fx;
 mod grab;
@@ -66,7 +69,7 @@ fn parse_args() -> Result<Args> {
 }
 
 fn main() -> Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    logring::init();
     skong_win::desktop::enable_per_monitor_dpi();
     let args = parse_args()?;
     // Only one pet at a time: two instances fight over global hotkeys and screen capture.

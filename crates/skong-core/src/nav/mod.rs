@@ -22,6 +22,7 @@
 //! * `search`: Dijkstra over landing states (surface + landing x), cost = estimated time
 //!   plus small style penalties.
 //! * `follow`: replays the edge scripts with the same executor the validation used.
+mod debug;
 mod follow;
 mod graph;
 mod script;
@@ -30,6 +31,7 @@ mod surface;
 #[cfg(test)]
 mod tests;
 
+pub use debug::{DebugPath, DebugSpan, debug_paths, debug_spans, edge_path, route_paths};
 pub use follow::PathFollower;
 pub use graph::{BuildStats, Edge};
 pub use surface::{Surface, SurfaceId};
