@@ -1105,9 +1105,19 @@ fn playful_knight_mines_a_geo_deposit() {
 #[test]
 fn rested_calm_knight_leaves_found_seats_alone() {
     let mut sim = calm(BrainConfig::default());
-    sim.brain.set_places(&[place(1, PlaceKind::Bench, Vec2::new(1300.0, FLOOR), 0.5, false), place(2, PlaceKind::Deposit, Vec2::new(600.0, FLOOR), 0.5, false)]);
+    sim.brain.set_places(&[place(1, PlaceKind::Bench, Vec2::new(1300.0, FLOOR), 0.5, false)]);
     let kinds = sim.run(20.0);
     assert!(!kinds.contains(&BehaviourKind::Visit));
+}
+
+#[test]
+fn a_geo_deposit_is_worth_it_even_when_calm() {
+    // Geo is one of his top priorities: a known deposit beats lounging around, calm or not.
+    let mut sim = calm(BrainConfig::default());
+    sim.brain.set_places(&[place(1, PlaceKind::Bench, Vec2::new(1300.0, FLOOR), 0.5, false), place(2, PlaceKind::Deposit, Vec2::new(600.0, FLOOR), 0.5, false)]);
+    assert!(sim.run_until(5.0, BehaviourKind::Visit), "{}", sim.last_reason());
+    assert_eq!(sim.brain.visiting().map(|p| p.kind), Some(PlaceKind::Deposit));
+    assert!(sim.last_reason().contains("deposit"), "{}", sim.last_reason());
 }
 
 

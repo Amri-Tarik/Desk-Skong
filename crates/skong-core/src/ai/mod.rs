@@ -762,6 +762,15 @@ impl Brain {
         let t = &self.cfg.tiers;
         let critical = self.mind.needs.energy < t.critical_energy;
         match kind {
+            // A geo deposit is Geo: an engagement like loot (other found places, benches, are
+            // pastimes). Exhausted, it waits like far loot does.
+            BehaviourKind::Visit => {
+                let place = match &self.active {
+                    Active::Visit(v) => Some(v.place),
+                    _ => self.interest.places.best.map(|c| c.place),
+                };
+                if place.is_some_and(|pl| pl.kind == PlaceKind::Deposit) && !critical && !self.asleep(p) { Tier::Engagement } else { Tier::Ambient }
+            }
             // Resting is a pastime unless he's exhausted / badly hurt.
             BehaviourKind::Rest | BehaviourKind::Nap if !critical => Tier::Ambient,
             BehaviourKind::Recover if self.mind.emotions.hurt < t.critical_hurt => Tier::Ambient,
