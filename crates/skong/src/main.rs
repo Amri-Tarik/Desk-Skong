@@ -9,6 +9,7 @@ mod logring;
 mod overlay;
 mod benches;
 mod fx;
+mod gameguard;
 mod grab;
 mod browser;
 mod keyboard;
