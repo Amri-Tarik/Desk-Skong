@@ -437,21 +437,8 @@ impl Hysteresis {
     }
 }
 
-fn surface_seg(s: &Surface) -> Seg {
-    Seg { lane: s.y as i64, a: s.x0, b: s.x1 }
-}
-
-fn seg_surface(s: &Seg) -> Surface {
-    Surface::new(s.a, s.b, s.lane as i32)
-}
-
 fn wall_seg(w: &ContentWall) -> Seg {
     Seg { lane: w.x as i64 * 2 + (w.face == Facing::Right) as i64, a: w.y0, b: w.y1 }
-}
-
-fn seg_wall(s: &Seg) -> ContentWall {
-    let face = if s.lane.rem_euclid(2) == 1 { Facing::Right } else { Facing::Left };
-    ContentWall::new(s.lane.div_euclid(2) as i32, s.a, s.b, face)
 }
 
 /// Persistent detector for one screen (output).
@@ -467,6 +454,8 @@ pub struct SurfaceMap {
     touched_rows: Vec<bool>,
     /// Rects (columns x0..x1, rows y0..y1) scanned since the last finish.
     scanned: Vec<(usize, usize, usize, usize)>,
+    /// Regions whose masks are never rewritten (covered by our own windows).
+    frozen: Vec<RectI>,
     /// Joined runs per row (`x0..x1`, length >= `min_run`).
     runs: Vec<Vec<(u32, u32)>>,
     /// Joined runs per column (`y0..y1`, length >= `min_wall_run`), left / right facing.
@@ -494,6 +483,7 @@ impl SurfaceMap {
             right: BitPlane::new(width, height),
             touched_rows: vec![false; height],
             scanned: Vec::new(),
+            frozen: Vec::new(),
             runs: vec![Vec::new(); height],
             col_runs: [vec![Vec::new(); width], vec![Vec::new(); width]],
             raw: Vec::new(),
@@ -546,6 +536,18 @@ impl SurfaceMap {
         }
     }
 
+    /// Freeze the boundary masks inside `rects` (map coords): [`Self::scan`] leaves them
+    /// untouched, so whatever is detected there stays exactly as it was while, e.g., one
+    /// of our own windows covers it. Returns the previously frozen rects: rescan them so
+    /// areas that were just uncovered are brought up to date.
+    pub fn set_frozen(&mut self, rects: &[RectI]) -> Vec<RectI> {
+        std::mem::replace(&mut self.frozen, rects.to_vec())
+    }
+
+    pub fn frozen(&self) -> &[RectI] {
+        &self.frozen
+    }
+
     /// [`Self::scan`] + [`Self::finish`]: re-detect around `dirty` (map coords; clipped).
     /// Returns `false` (and does nothing) if `img` does not fit in the map.
     pub fn rescan(&mut self, img: &PixelView, dirty: &[RectI]) -> bool {
@@ -578,7 +580,13 @@ impl SurfaceMap {
             if x0 >= x1 || y0 >= y1 {
                 continue;
             }
-            self.scan_rect(img, x0 as usize, x1 as usize, y0 as usize, y1 as usize);
+            let mut parts = vec![RectI::new(x0, y0, x1, y1)];
+            for f in &self.frozen {
+                parts = parts.into_iter().flat_map(|p| rect_minus(p, f)).collect();
+            }
+            for p in parts {
+                self.scan_rect(img, p.left as usize, p.right as usize, p.top as usize, p.bottom as usize);
+            }
             self.touched_rows[y0 as usize..y1 as usize].iter_mut().for_each(|t| *t = true);
             self.scanned.push((x0 as usize, x1 as usize, y0 as usize, y1 as usize));
         }
@@ -618,8 +626,11 @@ impl SurfaceMap {
                 }
             }
         }
-        self.raw = self.merge_rows();
-        self.raw_walls = self.merge_cols();
+        let rows = self.runs.iter().enumerate().map(|(y, r)| (y as i32, r.as_slice()));
+        self.raw = self.merge_rows(rows);
+        let left = self.col_runs[0].iter().enumerate().map(|(x, r)| (x as i32, r.as_slice()));
+        let right = self.col_runs[1].iter().enumerate().map(|(x, r)| (x as i32, r.as_slice()));
+        self.raw_walls = self.merge_cols(left, right);
     }
 
     /// Runs of ledge pixels on row `y`, gaps bridged, short ones dropped.
@@ -707,42 +718,77 @@ impl SurfaceMap {
     }
 
     /// Keep the topmost of near-duplicate rows: a run is cut where a kept surface lies
-    /// at most `merge_rows` rows above it.
-    fn merge_rows(&self) -> Vec<Surface> {
-        let lanes = self.runs.iter().enumerate().map(|(y, r)| (y as i32, r.as_slice()));
-        merge_lanes(lanes, self.params.merge_rows as i32, self.params.min_run as i32).into_iter().map(|(y, a, b)| Surface::new(a, b, y)).collect()
+    /// at most `merge_rows` rows above it. `rows`: `(y, runs)` in increasing `y`.
+    fn merge_rows<'r>(&self, rows: impl Iterator<Item = (i32, &'r [(u32, u32)])>) -> Vec<Surface> {
+        merge_lanes(rows, self.params.merge_rows as i32, self.params.min_run as i32).into_iter().map(|(y, a, b)| Surface::new(a, b, y)).collect()
     }
 
     /// Keep the outermost of near-duplicate columns of the same facing (leftmost for
-    /// left-facing walls, rightmost for right-facing ones).
-    fn merge_cols(&self) -> Vec<ContentWall> {
+    /// left-facing walls, rightmost for right-facing ones). `left` / `right`: `(column,
+    /// runs)` in increasing column order.
+    fn merge_cols<'r>(&self, left: impl Iterator<Item = (i32, &'r [(u32, u32)])>, right: impl DoubleEndedIterator<Item = (i32, &'r [(u32, u32)])>) -> Vec<ContentWall> {
         let (merge, min) = (self.params.merge_cols as i32, self.params.min_wall_run as i32);
-        let left = self.col_runs[0].iter().enumerate().map(|(x, r)| (x as i32, r.as_slice()));
         let mut out: Vec<ContentWall> = merge_lanes(left, merge, min).into_iter().map(|(x, a, b)| ContentWall::new(x, a, b, Facing::Left)).collect();
         // Right-facing: scan right to left (mirror the column index), wall line at x + 1.
         let w = self.width as i32;
-        let right = self.col_runs[1].iter().enumerate().rev().map(|(x, r)| (w - 1 - x as i32, r.as_slice()));
-        out.extend(merge_lanes(right, merge, min).into_iter().map(|(m, a, b)| ContentWall::new(w - 1 - m + 1, a, b, Facing::Right)));
+        let mirrored = right.rev().map(|(x, r)| (w - 1 - x, r));
+        out.extend(merge_lanes(mirrored, merge, min).into_iter().map(|(m, a, b)| ContentWall::new(w - 1 - m + 1, a, b, Facing::Right)));
         out.sort_unstable_by_key(wall_seg);
         out
     }
 
     /// Hysteresis step at time `now` (seconds, monotonic). Returns `true` when
     /// [`Self::surfaces`] or [`Self::walls`] changed.
+    ///
+    /// Hysteresis runs on the *unmerged* runs and near-duplicates are merged afterwards,
+    /// so a reported ledge never disappears just because a new (still pending) line
+    /// showed up a few rows above it: it stays until its own pixels are gone.
     pub fn update(&mut self, now: f64) -> bool {
-        let (p, gap) = (self.params.persist_secs, self.params.max_gap as i32);
-        let raw: Vec<Seg> = self.raw.iter().map(surface_seg).collect();
-        let a = self.hyst.update(&raw, now, p, gap);
-        let raw_w: Vec<Seg> = self.raw_walls.iter().map(wall_seg).collect();
-        let b = self.hyst_walls.update(&raw_w, now, p, self.params.max_wall_gap as i32);
-        if a {
-            self.surfaces = self.hyst.confirmed.iter().map(seg_surface).collect();
+        let p = self.params.persist_secs;
+        let raw_rows: Vec<Seg> = self
+            .runs
+            .iter()
+            .enumerate()
+            .flat_map(|(y, r)| r.iter().map(move |&(a, b)| Seg { lane: y as i64, a: a as i32, b: b as i32 }))
+            .collect();
+        let mut raw_cols: Vec<Seg> = (0..2)
+            .flat_map(|side| {
+                self.col_runs[side].iter().enumerate().flat_map(move |(c, r)| r.iter().map(move |&(a, b)| Seg { lane: c as i64 * 2 + side as i64, a: a as i32, b: b as i32 }))
+            })
+            .collect();
+        raw_cols.sort_unstable();
+        let rows_changed = self.hyst.update(&raw_rows, now, p, self.params.max_gap as i32);
+        let cols_changed = self.hyst_walls.update(&raw_cols, now, p, self.params.max_wall_gap as i32);
+        let mut changed = false;
+        if rows_changed {
+            let lanes = group_lanes(&self.hyst.confirmed, |l| Some(l as i32));
+            let surfaces = self.merge_rows(lanes.iter().map(|(l, r)| (*l, r.as_slice())));
+            changed |= surfaces != self.surfaces;
+            self.surfaces = surfaces;
         }
-        if b {
-            self.walls = self.hyst_walls.confirmed.iter().map(seg_wall).collect();
+        if cols_changed {
+            let left = group_lanes(&self.hyst_walls.confirmed, |l| (l % 2 == 0).then_some((l / 2) as i32));
+            let right = group_lanes(&self.hyst_walls.confirmed, |l| (l % 2 == 1).then_some((l / 2) as i32));
+            let walls = self.merge_cols(left.iter().map(|(l, r)| (*l, r.as_slice())), right.iter().map(|(l, r)| (*l, r.as_slice())));
+            changed |= walls != self.walls;
+            self.walls = walls;
         }
-        a || b
+        changed
     }
+}
+
+/// Confirmed segments (sorted by lane) grouped into `(index, runs)` for the lanes `pick`
+/// maps to an index (increasing).
+fn group_lanes(segs: &[Seg], pick: impl Fn(i64) -> Option<i32>) -> Vec<(i32, Vec<(u32, u32)>)> {
+    let mut out: Vec<(i32, Vec<(u32, u32)>)> = Vec::new();
+    for s in segs {
+        let Some(i) = pick(s.lane) else { continue };
+        match out.last_mut() {
+            Some((l, runs)) if *l == i => runs.push((s.a as u32, s.b as u32)),
+            _ => out.push((i, vec![(s.a as u32, s.b as u32)])),
+        }
+    }
+    out
 }
 
 /// Joins increasing positions into runs, bridging gaps up to `gap` and keeping runs of
@@ -815,6 +861,23 @@ fn lane_of<T>(v: &[T], lane: i64, key: impl Fn(&T) -> i64) -> &[T] {
     let lo = v.partition_point(|e| key(e) < lane);
     let hi = lo + v[lo..].partition_point(|e| key(e) <= lane);
     &v[lo..hi]
+}
+
+/// `r` minus `cut`: up to four rects.
+fn rect_minus(r: RectI, cut: &RectI) -> Vec<RectI> {
+    let i = r.intersect(cut);
+    if i.is_empty() {
+        return vec![r];
+    }
+    [
+        RectI::new(r.left, r.top, r.right, i.top),
+        RectI::new(r.left, i.bottom, r.right, r.bottom),
+        RectI::new(r.left, i.top, i.left, i.bottom),
+        RectI::new(i.right, i.top, r.right, i.bottom),
+    ]
+    .into_iter()
+    .filter(|p| !p.is_empty())
+    .collect()
 }
 
 /// `s` minus `cut`: zero, one or two pieces (half-open spans).
@@ -1219,6 +1282,130 @@ mod tests {
         m.rescan(&img.view(), &[RectI::new(100, 150, 103, 280)]);
         assert!(m.update(1.11));
         assert!(m.walls().iter().all(|w| w.y0 == 20 && w.y1 == 150), "{:?}", m.walls());
+    }
+
+    /// Paint a knight-like blob over `r` (what capture would show if our sprite window
+    /// were visible to it).
+    fn paint_sprite(img: &mut Img, r: RectI, frame: usize) {
+        for y in r.top..r.bottom {
+            for x in r.left..r.right {
+                let v = ((x * 7 + y * 13 + frame as i32 * 5) % 97) as u8;
+                img.px[y as usize * img.w + x as usize] = bgra(v, v / 2, 255 - v);
+            }
+        }
+    }
+
+    #[test]
+    fn frozen_region_keeps_its_ledge_under_our_own_window() {
+        let mut img = Img::new(500, 300, WHITE);
+        img.fill(50, 150, 450, 152, BLACK);
+        let mut m = SurfaceMap::new(500, 300, VisionParams::default());
+        m.rescan(&img.view(), &[img.full()]);
+        m.update(0.0);
+        m.update(0.1);
+        let ledge = [Surface::new(50, 450, 150)];
+        assert_eq!(m.surfaces(), &ledge);
+
+        // The knight sits on it for 30 s; worst case, capture sees his (animated) sprite.
+        let knight = RectI::new(200, 90, 260, 175);
+        assert!(m.set_frozen(&[knight]).is_empty());
+        let mut t = 0.1;
+        for frame in 0..900 {
+            paint_sprite(&mut img, knight, frame);
+            m.rescan(&img.view(), &[knight]);
+            t += 1.0 / 30.0;
+            assert!(!m.update(t), "frame {frame}: terrain changed under the knight");
+            assert_eq!(m.surfaces(), &ledge);
+        }
+
+        // He leaves: the area is rescanned once with what is really there.
+        img.fill(200, 90, 260, 175, WHITE);
+        img.fill(200, 150, 260, 152, BLACK);
+        let old = m.set_frozen(&[]);
+        m.rescan(&img.view(), &old);
+        assert!(!m.update(t + 0.1));
+        assert_eq!(m.surfaces(), &ledge);
+    }
+
+    #[test]
+    fn without_freezing_a_visible_sprite_would_cut_the_ledge() {
+        let mut img = Img::new(500, 300, WHITE);
+        img.fill(50, 150, 450, 152, BLACK);
+        let mut m = SurfaceMap::new(500, 300, VisionParams::default());
+        m.rescan(&img.view(), &[img.full()]);
+        m.update(0.0);
+        m.update(0.1);
+        let knight = RectI::new(200, 90, 260, 175);
+        paint_sprite(&mut img, knight, 0);
+        m.rescan(&img.view(), &[knight]);
+        assert!(m.update(0.2));
+        assert!(m.surfaces().iter().all(|s| s.x1 <= 200 || s.x0 >= 260), "{:?}", m.surfaces());
+    }
+
+    #[test]
+    fn content_changing_under_a_frozen_region_is_picked_up_after_unfreezing() {
+        let mut img = Img::new(500, 300, WHITE);
+        img.fill(50, 150, 450, 152, BLACK);
+        let mut m = SurfaceMap::new(500, 300, VisionParams::default());
+        m.rescan(&img.view(), &[img.full()]);
+        m.update(0.0);
+        m.update(0.1);
+        let knight = RectI::new(200, 90, 260, 175);
+        m.set_frozen(&[knight]);
+        img.fill(0, 150, 500, 152, WHITE); // the line is erased (e.g. scrolled away)
+        m.rescan(&img.view(), &[img.full()]);
+        m.update(0.2);
+        // Outside the frozen part it is gone at once; under the knight it is kept.
+        assert_eq!(m.surfaces(), &[Surface::new(200, 260, 150)]);
+        let old = m.set_frozen(&[]);
+        m.rescan(&img.view(), &old);
+        assert!(m.update(0.3));
+        assert!(m.surfaces().is_empty() && m.raw_surfaces().is_empty());
+    }
+
+    #[test]
+    fn rescanning_a_stationary_ledge_never_drops_or_moves_it() {
+        let mut img = Img::new(600, 300, WHITE);
+        img.fill(50, 200, 550, 202, BLACK);
+        let mut m = SurfaceMap::new(600, 300, VisionParams::default());
+        m.rescan(&img.view(), &[img.full()]);
+        m.update(0.0);
+        m.update(0.1);
+        let ledge = [Surface::new(50, 550, 200)];
+        // Something animates right above it (a spinner 20 px up); its region, which
+        // includes part of the ledge, is rescanned every frame.
+        let region = RectI::new(250, 150, 350, 210);
+        for frame in 0..300 {
+            img.fill(280, 170, 300, 182, if frame % 2 == 0 { BLACK } else { WHITE });
+            m.rescan(&img.view(), &[region]);
+            m.update(0.1 + frame as f64 / 30.0);
+            assert_eq!(m.surfaces(), &ledge, "frame {frame}");
+        }
+    }
+
+    #[test]
+    fn a_new_line_just_above_never_makes_the_ledge_blink() {
+        let mut img = Img::new(600, 300, WHITE);
+        img.fill(50, 200, 550, 202, BLACK);
+        let mut m = SurfaceMap::new(600, 300, VisionParams::default());
+        m.rescan(&img.view(), &[img.full()]);
+        m.update(0.0);
+        m.update(0.1);
+        // A second line appears 4 rows above (a selection outline, a focus ring...).
+        img.fill(50, 196, 550, 197, hex(0x3070ff));
+        let dirty = [RectI::new(50, 196, 550, 197)];
+        let mut t = 0.1;
+        for _ in 0..10 {
+            m.rescan(&img.view(), &dirty);
+            t += 1.0 / 30.0;
+            m.update(t);
+            let s = m.surfaces();
+            assert_eq!(s.len(), 1, "{s:?}");
+            assert!(s[0].x0 <= 50 && s[0].x1 >= 550 && (196..=200).contains(&s[0].y), "{s:?}");
+        }
+        // Once confirmed, the topmost of the two wins (a 4 px step, within the knight's
+        // step height).
+        assert_eq!(m.surfaces(), &[Surface::new(50, 550, 196)]);
     }
     #[test]
     fn rescan_rejects_wrong_size() {
