@@ -11,8 +11,8 @@ _Working list, last updated 2026-11-19 (night). Reorder freely and add notes und
       `FrameStore` like the knight and effects: most of the remaining ~180 MB private memory.
 - [ ] **Small switches**: enemies on/off, a "Dream Gate now" debug button, a margin on how
       eager the crystal dash is (`superdash_break_even`).
-- [ ] **Ability progression** — see the proposal in the conversation (2026-11-19); decide
-      whether to do it.
+- ~~Ability progression~~ — dropped: the point is seeing him use as many cool tools as
+  possible, so he always has the full kit.
 
 ## 2. Reasons to move around
 
