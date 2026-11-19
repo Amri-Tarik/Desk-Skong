@@ -894,7 +894,8 @@ impl Brain {
                 let near = self.stakes.sense.coins.iter().any(|c| c.distance(k) <= t.tired_loot_reach);
                 if near && !self.asleep(p) { Tier::Engagement } else { Tier::Ambient }
             }
-            BehaviourKind::ShadeHunt if (critical || self.asleep(p)) && !self.stakes.force_hunt => Tier::Ambient,
+            // The Shade comes first, always: it may even interrupt fights and visitors.
+            BehaviourKind::ShadeHunt => Tier::Urgent,
             // A shiny can wait for an exhausted knight.
             BehaviourKind::Shiny if critical => Tier::Ambient,
             _ => kind.tier(),

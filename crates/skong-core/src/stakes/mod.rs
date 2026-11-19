@@ -65,8 +65,11 @@ impl DeathKind {
 
 /// Where the knight comes back after dying: the nearest placed bench (sitting spot), else
 /// the nearest point on a wide, solid ledge (the taskbar/screen bottom first), else `near`.
-pub fn respawn_point(terrain: &Terrain, benches: &[Vec2], near: Vec2) -> Vec2 {
-    if let Some(b) = benches.iter().min_by(|a, b| a.distance(near).total_cmp(&b.distance(near))) {
+/// Where he wakes up after dying at `died` (where his Shade waits): the bench farthest
+/// from it, else the far end of the ground (another monitor if there is one), so winning
+/// the Geo back is a proper trek.
+pub fn respawn_point(terrain: &Terrain, benches: &[Vec2], died: Vec2) -> Vec2 {
+    if let Some(b) = benches.iter().max_by(|a, b| a.distance(died).total_cmp(&b.distance(died))) {
         return *b;
     }
     let pick = |ground_only: bool| {
@@ -74,13 +77,10 @@ pub fn respawn_point(terrain: &Terrain, benches: &[Vec2], near: Vec2) -> Vec2 {
             .ledges
             .iter()
             .filter(|l| l.x1 - l.x0 >= 160.0 && (!ground_only || l.kind == LedgeKind::Ground))
-            .map(|l| {
-                let x = near.x.clamp(l.x0 + 40.0, l.x1 - 40.0);
-                Vec2::new(x, l.y)
-            })
-            .min_by(|a, b| a.distance(near).total_cmp(&b.distance(near)))
+            .flat_map(|l| [Vec2::new(l.x0 + 40.0, l.y), Vec2::new(l.x1 - 40.0, l.y)])
+            .max_by(|a, b| a.distance(died).total_cmp(&b.distance(died)))
     };
-    pick(true).or_else(|| pick(false)).unwrap_or(near)
+    pick(true).or_else(|| pick(false)).unwrap_or(died)
 }
 
 /// Tiny deterministic xorshift (the brain's own RNG is private to `ai`).

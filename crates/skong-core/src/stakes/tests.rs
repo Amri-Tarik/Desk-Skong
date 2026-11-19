@@ -113,13 +113,18 @@ fn save_round_trips_and_old_files_load() {
 // --- Respawn ------------------------------------------------------------------------
 
 #[test]
-fn respawn_prefers_the_nearest_bench_then_solid_ground() {
+fn respawn_far_from_the_shade_bench_first_then_the_far_ground() {
+    // He wakes up far from where he died (where his Shade waits): winning the Geo back is a
+    // proper trek.
     let t = terrain();
     let died = Vec2::new(650.0, 600.0);
     let benches = [Vec2::new(1500.0, 1040.0), Vec2::new(200.0, 1040.0)];
-    assert_eq!(respawn_point(&t, &benches, died), Vec2::new(200.0, 1040.0));
-    assert_eq!(respawn_point(&t, &[], died), Vec2::new(650.0, 1040.0), "the ground, not the window he died on");
-    assert_eq!(respawn_point(&t, &[], Vec2::new(5.0, 100.0)), Vec2::new(40.0, 1040.0));
+    assert_eq!(respawn_point(&t, &benches, died), Vec2::new(1500.0, 1040.0), "the farther bench");
+    let ground = respawn_point(&t, &[], died);
+    assert_eq!(ground.y, 1040.0, "the ground, not the window he died on");
+    assert!(ground.distance(died) > 1000.0, "far end of the ground: {ground:?}");
+    let other = respawn_point(&t, &[], Vec2::new(5.0, 100.0));
+    assert!(other.x > 1500.0, "the other end: {other:?}");
 }
 
 // --- Shade --------------------------------------------------------------------------
