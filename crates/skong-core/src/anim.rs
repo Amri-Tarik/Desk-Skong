@@ -11,9 +11,31 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{Context, Result, bail};
+use serde::Deserialize;
 
 use crate::assets::{AnimLibraryJson, EventJson, SpriteBank, SpriteKey, read_json};
+
+#[derive(Deserialize)]
+struct ExtraFile {
+    clips: Vec<ExtraClip>,
+}
+
+#[derive(Deserialize)]
+struct ExtraClip {
+    name: String,
+    #[serde(default = "knight")]
+    collection: String,
+    fps: f32,
+    #[serde(default)]
+    loop_start: u32,
+    wrap_mode: String,
+    sprites: Vec<String>,
+}
+
+fn knight() -> String {
+    "Knight".into()
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WrapMode {
@@ -102,7 +124,34 @@ impl ClipLibrary {
                 frames,
             });
         }
+        let extra = path.with_extension("extra.json");
+        if extra.exists() {
+            lib.load_extra(&extra, bank).with_context(|| format!("{}", extra.display()))?;
+        }
         Ok(lib)
+    }
+
+    /// Hand-authored clips (`<Library>.extra.json` next to the exported library) built
+    /// from exported sprites by name: poses the game draws but never sequences into a
+    /// clip of its own (e.g. a seated breath or head turn).
+    fn load_extra(&mut self, path: &Path, bank: &SpriteBank) -> Result<()> {
+        let raw: ExtraFile = read_json(path)?;
+        for c in raw.clips {
+            if self.by_name.contains_key(&c.name) {
+                bail!("extra clip '{}' already exists", c.name);
+            }
+            let frames = c
+                .sprites
+                .iter()
+                .map(|s| {
+                    let key = bank.sprite_key(&c.collection, s).with_context(|| format!("clip '{}': no sprite '{s}' in {}", c.name, c.collection))?;
+                    Ok(ClipFrame { sprite: Some(key), event: None })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            self.by_name.insert(c.name.clone(), ClipId(self.clips.len() as u16));
+            self.clips.push(Clip { name: c.name, fps: c.fps.max(0.001), loop_start: c.loop_start as usize, wrap: WrapMode::parse(&c.wrap_mode), frames });
+        }
+        Ok(())
     }
 
     pub fn id(&self, name: &str) -> Option<ClipId> {

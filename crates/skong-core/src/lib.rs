@@ -15,6 +15,7 @@ pub mod discovery;
 pub mod effects;
 pub mod fxraster;
 pub mod geom;
+pub mod life;
 pub mod locomotion;
 pub mod nav;
 pub mod props;

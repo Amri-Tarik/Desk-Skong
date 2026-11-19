@@ -1,0 +1,13 @@
+{
+  "$comment": "Hand-authored Knight clips built from exported sprites (by name) that the game draws but never sequences on their own. Merged into the Knight library at load (ClipLibrary::load). Used by the seated life (acts.json `lives`) and to keep long holds from looking frozen.",
+  "clips": [
+    { "name": "Sit Glance",          "fps": 8,  "wrap_mode": "Once", "sprites": ["sit0003", "sit0003", "sit0003", "sit0003", "sit0003", "sit0003", "sit0003", "sit0003", "sit0003", "sit0003", "sit0002"] },
+    { "name": "Sit Look Down",       "fps": 8,  "wrap_mode": "Once", "sprites": ["sit0000", "sit0000", "sit0000", "sit0000", "sit0000", "sit0000", "sit0000", "sit0000", "sit0000", "sit0000", "sit0000", "sit0000", "sit0002"] },
+    { "name": "Sit Lean Idle",       "fps": 4,  "wrap_mode": "Loop", "sprites": ["sit_lean0002", "sit_lean0002", "sit_lean0002", "sit_lean0002", "sit_lean0002", "sit_lean0002", "sit_lean0002", "sit_lean0002", "sit_lean0002", "sit_lean0002", "sit_lean0003", "sit_lean0003", "sit_lean0003", "sit_lean0003"] },
+    { "name": "Sit Lean End",        "fps": 10, "wrap_mode": "Once", "sprites": ["sit_lean0001", "sit_lean0000", "sit0002"] },
+    { "name": "Sit Nod",             "fps": 6,  "wrap_mode": "Once", "sprites": ["wake0001", "wake0000", "wake0000", "wake0000", "wake0000", "wake0001", "sit0002"] },
+    { "name": "Sitting Asleep Breathe", "fps": 1, "wrap_mode": "Loop", "sprites": ["wake0000", "wake0000", "wake0000", "wake0000", "wake0000", "wake0000", "wake0000", "wake0001"] },
+    { "name": "Prostrate Breathe",   "fps": 4,  "wrap_mode": "Loop", "sprites": ["wake_up_ground0000", "wake_up_ground0000", "wake_up_ground0000", "wake_up_ground0000", "wake_up_ground0000", "wake_up_ground0000", "wake_up_ground0001", "wake_up_ground0002", "wake_up_ground0003", "wake_up_ground0002", "wake_up_ground0001"] },
+    { "name": "Look At King Idle",   "fps": 2,  "wrap_mode": "Loop", "sprites": ["knight_challenge0001", "knight_challenge0001", "knight_challenge0001", "knight_challenge0001", "knight_challenge0001", "knight_challenge0001", "knight_challenge0000", "knight_challenge0000"] }
+  ]
+}

@@ -1,5 +1,19 @@
 {
   "$comment": "Behaviour choreographies built from Knight clips. Each step plays a clip; looping clips run for `hold` seconds (random in [min,max]); one-shot clips play `repeat` times (default once) then hold their last frame for `hold` seconds if given. `until` ends a step on an external signal instead (e.g. 'woken'). `move` walks with a gait during the step (`turn`: clip played when the walk turns around). Steps ending on a `…ToIdle` clip hand over to idle without a snap. `interruptible: false` protects a step from being cut short. Tags feed the mood-driven AI; `requires` is checked before starting. `requires` is grounded | any | seat (perched on a window edge or at a bench; sitting clips are a front-facing pose with dangling legs). Weight 0 = never picked at random: the AI starts acts by name for a reason (watching activity, cursor above, mapping a new window, settling down, ...). Only `fidget` acts keep a small weight for genuine idle.",
+  "lives": {
+    "seated": {
+      "base": "Sit Idle",
+      "states": [
+        { "name": "idle", "weight": 4.0, "steps": [ { "clip": "Sit Idle", "hold": [1.5, 4.0] } ] },
+        { "name": "glance", "weight": 2.0, "curious": 1.0, "steps": [ { "clip": "Sit Glance" }, { "clip": "Sit Idle", "hold": [0.5, 1.5] } ] },
+        { "name": "look_down", "weight": 1.0, "tired": 0.5, "steps": [ { "clip": "Sit Look Down" } ] },
+        { "name": "lean", "weight": 1.5, "tired": 0.3, "steps": [ { "clip": "Sit Lean" }, { "clip": "Sit Lean Idle", "hold": [3.0, 8.0] }, { "clip": "Sit Lean End" } ] },
+        { "name": "map", "weight": 1.0, "curious": 2.0, "tired": -0.7, "steps": [ { "clip": "Sit Map Open" }, { "clip": "Map Update", "repeat": [1, 2] }, { "clip": "Sit Map Close" } ] },
+        { "name": "nod", "weight": 0.3, "tired": 4.0, "steps": [ { "clip": "Sit Nod" } ] },
+        { "name": "doze", "weight": 0.08, "tired": 8.0, "curious": -0.5, "steps": [ { "clip": "Sit Fall Asleep" }, { "clip": "Sitting Asleep Breathe", "hold": [6.0, 18.0], "until": "woken" }, { "clip": "Wake To Sit", "interruptible": false } ] }
+      ]
+    }
+  },
   "acts": [
     {
       "name": "look_up",
@@ -60,10 +74,10 @@
           "clip": "Sit"
         },
         {
-          "clip": "Sit Idle",
+          "life": "seated",
           "hold": [
-            6.0,
-            20.0
+            12.0,
+            40.0
           ]
         },
         {
@@ -85,10 +99,11 @@
           "clip": "Sit"
         },
         {
-          "clip": "Sit Lean",
+          "life": "seated",
+          "bias": { "lean": 4.0 },
           "hold": [
-            5.0,
-            15.0
+            10.0,
+            30.0
           ]
         },
         {
