@@ -128,6 +128,8 @@ struct Pet {
     seat_y: Option<f32>,
     benches: Benches,
     fx: Fx,
+    /// Seconds a walking act step has been pushing without moving.
+    act_blocked: f32,
     /// Debug (`--fx-test`): seconds since start, drives a scripted superdash.
     fx_test: Option<f32>,
     brain: Brain,
@@ -226,6 +228,7 @@ pub fn run(args: &Args) -> Result<()> {
         seat_y: None,
         benches,
         fx,
+        act_blocked: 0.0,
         fx_test: args.fx_test.then_some(0.0),
         brain,
         nav: GraphNavigator::new(),
@@ -335,8 +338,21 @@ impl Pet {
             }
         }
         if let Some(g) = self.act.as_ref().and_then(|p| p.gait(&d.acts)) {
+            // Walking acts (map stroll, lantern patrol) pace their ledge: turn around at its
+            // ends and when blocked, instead of pushing into walls or walking off.
+            let near_end = self.ch.support.as_ref().is_some_and(|s| {
+                let margin = self.ch.size.x;
+                (self.ch.facing == Side::Left && self.ch.pos.x - s.x0 < margin) || (self.ch.facing == Side::Right && s.x1 - self.ch.pos.x < margin)
+            });
+            self.act_blocked = if self.ch.is_grounded() && self.ch.vel.x.abs() < 5.0 { self.act_blocked + dt } else { 0.0 };
+            if near_end || self.act_blocked > 0.25 {
+                self.ch.facing = self.ch.facing.opposite();
+                self.act_blocked = 0.0;
+            }
             input.gait = g;
             input.x = self.ch.facing.sign();
+        } else {
+            self.act_blocked = 0.0;
         }
 
         // 3. Physics (suspended while the user holds the knight).
