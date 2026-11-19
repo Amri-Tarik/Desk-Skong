@@ -1,0 +1,33 @@
+{
+  "$comment": "Battle stakes (loaded after acts.json): deaths (hazard variants tagged `hazard` for later), respawns, reclaiming the Shade, spells and nail arts. All weight 0: the brain starts them by name for a reason. Effects for these acts are spawned per step by the app (crates/skong/src/stakes.rs).",
+  "acts": [
+    { "name": "death", "tags": ["fight", "hurt", "death"], "requires": "grounded", "weight": 0.0,
+      "steps": [ { "clip": "Death", "hold": [1.0, 1.0], "interruptible": false } ] },
+    { "name": "spike_death", "tags": ["hazard", "hurt", "death"], "requires": "grounded", "weight": 0.0,
+      "steps": [ { "clip": "Spike Death", "hold": [0.8, 0.8], "interruptible": false } ] },
+    { "name": "acid_death", "tags": ["hazard", "hurt", "death"], "requires": "grounded", "weight": 0.0,
+      "steps": [ { "clip": "Acid Death", "hold": [1.2, 1.2], "interruptible": false } ] },
+    { "name": "hazard_respawn", "tags": ["respawn", "hurt", "sad"], "requires": "grounded", "weight": 0.0,
+      "steps": [ { "clip": "Hazard Respawn", "interruptible": false } ] },
+    { "name": "respawn_wake", "tags": ["respawn", "seat", "sad"], "requires": "seat", "weight": 0.0,
+      "steps": [ { "clip": "Respawn Wake", "interruptible": false }, { "clip": "Sit Idle", "hold": [1.5, 2.5] }, { "clip": "Get Off" } ] },
+    { "name": "collect_happy", "tags": ["playful", "bold"], "requires": "grounded", "weight": 0.0, "cooldown": 30,
+      "steps": [ { "clip": "Collect Normal 1" }, { "clip": "Collect Normal 2" }, { "clip": "Collect Normal 3" } ] },
+    { "name": "reclaim_shade", "tags": ["fight", "bold"], "requires": "grounded", "weight": 0.0,
+      "steps": [ { "clip": "Collect Shadow", "hold": [0.4, 0.4], "interruptible": false } ] },
+    { "name": "fireball", "tags": ["fight", "spell"], "requires": "grounded", "weight": 0.0,
+      "steps": [ { "clip": "Fireball Antic", "interruptible": false }, { "clip": "Fireball1 Cast", "interruptible": false } ] },
+    { "name": "scream", "tags": ["fight", "spell"], "requires": "grounded", "weight": 0.0,
+      "steps": [ { "clip": "Scream Start", "interruptible": false }, { "clip": "Scream", "hold": [0.5, 0.6], "interruptible": false }, { "clip": "Scream End" } ] },
+    { "name": "great_slash", "tags": ["fight", "nail_art"], "requires": "grounded", "weight": 0.0,
+      "steps": [ { "clip": "Idle", "hold": [0.5, 0.6], "interruptible": false }, { "clip": "NA Big Slash", "interruptible": false } ] },
+    { "name": "cyclone_slash", "tags": ["fight", "nail_art"], "requires": "grounded", "weight": 0.0,
+      "steps": [ { "clip": "NA Cyclone Start", "interruptible": false }, { "clip": "NA Cyclone", "hold": [0.9, 1.2], "interruptible": false }, { "clip": "NA Cyclone End" } ] },
+    { "name": "dash_slash", "tags": ["fight", "nail_art"], "requires": "grounded", "weight": 0.0,
+      "steps": [ { "clip": "NA Dash Slash", "move": "sprint", "interruptible": false } ] },
+    { "name": "thorns", "tags": ["fight", "hurt"], "requires": "grounded", "weight": 0.0,
+      "steps": [ { "clip": "Recoil", "hold": [0.25, 0.3], "interruptible": false } ] },
+    { "name": "focus_heal", "tags": ["calm", "hurt"], "requires": "grounded", "weight": 0.0, "cooldown": 20,
+      "steps": [ { "clip": "Focus", "hold": [0.9, 1.1] }, { "clip": "Focus Get", "hold": [0.8, 0.9], "interruptible": false }, { "clip": "Focus End" } ] }
+  ]
+}

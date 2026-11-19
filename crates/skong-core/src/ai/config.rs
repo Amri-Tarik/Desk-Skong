@@ -221,6 +221,8 @@ pub struct BrainConfig {
     pub urgent: f32,
     pub needs: NeedRates,
     pub battle: BattleConfig,
+    /// Death, the Shade, Geo and spells.
+    pub stakes: super::stakes::StakesConfig,
     pub companion: CompanionConfig,
     pub watch: WatchConfig,
     /// Seconds of plain standing between purposeful actions when idle.
@@ -251,6 +253,7 @@ impl Default for BrainConfig {
             urgent: 1.0,
             needs: NeedRates::default(),
             battle: BattleConfig::default(),
+            stakes: super::stakes::StakesConfig::default(),
             companion: CompanionConfig::default(),
             watch: WatchConfig::default(),
             idle_gap: [1.0, 3.0],

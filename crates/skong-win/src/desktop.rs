@@ -83,6 +83,19 @@ pub fn enable_per_monitor_dpi() {
     let _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
 }
 
+/// A window that left the snapshot was really closed (destroyed, or hidden by its app
+/// like a close-to-tray), not minimized or cloaked (virtual desktop switch).
+pub fn window_closed(id: u64) -> bool {
+    let hwnd = HWND(id as usize as *mut core::ffi::c_void);
+    // SAFETY: plain queries on a window handle that may no longer exist.
+    unsafe {
+        if !windows::Win32::UI::WindowsAndMessaging::IsWindow(Some(hwnd)).as_bool() {
+            return true;
+        }
+        !IsWindowVisible(hwnd).as_bool() && !IsIconic(hwnd).as_bool() && !is_cloaked(hwnd)
+    }
+}
+
 /// Request a re-enumeration on the next [`DesktopWatcher::poll`]. Cheap and thread-safe.
 pub fn mark_dirty() {
     EVENT_SEQ.fetch_add(1, Ordering::Relaxed);

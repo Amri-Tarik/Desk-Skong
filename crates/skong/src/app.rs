@@ -41,6 +41,7 @@ use crate::overlay::PetOverlay;
 use skong_ipc::Command;
 
 mod panel;
+mod stakes;
 
 const HOTKEYS: &[(i32, vk::VIRTUAL_KEY, Command)] = &[
     (1, vk::VK_K, Command::ToggleManual),
@@ -177,6 +178,8 @@ struct Pet {
     /// Control panels (named pipe) and the terrain / nav debug overlay.
     control: ControlServer,
     overlay: PetOverlay,
+    /// Death, the Shade, Geo and spell effects.
+    stakes: stakes::Stakes,
 }
 
 pub fn run(args: &Args) -> Result<()> {
@@ -233,6 +236,7 @@ pub fn run(args: &Args) -> Result<()> {
     navb.reset(&terrain, &ch);
 
     let mut pet = Pet {
+        stakes: stakes::Stakes::new(&args.data, settings.stakes.clone(), args.capturable, &brain.config().stakes),
         data,
         settings,
         skin,
@@ -354,6 +358,7 @@ impl Pet {
         let games_changed = self.games.update(self.watcher.snapshot());
         if games_changed {
             self.benches.hide_on(&self.games.game_monitors);
+            self.stakes.hide_on(&self.games.game_monitors);
         }
         if self.content.poll(self.watcher.snapshot(), desk_changed) || desk_changed || games_changed {
             let mut new = self.content.terrain(self.watcher.snapshot(), &self.topts);
@@ -478,6 +483,7 @@ impl Pet {
             self.brain_events.drain(..128);
         }
 
+        self.stakes_tick(dt)?;
         self.draw()?;
         self.trigger_fx();
         let origin = self.knight_origin();
@@ -659,6 +665,7 @@ impl Pet {
     }
 
     fn think(&mut self, dt: f32) -> MoveInput {
+        self.stakes_sense();
         let seat = self.benches.seat_here(&self.ch, &self.terrain);
         let benches: Vec<Vec2> = self.benches.placed.iter().map(|(b, _)| b.pos).collect();
         let (left, right) = input::mouse_buttons();
@@ -686,6 +693,7 @@ impl Pet {
         let intent = self.brain.tick(&percepts, &mut self.nav);
         self.pokes.clear();
         self.brain_events.clear();
+        self.stakes_events(&intent.stakes);
         if intent.debug != self.brain_debug {
             self.brain_debug = intent.debug;
         }
@@ -842,6 +850,7 @@ impl Pet {
             }
             Command::ClearBenches => self.benches.clear(),
             Command::Quit => return Ok(Flow::Quit),
+            Command::Stakes(c) => self.apply_stakes(c),
             Command::SetManual(_) | Command::ToggleVision | Command::ToggleDebugOverlay | Command::SetOverlayLayers(_) | Command::OpenPanel => return self.apply_panel(c),
         }
         Ok(Flow::Continue)

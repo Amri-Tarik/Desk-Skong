@@ -1,0 +1,316 @@
+{
+  "name": "Geo",
+  "clips": [
+    {
+      "name": "Small Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Geo",
+          "sprite_id": 3,
+          "sprite": "coin0000"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 9,
+          "sprite": "coin0001"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 10,
+          "sprite": "coin0002"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 0,
+          "sprite": "coin0003"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 2,
+          "sprite": "coin0004"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 6,
+          "sprite": "coin0005"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 8,
+          "sprite": "coin0006"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 7,
+          "sprite": "coin0007"
+        }
+      ]
+    },
+    {
+      "name": "Small Air",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Geo",
+          "sprite_id": 1,
+          "sprite": "coin_air000"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 11,
+          "sprite": "coin_air001"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 4,
+          "sprite": "coin_air002"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 15,
+          "sprite": "coin_air003"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 5,
+          "sprite": "coin_air004"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 13,
+          "sprite": "coin_air005"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 12,
+          "sprite": "coin_air006"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 14,
+          "sprite": "coin_air007"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 16,
+          "sprite": "coin_air008"
+        }
+      ]
+    },
+    {
+      "name": "Med Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Geo",
+          "sprite_id": 19,
+          "sprite": "big_coin0000"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 21,
+          "sprite": "big_coin0001"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 18,
+          "sprite": "big_coin0002"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 24,
+          "sprite": "big_coin0003"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 26,
+          "sprite": "big_coin0004"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 29,
+          "sprite": "big_coin0005"
+        }
+      ]
+    },
+    {
+      "name": "Med Air",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Geo",
+          "sprite_id": 28,
+          "sprite": "big_coin_air000"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 22,
+          "sprite": "big_coin_air001"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 27,
+          "sprite": "big_coin_air002"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 30,
+          "sprite": "big_coin_air003"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 25,
+          "sprite": "big_coin_air004"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 20,
+          "sprite": "big_coin_air005"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 17,
+          "sprite": "big_coin_air006"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 23,
+          "sprite": "big_coin_air007"
+        }
+      ]
+    },
+    {
+      "name": "Large Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Geo",
+          "sprite_id": 46,
+          "sprite": "gold_coin0000"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 38,
+          "sprite": "gold_coin0001"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 39,
+          "sprite": "gold_coin0002"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 44,
+          "sprite": "gold_coin0003"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 37,
+          "sprite": "gold_coin0004"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 36,
+          "sprite": "gold_coin0005"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 43,
+          "sprite": "gold_coin0006"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 45,
+          "sprite": "gold_coin0007"
+        }
+      ]
+    },
+    {
+      "name": "Large Air",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Geo",
+          "sprite_id": 40,
+          "sprite": "gold_coin_air000"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 41,
+          "sprite": "gold_coin_air001"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 33,
+          "sprite": "gold_coin_air002"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 42,
+          "sprite": "gold_coin_air003"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 35,
+          "sprite": "gold_coin_air004"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 31,
+          "sprite": "gold_coin_air005"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 32,
+          "sprite": "gold_coin_air006"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 34,
+          "sprite": "gold_coin_air007"
+        }
+      ]
+    },
+    {
+      "name": "Get",
+      "fps": 25,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Geo",
+          "sprite_id": 50,
+          "sprite": "coinget_01"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 49,
+          "sprite": "coinget_02"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 47,
+          "sprite": "coinget_03"
+        },
+        {
+          "collection": "Geo",
+          "sprite_id": 48,
+          "sprite": "coinget_04"
+        }
+      ]
+    }
+  ]
+}
