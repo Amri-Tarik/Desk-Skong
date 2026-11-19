@@ -32,9 +32,11 @@ pub struct Args {
     pub sit_test: bool,
     pub fx_test: bool,
     pub goto_test: bool,
+    /// `--visit NAME|any`: invite a visitor right after start (debug).
+    pub visit: Option<String>,
 }
 
-const USAGE: &str = "usage: skong [--browse] [--capturable] [--panel|--no-panel] [--no-vision] [--capture-stats] [--data DIR] [--skins DIR] [--skin NAME] [--scale F] [--clip NAME]";
+const USAGE: &str = "usage: skong [--browse] [--capturable] [--panel|--no-panel] [--no-vision] [--capture-stats] [--data DIR] [--skins DIR] [--skin NAME] [--scale F] [--clip NAME] [--visit NAME|any]";
 
 fn parse_args() -> Result<Args> {
     let mut a = Args {
@@ -50,6 +52,7 @@ fn parse_args() -> Result<Args> {
         sit_test: false,
         fx_test: false,
         goto_test: false,
+        visit: None,
     };
     let mut it = std::env::args().skip(1);
     while let Some(k) = it.next() {
@@ -69,6 +72,7 @@ fn parse_args() -> Result<Args> {
             "--sit-test" => a.sit_test = true,
             "--fx-test" => a.fx_test = true,
             "--goto-test" => a.goto_test = true,
+            "--visit" => a.visit = Some(v()?),
             "-h" | "--help" => {
                 println!("{USAGE}");
                 std::process::exit(0);

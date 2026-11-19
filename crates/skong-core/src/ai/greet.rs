@@ -243,11 +243,23 @@ fn startable(ctx: &Ctx, alternatives: &str) -> Option<ActWait> {
         .map(ActWait::new)
 }
 
-/// Where to stand: beside the visitor on the knight's side of them.
+/// Where to stand: beside the visitor on the knight's side of them, on their ledge (the
+/// other side when the ledge ends too soon).
 fn stand_point(ctx: &Ctx, v: &Visitor) -> Vec2 {
     let k = ctx.p.knight;
+    let off = stand_off(ctx, v);
     let side = if k.pos.x >= v.pos.x { 1.0 } else { -1.0 };
-    Vec2::new(v.pos.x + side * stand_off(ctx, v), v.pos.y)
+    let ledge = ctx.p.terrain.ledges.iter().filter(|l| (l.y - v.pos.y).abs() < 2.0 && l.x0 - 1.0 <= v.pos.x && v.pos.x <= l.x1 + 1.0).max_by(|a, b| (a.x1 - a.x0).total_cmp(&(b.x1 - b.x0)));
+    let margin = 12.0;
+    let x = match ledge {
+        Some(l) => {
+            let fits = |s: f32| (l.x0 + margin..=l.x1 - margin).contains(&(v.pos.x + s * off));
+            let s = if fits(side) || !fits(-side) { side } else { -side };
+            (v.pos.x + s * off).clamp(l.x0 + margin, (l.x1 - margin).max(l.x0 + margin))
+        }
+        None => v.pos.x + side * off,
+    };
+    Vec2::new(x, v.pos.y)
 }
 
 fn stand_off(ctx: &Ctx, v: &Visitor) -> f32 {

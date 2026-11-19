@@ -268,6 +268,9 @@ pub fn run(args: &Args) -> Result<()> {
         visitors: None,
     };
     pet.visitors = pet.load_visitors(args.capturable);
+    if let (Some(v), Some(name)) = (pet.visitors.as_mut(), &args.visit) {
+        v.invite((name != "any").then(|| name.clone()));
+    }
     pet.control.set_hello(pet.hello());
 
     pet.benches.capturable = args.capturable;

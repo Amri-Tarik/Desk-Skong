@@ -206,7 +206,10 @@ impl Visitors {
             knight_busy: w.knight_busy,
         };
         let due = self.sched.tick(dt, &cond, &mut self.rng);
-        if let Some(name) = self.invited.take() {
+        // Invitations wait for the nav graph (placement must be reachable).
+        if w.graph.is_some()
+            && let Some(name) = self.invited.take()
+        {
             if !self.present() {
                 self.spawn(name.as_deref(), w, fx);
             }
@@ -298,7 +301,11 @@ impl Visitors {
         let knight = w.knight;
         let mut reachable = |p: Vec2| w.graph.is_none_or(|g| g.plan(knight, NavGoal::Point(p), TravelStyle::Hurry).is_some());
         let arrive = self.set.defs[def].arrive;
-        let Some(at) = plan_placement(arrive, &footings, knight.pos, &w.desk.monitors, &mut self.rng, &mut reachable) else {
+        let ledges: Vec<Footing> = w.terrain.ledges.iter().map(|l| Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner }).collect();
+        // Nav surfaces first (reachable by construction), raw ledges as a fallback.
+        let at = plan_placement(arrive, &footings, knight.pos, &w.desk.monitors, &mut self.rng, &mut reachable)
+            .or_else(|| plan_placement(arrive, &ledges, knight.pos, &w.desk.monitors, &mut self.rng, &mut reachable));
+        let Some(at) = at else {
             log::info!("visitor: no good spot for {} right now", self.set.defs[def].display);
             return;
         };
