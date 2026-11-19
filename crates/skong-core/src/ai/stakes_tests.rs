@@ -580,3 +580,13 @@ fn coins_he_may_not_go_for_dont_restart_loot_every_tick() {
     assert!(switches <= 2, "behaviour churned {switches} times");
     assert_ne!(sim.brain.behaviour(), BehaviourKind::Loot);
 }
+
+#[test]
+fn the_shade_comes_first_even_mid_fight_or_loot() {
+    // Lore: his Shade (his Geo, his soul) is priority number one, whatever he's doing.
+    let mut sim = Sim::new();
+    sim.coins = vec![Vec2::new(1300.0, FLOOR)];
+    assert!(sim.run_until(1.0, |s| s.brain.behaviour() == BehaviourKind::Loot));
+    sim.fixed_shade = Some(ShadeSense { pos: Vec2::new(400.0, FLOOR - 40.0), vulnerable: true, fighting: false, geo: 50 });
+    assert!(sim.run_until(1.0, |s| s.brain.behaviour() == BehaviourKind::ShadeHunt), "hunts the Shade over loot");
+}

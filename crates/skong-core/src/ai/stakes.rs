@@ -198,12 +198,12 @@ impl Brain {
         // Nothing interrupts dying (`dying` is cleared when the respawn is over).
         let dead = if st.pending_death.is_some() || (st.dying && matches!(self.active, Active::Dead(_))) { 2.0 } else { 0.0 };
 
+        // The Shade is priority number one, whatever he's doing (lore: his Geo, his soul).
+        // Only a fullscreen app holds it back, and a short breather after it beat him (so
+        // he doesn't throw himself at it in a loop).
         let hunt = match st.sense.shade {
-            Some(_) if st.force_hunt => 1.1,
-            Some(sh) if self.now >= st.shade_ready_at && !s.fullscreen && e.hurt < 0.25 && e.startle < 0.3 && m.needs.energy > 0.35 => {
-                let pers = m.personality;
-                (0.3 + 0.35 * pers.boldness + 0.25 * e.excitement + 0.15 * (sh.geo as f32 / 200.0).min(1.0)).min(0.85)
-            }
+            Some(_) if st.force_hunt => 1.6,
+            Some(_) if self.now >= st.shade_ready_at && !s.fullscreen => 1.5,
             _ => 0.0,
         };
 
