@@ -1108,3 +1108,4 @@ fn rested_calm_knight_leaves_found_seats_alone() {
     let kinds = sim.run(20.0);
     assert!(!kinds.contains(&BehaviourKind::Visit));
 }
+

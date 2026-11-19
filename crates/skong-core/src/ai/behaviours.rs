@@ -19,7 +19,7 @@ use super::navigator::{NavStatus, Navigator};
 use super::needs::Mind;
 use super::percept::{Percepts, Senses};
 use super::places::{DiscoveryEvent, Visit, favourite_bench};
-use super::repertoire::Repertoire;
+use super::repertoire::{ActInfo, Repertoire};
 use super::rng::Rng;
 use super::spots::{self, View};
 use super::watch::WatchSpot;
@@ -27,6 +27,33 @@ use super::death::Dead;
 use super::shade_hunt::{Loot, ShadeHunt};
 use super::stakes::StakesMind;
 use super::{Intent, Motion};
+
+/// Priority tier of a behaviour. The best eligible behaviour of the highest non-empty
+/// tier wins, and a higher tier preempts a lower one at once (no commitment wait);
+/// within a tier the usual utility / commitment / hysteresis rules apply.
+/// Ordered lowest to highest.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Tier {
+    /// Pastimes: keeping company, watching, exploring, visiting, sitting, fidgets.
+    Ambient,
+    /// A genuinely critical need (exhausted, badly hurt).
+    Needs,
+    /// Something worth dropping everything for: loot, the Shade, a fight, an NPC.
+    Engagement,
+    /// Safety and fate: fleeing, hiding, knocked out, dying.
+    Urgent,
+}
+
+impl Tier {
+    pub fn label(self) -> &'static str {
+        match self {
+            Tier::Ambient => "ambient",
+            Tier::Needs => "needs",
+            Tier::Engagement => "engagement",
+            Tier::Urgent => "urgent",
+        }
+    }
+}
 
 /// What the knight is up to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -107,6 +134,22 @@ impl BehaviourKind {
             BehaviourKind::ShadeHunt => "shade hunt",
             BehaviourKind::Loot => "loot",
             BehaviourKind::Visit => "visit",
+        }
+    }
+
+    /// Base priority tier. The brain refines it by context (see `Brain::tier_of`): Rest,
+    /// Nap and Recover only reach [`Tier::Needs`] when the need is critical, and Loot /
+    /// ShadeHunt step down while a critical need waits, unless the prize is right there.
+    ///
+    /// Extension point: a new engagement (e.g. the NPC `Greet`) is one line here.
+    pub fn tier(self) -> Tier {
+        match self {
+            BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead => Tier::Urgent,
+            BehaviourKind::Battle | BehaviourKind::ShadeHunt | BehaviourKind::Loot | BehaviourKind::Greet => Tier::Engagement,
+            BehaviourKind::Nap | BehaviourKind::Rest | BehaviourKind::Recover => Tier::Needs,
+            BehaviourKind::Idle | BehaviourKind::Companion | BehaviourKind::Watch | BehaviourKind::Explore | BehaviourKind::Ride | BehaviourKind::Visit => {
+                Tier::Ambient
+            }
         }
     }
 
@@ -991,5 +1034,18 @@ impl Active {
             Active::Loot(b) => b.reason(),
             Active::Visit(b) => b.reason(),
         }
+    }
+}
+
+/// Short act that ends `act` gracefully when another behaviour takes over (getting up from
+/// a seat, lowering the head, turning back from the screen) instead of snapping to idle.
+pub(crate) fn exit_act_for(act: &ActInfo) -> Option<&'static str> {
+    match act.name.as_str() {
+        "look_up" => Some("look_up_end"),
+        "look_down" => Some("look_down_end"),
+        "gaze_into_screen" => Some("turn_from_screen"),
+        "map_stroll" => Some("put_map_away"),
+        _ if act.requires == crate::acts::Requirement::Seat => Some("get_up"),
+        _ => None,
     }
 }

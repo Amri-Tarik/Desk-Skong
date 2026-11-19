@@ -435,3 +435,46 @@ fn a_shade_with_no_route_under_it_is_not_chased() {
     // It drops the idea at once (never travels there) and doesn't come back to it soon.
     assert!(!sim.run_until(60.0, |s| s.brain.behaviour() == BehaviourKind::ShadeHunt || s.nav.goal.is_some_and(|g| matches!(g, NavGoal::Point(p) if (p.x - 1300.0).abs() < 2.0))));
 }
+
+// --- Priority tiers -------------------------------------------------------------------
+
+#[test]
+fn loose_geo_preempts_ambient_behaviour_at_once() {
+    let mut sim = Sim::new();
+    sim.run_until(8.0, |_| false);
+    let before = sim.brain.behaviour();
+    assert_eq!(before.tier(), crate::ai::Tier::Ambient, "settled into something ambient: {before:?}");
+    sim.coins = vec![Vec2::new(1300.0, FLOOR)];
+    // Within one think interval (+ a tick), no commitment period applies.
+    assert!(sim.run_until(0.4, |s| s.brain.behaviour() == BehaviourKind::Loot), "loot preempts {before:?}");
+}
+
+#[test]
+fn an_exhausted_knight_leaves_far_geo_for_later() {
+    let mut sim = Sim::new();
+    sim.brain.mind_mut().needs.energy = 0.05;
+    sim.coins = vec![Vec2::new(1850.0, FLOOR)];
+    sim.run_until(3.0, |_| false);
+    assert_ne!(sim.brain.behaviour(), BehaviourKind::Loot, "a far coin waits while he's exhausted");
+}
+
+#[test]
+fn an_exhausted_knight_still_grabs_a_coin_at_his_feet() {
+    let mut sim = Sim::new();
+    sim.brain.mind_mut().needs.energy = 0.05;
+    sim.coins = vec![Vec2::new(sim.knight.pos.x + 120.0, FLOOR)];
+    assert!(sim.run_until(1.0, |s| s.brain.behaviour() == BehaviourKind::Loot), "a coin right there beats resting");
+}
+
+#[test]
+fn urgent_reactions_beat_engagements() {
+    let mut sim = Sim::new();
+    sim.coins = (0..6).map(|i| Vec2::new(1400.0 + 60.0 * i as f32, FLOOR)).collect();
+    assert!(sim.run_until(3.0, |s| s.brain.behaviour() == BehaviourKind::Loot));
+    let at = sim.knight.body().center();
+    for _ in 0..3 {
+        sim.pokes.push(Poke::Click { pos: at });
+        sim.step();
+    }
+    assert!(sim.run_until(1.0, |s| s.brain.behaviour() == BehaviourKind::Flee), "three quick pokes make him flee mid-loot");
+}

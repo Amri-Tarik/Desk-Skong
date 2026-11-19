@@ -747,6 +747,13 @@ impl Pet {
         if intent.cancel_act && self.act.as_ref().is_some_and(|p| p.interruptible(&d.acts)) {
             self.act = None;
         }
+        // A higher-priority behaviour took over: finish the pose gracefully (get up from the
+        // seat, lower the map…) instead of snapping out of the act. Seated exits keep the seat.
+        if let Some(id) = intent.exit_act
+            && self.act.as_ref().is_some_and(|p| p.interruptible(&d.acts))
+        {
+            self.act = Some(ActPlayer::start(&d.acts, &d.lib, &mut self.anim, id, seed()));
+        }
         if let Some(sig) = intent.signal
             && let Some(p) = self.act.as_mut()
         {
