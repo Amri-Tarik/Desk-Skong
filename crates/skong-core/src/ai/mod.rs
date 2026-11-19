@@ -33,12 +33,13 @@ mod battle;
 mod behaviours;
 mod companion;
 mod config;
+mod greet;
 mod interest;
 mod navigator;
 mod needs;
 mod percept;
 mod repertoire;
-mod rng;
+pub mod rng;
 mod spots;
 mod watch;
 #[cfg(test)]
@@ -50,6 +51,7 @@ pub use activity::{Activity, ActivitySpot, ActivityTracker, QUIET, TrackedSpot};
 pub use battle::{BattleScore, Outcome};
 pub use behaviours::BehaviourKind;
 pub use config::{BattleConfig, BrainConfig, CompanionConfig, NeedRates, Personality, WatchConfig};
+pub use greet::{STAND_OFF_UNITS, Visitor, VisitorState};
 pub use interest::{InterestMap, Poi, PoiKey, PoiKind, PoiTarget, ScoredPoi};
 pub use navigator::{GraphNavigator, NavStatus, Navigator};
 pub use needs::{Emotions, MOOD_TAGS, Mind, Needs};
@@ -128,6 +130,8 @@ pub struct Intent {
     pub reason: String,
     /// Plain standing with nothing in mind (a short gap between purposeful actions).
     pub waiting: bool,
+    /// Standing beside this visitor: start the conversation.
+    pub greet: Option<u32>,
     /// "reason | mood + needs | top-3 utilities", for an overlay.
     pub debug: String,
 }
@@ -189,6 +193,7 @@ pub struct Brain {
     exertion: f32,
     /// Times the knight caught himself pushing into a wall.
     stuck_count: u32,
+    visitors: greet::VisitorMemory,
 }
 
 impl Brain {
@@ -217,6 +222,7 @@ impl Brain {
             last_motion: Motion::Hold,
             exertion: 0.0,
             stuck_count: 0,
+            visitors: Default::default(),
             cfg,
         }
     }
@@ -263,6 +269,14 @@ impl Brain {
     /// Times the knight caught himself pushing into a wall.
     pub fn stuck_count(&self) -> u32 {
         self.stuck_count
+    }
+
+    /// The NPC visitors on screen (call before [`Self::tick`]; empty when none).
+    pub fn see_visitors(&mut self, visitors: Vec<Visitor>) {
+        for v in self.visitors.arrivals(&visitors) {
+            self.mind.excite(0.6 * v.excitement);
+        }
+        self.senses.visitors = visitors;
     }
 
     pub fn battle_score(&self) -> Option<BattleScore> {
@@ -467,7 +481,10 @@ impl Brain {
             None
         } else if best_u >= self.cfg.urgent && best_u > cur_u {
             Some(SwitchReason::Urgent)
-        } else if !current.exclusive() && self.since_switch >= self.cfg.min_commit && best_u > cur_u + self.cfg.hysteresis {
+        } else if !current.exclusive()
+            && (self.since_switch >= self.cfg.min_commit || best == BehaviourKind::Greet) // a visitor: drop everything
+            && best_u > cur_u + self.cfg.hysteresis
+        {
             Some(SwitchReason::Outscored)
         } else {
             None
@@ -490,6 +507,12 @@ impl Brain {
         if kind == BehaviourKind::KnockedOut {
             self.knocked_out = false;
         }
+        if let Active::Greet(g) = &self.active
+            && g.failed
+        {
+            self.visitors.snub(g.id, self.now + 90.0);
+        }
+        let visitor = self.visitors.target(&self.senses.visitors, p.knight.pos, self.now).cloned();
         nav.stop();
         let poi = self.best_poi.map(|s| s.poi);
         let spot = self.best_spot;
@@ -514,6 +537,10 @@ impl Brain {
             BehaviourKind::Ride => Active::Ride(Ride::start(&mut ctx)),
             BehaviourKind::KnockedOut => Active::KnockedOut(KnockedOut::start(&mut ctx)),
             BehaviourKind::Recover => Active::Recover(Recover::start(&mut ctx)),
+            BehaviourKind::Greet => match &visitor {
+                Some(v) => Active::Greet(Box::new(greet::Greet::start(&mut ctx, v))),
+                None => Active::Idle(Idle::start(&mut ctx)),
+            },
         };
         let kind = active.kind();
         log::debug!("brain: {} -> {} ({reason:?})", from.label(), kind.label());
@@ -690,6 +717,11 @@ impl Brain {
         let ride = if s.since_carried(self.now) < 0.6 && p.knight.is_grounded() { 0.65 + 0.2 * e.excitement } else { 0.0 };
         let knocked = if self.knocked_out { 1.25 } else { 0.0 };
         let recover = if e.hurt > 0.35 { (0.5 + 0.4 * e.hurt).min(0.9) } else { 0.0 };
+        // A visitor! Drop (almost) everything and go say hello.
+        let greet = match self.visitors.target(&s.visitors, p.knight.pos, self.now) {
+            Some(v) if !s.fullscreen => (0.86 + 0.08 * v.excitement + 0.04 * e.excitement).min(0.97),
+            _ => 0.0,
+        };
 
         let mut u = vec![
             (BehaviourKind::Idle, idle),
@@ -704,6 +736,7 @@ impl Brain {
             (BehaviourKind::Ride, ride),
             (BehaviourKind::KnockedOut, knocked),
             (BehaviourKind::Recover, recover),
+            (BehaviourKind::Greet, greet),
         ];
         // Stable sort: ties keep declaration order, so selection is deterministic.
         u.sort_by(|a, b| b.1.total_cmp(&a.1));

@@ -39,6 +39,7 @@ use crate::overlay::PetOverlay;
 use skong_ipc::Command;
 
 mod panel;
+mod visit;
 
 const HOTKEYS: &[(i32, vk::VIRTUAL_KEY, Command)] = &[
     (1, vk::VK_K, Command::ToggleManual),
@@ -63,6 +64,8 @@ const ID_CLEAR_BENCHES: u32 = 6;
 const ID_VISION: u32 = 7;
 const ID_OVERLAY: u32 = 8;
 const ID_PANEL: u32 = 10;
+const ID_INVITE: u32 = 11;
+const ID_DREAM: u32 = 12;
 const ID_QUIT: u32 = 9;
 const ID_SKIN0: u32 = 1000;
 const ID_SCALE0: u32 = 2000;
@@ -161,6 +164,8 @@ struct Pet {
     /// Control panels (named pipe) and the terrain / nav debug overlay.
     control: ControlServer,
     overlay: PetOverlay,
+    /// NPC visitors, speech bubbles, dream-nail thoughts (None if their data is missing).
+    visitors: Option<crate::npcs::Visitors>,
 }
 
 pub fn run(args: &Args) -> Result<()> {
@@ -254,7 +259,9 @@ pub fn run(args: &Args) -> Result<()> {
         anim_events: Vec::new(),
         control: ControlServer::start(),
         overlay: PetOverlay::default(),
+        visitors: None,
     };
+    pet.visitors = pet.load_visitors(args.capturable);
     pet.control.set_hello(pet.hello());
 
     pet.benches.capturable = args.capturable;
@@ -292,6 +299,7 @@ pub fn run(args: &Args) -> Result<()> {
         if last_housekeeping.elapsed().as_secs() >= 2 {
             last_housekeeping = Instant::now();
             pet.benches.raise_all();
+            pet.raise_visitors();
             pet.win.raise();
             log::debug!(
                 "knight at ({:.0},{:.0}) {:?} clip '{}' act {:?} | brain: {}",
@@ -405,6 +413,7 @@ impl Pet {
         self.draw()?;
         self.trigger_fx();
         let origin = self.knight_origin();
+        self.tick_visitors(dt);
         self.fx.update(dt, origin, self.ch.facing == Side::Right, self.ch.params.px_per_unit)
     }
 
@@ -500,7 +509,12 @@ impl Pet {
             local_hour: Some(monitor::local_hour()),
             dark: false,
         };
+        let visitors = self.visitor_percepts();
+        self.brain.see_visitors(visitors);
         let intent = self.brain.tick(&percepts, &mut self.nav);
+        if let Some(id) = intent.greet {
+            self.greet_visitor(id);
+        }
         self.pokes.clear();
         self.brain_events.clear();
         if intent.debug != self.brain_debug {
@@ -649,6 +663,7 @@ impl Pet {
                 self.place_bench(style, at);
             }
             Command::ClearBenches => self.benches.clear(),
+            Command::InviteVisitor | Command::DreamNail => return self.apply_visit(c),
             Command::Quit => return Ok(Flow::Quit),
             Command::SetManual(_) | Command::ToggleVision | Command::ToggleDebugOverlay | Command::SetOverlayLayers(_) | Command::OpenPanel => return self.apply_panel(c),
         }
@@ -678,6 +693,7 @@ impl Pet {
         self.look = look;
         self.fx.install_frames(fx_frames);
         self.drawn = None;
+        self.rescale_visitors();
         if let Err(e) = self.tray.set_icon(&tray_icon(&self.data, &self.look)) {
             log::warn!("tray icon: {e:#}");
         }
@@ -704,6 +720,8 @@ impl Pet {
             MenuItem::action(ID_CLEAR_BENCHES, "Remove benches"),
             MenuItem::Separator,
             MenuItem::action(ID_ACT, "Do something!"),
+            MenuItem::action(ID_INVITE, "Invite a visitor"),
+            MenuItem::action(ID_DREAM, "Dream-nail a window"),
             MenuItem::action(ID_RESPAWN, "Come here (respawn at cursor)"),
             MenuItem::check(ID_MANUAL, "Manual control", self.manual),
             MenuItem::check(ID_CLICK, "Click-through", self.settings.click_through),
@@ -729,6 +747,8 @@ impl Pet {
             ID_VISION => Command::ToggleVision,
             ID_OVERLAY => Command::ToggleDebugOverlay,
             ID_PANEL => Command::OpenPanel,
+            ID_INVITE => Command::InviteVisitor,
+            ID_DREAM => Command::DreamNail,
             i if (ID_BENCH0..ID_BENCH0 + self.benches.styles.len() as u32).contains(&i) => Command::PlaceBenchNearKnight((i - ID_BENCH0) as usize),
             i if (ID_SKIN0..ID_SKIN0 + self.data.skins.len() as u32).contains(&i) => Command::SetSkin((i - ID_SKIN0) as usize),
             i if (ID_SCALE0..ID_SCALE0 + SCALES.len() as u32).contains(&i) => Command::SetScale(SCALES[(i - ID_SCALE0) as usize].1),

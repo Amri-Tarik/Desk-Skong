@@ -696,6 +696,61 @@
           "clip": "Challenge End"
         }
       ]
+    },
+    {
+      "name": "dream_nail",
+      "tags": [
+        "curious",
+        "dream"
+      ],
+      "requires": "grounded",
+      "weight": 0.0,
+      "cooldown": 120,
+      "steps": [
+        {
+          "clip": "DN Start"
+        },
+        {
+          "clip": "DN Charge",
+          "hold": [
+            0.5,
+            0.9
+          ],
+          "interruptible": false
+        },
+        {
+          "clip": "DN Slash Antic",
+          "interruptible": false
+        },
+        {
+          "clip": "DN Slash",
+          "interruptible": false
+        }
+      ]
+    },
+    {
+      "name": "receive_map",
+      "tags": [
+        "calm",
+        "curious"
+      ],
+      "requires": "grounded",
+      "weight": 0.0,
+      "steps": [
+        {
+          "clip": "Map Open"
+        },
+        {
+          "clip": "Map Idle",
+          "hold": [
+            1.8,
+            2.8
+          ]
+        },
+        {
+          "clip": "Map Away"
+        }
+      ]
     }
   ]
 }

@@ -1,0 +1,180 @@
+{
+  "$comment": "NPC visitors. Clips come from the exported vanilla libraries in data/hk/animations (NPC art is always vanilla: skins/Vanilla). `faces`: left|right (side-view art, mirrored to face the knight) or front (never mirrored; use talk/talk_right for direction). `arrive`: walk (in from the knight's monitor edge along the bottom), perch (sitting on a window edge), portal (steps out of a dream portal anywhere on the desktop), drop (falls out of a portal). `leave`: walk|fade|portal. `origin_above_feet` (game units) overrides the feet line measured from the idle frame (perched visitors: the seat line). `stand_off`: where the knight stands to talk (game units from the visitor). Lines are plain strings or {say, react}; `react` names knight acts from acts.json, `a|b` = first one that can start. Placeholders: {title} (a visible window title), {app} (a running app), {daypart}. `dream`: the knight's dream-nail thoughts per window (match = lowercase substrings of process name or title; an empty match is the generic pool). All lines are original writing.",
+  "visits": {
+    "enabled": true,
+    "first": [420, 1200],
+    "gap": [600, 2400],
+    "busy_keys_per_sec": 2.5,
+    "away_secs": 90,
+    "retry": 20
+  },
+  "npcs": [
+    {
+      "name": "cornifer",
+      "display": "Cornifer",
+      "library": "Mapper",
+      "faces": "front",
+      "clips": { "idle": "Idle", "talk": "Talk L", "talk_right": "Talk R", "talk_end": "Talk L End", "talk_end_right": "Talk R End" },
+      "arrive": "portal",
+      "leave": "portal",
+      "stay": [120, 240],
+      "stand_off": 2.4,
+      "excitement": 1.0,
+      "idle_lines": ["Hmm hm hmmm...", "Hm-hm, hm-hmm, la-la...", "Now, where does this ledge go...", "Hmmm-hm. A little more ink here..."],
+      "idle_every": [9, 18],
+      "greet_react": "look_up",
+      "conversations": [
+        [
+          { "say": "Oh! A fellow explorer, all the way up here!", "react": "look_up" },
+          "I've been charting this {app} country all {daypart}. The walls keep moving!",
+          { "say": "Here, take a copy. It's a bit smudged, but it's honest work.", "react": "read_map|receive_map" }
+        ],
+        [
+          { "say": "Ah, hello there! Mind the papers, mind the papers!", "react": "look_down" },
+          "I've mapped '{title}' twice now. It looked different both times.",
+          { "say": "One for you, little traveller. Hm-hm-hmmm...", "react": "read_map|receive_map" }
+        ],
+        [
+          "Hm? Oh, it's you! Lost again, are we?",
+          "These glowing plains are much bigger than they look from below.",
+          { "say": "Take this map. I'll draw myself another.", "react": "read_map|receive_map" }
+        ]
+      ]
+    },
+    {
+      "name": "quirrel",
+      "display": "Quirrel",
+      "library": "Quirrel",
+      "faces": "right",
+      "clips": { "idle": "Bench Idle", "talk": "Bench Talk", "talk_end": "Bench Talk End" },
+      "arrive": "perch",
+      "leave": "fade",
+      "stay": [150, 300],
+      "origin_above_feet": 0.66,
+      "stand_off": 1.6,
+      "excitement": 0.95,
+      "greet_react": "look_up",
+      "conversations": [
+        [
+          "Ah, we meet again, little wanderer.",
+          { "say": "I sat down for a moment and ended up watching your {app} for an age.", "react": "stare_at_user" },
+          "Strange, how a place can feel so familiar. Safe travels."
+        ],
+        [
+          "Good {daypart}! Quite the view from up here, isn't it?",
+          { "say": "All these windows... each one a little kingdom with its own light.", "react": "look_down" },
+          "I think I'll stay a while longer. Go on, don't let me keep you."
+        ],
+        [
+          "You again! You certainly get around.",
+          { "say": "Have you ever wondered who arranges all these windows?", "react": "look_up" },
+          "Hmm. Perhaps some things are best left a mystery."
+        ]
+      ]
+    },
+    {
+      "name": "zote",
+      "display": "Zote",
+      "library": "Zote",
+      "faces": "front",
+      "clips": { "idle": "Idle", "talk": "Talk L", "talk_right": "Talk R", "fall": "Fall", "land": ["Land", "Stand"] },
+      "arrive": "drop",
+      "leave": "fade",
+      "stay": [90, 180],
+      "excitement": 0.8,
+      "idle_lines": ["Hmph.", "Magnificent, as always.", "Where is my audience?"],
+      "idle_every": [12, 24],
+      "greet_react": "challenge",
+      "conversations": [
+        [
+          "Halt! You stand before Zote the Mighty, conqueror of this {app} realm!",
+          { "say": "You may admire my landing. It was entirely on purpose.", "react": "stare_at_user" },
+          { "say": "Rule Fifty-Three: never trust a window that opens by itself. Remember it well!", "react": "look_up" }
+        ],
+        [
+          "You! Small one! Did you witness my glorious descent?",
+          { "say": "Do not be ashamed. Few could survive such a fall. I barely noticed it.", "react": "look_down" },
+          "Now begone. I have an important {daypart} nap to... guard."
+        ],
+        [
+          "Ah. The little knight. Still trailing after me, I see.",
+          { "say": "I shall allow it. Observe greatness from a respectful distance.", "react": "challenge" },
+          "Rule Twelve: always land on your feet. Or your head. Both are fine."
+        ]
+      ]
+    },
+    {
+      "name": "elderbug",
+      "display": "Elderbug",
+      "library": "Elderbug",
+      "faces": "front",
+      "clips": { "idle": "Idle", "talk": "Talk Left", "talk_right": "Talk Right" },
+      "arrive": "portal",
+      "leave": "fade",
+      "stay": [150, 300],
+      "stand_off": 1.9,
+      "excitement": 0.9,
+      "greet_react": "look_up",
+      "conversations": [
+        [
+          "Oh my, a visitor! Hardly anyone stops by to chat anymore.",
+          { "say": "Isn't it a lovely {daypart}? The screen is so bright and warm.", "react": "look_up" },
+          "Go on then, young adventurer. Do come back and say hello."
+        ],
+        [
+          "Hello, hello! You're looking well, little one.",
+          { "say": "I was just admiring '{title}'. Such a curious name for a place.", "react": "look_down" },
+          "Take care up on those high windows. They close without warning, you know."
+        ],
+        [
+          "Ah, it's you! I was hoping you'd pass by.",
+          "Everyone hurries so these days. Clicking here, typing there...",
+          { "say": "But you always find a moment for an old bug. Thank you.", "react": "stare_at_user" }
+        ]
+      ]
+    },
+    {
+      "name": "hornet",
+      "display": "Hornet",
+      "library": "Hornet Anim",
+      "faces": "left",
+      "clips": { "idle": "Idle", "talk": "Point", "talk_end": "Point End", "walk": "Run" },
+      "arrive": "walk",
+      "leave": "walk",
+      "walk_speed": 9.0,
+      "stay": [60, 120],
+      "stand_off": 2.0,
+      "excitement": 1.0,
+      "greet_react": "challenge",
+      "conversations": [
+        [
+          "Little ghost. So you've found yourself a strange new kingdom.",
+          { "say": "These windows open and close without warning. Stay sharp.", "react": "look_up" },
+          "I'll be watching. Don't disappoint me."
+        ],
+        [
+          "Hmph. Still here, I see.",
+          { "say": "Your {app} hums like a nest full of weavers.", "react": "stare_at_user" },
+          "Our paths will cross again. Try to keep up."
+        ],
+        [
+          { "say": "You've grown quicker. Good.", "react": "challenge" },
+          "Not every glowing thing up here is friendly. Remember that.",
+          "Farewell, little ghost."
+        ]
+      ]
+    }
+  ],
+  "dream": [
+    { "match": ["code", "devenv", "idea", "rider", "nvim", "vim", "sublime", "zed"], "thoughts": ["...one more semicolon and it will surely compile...", "Why does it work now? Why didn't it work before?", "So many little symbols, marching in rows...", "Who wrote this? ...oh. It was us."] },
+    { "match": ["chrome", "firefox", "msedge", "brave", "opera", "vivaldi"], "thoughts": ["Just one more tab... just one more...", "So many doors inside one window...", "I came here for something. What was it?", "'{title}'... I'll read it later. Probably."] },
+    { "match": ["discord", "slack", "teams", "telegram", "whatsapp", "signal"], "thoughts": ["Someone is typing...", "So many voices, all at once...", "Was that a ping? Was it for me?"] },
+    { "match": ["spotify", "music", "vlc", "foobar", "winamp"], "thoughts": ["Hmm hm hmm... this one is catchy.", "Louder... no, quieter... no, louder.", "Play it again. Just once more."] },
+    { "match": ["steam", "epicgames", "battle.net", "gog"], "thoughts": ["One more game. Just one.", "So many worlds waiting to be played..."] },
+    { "match": ["explorer"], "thoughts": ["Folders inside folders inside folders...", "Somewhere in here is a file called final_final_v2.", "Where did I put that thing?"] },
+    { "match": ["notepad", "winword", "obsidian", "notion", "onenote", "typora"], "thoughts": ["A blank page stares back...", "Words, words, words...", "Maybe the next sentence will be the good one."] },
+    { "match": ["excel", "calc", "sheets"], "thoughts": ["Rows and columns, as far as the eye can see...", "If only this one cell would add up..."] },
+    { "match": ["terminal", "cmd", "powershell", "pwsh", "wsl", "bash"], "thoughts": ["A blinking cursor, waiting so patiently...", "Type something. Anything. Please."] },
+    { "match": [], "thoughts": ["'{title}'... what a strange name for a place.", "I dream of being maximized someday.", "So warm up here. I could stay open for days.", "Who keeps moving me around?", "Is anyone there...?", "It is {daypart}, and I am still open.", "Someone is standing on my roof..."] }
+  ]
+}

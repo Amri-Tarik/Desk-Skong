@@ -51,10 +51,12 @@ pub enum BehaviourKind {
     KnockedOut,
     /// Hurt: nurse it, then focus to heal.
     Recover,
+    /// A visitor (NPC) showed up: hurry over and talk.
+    Greet,
 }
 
 impl BehaviourKind {
-    pub const ALL: [BehaviourKind; 12] = [
+    pub const ALL: [BehaviourKind; 13] = [
         BehaviourKind::Idle,
         BehaviourKind::Companion,
         BehaviourKind::Watch,
@@ -67,6 +69,7 @@ impl BehaviourKind {
         BehaviourKind::Ride,
         BehaviourKind::KnockedOut,
         BehaviourKind::Recover,
+        BehaviourKind::Greet,
     ];
 
     pub fn label(self) -> &'static str {
@@ -83,6 +86,7 @@ impl BehaviourKind {
             BehaviourKind::Ride => "ride",
             BehaviourKind::KnockedOut => "knocked out",
             BehaviourKind::Recover => "recover",
+            BehaviourKind::Greet => "greet",
         }
     }
 
@@ -395,6 +399,8 @@ impl Idle {
                 ctx.seated_act()
             } else if ctx.senses.dark && ctx.rng.chance(0.3) {
                 ActWait::named(ctx, "lantern_patrol")
+            } else if ctx.senses.support_owner.is_some() && ctx.rng.chance(0.06 * ctx.mind.personality.curiosity) {
+                ActWait::named(ctx, "dream_nail") // what is this window dreaming about?
             } else {
                 ctx.fidget()
             };
@@ -474,8 +480,11 @@ impl Explore {
             PoiTarget::Window(id) => ctx.p.desktop.window(id).is_some_and(|w| w.rect.width() * w.rect.height() <= 420 * 320),
             PoiTarget::Spot(_) => false,
         };
+        // Curious about a big new window: dream-nail it to hear what it thinks.
+        let dream = !small && matches!(self.poi.target, PoiTarget::Window(_)) && ctx.rng.chance(0.1 + 0.3 * ctx.mind.personality.curiosity);
         let (what, name) = match self.poi.kind {
             PoiKind::NewWindow if small => ("found a small new thing", "pick_up_trinket"),
+            PoiKind::NewWindow | PoiKind::Unvisited if dream => ("dream-nailing a window", "dream_nail"),
             PoiKind::NewWindow | PoiKind::Unvisited if ctx.senses.can_sit() => ("mapping a new window", "read_map"),
             PoiKind::NewWindow | PoiKind::Unvisited => ("mapping a new window", "map_stroll"),
             PoiKind::ActiveWindow => {
@@ -834,6 +843,7 @@ pub(crate) enum Active {
     Ride(Ride),
     KnockedOut(KnockedOut),
     Recover(Recover),
+    Greet(Box<super::greet::Greet>),
 }
 
 impl Active {
@@ -851,6 +861,7 @@ impl Active {
             Active::Ride(_) => BehaviourKind::Ride,
             Active::KnockedOut(_) => BehaviourKind::KnockedOut,
             Active::Recover(_) => BehaviourKind::Recover,
+            Active::Greet(_) => BehaviourKind::Greet,
         }
     }
 
@@ -868,6 +879,7 @@ impl Active {
             Active::Ride(b) => b.tick(ctx),
             Active::KnockedOut(b) => b.tick(ctx),
             Active::Recover(b) => b.tick(ctx),
+            Active::Greet(b) => b.tick(ctx),
         }
     }
 
@@ -886,6 +898,7 @@ impl Active {
             Active::Ride(_) => "ride: window moving".into(),
             Active::KnockedOut(_) => "knocked out: huge fall".into(),
             Active::Recover(b) => b.reason(),
+            Active::Greet(b) => b.reason(ctx),
         }
     }
 }

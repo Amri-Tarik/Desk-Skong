@@ -1,0 +1,736 @@
+{
+  "name": "Hornet Anim",
+  "clips": [
+    {
+      "name": "Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 26,
+          "sprite": "idle0000"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 28,
+          "sprite": "idle0001"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 25,
+          "sprite": "idle0002"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 27,
+          "sprite": "idle0003"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 29,
+          "sprite": "idle0004"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 30,
+          "sprite": "idle0005"
+        }
+      ]
+    },
+    {
+      "name": "Turn",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 93,
+          "sprite": "turn0000"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 94,
+          "sprite": "turn0001"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 95,
+          "sprite": "turn0002"
+        }
+      ]
+    },
+    {
+      "name": "Jump",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 43,
+          "sprite": "jump0000"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 48,
+          "sprite": "jump0001"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 46,
+          "sprite": "jump0002"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 45,
+          "sprite": "jump0003"
+        }
+      ]
+    },
+    {
+      "name": "Evade",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 0,
+          "sprite": "evade0003"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 5,
+          "sprite": "evade0004"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 4,
+          "sprite": "evade0005"
+        }
+      ]
+    },
+    {
+      "name": "Fall",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 41,
+          "sprite": "jump0004"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 40,
+          "sprite": "jump0005"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 47,
+          "sprite": "jump0006"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 44,
+          "sprite": "jump0007"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 42,
+          "sprite": "jump0008"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 39,
+          "sprite": "jump0009"
+        }
+      ]
+    },
+    {
+      "name": "Run",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 61,
+          "sprite": "run0000"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 59,
+          "sprite": "run0001"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 58,
+          "sprite": "run0002"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 60,
+          "sprite": "run0003"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 57,
+          "sprite": "run0004"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 62,
+          "sprite": "run0005"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 56,
+          "sprite": "run0006"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 55,
+          "sprite": "run0007"
+        }
+      ]
+    },
+    {
+      "name": "Evade Antic",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 3,
+          "sprite": "evade0000"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 1,
+          "sprite": "evade0001"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 2,
+          "sprite": "evade0002"
+        }
+      ]
+    },
+    {
+      "name": "Soft Land",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 63,
+          "sprite": "soft_land0000"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 65,
+          "sprite": "soft_land0001"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 64,
+          "sprite": "soft_land0002"
+        }
+      ]
+    },
+    {
+      "name": "Jump Full",
+      "fps": 12,
+      "loop_start": 6,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 43,
+          "sprite": "jump0000"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 48,
+          "sprite": "jump0001"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 46,
+          "sprite": "jump0002"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 45,
+          "sprite": "jump0003"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 41,
+          "sprite": "jump0004"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 40,
+          "sprite": "jump0005"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 47,
+          "sprite": "jump0006"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 44,
+          "sprite": "jump0007"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 42,
+          "sprite": "jump0008"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 39,
+          "sprite": "jump0009"
+        }
+      ]
+    },
+    {
+      "name": "Point",
+      "fps": 12,
+      "loop_start": 3,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 37,
+          "sprite": "idle_to_point0000"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 35,
+          "sprite": "idle_to_point0001"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 38,
+          "sprite": "idle_to_point0002"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 36,
+          "sprite": "idle_to_point0003"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 31,
+          "sprite": "idle_to_point0004"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 32,
+          "sprite": "idle_to_point0005"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 34,
+          "sprite": "idle_to_point0006"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 33,
+          "sprite": "idle_to_point0007"
+        }
+      ]
+    },
+    {
+      "name": "Throw Side",
+      "fps": 12,
+      "loop_start": 4,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 70,
+          "sprite": "throw_side0002"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 71,
+          "sprite": "throw_side0003"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 74,
+          "sprite": "throw_side0004"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 66,
+          "sprite": "throw_side0005"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 67,
+          "sprite": "throw_side0006"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 68,
+          "sprite": "throw_side0007"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 69,
+          "sprite": "throw_side0008"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 68,
+          "sprite": "throw_side0007"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 67,
+          "sprite": "throw_side0006"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 66,
+          "sprite": "throw_side0005"
+        }
+      ]
+    },
+    {
+      "name": "Harpoon Side",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 13,
+          "sprite": "harpoon_side0000"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 12,
+          "sprite": "harpoon_side0001"
+        }
+      ]
+    },
+    {
+      "name": "Thread 1",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 16,
+          "sprite": "harpoon_thread_v020002"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 17,
+          "sprite": "harpoon_thread_v020003"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 14,
+          "sprite": "harpoon_thread_v020004"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 21,
+          "sprite": "harpoon_thread_v020005"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 22,
+          "sprite": "harpoon_thread_v020006"
+        }
+      ]
+    },
+    {
+      "name": "Thread 2",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 18,
+          "sprite": "harpoon_thread_v020007"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 19,
+          "sprite": "harpoon_thread_v020008"
+        }
+      ]
+    },
+    {
+      "name": "Throw Side Start",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 72,
+          "sprite": "throw_side0000"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 73,
+          "sprite": "throw_side0001"
+        }
+      ]
+    },
+    {
+      "name": "Point End",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 37,
+          "sprite": "idle_to_point0000"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 26,
+          "sprite": "idle0000"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 28,
+          "sprite": "idle0001"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 25,
+          "sprite": "idle0002"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 27,
+          "sprite": "idle0003"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 29,
+          "sprite": "idle0004"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 30,
+          "sprite": "idle0005"
+        }
+      ]
+    },
+    {
+      "name": "TurnToIdle",
+      "fps": 12,
+      "loop_start": 3,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 93,
+          "sprite": "turn0000"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 94,
+          "sprite": "turn0001"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 95,
+          "sprite": "turn0002"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 26,
+          "sprite": "idle0000"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 28,
+          "sprite": "idle0001"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 25,
+          "sprite": "idle0002"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 27,
+          "sprite": "idle0003"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 29,
+          "sprite": "idle0004"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 30,
+          "sprite": "idle0005"
+        }
+      ]
+    },
+    {
+      "name": "Den Idle",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 105,
+          "sprite": "Hornet_Beast_NPC_Version0000"
+        }
+      ]
+    },
+    {
+      "name": "Den Talk R",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 97,
+          "sprite": "Hornet_Beast_NPC_Version0008"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 98,
+          "sprite": "Hornet_Beast_NPC_Version0009"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 99,
+          "sprite": "Hornet_Beast_NPC_Version0010"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 107,
+          "sprite": "Hornet_Beast_NPC_Version0011"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 100,
+          "sprite": "Hornet_Beast_NPC_Version0012"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 109,
+          "sprite": "Hornet_Beast_NPC_Version0013"
+        }
+      ]
+    },
+    {
+      "name": "Den End R",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 98,
+          "sprite": "Hornet_Beast_NPC_Version0009"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 97,
+          "sprite": "Hornet_Beast_NPC_Version0008"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 105,
+          "sprite": "Hornet_Beast_NPC_Version0000"
+        }
+      ]
+    },
+    {
+      "name": "Den Talk L",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 104,
+          "sprite": "Hornet_Beast_NPC_Version0001"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 101,
+          "sprite": "Hornet_Beast_NPC_Version0002"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 96,
+          "sprite": "Hornet_Beast_NPC_Version0003"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 106,
+          "sprite": "Hornet_Beast_NPC_Version0004"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 103,
+          "sprite": "Hornet_Beast_NPC_Version0005"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 102,
+          "sprite": "Hornet_Beast_NPC_Version0006"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 108,
+          "sprite": "Hornet_Beast_NPC_Version0007"
+        }
+      ]
+    },
+    {
+      "name": "Den End L",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 101,
+          "sprite": "Hornet_Beast_NPC_Version0002"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 104,
+          "sprite": "Hornet_Beast_NPC_Version0001"
+        },
+        {
+          "collection": "Hornet Cln",
+          "sprite_id": 105,
+          "sprite": "Hornet_Beast_NPC_Version0000"
+        }
+      ]
+    }
+  ]
+}

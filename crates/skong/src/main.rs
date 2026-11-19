@@ -8,6 +8,8 @@ mod control;
 mod logring;
 mod overlay;
 mod benches;
+mod bubble;
+mod npcs;
 mod fx;
 mod grab;
 mod browser;
