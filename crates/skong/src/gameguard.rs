@@ -41,6 +41,7 @@ impl GameGuard {
             self.exclusive = exclusive_fullscreen();
         }
         let mut games: Vec<RectI> = Vec::new();
+        let mut found: Vec<String> = Vec::new();
         if self.exclusive {
             // The display belongs to the game; treat every monitor as taken.
             games.extend(desk.monitors.iter().map(|m| m.rect));
@@ -50,12 +51,18 @@ impl GameGuard {
                     && let Some(m) = desk.monitors.iter().find(|m| m.rect.contains((w.rect.left + w.rect.right) / 2, (w.rect.top + w.rect.bottom) / 2))
                     && !games.contains(&m.rect)
                 {
-                    log::info!("game detected on monitor {:?}: {} ({})", m.rect, w.title, w.process);
+                    found.push(format!("game detected on monitor {:?}: {} ({})", m.rect, w.title, w.process));
                     games.push(m.rect);
                 }
             }
         }
         let changed = games != self.game_monitors;
+        // Only when the picture changes (this re-runs every second while a game is up).
+        if changed {
+            for line in &found {
+                log::info!("{line}");
+            }
+        }
         self.game_monitors = games;
         changed
     }
