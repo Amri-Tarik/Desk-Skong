@@ -133,6 +133,9 @@ fn no_gate_onto_a_ledge_that_has_not_settled() {
     sim.run(2.0);
     // A window that just opened (it may still be moving).
     sim.open(window(1, RectI::new(200, 400, 900, 900), "editor.exe"));
+    // (Exploring the new window would walk him onto its top, right by the coin, which the
+    // fake navigator lets him reach while calling the coin unreachable: keep him off it.)
+    sim.brain.interest.block(crate::ai::PoiTarget::Window(1), sim.brain.now + 100.0);
     let coin = Vec2::new(500.0, 400.0);
     unreachable(&mut sim, coin);
     coins(&mut sim, &[coin]);
@@ -173,3 +176,4 @@ fn disabled_means_no_dream_gates() {
     assert!(!kinds.contains(&BehaviourKind::DreamGate) && gates(&sim).is_empty());
     assert!(sim.intents.iter().flat_map(|i| &i.stakes).any(|e| *e == StakeEvent::AbandonCoin { at: coin }), "the old give-up");
 }
+
