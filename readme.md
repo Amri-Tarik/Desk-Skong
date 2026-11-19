@@ -1,16 +1,36 @@
 # Desk-Skong
 
-**Desk-Skong** is a Windows overlay “pet” that walks, jumps, and reacts to what’s on your screen — powered by computer vision and community-made Hollow Knight skins, any skin that includes the `Knight.png` file will be supported.  
+**Desk-Skong** is a Windows desktop pet: the Knight from Hollow Knight lives on your
+desktop. Window tops, the taskbar and even lines drawn on screen (table borders, Paint
+strokes) are his platforms. He walks, runs, wall-jumps, dashes and crystal-dashes between
+them with the game's own movement constants and animations, decides what to do with a
+mood-driven brain (keep you company, watch what changes on screen, gather Geo, rest on
+benches, fight your cursor…), and stays out of the way of fullscreen games.
+Any Custom-Knight-style skin (a folder with `Knight.png`) works.
 
-> ⚠️ Legal: This repository **does not** include Hollow Knight assets. Users must provide their own files. Only `classdata.tpk` (a Unity class database) is kept in version control.
+> ⚠️ Legal: this repository **does not** include Hollow Knight art. You export it from
+> your own copy of the game (see *First-time setup*); it stays in the git-ignored `skins/`
+> folder. Only metadata JSON (sprite geometry, animation timings) and `classdata.tpk` are
+> versioned.
+
+- **Architecture & internals:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- **Feature status, open work & backlog:** [docs/STATUS.md](docs/STATUS.md)
+- **Asset exporter:** [HK_TK2D_Exporter/readme.md](HK_TK2D_Exporter/readme.md)
 
 ---
 
 ## What lives in this repo
 
-- `HK_TK2D_Exporter/` — a small one-time tool that converts Hollow Knight’s tk2d sprite collections into our PNG+JSON format.  
-  (See its own README inside that folder for usage.)
-- Overlay code : renders sprites, reads the screen, runs basic pathfinding/AI.
+| Path | What |
+|---|---|
+| `crates/skong-core` | Platform-independent simulation: assets/animation, acts, controller (movement kit), terrain, vision detection, navigation, AI brain, effects, props, discoveries, stakes (Shade/Geo) |
+| `crates/skong-win` | Win32 layer: sprite windows, desktop watcher, DXGI screen capture, tray, debug overlay, input sensing, game detection |
+| `crates/skong` | The pet app (`skong.exe`) |
+| `crates/skong-ipc` | Pet ⇄ control-panel protocol (named pipe, JSON lines) |
+| `crates/skong-panel` | The control panel (`skong-panel.exe`, egui) |
+| `data/` | Versioned metadata: exported tk2d collections/animations (`data/hk`), acts, effects, props |
+| `HK_TK2D_Exporter/` | C# tool that reads the game's Unity assets and exports metadata + (locally) art |
+| `desk-skong/` | Legacy Python prototype (superseded by the Rust crates; kept for history) |
 
 ---
 
@@ -53,23 +73,26 @@ layer without the pet.
 
 ---
 
-## Project Goals
+## First-time setup
 
-- **Zero art pipeline:** Reuse community Hollow Knight skins by reading existing atlases/metadata once.
-- **Simple runtime:** The overlay only needs PNG+JSON to animate a character.
-- **Screen awareness:** Periodically read screen captures and classify “walkable” surfaces (CNN).
-- **Tiny pathfinding/AI:** Keep the character grounded, bounce off walls, climb UI edges, etc.
-- **Windows-first overlay:** Always-on-top sprites with smooth 60fps-ish motion.
+1. **Tools:** Rust stable (MSVC), .NET 9 SDK (for the exporter), a legal copy of Hollow Knight.
+2. **Export the vanilla art** (metadata is already in `data/hk`; this writes atlases into the
+   git-ignored `skins/Vanilla`, which is also the fallback for anything a skin lacks):
+   ```text
+   cd HK_TK2D_Exporter
+   dotnet run -c Release -- --data "<Steam>/steamapps/common/Hollow Knight/hollow_knight_Data" ^
+       --out ../data/hk --textures ../skins/Vanilla ^
+       --animations "Knight,Knight Effects Anim,Strikes,Spells Anim,Dust,Hollow Shade,Grimmchild Anim,Weaverling Anim,Knight Hatchling Anim,Geo"
+   dotnet run -c Release -- --data "<…>/hollow_knight_Data" --textures ../skins/Vanilla/props ^
+       --export-sprites town_bench,town_bench_lit,guardian_bench,fung_bench_new,tram_interior_bench,mines_small_rock
+   ```
+   (Re-running `--out ../data/hk` regenerates the committed metadata; it should come out identical.)
+3. **Optional community skins:** drop skin folders (each containing `Knight.png`, optionally
+   `Sprint.png`, `Unn.png`, …) anywhere under `skins/` (up to two levels deep).
+4. **Build & run:** see *Usage* above.
 
----
-
-## Roadmap (High Level)
-
-- Overlay renderer (Rust/WGPU) + sprite animator
-- Walkable-surface classifier (lightweight CNN) + heuristics
-- Pathfinding/physics micro-engine for UI terrain
-- Input hooks for playful reactions (optional)
-- Packaging and config (choose skin, animation sets)
+Settings persist in `%APPDATA%\Desk-Skong\settings.json`; the discovered-places world in
+`%APPDATA%\Desk-Skong\world.json`.
 
 ---
 
@@ -126,60 +149,9 @@ Use these short, consistent scopes. Examples:
 
 ---
 
-# Setup Python env
+## Data format
 
-install uv (https://docs.astral.sh/uv/)
-
-run 
-```bash
-cd desk-skong
-uv run
-```
-
----
-
-## Data format (what the overlay consumes)
-
-Each skin is represented by:
-1) An **atlas PNG** (e.g., `Knight.png`)
-2) A **JSON** file (e.g., `Knight_tk2d.json`) describing every sprite/frame
-
-### JSON shape
-
-```json
-{
-  "AtlasWidth": 4096,
-  "AtlasHeight": 4096,
-  "Sprites": [
-    {
-      "Name": "idle_still_020007",
-      "PixelRect": { "X": 1119, "Y": 1897, "W": 130, "H": 61 },  // atlas pixels, bottom-left origin
-      "Pivot": [0.054687425, -0.39062503],                        // world-units anchor (from tk2d bounds.center)
-      "Flip": "TPackerCW",                                        // None | Tk2d | TPackerCW (90° CW)
-      "SourceSize": { "W": 350, "H": 186 },                        // original (untrimmed) size in pixels
-      "SpriteSourceOffset": { "X": 24, "Y": 18 }                   // bottom-left offset of trimmed rect within the untrimmed
-    }
-  ]
-}
-```
-
-### Field Descriptions
-
-| Field                | Description                                                                                                                                                                                                                 |
-|----------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `atlasWidth`, `atlasHeight` | Dimensions of the atlas PNG in pixels.                                                                                                                                                                         |
-| `sprites[]`          | Array of sprite/frame objects.                                                                                                                                                                                             |
-| `name`               | Frame identifier (used for animation sequences).                                                                                                                                                                           |
-| `pixelRect`          | Sub-rectangle of the atlas in pixels, using bottom-left origin.<br/>**Note:** If your image API uses top-left origin, convert with:<br/>`yTopLeft = atlasHeight - (y + h)`                                                |
-| `pivot`              | World-space anchor point from tk2d (`bounds.center`). Map this to your renderer’s anchor system as needed.                                                                          |
-| `flip`               | Atlas rotation flag from tk2d:<br/>- `None` (not rotated)<br/>- `Tk2d` (90° clockwise + horizontal flip)<br/>- `TPackerCW` (90° counter-clockwise)<br/>Respect this when sampling the atlas (rotate UVs or the quad accordingly).                      |
-| `sourceSize`         | Untrimmed/original size of the sprite in pixels.                                                                                                                                                                           |
-| `spriteSourceOffset` | Offset (in pixels, bottom-left origin) of the trimmed rectangle within the original untrimmed image.<br/>This allows consistent placement even when aggressive packing/trimming is used.                                   |
-
----
-
-### Additional Notes
-
-- All coordinates in the JSON use **bottom-left origin** (Unity/tk2d convention).
-- `pivot` is in **world units** (tk2d/Unity space). If you need pixel units, divide by the collection’s `texelSize` during export (the exporter already does this for trim offsets; `texelSize` is not included in the JSON).
-- The combination of `pixelRect`, `sourceSize`, and `spriteSourceOffset` matches [TexturePacker](https://www.codeandweb.com/texturepacker/documentation#json-array) semantics, and is sufficient to reconstruct the full, untrimmed canvas position for each frame.
+The exporter's JSON formats (tk2d collections as raw quad geometry + UVs, animation
+libraries with fps/wrap mode/loop start/events) are documented in
+[HK_TK2D_Exporter/readme.md](HK_TK2D_Exporter/readme.md). Acts, effects and props formats
+are described at the top of their files in `data/` and in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

@@ -1,0 +1,682 @@
+{
+  "name": "Dialogue Anim",
+  "clips": [
+    {
+      "name": "Box Up",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 6,
+          "sprite": "arrow_down0000"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 6,
+          "sprite": "arrow_down0000"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 6,
+          "sprite": "arrow_down0000"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 6,
+          "sprite": "arrow_down0000"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 6,
+          "sprite": "arrow_down0000"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 6,
+          "sprite": "arrow_down0000"
+        }
+      ]
+    },
+    {
+      "name": "Box Down",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 6,
+          "sprite": "arrow_down0000"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 6,
+          "sprite": "arrow_down0000"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 6,
+          "sprite": "arrow_down0000"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 6,
+          "sprite": "arrow_down0000"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 6,
+          "sprite": "arrow_down0000"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 6,
+          "sprite": "arrow_down0000"
+        },
+        {
+          "collection": "Prompts Cln",
+          "sprite_id": 77,
+          "sprite": "prompt_blank"
+        }
+      ]
+    },
+    {
+      "name": "Arrow Up",
+      "fps": 15,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 6,
+          "sprite": "arrow_down0000"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 7,
+          "sprite": "arrow_down0001"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 8,
+          "sprite": "arrow_down0002"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 9,
+          "sprite": "arrow_down0003"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 10,
+          "sprite": "arrow_down0004"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 11,
+          "sprite": "arrow_down0005"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 11,
+          "sprite": "arrow_down0005"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 11,
+          "sprite": "arrow_down0005"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 11,
+          "sprite": "arrow_down0005"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 11,
+          "sprite": "arrow_down0005"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 11,
+          "sprite": "arrow_down0005"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 11,
+          "sprite": "arrow_down0005"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 11,
+          "sprite": "arrow_down0005"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 9,
+          "sprite": "arrow_down0003"
+        }
+      ]
+    },
+    {
+      "name": "Arrow Down",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 7,
+          "sprite": "arrow_down0001"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 6,
+          "sprite": "arrow_down0000"
+        },
+        {
+          "collection": "Prompts Cln",
+          "sprite_id": 77,
+          "sprite": "prompt_blank"
+        }
+      ]
+    },
+    {
+      "name": "Stop Up",
+      "fps": 13,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 13,
+          "sprite": "fullstop0000"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 14,
+          "sprite": "fullstop0001"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 12,
+          "sprite": "fullstop0002"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 15,
+          "sprite": "fullstop0003"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 15,
+          "sprite": "fullstop0003"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 15,
+          "sprite": "fullstop0003"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 15,
+          "sprite": "fullstop0003"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 15,
+          "sprite": "fullstop0003"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 15,
+          "sprite": "fullstop0003"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 15,
+          "sprite": "fullstop0003"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 15,
+          "sprite": "fullstop0003"
+        }
+      ]
+    },
+    {
+      "name": "Stop Down",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 14,
+          "sprite": "fullstop0001"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 13,
+          "sprite": "fullstop0000"
+        },
+        {
+          "collection": "Prompts Cln",
+          "sprite_id": 77,
+          "sprite": "prompt_blank"
+        }
+      ]
+    },
+    {
+      "name": "Pointer Up",
+      "fps": 60,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 17,
+          "sprite": "main_menu_pointer_anim0000"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 18,
+          "sprite": "main_menu_pointer_anim0001"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 19,
+          "sprite": "main_menu_pointer_anim0002"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 20,
+          "sprite": "main_menu_pointer_anim0003"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 21,
+          "sprite": "main_menu_pointer_anim0004"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 22,
+          "sprite": "main_menu_pointer_anim0005"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 23,
+          "sprite": "main_menu_pointer_anim0006"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 24,
+          "sprite": "main_menu_pointer_anim0007"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 25,
+          "sprite": "main_menu_pointer_anim0008"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 26,
+          "sprite": "main_menu_pointer_anim0009"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 16,
+          "sprite": "main_menu_pointer_anim0010"
+        }
+      ]
+    },
+    {
+      "name": "Fleur Top Up",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 27,
+          "sprite": "dialogue_fleur_top0000"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 28,
+          "sprite": "dialogue_fleur_top0001"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 29,
+          "sprite": "dialogue_fleur_top0002"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 30,
+          "sprite": "dialogue_fleur_top0003"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 31,
+          "sprite": "dialogue_fleur_top0004"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 32,
+          "sprite": "dialogue_fleur_top0005"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 33,
+          "sprite": "dialogue_fleur_top0006"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 34,
+          "sprite": "dialogue_fleur_top0007"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 35,
+          "sprite": "dialogue_fleur_top0008"
+        }
+      ]
+    },
+    {
+      "name": "Pointer Down",
+      "fps": 60,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 16,
+          "sprite": "main_menu_pointer_anim0010"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 26,
+          "sprite": "main_menu_pointer_anim0009"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 25,
+          "sprite": "main_menu_pointer_anim0008"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 24,
+          "sprite": "main_menu_pointer_anim0007"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 23,
+          "sprite": "main_menu_pointer_anim0006"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 22,
+          "sprite": "main_menu_pointer_anim0005"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 21,
+          "sprite": "main_menu_pointer_anim0004"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 20,
+          "sprite": "main_menu_pointer_anim0003"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 19,
+          "sprite": "main_menu_pointer_anim0002"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 18,
+          "sprite": "main_menu_pointer_anim0001"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 17,
+          "sprite": "main_menu_pointer_anim0000"
+        },
+        {
+          "collection": "Prompts Cln",
+          "sprite_id": 77,
+          "sprite": "prompt_blank"
+        }
+      ]
+    },
+    {
+      "name": "Fleur Bot Up",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 36,
+          "sprite": "dialogue_fleur_bottom0000"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 37,
+          "sprite": "dialogue_fleur_bottom0001"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 38,
+          "sprite": "dialogue_fleur_bottom0002"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 39,
+          "sprite": "dialogue_fleur_bottom0003"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 40,
+          "sprite": "dialogue_fleur_bottom0004"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 41,
+          "sprite": "dialogue_fleur_bottom0005"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 42,
+          "sprite": "dialogue_fleur_bottom0006"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 43,
+          "sprite": "dialogue_fleur_bottom0007"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 44,
+          "sprite": "dialogue_fleur_bottom0008"
+        }
+      ]
+    },
+    {
+      "name": "Fleur Bot Down",
+      "fps": 40,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 44,
+          "sprite": "dialogue_fleur_bottom0008"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 43,
+          "sprite": "dialogue_fleur_bottom0007"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 42,
+          "sprite": "dialogue_fleur_bottom0006"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 41,
+          "sprite": "dialogue_fleur_bottom0005"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 40,
+          "sprite": "dialogue_fleur_bottom0004"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 39,
+          "sprite": "dialogue_fleur_bottom0003"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 38,
+          "sprite": "dialogue_fleur_bottom0002"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 37,
+          "sprite": "dialogue_fleur_bottom0001"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 36,
+          "sprite": "dialogue_fleur_bottom0000"
+        }
+      ]
+    },
+    {
+      "name": "Fleur Top Down",
+      "fps": 40,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 35,
+          "sprite": "dialogue_fleur_top0008"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 34,
+          "sprite": "dialogue_fleur_top0007"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 33,
+          "sprite": "dialogue_fleur_top0006"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 32,
+          "sprite": "dialogue_fleur_top0005"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 31,
+          "sprite": "dialogue_fleur_top0004"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 30,
+          "sprite": "dialogue_fleur_top0003"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 29,
+          "sprite": "dialogue_fleur_top0002"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 28,
+          "sprite": "dialogue_fleur_top0001"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 27,
+          "sprite": "dialogue_fleur_top0000"
+        }
+      ]
+    },
+    {
+      "name": "Dream Up",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 48,
+          "sprite": "Dream_Dialogue_Box0001"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 50,
+          "sprite": "Dream_Dialogue_Box0002"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 45,
+          "sprite": "Dream_Dialogue_Box0003"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 49,
+          "sprite": "Dream_Dialogue_Box0004"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 46,
+          "sprite": "Dream_Dialogue_Box0005"
+        }
+      ]
+    },
+    {
+      "name": "Dream Down",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 46,
+          "sprite": "Dream_Dialogue_Box0005"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 49,
+          "sprite": "Dream_Dialogue_Box0004"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 45,
+          "sprite": "Dream_Dialogue_Box0003"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 50,
+          "sprite": "Dream_Dialogue_Box0002"
+        },
+        {
+          "collection": "Dialogue Cln",
+          "sprite_id": 48,
+          "sprite": "Dream_Dialogue_Box0001"
+        }
+      ]
+    }
+  ]
+}

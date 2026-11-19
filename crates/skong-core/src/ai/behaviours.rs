@@ -82,18 +82,20 @@ pub enum BehaviourKind {
     KnockedOut,
     /// Hurt: nurse it, then focus to heal.
     Recover,
+    /// A visitor (NPC) showed up: hurry over and talk.
+    Greet,
     /// Died: death act, gone, respawn at a bench / safe ledge.
     Dead,
     /// Go fight the Shade to get the Geo back.
     ShadeHunt,
     /// Walk over loose Geo to pick it up.
     Loot,
-    /// Use a place found in a window (bench, hot spring, geo deposit).
+    /// Use a place found in a window (bench, geo deposit).
     Visit,
 }
 
 impl BehaviourKind {
-    pub const ALL: [BehaviourKind; 16] = [
+    pub const ALL: [BehaviourKind; 17] = [
         BehaviourKind::Idle,
         BehaviourKind::Companion,
         BehaviourKind::Watch,
@@ -106,6 +108,7 @@ impl BehaviourKind {
         BehaviourKind::Ride,
         BehaviourKind::KnockedOut,
         BehaviourKind::Recover,
+        BehaviourKind::Greet,
         BehaviourKind::Dead,
         BehaviourKind::ShadeHunt,
         BehaviourKind::Loot,
@@ -126,6 +129,7 @@ impl BehaviourKind {
             BehaviourKind::Ride => "ride",
             BehaviourKind::KnockedOut => "knocked out",
             BehaviourKind::Recover => "recover",
+            BehaviourKind::Greet => "greet",
             BehaviourKind::Dead => "dead",
             BehaviourKind::ShadeHunt => "shade hunt",
             BehaviourKind::Loot => "loot",
@@ -141,7 +145,7 @@ impl BehaviourKind {
     pub fn tier(self) -> Tier {
         match self {
             BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead => Tier::Urgent,
-            BehaviourKind::Battle | BehaviourKind::ShadeHunt | BehaviourKind::Loot => Tier::Engagement,
+            BehaviourKind::Battle | BehaviourKind::ShadeHunt | BehaviourKind::Loot | BehaviourKind::Greet => Tier::Engagement,
             BehaviourKind::Nap | BehaviourKind::Rest | BehaviourKind::Recover => Tier::Needs,
             BehaviourKind::Idle | BehaviourKind::Companion | BehaviourKind::Watch | BehaviourKind::Explore | BehaviourKind::Ride | BehaviourKind::Visit => {
                 Tier::Ambient
@@ -504,6 +508,8 @@ impl Idle {
                 ctx.seated_act()
             } else if ctx.senses.dark && ctx.rng.chance(0.3) {
                 ActWait::named(ctx, "lantern_patrol")
+            } else if ctx.senses.support_owner.is_some() && ctx.rng.chance(0.06 * ctx.mind.personality.curiosity) {
+                ActWait::named(ctx, "dream_nail") // what is this window dreaming about?
             } else {
                 ctx.fidget()
             };
@@ -586,8 +592,11 @@ impl Explore {
             PoiTarget::Window(id) => ctx.p.desktop.window(id).is_some_and(|w| w.rect.width() * w.rect.height() <= 420 * 320),
             PoiTarget::Spot(_) => false,
         };
+        // Curious about a big new window: dream-nail it to hear what it thinks.
+        let dream = !small && matches!(self.poi.target, PoiTarget::Window(_)) && ctx.rng.chance(0.1 + 0.3 * ctx.mind.personality.curiosity);
         let (what, name) = match self.poi.kind {
             PoiKind::NewWindow if small => ("found a small new thing", "pick_up_trinket"),
+            PoiKind::NewWindow | PoiKind::Unvisited if dream => ("dream-nailing a window", "dream_nail"),
             PoiKind::NewWindow | PoiKind::Unvisited if ctx.senses.can_sit() => ("mapping a new window", "read_map"),
             PoiKind::NewWindow | PoiKind::Unvisited => ("mapping a new window", "map_stroll"),
             PoiKind::ActiveWindow => {
@@ -952,6 +961,7 @@ pub(crate) enum Active {
     Ride(Ride),
     KnockedOut(KnockedOut),
     Recover(Recover),
+    Greet(Box<super::greet::Greet>),
     Dead(Dead),
     ShadeHunt(Box<ShadeHunt>),
     Loot(Loot),
@@ -973,6 +983,7 @@ impl Active {
             Active::Ride(_) => BehaviourKind::Ride,
             Active::KnockedOut(_) => BehaviourKind::KnockedOut,
             Active::Recover(_) => BehaviourKind::Recover,
+            Active::Greet(_) => BehaviourKind::Greet,
             Active::Dead(_) => BehaviourKind::Dead,
             Active::ShadeHunt(_) => BehaviourKind::ShadeHunt,
             Active::Loot(_) => BehaviourKind::Loot,
@@ -994,6 +1005,7 @@ impl Active {
             Active::Ride(b) => b.tick(ctx),
             Active::KnockedOut(b) => b.tick(ctx),
             Active::Recover(b) => b.tick(ctx),
+            Active::Greet(b) => b.tick(ctx),
             Active::Dead(b) => b.tick(ctx),
             Active::ShadeHunt(b) => b.tick(ctx),
             Active::Loot(b) => b.tick(ctx),
@@ -1016,6 +1028,7 @@ impl Active {
             Active::Ride(_) => "ride: window moving".into(),
             Active::KnockedOut(_) => "knocked out: huge fall".into(),
             Active::Recover(b) => b.reason(),
+            Active::Greet(b) => b.reason(ctx),
             Active::Dead(b) => b.reason(),
             Active::ShadeHunt(b) => b.reason(),
             Active::Loot(b) => b.reason(),

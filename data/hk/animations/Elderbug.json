@@ -1,0 +1,541 @@
+{
+  "name": "Elderbug",
+  "clips": [
+    {
+      "name": "Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Elderbug",
+          "sprite_id": 5,
+          "sprite": "idle_01"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 2,
+          "sprite": "idle_02"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 4,
+          "sprite": "idle_03"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 1,
+          "sprite": "idle_04"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 3,
+          "sprite": "idle_05"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 0,
+          "sprite": "idle_06"
+        }
+      ]
+    },
+    {
+      "name": "Turn Right",
+      "fps": 12,
+      "loop_start": 4,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Elderbug",
+          "sprite_id": 45,
+          "sprite": "turn000"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 47,
+          "sprite": "turn001"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 44,
+          "sprite": "turn002"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 46,
+          "sprite": "turn003"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 5,
+          "sprite": "idle_01"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 2,
+          "sprite": "idle_02"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 4,
+          "sprite": "idle_03"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 1,
+          "sprite": "idle_04"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 3,
+          "sprite": "idle_05"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 0,
+          "sprite": "idle_06"
+        }
+      ]
+    },
+    {
+      "name": "Reach",
+      "fps": 12,
+      "loop_start": 5,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Elderbug",
+          "sprite_id": 26,
+          "sprite": "reach0000"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 25,
+          "sprite": "reach0001"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 30,
+          "sprite": "reach0002"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 33,
+          "sprite": "reach0003"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 24,
+          "sprite": "reach0004"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 29,
+          "sprite": "reach0005"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 23,
+          "sprite": "reach0006"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 31,
+          "sprite": "reach0007"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 32,
+          "sprite": "reach0008"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 27,
+          "sprite": "reach0009"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 28,
+          "sprite": "reach0010"
+        }
+      ]
+    },
+    {
+      "name": "Reach To Slump",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Elderbug",
+          "sprite_id": 34,
+          "sprite": "idle_look_right0005"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 35,
+          "sprite": "turn0000"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 36,
+          "sprite": "turn0001"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 37,
+          "sprite": "Ghost_Glow0011"
+        }
+      ]
+    },
+    {
+      "name": "Slump",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Elderbug",
+          "sprite_id": 39,
+          "sprite": "Ghost_Glow0013"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 40,
+          "sprite": "Ghost_Glow_empty"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 38,
+          "sprite": "Ghost_Glow0012"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 41,
+          "sprite": "Ghost_Glow0006"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 42,
+          "sprite": ""
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 43,
+          "sprite": "Ghost_Glow0009"
+        }
+      ]
+    },
+    {
+      "name": "Turn Left",
+      "fps": 12,
+      "loop_start": 4,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Elderbug",
+          "sprite_id": 46,
+          "sprite": "turn003"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 44,
+          "sprite": "turn002"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 47,
+          "sprite": "turn001"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 45,
+          "sprite": "turn000"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 18,
+          "sprite": "look_left000"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 19,
+          "sprite": "look_left001"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 20,
+          "sprite": "look_left002"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 22,
+          "sprite": "look_left003"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 21,
+          "sprite": "look_left004"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 17,
+          "sprite": "look_left005"
+        }
+      ]
+    },
+    {
+      "name": "Talk Left",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Elderbug",
+          "sprite_id": 52,
+          "sprite": "talk_left0000"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 53,
+          "sprite": "talk_left0001"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 49,
+          "sprite": "talk_left0002"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 48,
+          "sprite": "talk_left0003"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 50,
+          "sprite": "talk_left0004"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 51,
+          "sprite": "talk_left0005"
+        }
+      ]
+    },
+    {
+      "name": "Talk Right",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Elderbug",
+          "sprite_id": 57,
+          "sprite": "talk_right0000"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 59,
+          "sprite": "talk_right0001"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 55,
+          "sprite": "talk_right0002"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 58,
+          "sprite": "talk_right0003"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 54,
+          "sprite": "talk_right0004"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 56,
+          "sprite": "talk_right0005"
+        }
+      ]
+    },
+    {
+      "name": "Reach To Idle",
+      "fps": 12,
+      "loop_start": 5,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Elderbug",
+          "sprite_id": 24,
+          "sprite": "reach0004"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 33,
+          "sprite": "reach0003"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 30,
+          "sprite": "reach0002"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 25,
+          "sprite": "reach0001"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 26,
+          "sprite": "reach0000"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 5,
+          "sprite": "idle_01"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 2,
+          "sprite": "idle_02"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 4,
+          "sprite": "idle_03"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 1,
+          "sprite": "idle_04"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 3,
+          "sprite": "idle_05"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 0,
+          "sprite": "idle_06"
+        }
+      ]
+    },
+    {
+      "name": "Idle Left",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Elderbug",
+          "sprite_id": 18,
+          "sprite": "look_left000"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 19,
+          "sprite": "look_left001"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 20,
+          "sprite": "look_left002"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 22,
+          "sprite": "look_left003"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 21,
+          "sprite": "look_left004"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 17,
+          "sprite": "look_left005"
+        }
+      ]
+    },
+    {
+      "name": "Flower",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Elderbug",
+          "sprite_id": 61,
+          "sprite": "flower0000"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 60,
+          "sprite": "flower0001"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 63,
+          "sprite": "flower0002"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 62,
+          "sprite": "flower0003"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 64,
+          "sprite": "flower0004"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 65,
+          "sprite": "flower0005"
+        }
+      ]
+    },
+    {
+      "name": "Shiver",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Elderbug",
+          "sprite_id": 67,
+          "sprite": "elderbug_shiver0001"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 71,
+          "sprite": "elderbug_shiver0004"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 68,
+          "sprite": "elderbug_shiver0005"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 70,
+          "sprite": "elderbug_shiver0002"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 66,
+          "sprite": "elderbug_shiver0000"
+        },
+        {
+          "collection": "Elderbug",
+          "sprite_id": 69,
+          "sprite": "elderbug_shiver0003"
+        }
+      ]
+    }
+  ]
+}

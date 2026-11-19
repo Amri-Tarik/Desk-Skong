@@ -1,7 +1,7 @@
 //! Tiny deterministic xorshift RNG (no global state, no wall clock).
 
 #[derive(Clone, Debug)]
-pub(crate) struct Rng(u32);
+pub struct Rng(u32);
 
 impl Rng {
     pub fn new(seed: u32) -> Self {

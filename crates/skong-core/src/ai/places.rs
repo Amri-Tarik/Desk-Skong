@@ -1,10 +1,10 @@
-//! Known places: things the knight found inside windows (benches, hot springs, geo
-//! deposits; see [`crate::discovery`]) and the **Visit** behaviour that uses them.
+//! Known places: things the knight found inside windows (benches, geo deposits;
+//! see [`crate::discovery`]) and the **Visit** behaviour that uses them.
 //!
 //! The app tells the brain what is on screen every tick ([`Brain::set_places`]); a place
 //! flagged `fresh` was just revealed, and the knight reacts to it at once (looks at it,
-//! walks over, tries it out). Otherwise places are chosen by need: found seats and
-//! springs when tired (favourites first), deposits when playful.
+//! walks over, tries it out). Otherwise places are chosen by need: found benches
+//! when tired (favourites first), deposits when playful.
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::controller::Side;
@@ -24,7 +24,6 @@ pub type PlaceId = u64;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PlaceKind {
     Bench,
-    Spring,
     Deposit,
 }
 
@@ -32,7 +31,6 @@ impl PlaceKind {
     pub fn label(self) -> &'static str {
         match self {
             PlaceKind::Bench => "bench",
-            PlaceKind::Spring => "hot spring",
             PlaceKind::Deposit => "geo deposit",
         }
     }
@@ -41,7 +39,6 @@ impl PlaceKind {
     fn cooldown(self) -> f32 {
         match self {
             PlaceKind::Bench => 120.0,
-            PlaceKind::Spring => 900.0,
             PlaceKind::Deposit => 90.0,
         }
     }
@@ -52,7 +49,7 @@ impl PlaceKind {
 pub struct KnownPlace {
     pub id: PlaceId,
     pub kind: PlaceKind,
-    /// Feet position to use it from (on the bench / in the spring / beside the deposit).
+    /// Feet position to use it from (on the bench / beside the deposit).
     pub at: Vec2,
     /// The prop's bottom center.
     pub center: Vec2,
@@ -67,7 +64,7 @@ pub struct KnownPlace {
 pub enum DiscoveryEvent {
     /// Arrived on a never-visited window: roll / reveal its room.
     Explored(WindowId),
-    /// Sat on / bathed in this place.
+    /// Sat on this place.
     Used(PlaceId),
     /// Slashed this deposit (the attack is in the same intent).
     Struck(PlaceId),
@@ -122,8 +119,6 @@ pub(crate) fn want(p: &KnownPlace, m: &Mind) -> f32 {
     match p.kind {
         // Beats sitting on any old ledge when tired (Rest tops out at 0.75 here).
         PlaceKind::Bench => (0.1 + 0.85 * smooth(0.3, 0.7, tired) + 0.12 * p.favour) * calm,
-        // Restores faster than a bench: slightly preferred, and earlier.
-        PlaceKind::Spring => (0.12 + 0.9 * smooth(0.25, 0.65, tired) + 0.12 * p.favour) * calm,
         PlaceKind::Deposit if m.needs.energy < 0.3 => 0.0,
         PlaceKind::Deposit => 0.7 * m.needs.mischief + 0.35 * m.emotions.excitement + 0.2 * m.needs.boredom * m.personality.playfulness + 0.05 * p.favour,
     }
@@ -218,8 +213,6 @@ enum Phase {
     Travel(Travel),
     /// Seated acts on a found bench.
     Sit { beat: Beat, acts: u32 },
-    /// The "bathe" act in a spring.
-    Bathe(Option<ActWait>),
     /// A few slashes at a deposit.
     Strike { left: u32, gap: f32 },
 }
@@ -273,7 +266,6 @@ impl Visit {
         ctx.face_toward(p.center.x);
         self.phase = match p.kind {
             PlaceKind::Bench => Phase::Sit { beat: Beat::new(0.2), acts: 0 },
-            PlaceKind::Spring => Phase::Bathe(ActWait::named(ctx, "bathe")),
             PlaceKind::Deposit => Phase::Strike { left: Self::STRIKES, gap: 0.3 },
         };
         if p.kind != PlaceKind::Deposit {
@@ -348,22 +340,6 @@ impl Visit {
                 beat.play(ctx, act, [0.5, 1.5]);
                 Status::Running
             }
-            Phase::Bathe(act) => {
-                ctx.nav.stop();
-                let bathing = act.is_some_and(|w| ctx.p.act.is_some_and(|a| a.id == w.id));
-                if bathing {
-                    // On top of the seated rate: a hot spring restores faster than a bench.
-                    let dt = ctx.dt();
-                    ctx.mind.adjust(|n| &mut n.energy, 1.2 * ctx.cfg.needs.energy_restore * dt / 60.0);
-                    ctx.mind.adjust(|n| &mut n.boredom, -0.02 * dt);
-                    let e = &mut ctx.mind.emotions;
-                    let calm = 0.5f32.powf(dt / 3.0);
-                    e.annoyance *= calm;
-                    e.startle *= calm;
-                    e.hurt *= 0.5f32.powf(dt / 20.0);
-                }
-                if act.as_mut().is_none_or(|w| w.tick(ctx)) { Status::Done } else { Status::Running }
-            }
             Phase::Strike { left, gap } => {
                 ctx.nav.stop();
                 *gap -= ctx.dt();
@@ -393,7 +369,6 @@ impl Visit {
             Phase::Notice { .. } => format!("visit: found a {what}!"),
             Phase::Travel(t) => format!("visit {what}: walking over ({:?}){}", t.style, if self.fresh { ", just found" } else { "" }),
             Phase::Sit { .. } => format!("visit {what}: sitting on a found bench"),
-            Phase::Bathe(_) => format!("visit {what}: bathing"),
             Phase::Strike { .. } => format!("visit {what}: mining geo"),
         }
     }
