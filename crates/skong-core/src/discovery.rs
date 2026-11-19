@@ -36,7 +36,8 @@ pub type FindId = u64;
 pub enum FindKind {
     /// A bench of one of the `props.json` styles.
     Bench { style: usize },
-    /// A geo rock: slashed when playful; breaks after a few hits, regrows a day later.
+    /// A geo rock: slashed for Geo; breaks after a few hits and is gone, and another one
+    /// turns up in some other app's window a little later (something new to travel to).
     Deposit,
 }
 
@@ -85,7 +86,7 @@ pub struct Find {
     /// Deposit: hits taken since it (re)grew.
     #[serde(default)]
     pub hits: u32,
-    /// Deposit: unix time it broke; hidden until it regrows.
+    /// Deposit: unix time it broke (old saves only: broken rocks are removed now).
     #[serde(default)]
     pub broken_at: Option<u64>,
 }
@@ -119,15 +120,15 @@ pub struct Rules {
     pub deposit: f32,
     /// Relative weight per bench style (index = `props.json` order).
     pub bench_styles: Vec<f32>,
-    /// Hours until a broken deposit regrows.
-    pub regrow_hours: f32,
+    /// Seconds (range) until a broken deposit turns up again elsewhere.
+    pub relocate_secs: [u64; 2],
     /// Hits that break a deposit.
     pub deposit_hp: u32,
 }
 
 impl Default for Rules {
     fn default() -> Self {
-        Self { nothing: 0.6, bench: 0.25, deposit: 0.15, bench_styles: vec![3.0, 1.0, 1.5, 1.5, 1.5], regrow_hours: 24.0, deposit_hp: 3 }
+        Self { nothing: 0.6, bench: 0.25, deposit: 0.15, bench_styles: vec![3.0, 1.0, 1.5, 1.5, 1.5], relocate_secs: [60, 180], deposit_hp: 3 }
     }
 }
 
@@ -182,6 +183,10 @@ pub struct World {
     pub rooms: BTreeMap<String, Room>,
     #[serde(default)]
     next_id: FindId,
+    /// Broken deposits waiting to turn up elsewhere: (app they broke in, unix time due).
+    /// A rock never regrows in place: the next one is somewhere new to travel to.
+    #[serde(default)]
+    relocations: Vec<(String, u64)>,
     /// Which window of an app hosts its finds right now (not saved).
     #[serde(skip)]
     hosts: BTreeMap<String, WindowId>,
@@ -344,7 +349,7 @@ pub fn settle(mut shown: Vec<Shown>, occ: &mut Occupancy, footprint: &dyn Fn(Fin
 
 impl World {
     pub fn new(seed: u64) -> Self {
-        Self { version: version(), seed, rooms: BTreeMap::new(), next_id: 1, hosts: BTreeMap::new() }
+        Self { version: version(), seed, rooms: BTreeMap::new(), next_id: 1, relocations: Vec::new(), hosts: BTreeMap::new() }
     }
 
     pub fn from_json(s: &str) -> serde_json::Result<World> {
@@ -448,12 +453,13 @@ impl World {
     /// its hosting window (the one last explored if still open, else its first visible
     /// window where something resolves).
     pub fn shown(&mut self, desk: &DesktopSnapshot, terrain: &Terrain, now_unix: u64, rules: &Rules, footprint: &dyn Fn(FindKind) -> Footprint) -> Vec<Shown> {
-        let regrow = (rules.regrow_hours * 3600.0) as u64;
-        for f in self.rooms.values_mut().flat_map(|r| r.finds.iter_mut()) {
-            if f.broken_at.is_some_and(|t| now_unix >= t + regrow) {
-                f.broken_at = None;
-                f.hits = 0;
-            }
+        // Worlds saved before deposits moved on keep broken rocks to regrow: they go now,
+        // and turn up elsewhere instead.
+        let _ = rules;
+        for (key, room) in &mut self.rooms {
+            let broken = room.finds.iter().filter(|f| f.broken_at.is_some()).count();
+            room.finds.retain(|f| f.broken_at.is_none());
+            self.relocations.extend(std::iter::repeat_n((key.clone(), now_unix), broken));
         }
         let mut out = vec![];
         let mut hosts = BTreeMap::new();
@@ -501,10 +507,38 @@ impl World {
         if f.hits < rules.deposit_hp {
             return None;
         }
-        f.broken_at = Some(now_unix);
-        f.visits += 1;
         let geo = 5 + (Mix(seed ^ id ^ (now_unix / 86_400)).next() % 11) as u32;
+        // Gone for good; another one turns up in some other app's window in a while.
+        let key = self.rooms.iter().find(|(_, r)| r.finds.iter().any(|f| f.id == id)).map(|(k, _)| k.clone());
+        if let Some(k) = key {
+            if let Some(room) = self.rooms.get_mut(&k) {
+                room.finds.retain(|f| f.id != id);
+            }
+            let wait = rules.relocate_secs[0] + Mix(seed ^ id ^ now_unix).next() % (rules.relocate_secs[1] - rules.relocate_secs[0]).max(1);
+            self.relocations.push((k, now_unix + wait));
+        }
         Some(DepositDrop { at, geo })
+    }
+
+    /// Broken deposits due to turn up again: place each in a visible window of *another*
+    /// app (trying windows in a seed-shuffled order), on a ledge that lasted. Returns what
+    /// was placed, with its window, to reveal; anything that found no spot waits.
+    pub fn relocate_due(&mut self, desk: &DesktopSnapshot, site: &Site, now_unix: u64) -> Vec<(FindId, WindowId)> {
+        let mut placed = vec![];
+        let due: Vec<(String, u64)> = self.relocations.iter().filter(|(_, t)| now_unix >= *t).cloned().collect();
+        for (from, t) in due {
+            let mut wins: Vec<&WindowInfo> = desk.windows.iter().filter(|w| !w.fullscreen && app_key(w).is_some_and(|k| k != from)).collect();
+            let mut mix = Mix(self.seed ^ t);
+            for i in (1..wins.len()).rev() {
+                wins.swap(i, (mix.next() % (i as u64 + 1)) as usize);
+            }
+            let ids: Vec<WindowId> = wins.iter().map(|w| w.id).collect();
+            if let Some((fid, wid)) = ids.into_iter().find_map(|wid| self.force(FindKind::Deposit, wid, desk, site).map(|f| (f, wid))) {
+                self.relocations.retain(|r| r != &(from.clone(), t));
+                placed.push((fid, wid));
+            }
+        }
+        placed
     }
 
     /// Forget everything (debug).
@@ -739,9 +773,9 @@ mod tests {
     }
 
     #[test]
-    fn deposits_break_drop_geo_and_regrow() {
+    fn broken_deposits_are_gone_and_turn_up_in_another_app() {
         let rules = always(FindKind::Deposit);
-        let (d, t) = desk(vec![win(1, RectI::new(200, 400, 900, 900), "paint.exe")]);
+        let (d, t) = desk(vec![win(1, RectI::new(200, 400, 900, 900), "paint.exe"), win(2, RectI::new(1000, 300, 1800, 900), "notepad.exe")]);
         let env = Env::new(t);
         let mut world = World::new(3);
         let id = world.explored(1, &d, &env.site(), &rules)[0];
@@ -751,8 +785,16 @@ mod tests {
         }
         let drop = world.strike(id, at, 1000, &rules).expect("broke");
         assert!((5..=15).contains(&drop.geo));
-        assert!(world.shown(&d, &env.terrain, 2000, &rules, &fp).is_empty(), "broken");
-        assert_eq!(world.shown(&d, &env.terrain, 1000 + 25 * 3600, &rules, &fp).len(), 1, "regrown a day later");
+        assert!(world.shown(&d, &env.terrain, 1001, &rules, &fp).is_empty(), "gone");
+        assert!(world.relocate_due(&d, &env.site(), 1001).is_empty(), "not right away");
+        let placed = world.relocate_due(&d, &env.site(), 1000 + 200);
+        assert_eq!(placed.len(), 1, "turned up again");
+        assert_eq!(placed[0].1, 2, "in another app's window, not where it broke");
+        let shown = world.shown(&d, &env.terrain, 1200, &rules, &fp);
+        assert_eq!(shown.len(), 1);
+        assert_eq!((shown[0].kind, shown[0].window), (FindKind::Deposit, 2));
+        // It never regrows in paint.
+        assert!(world.shown(&d, &env.terrain, 1000 + 25 * 3600, &rules, &fp).iter().all(|s| s.window != 1));
     }
 
     #[test]
