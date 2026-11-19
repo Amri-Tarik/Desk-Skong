@@ -346,7 +346,9 @@ pub(crate) fn effort(from: Vec2, to: Vec2) -> f32 {
     (to.x - from.x).abs() + 2.5 * (to.y - from.y).abs()
 }
 
-/// The next coin to go for (cheapest effort, not blocked, within `range`).
+/// The nearest coin by straight-line effort (not blocked, within `range`): the old pick,
+/// kept for tests of `effort`; the real choice is `quickest_coin` (route time).
+#[cfg(test)]
 pub(crate) fn next_coin(coins: &[Vec2], from: Vec2, range: f32, blocked: impl Fn(Vec2) -> bool) -> Option<Vec2> {
     coins.iter().copied().filter(|c| c.distance(from) < range && !blocked(*c)).min_by(|a, b| effort(from, *a).total_cmp(&effort(from, *b)))
 }
