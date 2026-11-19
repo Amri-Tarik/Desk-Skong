@@ -120,7 +120,10 @@ pub(crate) fn want(p: &KnownPlace, m: &Mind) -> f32 {
         // Beats sitting on any old ledge when tired (Rest tops out at 0.75 here).
         PlaceKind::Bench => (0.1 + 0.85 * smooth(0.3, 0.7, tired) + 0.12 * p.favour) * calm,
         PlaceKind::Deposit if m.needs.energy < 0.3 => 0.0,
-        PlaceKind::Deposit => 0.7 * m.needs.mischief + 0.35 * m.emotions.excitement + 0.2 * m.needs.boredom * m.personality.playfulness + 0.05 * p.favour,
+        // Geo! On par with loot (0.6..0.85): beats everything but fights and visitors.
+        PlaceKind::Deposit => {
+            (0.6 + 0.15 * m.needs.mischief + 0.1 * m.emotions.excitement + 0.1 * m.needs.boredom * m.personality.playfulness + 0.05 * p.favour).min(0.85)
+        }
     }
 }
 
