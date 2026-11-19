@@ -25,29 +25,9 @@ _Last updated 2026-11-19 (late afternoon): bug-test rounds 1–2 fixed and merge
 
 Nothing — all draft PRs from day 1 were finished and merged on day 2.
 
-## Backlog (agreed ideas, not started)
+## Backlog
 
-- **Crystal dash in the planner beyond gap crossing** (long flat runs, wall-launched). Today
-  it is only a last resort in Hurry for pairs nothing else connects (1–2 edges per graph),
-  so he never visibly chooses it. Make Hurry prefer it for long same-height runs.
-- **Directional NPC art**: Hornet's clips face one way; with the knight on her other side
-  she looks like she ignores him. Respect each visitor's facing everywhere they idle and talk.
-- **Visitors spawning too high**: keep arrival spots low enough that the sprite never clips
-  off the top of the screen (account for the sprite height, not just the feet).
-- **Reacting to on-screen text without OCR** (idea; opt-in, local only): UI Automation
-  TextPattern — the selection-changed event gives the selected text and its screen rect
-  (Word, Notepad, Edge / Chrome; Electron apps may need accessibility on). Start with
-  "curious about highlighted text"; keyword reactions later. Throttle text-change events.
-- Geo showers through the (subtle) portal; tray/panel trigger for visits.
-- Ability progression (earn dash/wings/claw/crystal heart with the game's Collect
-  cutscenes) — optional, not decided.
-- Enemies / training targets wandering in from screen edges (NPC/enemy art from level
-  files); Zote as a sparring partner.
-- Hazards: `Spike Death` / `Acid Death` acts exist, nothing triggers them yet.
-- Unn slug form (28 unused `Slug *` clips) for very calm moods.
-- Dream Gate travel as the fallback when no route exists.
-- HK particle systems (crystal shards, run/land dust) recreated procedurally.
-- Lazy per-clip rasterization to cut frame memory at large scales.
+The prioritised backlog lives in [ROADMAP.md](ROADMAP.md) (the user edits and annotates it).
 
 ## Design principles (from the user)
 
