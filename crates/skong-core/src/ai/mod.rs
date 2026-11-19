@@ -1070,7 +1070,7 @@ impl Brain {
         };
         let flee = if self.flee_from.is_some() && e.startle > 0.3 { 1.2 } else { 0.0 };
         let hide = if s.fullscreen { 1.3 } else { 0.0 };
-        let ride = if s.since_carried(self.now) < 0.6 && p.knight.is_grounded() { 0.65 + 0.2 * e.excitement } else { 0.0 };
+        let ride = if s.since_carried(self.now) < 2.0 && p.knight.is_grounded() { 0.65 + 0.2 * e.excitement } else { 0.0 };
         let knocked = if self.knocked_out { 1.25 } else { 0.0 };
         let recover = if e.hurt > 0.35 { (0.5 + 0.4 * e.hurt).min(0.9) } else { 0.0 };
         // A visitor! Drop (almost) everything and go say hello.

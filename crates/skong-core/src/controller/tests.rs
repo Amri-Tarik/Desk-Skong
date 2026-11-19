@@ -583,18 +583,34 @@ fn moved(id: WindowId, r: RectF) -> Terrain {
 }
 
 #[test]
-fn carried_by_moving_window() {
+fn a_window_moving_up_or_down_drops_him_into_a_fall() {
+    let old = moved(1, RectF::new(800.0, 600.0, 1200.0, 900.0));
+    for new_top in [570.0, 640.0] {
+        let mut c = standing(&old, 1000.0, 500.0);
+        let new = moved(1, RectF::new(850.0, new_top, 1250.0, new_top + 300.0));
+        let mut ev = vec![];
+        c.on_terrain_rebuilt(&old, &new, &mut ev);
+        assert_eq!(ev, vec![MoveEvent::PlatformMoved { owner: 1 }, MoveEvent::LostSupport], "top {new_top}");
+        assert_eq!(c.pos, Vec2::new(1000.0, 600.0), "not carried");
+        assert_eq!(c.state, MoveState::Airborne);
+    }
+}
+
+#[test]
+fn a_window_sliding_sideways_slides_out_from_under_him() {
     let old = moved(1, RectF::new(800.0, 600.0, 1200.0, 900.0));
     let mut c = standing(&old, 1000.0, 500.0);
-    let new = moved(1, RectF::new(850.0, 570.0, 1250.0, 870.0));
+    let new = moved(1, RectF::new(850.0, 600.0, 1250.0, 900.0));
     let mut ev = vec![];
     c.on_terrain_rebuilt(&old, &new, &mut ev);
-    assert_eq!(ev, vec![MoveEvent::CarriedBy { owner: 1 }]);
-    assert_eq!(c.pos, Vec2::new(1050.0, 570.0));
-    assert_eq!(c.support.and_then(|s| s.owner), Some(1));
-    // And keeps standing there.
-    let ev = run(&mut c, &new, idle(), 10);
-    assert!(ev.is_empty(), "{ev:?}");
+    assert_eq!(ev, vec![MoveEvent::PlatformMoved { owner: 1 }]);
+    assert_eq!(c.pos, Vec2::new(1000.0, 600.0), "stays where he is");
+    assert!(c.is_grounded());
+    // Slid far enough that he is past its left end: he falls.
+    let far = moved(1, RectF::new(1100.0, 600.0, 1500.0, 900.0));
+    let mut ev = vec![];
+    c.on_terrain_rebuilt(&new, &far, &mut ev);
+    assert!(ev.contains(&MoveEvent::LostSupport), "{ev:?}");
 }
 
 #[test]
@@ -779,7 +795,7 @@ fn jumps_up_through_content_and_drops_through_it() {
 }
 
 #[test]
-fn carried_by_window_while_standing_on_its_content() {
+fn falls_when_the_window_showing_his_content_ledge_moves() {
     let old = window_with_content(PAINT, 800.0, 1200.0, 700.0);
     let mut c = standing(&old, 1000.0, 400.0);
     assert_eq!(c.pos.y, 700.0);
@@ -787,11 +803,9 @@ fn carried_by_window_while_standing_on_its_content() {
     let new = window_with_content(moved, 850.0, 1250.0, 670.0);
     let mut ev = vec![];
     c.on_terrain_rebuilt(&old, &new, &mut ev);
-    assert_eq!(ev, vec![MoveEvent::CarriedBy { owner: 1 }]);
-    assert_eq!(c.pos, Vec2::new(1050.0, 670.0));
-    assert_eq!(c.support.map(|s| s.kind), Some(LedgeKind::Content));
-    let ev = run(&mut c, &new, idle(), 10);
-    assert!(ev.is_empty(), "{ev:?}");
+    assert_eq!(ev, vec![MoveEvent::PlatformMoved { owner: 1 }, MoveEvent::LostSupport]);
+    assert_eq!(c.pos, Vec2::new(1000.0, 700.0));
+    assert_eq!(c.state, MoveState::Airborne);
 }
 
 #[test]

@@ -195,7 +195,7 @@ pub struct Senses {
     /// Changes seen this tick.
     pub changes: DesktopChanges,
     pub cursor: Option<CursorSense>,
-    /// Brain clock time of the last `CarriedBy` event.
+    /// Brain clock time of the last `PlatformMoved` event.
     pub carried_at: Option<f32>,
     /// Window the knight stood on last tick.
     pub support_owner: Option<WindowId>,
@@ -252,7 +252,7 @@ impl Senses {
             }
         });
 
-        if p.move_events.iter().any(|e| matches!(e, MoveEvent::CarriedBy { .. })) {
+        if p.move_events.iter().any(|e| matches!(e, MoveEvent::PlatformMoved { .. })) {
             self.carried_at = Some(now);
         }
         self.support_closed = self.support_owner.and_then(|owner| self.changes.closed.iter().find(|c| c.id == owner).copied());
@@ -298,7 +298,7 @@ impl Senses {
         self.at_bench.is_some() || self.perch
     }
 
-    /// Seconds since the knight was last carried by a moving window.
+    /// Seconds since the window under the knight last moved (he fell off / it slid away).
     pub fn since_carried(&self, now: f32) -> f32 {
         self.carried_at.map_or(f32::INFINITY, |t| now - t)
     }
