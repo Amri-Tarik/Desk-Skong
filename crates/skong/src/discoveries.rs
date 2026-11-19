@@ -142,6 +142,8 @@ pub struct Discoveries {
     knight_on: Option<WindowId>,
     /// Monitors running a fullscreen game: nothing shows there.
     game_monitors: Vec<RectI>,
+    /// Clock of the last check for broken deposits due to turn up elsewhere.
+    relocate_checked: f32,
     pub capturable: bool,
 }
 
@@ -212,6 +214,7 @@ impl Discoveries {
             observed: (u64::MAX, f32::NEG_INFINITY),
             knight_on: None,
             game_monitors: Vec::new(),
+            relocate_checked: 0.0,
             capturable: false,
         };
         d.rescale(scale);
@@ -259,6 +262,18 @@ impl Discoveries {
             self.revealed(found, desk, id);
         }
         self.knight_on = on;
+
+        // Broken deposits turn up again in another app's window once due.
+        if clock - self.relocate_checked >= 1.0 {
+            self.relocate_checked = clock;
+            let site = Site { terrain, ages: &self.ages, now: clock, min_age: LASTING_SECS, occupancy: occ, footprint: &fp };
+            let placed = self.world.relocate_due(desk, &site, now_unix());
+            for (fid, wid) in placed {
+                log::info!("discoveries: a new geo deposit turned up (window {wid})");
+                self.revealed(vec![fid], desk, wid);
+                self.save();
+            }
+        }
 
         let mut raw = self.world.shown(desk, terrain, now_unix(), &self.rules, &fp);
         // Really on its ledge this tick (the grace copies below must not count as seen, or
