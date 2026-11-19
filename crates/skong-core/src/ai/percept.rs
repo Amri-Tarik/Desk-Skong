@@ -264,8 +264,8 @@ impl Senses {
             }
         }
 
-        let derived_fullscreen = p.desktop.windows.first().is_some_and(|w| w.fullscreen)
-            || p.desktop.windows.iter().any(|w| w.fullscreen && w.foreground);
+        let derived_fullscreen = cfg.hide_for_fullscreen
+            && (p.desktop.windows.first().is_some_and(|w| w.fullscreen) || p.desktop.windows.iter().any(|w| w.fullscreen && w.foreground));
         self.fullscreen = p.fullscreen_front || derived_fullscreen;
         self.user_busy = p.user.keys_per_sec >= cfg.typing_busy_rate;
         let away = p.user.idle_secs >= cfg.user_away_secs;

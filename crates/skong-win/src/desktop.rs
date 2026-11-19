@@ -400,7 +400,8 @@ fn class_name(hwnd: HWND) -> String {
     String::from_utf16_lossy(&buf[..n.max(0) as usize])
 }
 
-fn query_exe_name(pid: u32) -> Option<String> {
+/// Full image path of a process (e.g. `C:\Games\x\x.exe`).
+pub(crate) fn query_exe_path(pid: u32) -> Option<String> {
     // SAFETY: handle is closed below on every path after a successful open.
     let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }.ok()?;
     let mut buf = [0u16; 1024];
@@ -410,7 +411,11 @@ fn query_exe_name(pid: u32) -> Option<String> {
     // SAFETY: valid handle from OpenProcess.
     let _ = unsafe { CloseHandle(handle) };
     res.ok()?;
-    let path = String::from_utf16_lossy(&buf[..len as usize]);
+    Some(String::from_utf16_lossy(&buf[..len as usize]))
+}
+
+fn query_exe_name(pid: u32) -> Option<String> {
+    let path = query_exe_path(pid)?;
     Some(path.rsplit(['\\', '/']).next().unwrap_or_default().to_owned())
 }
 

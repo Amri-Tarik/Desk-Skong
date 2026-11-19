@@ -3,6 +3,7 @@
 pub mod capture;
 pub mod debug_overlay;
 pub mod desktop;
+pub mod games;
 pub mod input;
 pub mod monitor;
 pub mod process;
