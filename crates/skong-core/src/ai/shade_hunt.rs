@@ -36,6 +36,8 @@ pub(crate) struct ShadeHunt {
     goal_at: Vec2,
     /// Shade geo when last seen (for the reason line).
     geo: u32,
+    /// Seconds the Shade has stayed out of slash reach while fighting.
+    out_of_reach: f32,
 }
 
 impl ShadeHunt {
@@ -55,6 +57,7 @@ impl ShadeHunt {
             double_jumped: false,
             goal_at: goal,
             geo: shade.geo,
+            out_of_reach: 0.0,
         }
     }
 
@@ -165,6 +168,17 @@ impl ShadeHunt {
                 }
                 Status::Running
             }
+            (HuntPhase::Fight, Some(_)) if self.out_of_reach > cfg.unreachable_secs => {
+                // Can't get at it: no frantic chase. Calm down and leave it for a while.
+                ctx.nav.stop();
+                let under = Self::ground_under(ctx, shade.map_or(ctx.p.knight.pos, |s| s.pos));
+                ctx.interest.block(PoiTarget::Spot(under), ctx.now + 2.0 * cfg.shade_retry);
+                ctx.stakes.shade_ready_at = ctx.now + 2.0 * cfg.shade_retry;
+                ctx.mind.emotions.excitement *= 0.3;
+                ctx.mind.annoy(0.15);
+                log::debug!("brain: the shade is out of reach; leaving it for now");
+                Status::Done
+            }
             (HuntPhase::Fight, Some(sh)) => {
                 self.fight(ctx, sh);
                 Status::Running
@@ -195,6 +209,11 @@ impl ShadeHunt {
         let centre = body_centre(ctx);
         let off = sh.pos - centre;
         let side = Side::of(off.x).unwrap_or(k.facing);
+        if off.length() > b.attack_range * 1.6 {
+            self.out_of_reach += ctx.dt();
+        } else {
+            self.out_of_reach = 0.0;
+        }
 
         if self.attack_cd <= 0.0
             && let Some((spell, w)) = try_spell(ctx, Some(off), false, false)
@@ -261,47 +280,81 @@ impl ShadeHunt {
 
 // --- Loot ---------------------------------------------------------------------------
 
-/// Walk over the Geo lying around to pick it up.
+/// Gather the Geo lying around: nearest-first by an effort-weighted distance (climbing
+/// costs more than walking, so a cluster on his ledge goes before a coin up high), hurry
+/// for a big pile and stroll for stragglers, give up on a coin he can't reach (it fades
+/// on its own), and a happy little act after a big haul.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Loot {
     travel: Option<Travel>,
     target: Vec2,
     elapsed: f32,
-    picked: u32,
+    pub picked: u32,
+    /// Coins in sight when the gathering began.
+    pile: usize,
+    cheer: Option<ActWait>,
+}
+
+/// Coins picked up in one go that earn a happy act.
+const BIG_HAUL: u32 = 6;
+
+/// Effort to walk from `from` to `to`: vertical moves (jumps, drops) cost extra.
+pub(crate) fn effort(from: Vec2, to: Vec2) -> f32 {
+    (to.x - from.x).abs() + 2.5 * (to.y - from.y).abs()
+}
+
+/// The next coin to go for (cheapest effort, not blocked, within `range`).
+pub(crate) fn next_coin(coins: &[Vec2], from: Vec2, range: f32, blocked: impl Fn(Vec2) -> bool) -> Option<Vec2> {
+    coins.iter().copied().filter(|c| c.distance(from) < range && !blocked(*c)).min_by(|a, b| effort(from, *a).total_cmp(&effort(from, *b)))
 }
 
 impl Loot {
-    pub fn start(_ctx: &mut Ctx) -> Self {
-        Self { travel: None, target: Vec2::ZERO, elapsed: 0.0, picked: 0 }
+    pub fn start(ctx: &mut Ctx) -> Self {
+        let k = ctx.p.knight.pos;
+        let range = ctx.cfg.stakes.loot_range;
+        let pile = ctx.stakes.sense.coins.iter().filter(|c| c.distance(k) < range).count();
+        if pile >= 8 {
+            ctx.mind.excite(0.3);
+        }
+        Self { travel: None, target: Vec2::ZERO, elapsed: 0.0, picked: 0, pile, cheer: None }
+    }
+
+    fn style(&self, ctx: &Ctx) -> TravelStyle {
+        let left = ctx.stakes.sense.coins.len();
+        let bother = ctx.cfg.bother_level;
+        if left >= 8 && bother > 0.0 && ctx.mind.needs.energy > 0.25 {
+            TravelStyle::Hurry
+        } else if left <= 2 || bother <= 0.0 {
+            TravelStyle::Stroll
+        } else {
+            TravelStyle::Normal
+        }
     }
 
     pub fn tick(&mut self, ctx: &mut Ctx) -> Status {
+        if let Some(w) = &mut self.cheer {
+            return if w.tick(ctx) { Status::Done } else { Status::Running };
+        }
         self.elapsed += ctx.dt();
-        if self.elapsed > 30.0 {
+        if self.elapsed > 120.0 {
             ctx.stakes.loot_ready_at = ctx.now + 20.0;
-            return Status::Done;
+            return self.wrap_up(ctx);
         }
         let k = ctx.p.knight.pos;
         let range = ctx.cfg.stakes.loot_range;
         let still_there = ctx.stakes.sense.coins.iter().any(|c| c.distance(self.target) < 12.0);
         if self.travel.is_none() || !still_there {
-            if self.travel.is_some() {
+            if self.travel.is_some() && !still_there {
                 self.picked += 1;
             }
-            let next = ctx
-                .stakes
-                .sense
-                .coins
-                .iter()
-                .copied()
-                .filter(|c| c.distance(k) < range && !ctx.interest.is_blocked(PoiTarget::Spot(*c)))
-                .min_by(|a, b| a.distance(k).total_cmp(&b.distance(k)));
+            let interest = &*ctx.interest;
+            let next = next_coin(&ctx.stakes.sense.coins, k, range, |c| interest.is_blocked(PoiTarget::Spot(c)));
             let Some(coin) = next else {
                 ctx.nav.stop();
-                return Status::Done;
+                return self.wrap_up(ctx);
             };
             self.target = coin;
-            let style = if ctx.mind.arousal() > 0.3 { TravelStyle::Hurry } else { TravelStyle::Normal };
+            let style = self.style(ctx);
             self.travel = Some(Travel::to(ctx, coin, style));
         }
         if let Some(t) = &mut self.travel {
@@ -313,13 +366,16 @@ impl Loot {
                         let dx = self.target.x - k.x;
                         ctx.out.motion = Motion::Direct(MoveInput { x: dx.signum(), gait: Gait::Walk, ..Default::default() });
                     }
-                    if self.elapsed > 0.0 && k.distance(self.target) > 40.0 {
-                        ctx.interest.block(PoiTarget::Spot(self.target), ctx.now + 60.0);
+                    if k.distance(self.target) > 40.0 {
+                        ctx.interest.block(PoiTarget::Spot(self.target), ctx.now + 120.0);
+                        ctx.out.stakes.push(StakeEvent::AbandonCoin { at: self.target });
                         self.travel = None;
                     }
                 }
                 TravelStep::Failed => {
-                    ctx.interest.block(PoiTarget::Spot(self.target), ctx.now + 60.0);
+                    // Unreachable: leave it (it fades), try the next one.
+                    ctx.interest.block(PoiTarget::Spot(self.target), ctx.now + 120.0);
+                    ctx.out.stakes.push(StakeEvent::AbandonCoin { at: self.target });
                     self.travel = None;
                 }
             }
@@ -327,7 +383,28 @@ impl Loot {
         Status::Running
     }
 
+    /// Done gathering: a happy act after a big haul.
+    fn wrap_up(&mut self, ctx: &mut Ctx) -> Status {
+        if self.picked >= BIG_HAUL && ctx.grounded() {
+            ctx.mind.adjust(|n| &mut n.boredom, -0.2);
+            ctx.mind.excite(0.2);
+            self.cheer = ActWait::named(ctx, "collect_happy");
+            if self.cheer.is_some() {
+                return Status::Running;
+            }
+        }
+        Status::Done
+    }
+
+    /// Playing the happy act after a big haul (keep at it).
+    pub fn cheering(&self) -> bool {
+        self.cheer.is_some()
+    }
+
     pub fn reason(&self) -> String {
-        format!("loot: picking up geo ({} so far)", self.picked)
+        if self.cheer.is_some() {
+            return format!("loot: happy with {} coins", self.picked);
+        }
+        format!("loot: gathering geo ({}/{} picked)", self.picked, self.pile)
     }
 }

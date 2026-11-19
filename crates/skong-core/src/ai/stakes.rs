@@ -28,6 +28,8 @@ pub enum StakeEvent {
     StrikeShade { damage: u32, from: Vec2 },
     /// A cursor battle was won: loot bursts out of the beaten cursor at `at`.
     Victory { at: Vec2 },
+    /// He couldn't reach the coin at `at`: let it fade.
+    AbandonCoin { at: Vec2 },
 }
 
 /// The Shade as the app sees it (only while it exists and is alive).
@@ -90,11 +92,17 @@ pub struct StakesConfig {
     pub masks: u32,
     /// Give up a Shade fight after this long (s).
     pub shade_fight_secs: f32,
+    /// Give up (calmly) when the target stays out of slash reach this long (s).
+    pub unreachable_secs: f32,
     /// Walk over to resting Geo within this distance (px).
     pub loot_range: f32,
     /// Geo dropped by a beaten cursor: [min, max].
     pub victory_geo: [u32; 2],
     pub spells: SpellConfig,
+    /// Organic Geo: shattered windows, showers.
+    pub sources: crate::stakes::GeoSourceConfig,
+    /// Loose coins vanish after this long (s); unreachable ones fade away.
+    pub coin_lifetime: f32,
 }
 
 impl Default for StakesConfig {
@@ -107,9 +115,12 @@ impl Default for StakesConfig {
             shade_retry: 180.0,
             masks: 5,
             shade_fight_secs: 60.0,
-            loot_range: 700.0,
+            unreachable_secs: 4.0,
+            loot_range: 2600.0,
             victory_geo: [8, 30],
             spells: SpellConfig::default(),
+            sources: crate::stakes::GeoSourceConfig::default(),
+            coin_lifetime: crate::stakes::geo::COIN_LIFETIME,
         }
     }
 }
@@ -141,6 +152,10 @@ impl Brain {
         // Unclaimed hits only carry over while a Shade fight is on.
         let carried = if matches!(self.active, Active::ShadeHunt(_)) { self.stakes.sense.shade_hits } else { 0 };
         let hits = carried + sense.shade_hits;
+        // A fresh pile of Geo is exciting.
+        if sense.coins.len() >= self.stakes.sense.coins.len() + 5 {
+            self.mind.excite(0.35);
+        }
         self.stakes.sense = StakesSense { shade_hits: hits, ..sense };
     }
 
@@ -169,9 +184,8 @@ impl Brain {
         // Nothing interrupts dying (`dying` is cleared when the respawn is over).
         let dead = if st.pending_death.is_some() || (st.dying && matches!(self.active, Active::Dead(_))) { 2.0 } else { 0.0 };
 
-        let hunting = matches!(self.active, Active::ShadeHunt(_));
         let hunt = match st.sense.shade {
-            Some(_) if st.force_hunt || hunting => 1.1,
+            Some(_) if st.force_hunt => 1.1,
             Some(sh) if self.now >= st.shade_ready_at && !s.fullscreen && e.hurt < 0.25 && e.startle < 0.3 && m.needs.energy > 0.35 => {
                 let pers = m.personality;
                 (0.3 + 0.35 * pers.boldness + 0.25 * e.excitement + 0.15 * (sh.geo as f32 / 200.0).min(1.0)).min(0.85)
@@ -181,7 +195,9 @@ impl Brain {
 
         let k = p.knight.pos;
         let near_coin = st.sense.coins.iter().any(|c| c.distance(k) < cfg.loot_range);
-        let loot = if near_coin && self.now >= st.loot_ready_at && !s.fullscreen && p.knight.is_grounded() { (0.6 + 0.2 * e.excitement).min(0.8) } else { 0.0 };
+        let pile = if st.sense.coins.len() >= 8 { 0.1 } else { 0.0 };
+        let cheering = matches!(&self.active, Active::Loot(l) if l.cheering());
+        let loot = if near_coin && self.now >= st.loot_ready_at && !s.fullscreen && p.knight.is_grounded() { (0.6 + 0.2 * e.excitement + pile).min(0.85) } else if cheering { 0.7 } else { 0.0 };
         [(BehaviourKind::Dead, dead), (BehaviourKind::ShadeHunt, hunt), (BehaviourKind::Loot, loot)]
     }
 }

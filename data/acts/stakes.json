@@ -11,6 +11,8 @@
       "steps": [ { "clip": "Hazard Respawn", "interruptible": false } ] },
     { "name": "respawn_wake", "tags": ["respawn", "seat", "sad"], "requires": "seat", "weight": 0.0,
       "steps": [ { "clip": "Respawn Wake", "interruptible": false }, { "clip": "Sit Idle", "hold": [1.5, 2.5] }, { "clip": "Get Off" } ] },
+    { "name": "collect_happy", "tags": ["playful", "bold"], "requires": "grounded", "weight": 0.0, "cooldown": 30,
+      "steps": [ { "clip": "Collect Normal 1" }, { "clip": "Collect Normal 2" }, { "clip": "Collect Normal 3" } ] },
     { "name": "reclaim_shade", "tags": ["fight", "bold"], "requires": "grounded", "weight": 0.0,
       "steps": [ { "clip": "Collect Shadow", "hold": [0.4, 0.4], "interruptible": false } ] },
     { "name": "fireball", "tags": ["fight", "spell"], "requires": "grounded", "weight": 0.0,

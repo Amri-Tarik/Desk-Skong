@@ -18,16 +18,18 @@
 pub mod geo;
 pub mod save;
 pub mod shade;
+pub mod sources;
 pub mod spells;
 #[cfg(test)]
 mod tests;
 
 pub use geo::{Coin, CoinSize, GeoField, Pickup};
 pub use save::{ShadeSave, StakesSave};
+pub use sources::{GeoDrop, GeoSourceConfig, GeoSources};
 pub use shade::{Shade, ShadePhase, ShadeTick};
 pub use spells::{Spell, SpellBook, SpellConfig, SpellSituation};
 
-use crate::geom::Vec2;
+use crate::geom::{RectF, Vec2};
 use crate::terrain::{LedgeKind, Terrain};
 
 /// How the knight died (picks the death act; hazards are for later: spikes, acid pools).
@@ -100,4 +102,28 @@ impl Xorshift {
     pub fn range(&mut self, lo: f32, hi: f32) -> f32 {
         lo + (hi - lo) * self.f32()
     }
+}
+
+/// Keep `p` inside the union of `areas` (monitor work areas), `margin` px from their
+/// edges: a point in a dead zone between monitors (or off-screen) moves to the nearest
+/// point of the nearest area. Empty `areas` = no clamping.
+pub fn clamp_to_areas(p: Vec2, areas: &[RectF], margin: f32) -> Vec2 {
+    let inner = |a: &RectF| {
+        let mx = margin.min(a.width() * 0.5);
+        let my = margin.min(a.height() * 0.5);
+        RectF::new(a.left + mx, a.top + my, a.right - mx, a.bottom - my)
+    };
+    areas
+        .iter()
+        .map(|a| {
+            let r = inner(a);
+            Vec2::new(p.x.clamp(r.left, r.right), p.y.clamp(r.top, r.bottom))
+        })
+        .min_by(|a, b| a.distance(p).total_cmp(&b.distance(p)))
+        .unwrap_or(p)
+}
+
+/// The work area containing `p` (or the nearest one).
+pub fn area_of(p: Vec2, areas: &[RectF]) -> Option<RectF> {
+    areas.iter().copied().min_by(|a, b| clamp_to_areas(p, &[*a], 0.0).distance(p).total_cmp(&clamp_to_areas(p, &[*b], 0.0).distance(p)))
 }

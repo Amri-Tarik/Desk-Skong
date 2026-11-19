@@ -103,7 +103,7 @@ impl BehaviourKind {
 
     /// Exclusive behaviours end themselves; only urgent challengers may interrupt.
     pub fn exclusive(self) -> bool {
-        matches!(self, BehaviourKind::Nap | BehaviourKind::Battle | BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead | BehaviourKind::ShadeHunt)
+        matches!(self, BehaviourKind::Nap | BehaviourKind::Battle | BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead | BehaviourKind::ShadeHunt | BehaviourKind::Loot)
     }
 }
 

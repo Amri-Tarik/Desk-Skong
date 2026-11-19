@@ -80,6 +80,8 @@ struct Sim {
     events: Vec<StakeEvent>,
     hits_from_shade: u32,
     activity: Activity,
+    /// A Shade that never moves (overrides `shade`).
+    fixed_shade: Option<ShadeSense>,
 }
 
 impl Sim {
@@ -112,6 +114,7 @@ impl Sim {
             events: vec![],
             hits_from_shade: 0,
             activity: Activity::default(),
+            fixed_shade: None,
         }
     }
 
@@ -126,13 +129,14 @@ impl Sim {
         let hunted = self.brain.behaviour() == BehaviourKind::ShadeHunt;
         let centre = self.knight.body().center();
         if let Some(sh) = &mut self.shade {
-            let t = sh.step(DT, Some(centre), hunted, self.terrain.bounds);
+            let t = sh.step(DT, Some(centre), hunted, &[self.terrain.bounds]);
             self.hits_from_shade += u32::from(t.hit_knight);
             if t.burst {
                 self.shade = None;
             }
         }
         let shade = self.shade.as_ref().filter(|s| s.alive()).map(|s| ShadeSense { pos: s.pos, vulnerable: s.vulnerable(), fighting: s.fighting(), geo: s.geo });
+        let shade = self.fixed_shade.or(shade);
         let shade_hits = std::mem::take(&mut self.hits_from_shade);
         self.brain.sense_stakes(StakesSense { shade, coins: self.coins.clone(), shade_hits, scale: 1.0 });
 
@@ -342,4 +346,75 @@ fn he_walks_over_loose_geo() {
     assert!(sim.run_until(5.0, |s| s.brain.behaviour() == BehaviourKind::Loot));
     assert!(sim.run_until(15.0, |s| s.coins.is_empty()), "picked everything up");
     assert!(sim.run_until(3.0, |s| s.brain.behaviour() != BehaviourKind::Loot));
+}
+
+#[test]
+fn an_unreachable_shade_is_left_alone_calmly() {
+    let mut sim = Sim::new();
+    sim.knight.pos.x = 900.0;
+    // High up over the floor, never coming down: nothing to slash at.
+    sim.fixed_shade = Some(ShadeSense { pos: Vec2::new(1000.0, FLOOR - 600.0), vulnerable: true, fighting: false, geo: 40 });
+    sim.brain.hunt_shade();
+    assert!(sim.run_until(3.0, |s| s.brain.behaviour() == BehaviourKind::ShadeHunt));
+    assert!(sim.run_until(15.0, |s| s.brain.behaviour() != BehaviourKind::ShadeHunt), "gives up instead of chasing forever");
+    let mut restarts = 0;
+    let mut was = false;
+    for _ in 0..(120.0 / DT) as usize {
+        sim.step();
+        let now = sim.brain.behaviour() == BehaviourKind::ShadeHunt;
+        restarts += u32::from(now && !was);
+        was = now;
+    }
+    assert_eq!(restarts, 0, "no frantic re-planning");
+    assert!(sim.brain.mind().emotions.excitement < 0.5);
+}
+
+#[test]
+fn an_unreachable_cursor_ends_the_battle() {
+    let mut sim = Sim::new();
+    sim.brain.mind_mut().needs.mischief = 1.0;
+    sim.cursor = Some(Cursor { pos: sim.knight.body().center() + Vec2::new(150.0, -20.0), ..Default::default() });
+    assert!(sim.run_until(10.0, |s| s.brain.behaviour() == BehaviourKind::Battle));
+    assert!(sim.run_until(5.0, |s| s.started.iter().any(|a| a == "challenge") && s.act.is_none()));
+    // The cursor parks way up where he can't jump.
+    sim.cursor = Some(Cursor { pos: sim.knight.body().center() + Vec2::new(0.0, -700.0), ..Default::default() });
+    assert!(sim.run_until(15.0, |s| s.brain.behaviour() != BehaviourKind::Battle), "gives up");
+}
+
+#[test]
+fn gathering_goes_for_the_easy_coins_first() {
+    use super::shade_hunt::next_coin;
+    let from = Vec2::new(500.0, FLOOR);
+    let up_close = Vec2::new(560.0, FLOOR - 300.0);
+    let along = Vec2::new(800.0, FLOOR);
+    let far = Vec2::new(1500.0, FLOOR);
+    let coins = [far, up_close, along];
+    assert_eq!(next_coin(&coins, from, 3000.0, |_| false), Some(along), "walking 300 beats climbing 300");
+    assert_eq!(next_coin(&coins, from, 3000.0, |c| c == along), Some(up_close));
+    assert_eq!(next_coin(&coins, from, 200.0, |_| false), None, "out of range");
+
+    // In the brain: the floor coins in order of distance, the high one last.
+    let mut sim = Sim::new();
+    sim.knight.pos.x = 500.0;
+    sim.coins = vec![far, up_close, along, Vec2::new(650.0, FLOOR)];
+    assert!(sim.run_until(5.0, |s| s.brain.behaviour() == BehaviourKind::Loot));
+    let mut order = Vec::new();
+    sim.run_until(30.0, |s| {
+        if let Some(NavGoal::Point(p)) = s.nav.goal
+            && order.last() != Some(&p)
+        {
+            order.push(p);
+        }
+        s.coins.is_empty()
+    });
+    assert_eq!(order.first(), Some(&Vec2::new(650.0, FLOOR)), "{order:?}");
+    assert_eq!(order.get(1), Some(&along), "{order:?}");
+}
+
+#[test]
+fn a_big_haul_ends_with_a_happy_act() {
+    let mut sim = Sim::new();
+    sim.coins = (0..8).map(|i| Vec2::new(1000.0 + 40.0 * i as f32, FLOOR)).collect();
+    assert!(sim.run_until(5.0, |s| s.brain.behaviour() == BehaviourKind::Loot));
+    assert!(sim.run_until(40.0, |s| s.started.iter().any(|a| a == "collect_happy")), "{:?}", sim.started);
 }

@@ -4,7 +4,8 @@
 use crate::geom::{RectF, Vec2};
 use crate::terrain::Terrain;
 
-use super::Xorshift;
+use super::{Xorshift, area_of, clamp_to_areas};
+use super::sources::{GeoDrop, drop_point};
 
 /// Coin denominations (the game's small / medium / large Geo).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -79,6 +80,8 @@ pub struct GeoField {
     rng: Xorshift,
     /// Render scale (px per game unit / 64): physics constants scale with it.
     pub scale: f32,
+    /// Coins vanish after lying around this long (s): the ones he can't reach fade out.
+    pub lifetime: f32,
 }
 
 /// Physics at scale 1 (px, s).
@@ -90,13 +93,15 @@ const BOUNCE: f32 = 0.45;
 const MAX_BOUNCES: u8 = 3;
 /// Half width of a coin's pickup box.
 const HALF: f32 = 9.0;
-/// Coins disappear after lying around this long (s).
-pub const COIN_LIFETIME: f32 = 15.0 * 60.0;
-pub const MAX_COINS: usize = 48;
+/// Default coin lifetime (s).
+pub const COIN_LIFETIME: f32 = 4.0 * 60.0;
+/// Coins blink this long before vanishing (s).
+pub const FADE_SECS: f32 = 6.0;
+pub const MAX_COINS: usize = 80;
 
 impl GeoField {
     pub fn new(seed: u32) -> Self {
-        Self { coins: Vec::new(), next_id: 1, rng: Xorshift::new(seed), scale: 1.0 }
+        Self { coins: Vec::new(), next_id: 1, rng: Xorshift::new(seed), scale: 1.0, lifetime: COIN_LIFETIME }
     }
 
     pub fn coins(&self) -> &[Coin] {
@@ -128,11 +133,40 @@ impl GeoField {
         }
     }
 
+    /// Spill a [`GeoDrop`]: a shattered window flings its coins outward from all over
+    /// its rect; a shower lets them fall in through the top.
+    pub fn spill(&mut self, d: &GeoDrop) {
+        let room = MAX_COINS.saturating_sub(self.coins.len()).max(1);
+        let s = self.scale;
+        let centre = d.rect.center();
+        for size in CoinSize::split(d.amount, room.min(30)) {
+            let (u, v) = (self.rng.f32(), self.rng.f32());
+            let pos = drop_point(d.rect, u, v);
+            let vel = if d.shower {
+                Vec2::new(self.rng.range(-120.0, 120.0), self.rng.range(0.0, 250.0)) * s
+            } else {
+                let out = (pos - centre) / (d.rect.width().max(d.rect.height()) * 0.5).max(1.0);
+                Vec2::new(out.x * 500.0 + self.rng.range(-120.0, 120.0), self.rng.range(-700.0, -250.0)) * s
+            };
+            self.coins.push(Coin { id: self.next_id, size, pos, vel, resting: false, age: 0.0, bounces: 0 });
+            self.next_id += 1;
+        }
+    }
+
+    /// Is this coin about to vanish (blinking)?
+    pub fn fading(&self, c: &Coin) -> bool {
+        c.age >= self.lifetime - FADE_SECS
+    }
+
     /// Advance the physics: fall, land on (one-way) ledges from above, bounce, settle.
     /// Resting coins whose ledge went away fall again.
-    pub fn step(&mut self, dt: f32, terrain: &Terrain) {
+    /// `areas` = monitor work areas: coins never leave them (no dead zones between
+    /// monitors); empty = the terrain bounds.
+    pub fn step(&mut self, dt: f32, terrain: &Terrain, areas: &[RectF]) {
         let s = self.scale.max(0.1);
-        let b = terrain.bounds;
+        let bounds = [terrain.bounds];
+        let areas = if areas.is_empty() { &bounds[..] } else { areas };
+        let inside = |p: Vec2| areas.iter().any(|a| a.left <= p.x && p.x <= a.right && a.top <= p.y && p.y <= a.bottom);
         for c in &mut self.coins {
             c.age += dt;
             if c.resting {
@@ -145,12 +179,16 @@ impl GeoField {
             }
             c.vel.y = (c.vel.y + GRAVITY * s * dt).min(MAX_FALL * s);
             c.vel.x *= (1.0 - 0.6 * dt).max(0.0);
+            if !inside(c.pos) {
+                // Spawned off-screen (a shower above the top) or in a dead zone.
+                c.pos = clamp_to_areas(c.pos, areas, HALF * s);
+            }
             let from = c.pos;
             let mut to = c.pos + c.vel * dt;
-            // Screen edges are walls.
-            if to.x < b.left + HALF * s || to.x > b.right - HALF * s {
+            // Screen edges (and dead zones beside them) are walls.
+            if !inside(Vec2::new(to.x, from.y)) {
                 c.vel.x = -c.vel.x * BOUNCE;
-                to.x = to.x.clamp(b.left + HALF * s, b.right - HALF * s);
+                to.x = from.x;
             }
             // Landing: the first ledge crossed going down.
             if c.vel.y > 0.0
@@ -171,15 +209,21 @@ impl GeoField {
                     c.bounces += 1;
                 }
             }
-            if to.y > b.bottom {
-                // Fell past everything (no ground under it): rest on the screen bottom.
-                to.y = b.bottom;
-                c.vel = Vec2::ZERO;
-                c.resting = true;
+            if !inside(to) {
+                // Fell out of its work area (no ground under it): rest on its bottom.
+                let a = area_of(from, areas).unwrap_or(terrain.bounds);
+                to = Vec2::new(to.x.clamp(a.left, a.right), to.y.clamp(a.top, a.bottom));
+                if to.y >= a.bottom - 0.5 {
+                    c.vel = Vec2::ZERO;
+                    c.resting = true;
+                } else {
+                    c.vel.y = c.vel.y.max(0.0);
+                }
             }
             c.pos = to;
         }
-        self.coins.retain(|c| c.age < COIN_LIFETIME);
+        let life = self.lifetime;
+        self.coins.retain(|c| c.age < life);
     }
 
     /// Coins under the knight's body (`body`, screen px) are collected.
@@ -215,5 +259,15 @@ impl GeoField {
 
     pub fn clear(&mut self) {
         self.coins.clear();
+    }
+}
+
+impl GeoField {
+    /// The knight gave up on the coin at `at` (unreachable): let it fade out soon.
+    pub fn abandon(&mut self, at: Vec2) {
+        let fade = self.lifetime - FADE_SECS;
+        for c in self.coins.iter_mut().filter(|c| c.pos.distance(at) < 12.0) {
+            c.age = c.age.max(fade);
+        }
     }
 }

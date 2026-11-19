@@ -181,7 +181,7 @@ impl Panel {
             });
             ui.horizontal_wrapped(|ui| {
                 ui.label("Stakes");
-                for (label, c) in [("Die", StakesCommand::Die), ("Drop geo", StakesCommand::DropGeo), ("Fight shade", StakesCommand::HuntShade)] {
+                for (label, c) in [("Die", StakesCommand::Die), ("Drop geo", StakesCommand::DropGeo), ("Spill geo", StakesCommand::SpillGeo), ("Fight shade", StakesCommand::HuntShade)] {
                     if ui.button(label).clicked() {
                         self.cmd(Command::Stakes(c));
                     }

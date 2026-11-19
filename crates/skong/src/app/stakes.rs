@@ -12,7 +12,11 @@ use skong_core::acts::ActId;
 use skong_core::ai::{BehaviourKind, ShadeSense, StakeEvent, StakesSense};
 use skong_core::controller::{Character, Side};
 use skong_core::geom::Vec2;
-use skong_core::stakes::{DeathKind, GeoField, Shade, StakesSave};
+use std::collections::HashMap;
+
+use skong_core::desktop::WindowId;
+use skong_core::geom::{RectF, RectI};
+use skong_core::stakes::{DeathKind, GeoDrop, GeoField, GeoSources, Shade, StakesSave};
 use skong_ipc::{SPELLS, StakesCommand, StakesInfo};
 use skong_win::monitor;
 
@@ -32,6 +36,15 @@ pub struct Stakes {
     pub save: StakesSave,
     shade: Option<Shade>,
     geo: GeoField,
+    /// Shattered windows and Geo showers.
+    sources: GeoSources,
+    /// Windows of the last desktop snapshot (to tell which ones closed).
+    windows: HashMap<WindowId, RectI>,
+    desk_generation: u64,
+    /// Terrain generation the Shade was last settled for (0 = settle now).
+    settled_for: u64,
+    /// Monitor work areas: the Shade and the coins stay inside them.
+    areas: Vec<RectF>,
     /// `None` when the Shade / Geo art metadata is missing (stakes still work, unseen).
     view: Option<View>,
     /// Died and not yet respawned.
@@ -50,7 +63,7 @@ pub struct Stakes {
 }
 
 impl Stakes {
-    pub fn new(data: &Path, save: StakesSave, capturable: bool) -> Self {
+    pub fn new(data: &Path, save: StakesSave, capturable: bool, cfg: &skong_core::ai::StakesConfig) -> Self {
         let view = View::load(data, capturable).map_err(|e| log::warn!("stakes art unavailable: {e:#}")).ok();
         let shade = save.shade.map(|s| Shade::new(s.pos(), s.geo, false, seed()));
         if let Some(s) = &save.shade {
@@ -60,6 +73,11 @@ impl Stakes {
             save,
             shade,
             geo: GeoField::new(seed()),
+            sources: GeoSources::new(cfg.sources, seed()),
+            windows: HashMap::new(),
+            desk_generation: 0,
+            settled_for: 0,
+            areas: Vec::new(),
             view,
             dead: false,
             hidden: false,
@@ -119,6 +137,7 @@ impl Pet {
                         log::info!("the shade is beaten");
                     }
                 }
+                StakeEvent::AbandonCoin { at } => self.stakes.geo.abandon(at),
                 StakeEvent::Victory { at } => {
                     let [lo, hi] = self.brain.config().stakes.victory_geo;
                     let amount = lo + seed() % (hi.saturating_sub(lo) + 1);
@@ -139,6 +158,7 @@ impl Pet {
             let mut shade = Shade::new(shade_at, carried, true, seed());
             shade.scale = self.settings.scale;
             st.shade = Some(shade);
+            st.settled_for = 0;
         }
         st.dead = true;
         st.head = Some((at, cracked));
@@ -159,10 +179,20 @@ impl Pet {
         let knight = (!self.stakes.dead).then(|| self.ch.body().center());
         let origin = self.knight_origin();
         let st = &mut self.stakes;
+        st.areas.clear();
+        st.areas.extend(self.watcher.snapshot().monitors.iter().map(|m| m.work.to_f()));
         let mut drawn = None;
         if let Some(sh) = st.shade.as_mut() {
             sh.scale = scale;
-            let tick = sh.step(dt, knight, hunted, self.terrain.bounds);
+            if st.settled_for != self.terrain.generation {
+                st.settled_for = self.terrain.generation;
+                if sh.settle(&self.terrain, &st.areas) {
+                    log::info!("the shade moves somewhere reachable: ({:.0},{:.0})", sh.home.x, sh.home.y);
+                    st.save.shade_moved(sh.home);
+                    st.dirty = true;
+                }
+            }
+            let tick = sh.step(dt, knight, hunted, &st.areas);
             st.shade_hits += u32::from(tick.hit_knight);
             if tick.burst {
                 let got = st.save.reclaim();
@@ -180,9 +210,33 @@ impl Pet {
             v.shade(st.shade.as_ref().zip(drawn), dt)?;
         }
 
-        // Geo.
+        // Geo: new drops (shattered windows, showers), physics, pickups.
+        let st = &mut self.stakes;
         st.geo.scale = scale;
-        st.geo.step(dt, &self.terrain);
+        st.geo.lifetime = self.brain.config().stakes.coin_lifetime;
+        let desk = self.watcher.snapshot();
+        let loose = st.geo.total();
+        if desk.generation != st.desk_generation {
+            let first = st.desk_generation == 0;
+            st.desk_generation = desk.generation;
+            let now: HashMap<WindowId, RectI> = desk.windows.iter().map(|w| (w.id, w.rect)).collect();
+            for (id, rect) in &st.windows {
+                if first || now.contains_key(id) || !skong_win::desktop::window_closed(*id) {
+                    continue;
+                }
+                if let Some(d) = st.sources.on_closed(*rect, loose) {
+                    log::info!("a closed window shatters into {} geo", d.amount);
+                    st.geo.spill(&d);
+                }
+            }
+            st.windows = now;
+        }
+        let s = self.brain.senses();
+        if let Some(d) = st.sources.tick(dt, !s.user_away, s.fullscreen || s.user_busy, loose, self.terrain.bounds) {
+            log::info!("a geo shower: {} geo", d.amount);
+            st.geo.spill(&d);
+        }
+        st.geo.step(dt, &self.terrain, &st.areas);
         if !st.dead {
             let got: u32 = st.geo.collect(self.ch.body()).iter().map(|p| p.value).sum();
             if got > 0 {
@@ -193,7 +247,7 @@ impl Pet {
             }
         }
         if let Some(v) = st.view.as_mut() {
-            v.coins(st.geo.coins(), dt)?;
+            v.coins(&st.geo, dt)?;
             v.update(dt, &self.terrain, scale, &self.look.bank)?;
         }
 
@@ -276,6 +330,12 @@ impl Pet {
         match c {
             StakesCommand::Die => self.brain.kill(DeathKind::Fight),
             StakesCommand::HuntShade => self.brain.hunt_shade(),
+            StakesCommand::SpillGeo => {
+                let st = &mut self.stakes;
+                st.geo.scale = self.settings.scale;
+                let d: GeoDrop = st.sources.shower(self.terrain.bounds);
+                st.geo.spill(&d);
+            }
             StakesCommand::DropGeo => {
                 let at = monitor::cursor_pos().map_or(self.ch.pos - Vec2::new(0.0, 200.0), |(x, y)| Vec2::new(x as f32, y as f32));
                 self.stakes.geo.scale = self.settings.scale;

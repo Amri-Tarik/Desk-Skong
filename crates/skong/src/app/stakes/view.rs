@@ -7,7 +7,7 @@ use anyhow::Result;
 use skong_core::anim::{AnimEvent, Animator, ClipId, ClipLibrary};
 use skong_core::assets::{Frame, Skin, SpriteBank, SpriteKey};
 use skong_core::geom::Vec2;
-use skong_core::stakes::{Coin, Shade, ShadeTick};
+use skong_core::stakes::{GeoField, Shade, ShadeTick};
 use skong_core::terrain::Terrain;
 use skong_win::sprite_window::SpriteWindow;
 
@@ -231,7 +231,8 @@ impl View {
     }
 
     /// One coin window per loose coin, playing its resting / airborne spin.
-    pub fn coins(&mut self, coins: &[Coin], dt: f32) -> Result<()> {
+    pub fn coins(&mut self, field: &GeoField, dt: f32) -> Result<()> {
+        let coins = field.coins();
         let gone: Vec<u32> = self.coins.keys().copied().filter(|id| !coins.iter().any(|c| c.id == *id)).collect();
         for id in gone {
             if let Some(s) = self.coins.remove(&id) {
@@ -250,6 +251,15 @@ impl View {
                 s.anim.play(&self.geo_lib, id, false);
                 self.events.clear();
                 s.anim.update(&self.geo_lib, dt, &mut self.events);
+                // About to vanish (unreachable / left too long): blink.
+                let blink_off = field.fading(c) && ((c.age * 6.0) as u32).is_multiple_of(2);
+                if blink_off {
+                    if s.shown {
+                        s.win.set_visible(false);
+                        s.shown = false;
+                    }
+                    continue;
+                }
                 s.draw(&self.geo_lib, &self.frames, c.pos, false, true)?;
             }
         }

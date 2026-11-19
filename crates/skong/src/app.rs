@@ -225,7 +225,7 @@ pub fn run(args: &Args) -> Result<()> {
     navb.reset(&terrain, &ch);
 
     let mut pet = Pet {
-        stakes: stakes::Stakes::new(&args.data, settings.stakes.clone(), args.capturable),
+        stakes: stakes::Stakes::new(&args.data, settings.stakes.clone(), args.capturable, &brain.config().stakes),
         data,
         settings,
         skin,

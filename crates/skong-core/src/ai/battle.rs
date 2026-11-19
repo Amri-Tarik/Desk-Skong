@@ -49,6 +49,8 @@ pub(crate) struct Battle {
     last_hit_taken: f32,
     travel: Option<Travel>,
     goal_at: Vec2,
+    /// Seconds the cursor has stayed out of slash reach while fighting.
+    out_of_reach: f32,
 }
 
 impl Battle {
@@ -64,6 +66,7 @@ impl Battle {
             last_hit_taken: f32::NEG_INFINITY,
             travel: None,
             goal_at: Vec2::ZERO,
+            out_of_reach: 0.0,
         }
     }
 
@@ -108,6 +111,11 @@ impl Battle {
             Some(c) if !ctx.senses.user_busy && !ctx.senses.user_away && self.elapsed <= b.max_duration && c.far_for <= b.give_up_secs => c,
             _ => return self.finish(ctx, Outcome::GaveUp),
         };
+        if self.out_of_reach > 2.0 * ctx.cfg.stakes.unreachable_secs {
+            // Out of reach (up on a ledge he can't get to): no frantic chase.
+            ctx.mind.emotions.excitement *= 0.3;
+            return self.finish(ctx, Outcome::GaveUp);
+        }
 
         // The cursor's hits: clicks on the knight.
         let hits = ctx.p.pokes.iter().filter(|p| matches!(p, Poke::Click { .. })).count() as u32;
@@ -193,6 +201,7 @@ impl Battle {
         let grounded = k.is_grounded();
         let off = c.offset;
         let side = Side::of(off.x).unwrap_or(k.facing);
+        self.out_of_reach = if c.dist() > b.attack_range * 1.6 { self.out_of_reach + ctx.dt() } else { 0.0 };
         if self.attack_cd <= 0.0
             && let Some((spell, w)) = super::stakes::try_spell(ctx, Some(off), false, false)
         {

@@ -6,7 +6,8 @@
 //! Clip names refer to the `Hollow Shade` animation library; the app renders them.
 use crate::geom::{RectF, Vec2};
 
-use super::Xorshift;
+use super::{Xorshift, clamp_to_areas};
+use crate::terrain::Terrain;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ShadePhase {
@@ -66,7 +67,7 @@ pub struct Shade {
 }
 
 /// Hits the knight needs to land (spells count more).
-pub const SHADE_HP: u32 = 6;
+pub const SHADE_HP: u32 = 10;
 const APPEAR_SECS: f32 = 2.2;
 const STARTLE_SECS: f32 = 0.58;
 const ANTIC_SECS: f32 = 0.5;
@@ -139,8 +140,9 @@ impl Shade {
     }
 
     /// One step. `knight` = the knight's body centre; `hunted` = he came to fight (the
-    /// Shade only attacks then; otherwise it just watches him). `bounds` keeps it on screen.
-    pub fn step(&mut self, dt: f32, knight: Option<Vec2>, hunted: bool, bounds: RectF) -> ShadeTick {
+    /// Shade only attacks then; otherwise it just watches him). `areas` (monitor work areas)
+    /// keep it on screen: never in a dead zone between monitors, never off an edge.
+    pub fn step(&mut self, dt: f32, knight: Option<Vec2>, hunted: bool, areas: &[RectF]) -> ShadeTick {
         self.t += dt;
         self.clock += dt;
         let s = self.scale.max(0.1);
@@ -236,10 +238,7 @@ impl Shade {
             ShadePhase::Gone => out.clip = "Death",
         }
         let m = 30.0 * s;
-        if bounds.width() > 2.0 * m && bounds.height() > 2.0 * m {
-            self.pos.x = self.pos.x.clamp(bounds.left + m, bounds.right - m);
-            self.pos.y = self.pos.y.clamp(bounds.top + m, bounds.bottom - m);
-        }
+        self.pos = clamp_to_areas(self.pos, areas, m);
         out
     }
 
@@ -260,5 +259,47 @@ impl Shade {
         let d = goal - self.pos;
         let step = speed * dt;
         self.pos = if d.length() <= step { goal } else { self.pos + d.normalize() * step };
+    }
+}
+
+impl Shade {
+    /// Move the home point somewhere the knight can fight it: inside the work areas and
+    /// hovering above a standable ledge he can get under. Called at spawn and whenever
+    /// the terrain changes (he died mid-air over a void, the window under it closed).
+    /// Returns `true` when the home moved.
+    pub fn settle(&mut self, terrain: &Terrain, areas: &[RectF]) -> bool {
+        let s = self.scale.max(0.1);
+        let hover = 70.0 * s;
+        let before = self.home;
+        let home = clamp_to_areas(self.home, areas, 30.0 * s);
+        let inside = |p: Vec2| areas.is_empty() || areas.iter().any(|a| a.contains(p));
+        // Standable surfaces: long enough to stand on, inside a work area.
+        let spot = terrain
+            .ledges
+            .iter()
+            .filter(|l| l.x1 - l.x0 >= 60.0 * s)
+            .map(|l| {
+                let m = (20.0 * s).min((l.x1 - l.x0) * 0.5);
+                Vec2::new(home.x.clamp(l.x0 + m, l.x1 - m), l.y)
+            })
+            .filter(|f| inside(*f - Vec2::new(0.0, 1.0)))
+            .map(|f| {
+                // Directly above its own ledge (with room to hover) costs nothing.
+                let above = f.y - hover;
+                let ok_here = (home.x - f.x).abs() < 1.0 && home.y <= above && above - home.y < 260.0 * s;
+                let cost = if ok_here { 0.0 } else { Vec2::new(f.x, above).distance(home) };
+                (f, cost)
+            })
+            .min_by(|a, b| a.1.total_cmp(&b.1));
+        self.home = match spot {
+            Some((_, 0.0)) => home,
+            Some((f, _)) => clamp_to_areas(Vec2::new(f.x, f.y - hover), areas, 30.0 * s),
+            None => home,
+        };
+        if self.home != before {
+            self.pos = clamp_to_areas(self.pos, areas, 30.0 * s);
+            return true;
+        }
+        false
     }
 }

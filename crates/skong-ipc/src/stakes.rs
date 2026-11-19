@@ -19,6 +19,8 @@ pub enum StakesCommand {
     Die,
     /// Burst some Geo out of the cursor position.
     DropGeo,
+    /// A Geo shower now (coins rain in through the top of the screen).
+    SpillGeo,
     /// Send the knight after his Shade now.
     HuntShade,
     /// Play a spell act (index into [`SPELLS`]).

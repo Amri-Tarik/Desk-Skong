@@ -34,7 +34,7 @@ fn coins_fall_bounce_and_settle_on_ledges() {
     assert!(n >= 4);
     let mut bounced = false;
     for _ in 0..600 {
-        g.step(1.0 / 60.0, &t);
+        g.step(1.0 / 60.0, &t, &[]);
         bounced |= g.coins().iter().any(|c| !c.resting && c.vel.y < 0.0 && c.pos.y > 400.0);
     }
     assert_eq!(g.coins().len(), n);
@@ -52,12 +52,12 @@ fn resting_coins_fall_when_their_window_goes_away() {
     let mut g = GeoField::new(3);
     g.burst(Vec2::new(650.0, 590.0), 3);
     for _ in 0..300 {
-        g.step(1.0 / 60.0, &t);
+        g.step(1.0 / 60.0, &t, &[]);
     }
     assert!(g.coins().iter().any(|c| c.pos.y == 600.0));
     t.ledges.remove(0);
     for _ in 0..300 {
-        g.step(1.0 / 60.0, &t);
+        g.step(1.0 / 60.0, &t, &[]);
     }
     assert!(g.coins().iter().all(|c| c.resting && c.pos.y == 1040.0));
 }
@@ -68,7 +68,7 @@ fn walking_over_coins_picks_them_up() {
     let mut g = GeoField::new(2);
     g.burst(Vec2::new(1000.0, 1000.0), 7);
     for _ in 0..600 {
-        g.step(1.0 / 60.0, &t);
+        g.step(1.0 / 60.0, &t, &[]);
     }
     let total = g.total();
     assert_eq!(total, 7);
@@ -125,8 +125,8 @@ fn respawn_prefers_the_nearest_bench_then_solid_ground() {
 // --- Shade --------------------------------------------------------------------------
 
 fn run_shade(sh: &mut Shade, secs: f32, knight: Option<Vec2>, hunted: bool) -> Vec<ShadeTick> {
-    let b = RectF::new(0.0, 0.0, 1920.0, 1080.0);
-    (0..(secs * 60.0) as usize).map(|_| sh.step(1.0 / 60.0, knight, hunted, b)).collect()
+    let b = [RectF::new(0.0, 0.0, 1920.0, 1080.0)];
+    (0..(secs * 60.0) as usize).map(|_| sh.step(1.0 / 60.0, knight, hunted, &b)).collect()
 }
 
 #[test]
@@ -224,4 +224,118 @@ fn thorns_answer_hits_and_focus_heals_after() {
     let over = SpellSituation { fight_over: true, hurt: 0.5, ..situation(None) };
     assert_eq!(book.choose(&over, 10.0, &cfg), Some(Spell::Focus));
     assert_eq!(book.choose(&SpellSituation { hurt: 0.05, ..over }, 30.0, &cfg), None, "not hurt: no focus");
+}
+
+// --- Geo sources ------------------------------------------------------------------
+
+#[test]
+fn closed_windows_shatter_by_size_with_a_cap_and_a_rate_limit() {
+    let mut src = GeoSources::new(GeoSourceConfig::default(), 1);
+    let small = src.on_closed(crate::geom::RectI::new(0, 0, 400, 300), 0).expect("small window");
+    let mut src = GeoSources::new(GeoSourceConfig::default(), 1);
+    let big = src.on_closed(crate::geom::RectI::new(0, 0, 2560, 1400), 0).expect("big window");
+    assert!(big.amount > small.amount, "bigger windows hold more: {} vs {}", big.amount, small.amount);
+    assert!(big.amount <= GeoSourceConfig::default().shatter_geo[1]);
+    assert!(!big.shower);
+
+    let mut src = GeoSources::new(GeoSourceConfig::default(), 2);
+    let r = crate::geom::RectI::new(0, 0, 800, 600);
+    assert!(src.on_closed(crate::geom::RectI::new(0, 0, 120, 600), 0).is_none(), "popups don't shatter");
+    assert!(src.on_closed(r, 0).is_some());
+    assert!(src.on_closed(r, 0).is_some());
+    assert!(src.on_closed(r, 0).is_none(), "closing a whole app at once: rate limited");
+    let b = RectF::new(0.0, 0.0, 1920.0, 1080.0);
+    src.tick(21.0, false, false, 0, b);
+    assert!(src.on_closed(r, 0).is_some(), "the limit window passed");
+    assert!(src.on_closed(r, 10_000).is_none(), "enough geo lying around");
+}
+
+#[test]
+fn showers_come_every_few_minutes_of_presence_only() {
+    let cfg = GeoSourceConfig::default();
+    let b = RectF::new(0.0, 0.0, 1920.0, 1080.0);
+    let mut src = GeoSources::new(cfg, 5);
+    let gap = src.shower_in();
+    assert!((cfg.shower_every[0]..=cfg.shower_every[1]).contains(&gap));
+    // Away, or fullscreen / typing: the timer doesn't run.
+    for _ in 0..1000 {
+        assert!(src.tick(1.0, false, false, 0, b).is_none());
+        assert!(src.tick(1.0, true, true, 0, b).is_none());
+    }
+    assert_eq!(src.shower_in(), gap);
+    let mut showers = 0;
+    for _ in 0..3600 {
+        if let Some(d) = src.tick(1.0, true, false, 0, b) {
+            assert!(d.shower && d.rect.top <= b.top);
+            showers += 1;
+        }
+    }
+    assert!((7..=20).contains(&showers), "an hour of presence: {showers} showers");
+}
+
+#[test]
+fn coins_stay_out_of_dead_zones_between_monitors() {
+    // A 2560x1440 primary with a 1920x1080 monitor to its left: x<0, y>1080 is off-screen.
+    let areas = [RectF::new(0.0, 0.0, 2560.0, 1400.0), RectF::new(-1920.0, 0.0, 0.0, 1040.0)];
+    let t = Terrain {
+        ledges: vec![
+            Ledge { x0: 0.0, x1: 2560.0, y: 1400.0, kind: LedgeKind::Ground, owner: None },
+            Ledge { x0: -1920.0, x1: 0.0, y: 1040.0, kind: LedgeKind::Ground, owner: None },
+        ],
+        bounds: RectF::new(-1920.0, 0.0, 2560.0, 1440.0),
+        ..Default::default()
+    };
+    let mut g = GeoField::new(9);
+    g.spill(&GeoDrop { rect: RectF::new(-300.0, 900.0, 300.0, 1000.0), amount: 40, shower: false });
+    g.spill(&GeoDrop { rect: RectF::new(-1000.0, -10.0, -800.0, 0.0), amount: 20, shower: true });
+    for _ in 0..900 {
+        g.step(1.0 / 60.0, &t, &areas);
+        for c in g.coins() {
+            assert!(areas.iter().any(|a| a.left <= c.pos.x && c.pos.x <= a.right && a.top <= c.pos.y && c.pos.y <= a.bottom), "{c:?} left the screen");
+        }
+    }
+    assert!(g.coins().iter().all(|c| c.resting && (c.pos.y == 1400.0 || c.pos.y == 1040.0)));
+}
+
+#[test]
+fn abandoned_coins_fade_out() {
+    let t = terrain();
+    let mut g = GeoField::new(4);
+    g.burst(Vec2::new(1500.0, 1000.0), 1);
+    for _ in 0..120 {
+        g.step(1.0 / 60.0, &t, &[]);
+    }
+    let at = g.coins()[0].pos;
+    g.abandon(at);
+    assert!(g.fading(&g.coins()[0]));
+    for _ in 0..(super::geo::FADE_SECS * 60.0) as usize + 5 {
+        g.step(1.0 / 60.0, &t, &[]);
+    }
+    assert!(g.is_empty());
+}
+
+#[test]
+fn shade_never_floats_off_screen_and_settles_somewhere_reachable() {
+    let areas = [RectF::new(0.0, 0.0, 2560.0, 1400.0), RectF::new(-1920.0, 0.0, 0.0, 1040.0)];
+    let t = Terrain {
+        ledges: vec![
+            Ledge { x0: 0.0, x1: 2560.0, y: 1400.0, kind: LedgeKind::Ground, owner: None },
+            Ledge { x0: -1920.0, x1: 0.0, y: 1040.0, kind: LedgeKind::Ground, owner: None },
+        ],
+        bounds: RectF::new(-1920.0, 0.0, 2560.0, 1440.0),
+        ..Default::default()
+    };
+    // Died somewhere in the dead zone below the left monitor.
+    let mut sh = Shade::new(Vec2::new(-200.0, 1300.0), 10, true, 1);
+    assert!(sh.settle(&t, &areas));
+    let h = sh.home;
+    assert!(areas.iter().any(|a| a.contains(h)), "home {h:?} on screen");
+    assert!(t.ledges.iter().any(|l| l.x0 <= h.x && h.x <= l.x1 && l.y > h.y && l.y - h.y < 200.0), "hovering over a ledge: {h:?}");
+    // Already fine: stays.
+    assert!(!sh.settle(&t, &areas));
+    // Lunging and drifting stay inside the work areas.
+    for _ in 0..600 {
+        sh.step(1.0 / 60.0, Some(Vec2::new(-30.0, 1390.0)), true, &areas);
+        assert!(areas.iter().any(|a| a.contains(sh.pos)), "{:?}", sh.pos);
+    }
 }
