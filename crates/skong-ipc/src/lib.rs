@@ -33,6 +33,8 @@ pub enum Command {
     ToggleShareVisible,
     /// Fight the cursor, round after round (until toggled off).
     ToggleFightMode,
+    /// Curious about highlighted text (UI Automation, rectangles only); off by default.
+    ToggleTextCuriosity,
     PlaceBenchAtCursor(usize),
     PlaceBenchNearKnight(usize),
     ClearBenches,
@@ -186,6 +188,8 @@ pub struct Status {
     pub fight_mode: bool,
     /// Visible in screen shares and screenshots.
     pub share_visible: bool,
+    /// Curious about highlighted text (opt-in).
+    pub text_curiosity: bool,
     pub vision: bool,
     pub overlay: bool,
     pub overlay_layers: OverlayLayers,

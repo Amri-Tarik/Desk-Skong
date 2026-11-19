@@ -27,6 +27,7 @@ use skong_win::capture::ContentFeed;
 use skong_win::desktop::DesktopWatcher;
 use skong_win::monitor;
 use skong_win::runloop::{Flow, RunLoop};
+use skong_win::selection::SelectionWatcher;
 use skong_win::sprite_window::SpriteWindow;
 use skong_win::tray::{MenuItem, Tray, TrayEvent};
 use skong_win::vk;
@@ -82,6 +83,7 @@ const ID_DREAM: u32 = 12;
 const ID_SHARE: u32 = 14;
 const ID_FIGHT: u32 = 15;
 const ID_SHOWER: u32 = 20;
+const ID_TEXT: u32 = 16;
 const ID_QUIT: u32 = 9;
 const ID_SKIN0: u32 = 1000;
 const ID_SCALE0: u32 = 2000;
@@ -190,6 +192,8 @@ struct Pet {
     last_input: MoveInput,
     /// Screen activity for the brain, mirrored from the vision feed.
     activity: Activity,
+    /// Where highlighted text is (opt-in `text_curiosity`; `None` while off).
+    selection: Option<SelectionWatcher>,
     /// Last brain debug line (behaviour, mood, top utilities).
     brain_debug: String,
     keyboard: Keyboard,
@@ -318,6 +322,7 @@ pub fn run(args: &Args) -> Result<()> {
         brain_events: Vec::new(),
         last_input: MoveInput::default(),
         activity: Activity::default(),
+        selection: None,
         brain_debug: String::new(),
         keyboard: Keyboard::default(),
         manual: false,
@@ -346,6 +351,7 @@ pub fn run(args: &Args) -> Result<()> {
     pet.discoveries.capturable = args.capturable;
     pet.shinies.capturable = args.capturable;
     pet.apply_share_visible();
+    pet.apply_text_curiosity();
     if args.panel.unwrap_or(pet.settings.open_panel) {
         pet.apply(Command::OpenPanel)?;
     }
@@ -609,7 +615,7 @@ impl Pet {
             match sw.to {
                 BehaviourKind::Loot => self.emotes.show(Emote::Geo),
                 BehaviourKind::Flee | BehaviourKind::Greet | BehaviourKind::ShadeHunt => self.emotes.show(Emote::Bang),
-                BehaviourKind::Explore | BehaviourKind::Watch | BehaviourKind::Shiny => self.emotes.show(Emote::Question),
+                BehaviourKind::Explore | BehaviourKind::Watch | BehaviourKind::Shiny | BehaviourKind::Highlight => self.emotes.show(Emote::Question),
                 _ => {}
             }
         }
@@ -824,6 +830,19 @@ impl Pet {
         }
     }
 
+    /// Apply "curious about highlighted text": start or stop the selection watcher (its
+    /// thread and hooks exist only while the setting is on).
+    fn apply_text_curiosity(&mut self) {
+        match (self.settings.text_curiosity, self.selection.is_some()) {
+            (true, false) => match SelectionWatcher::start() {
+                Ok(w) => self.selection = Some(w),
+                Err(e) => log::warn!("text selection watcher unavailable: {e:#}"),
+            },
+            (false, true) => self.selection = None,
+            _ => {}
+        }
+    }
+
     fn sense_darkness(&mut self, dt: f32) {
         self.dark.1 -= dt;
         if self.dark.1 > 0.0 {
@@ -850,6 +869,11 @@ impl Pet {
         let cursor = monitor::cursor_pos().map(|(x, y)| Cursor { pos: Vec2::new(x as f32, y as f32), left, right });
         let user = UserActivity { idle_secs: input::idle_secs(), keys_per_sec: self.user_input.keys_per_sec() };
         self.sense_darkness(dt);
+        // Non-blocking: the watcher's thread does the UI Automation work.
+        let selection = self.selection.as_mut().and_then(|w| {
+            w.poll();
+            w.rect()
+        });
         // A lingering pose already counts as finished for the brain (so it chooses what comes
         // next); its ending after a linger is not cut again.
         let act = self.act.as_ref().filter(|p| !p.is_lingering()).map(|p| RunningAct { id: p.act(), interruptible: p.interruptible(&self.data.acts) && !p.is_released() });
@@ -870,6 +894,7 @@ impl Pet {
             last_input: self.last_input,
             local_hour: Some(monitor::local_hour()),
             dark: self.dark.0,
+            selection,
         };
         let visitors = self.visitor_percepts();
         self.brain.see_visitors(visitors);
@@ -1101,6 +1126,12 @@ impl Pet {
                 self.settings.save();
                 log::info!("visible in screen shares: {}", self.settings.share_visible);
             }
+            Command::ToggleTextCuriosity => {
+                self.settings.text_curiosity = !self.settings.text_curiosity;
+                self.apply_text_curiosity();
+                self.settings.save();
+                log::info!("curious about highlighted text: {}", self.settings.text_curiosity);
+            }
             Command::TogglePause => {
                 self.paused = !self.paused;
                 self.win.set_visible(!self.paused);
@@ -1185,6 +1216,7 @@ impl Pet {
             MenuItem::check(ID_MANUAL, "Manual control", self.manual),
             MenuItem::check(ID_CLICK, "Click-through", self.settings.click_through),
             MenuItem::check(ID_SHARE, "Visible in screen shares", self.settings.share_visible),
+            MenuItem::check(ID_TEXT, "Curious about highlighted text", self.settings.text_curiosity),
             MenuItem::check(ID_PAUSE, "Pause", self.paused),
             MenuItem::Separator,
             MenuItem::check(ID_VISION, "Vision (content terrain)", self.content.is_enabled()),
@@ -1201,6 +1233,7 @@ impl Pet {
             ID_CLICK => Command::ToggleClickThrough,
             ID_SHARE => Command::ToggleShareVisible,
             ID_FIGHT => Command::ToggleFightMode,
+            ID_TEXT => Command::ToggleTextCuriosity,
             ID_PAUSE => Command::TogglePause,
             ID_ACT => Command::RandomAct,
             ID_RESPAWN => Command::RespawnAtCursor,

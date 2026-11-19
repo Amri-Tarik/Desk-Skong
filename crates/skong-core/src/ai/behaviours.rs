@@ -98,10 +98,12 @@ pub enum BehaviourKind {
     Visit,
     /// Walk over to a shiny on the ground and pick it up.
     Shiny,
+    /// Go and look at text the user highlighted (opt-in; only its rectangle is known).
+    Highlight,
 }
 
 impl BehaviourKind {
-    pub const ALL: [BehaviourKind; 20] = [
+    pub const ALL: [BehaviourKind; 21] = [
         BehaviourKind::Idle,
         BehaviourKind::Companion,
         BehaviourKind::Watch,
@@ -122,6 +124,7 @@ impl BehaviourKind {
         BehaviourKind::Pester,
         BehaviourKind::Train,
         BehaviourKind::Shiny,
+        BehaviourKind::Highlight,
     ];
 
     pub fn label(self) -> &'static str {
@@ -146,6 +149,7 @@ impl BehaviourKind {
             BehaviourKind::Pester => "pester",
             BehaviourKind::Train => "train",
             BehaviourKind::Shiny => "shiny",
+            BehaviourKind::Highlight => "highlight",
         }
     }
 
@@ -163,7 +167,7 @@ impl BehaviourKind {
             // The cursor is a boredom killer (battles, pestering): an ambient pastime, never
             // allowed to interrupt Geo or visitors, and dropped the moment those show up.
             BehaviourKind::Battle | BehaviourKind::Pester => Tier::Ambient,
-            BehaviourKind::Idle | BehaviourKind::Companion | BehaviourKind::Watch | BehaviourKind::Explore | BehaviourKind::Ride | BehaviourKind::Visit => {
+            BehaviourKind::Idle | BehaviourKind::Companion | BehaviourKind::Watch | BehaviourKind::Explore | BehaviourKind::Ride | BehaviourKind::Visit | BehaviourKind::Highlight => {
                 Tier::Ambient
             }
         }
@@ -1046,6 +1050,7 @@ pub(crate) enum Active {
     Loot(Loot),
     Visit(Visit),
     Shiny(super::shiny::PickShiny),
+    Highlight(super::highlight::LookAtHighlight),
 }
 
 impl Active {
@@ -1071,6 +1076,7 @@ impl Active {
             Active::Loot(_) => BehaviourKind::Loot,
             Active::Visit(_) => BehaviourKind::Visit,
             Active::Shiny(_) => BehaviourKind::Shiny,
+            Active::Highlight(_) => BehaviourKind::Highlight,
         }
     }
 
@@ -1096,6 +1102,7 @@ impl Active {
             Active::Loot(b) => b.tick(ctx),
             Active::Visit(b) => b.tick(ctx),
             Active::Shiny(b) => b.tick(ctx),
+            Active::Highlight(b) => b.tick(ctx),
         }
     }
 
@@ -1122,6 +1129,7 @@ impl Active {
             Active::Loot(b) => b.reason(),
             Active::Visit(b) => b.reason(),
             Active::Shiny(b) => b.reason(),
+            Active::Highlight(b) => b.reason(ctx),
         }
     }
 }
