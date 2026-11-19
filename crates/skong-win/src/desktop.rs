@@ -318,7 +318,8 @@ impl Enumerator {
         if ex & WS_EX_LAYERED.0 != 0 && is_fully_transparent(hwnd) {
             return None;
         }
-        let fullscreen = !has_caption && monitors.iter().any(|m| covers(&rect, &m.rect));
+        let maximized = unsafe { IsZoomed(hwnd) }.as_bool();
+        let fullscreen = is_fullscreen(&rect, monitors, has_caption, maximized);
         Some(WindowInfo {
             id: hwnd.0 as usize as u64,
             rect,
@@ -326,7 +327,7 @@ impl Enumerator {
             class,
             process: self.exe_name(pid).to_owned(),
             pid,
-            maximized: unsafe { IsZoomed(hwnd) }.as_bool(),
+            maximized,
             fullscreen,
             foreground: hwnd == foreground,
             topmost: ex & WS_EX_TOPMOST.0 != 0,
@@ -458,6 +459,15 @@ fn covers(outer: &RectI, inner: &RectI) -> bool {
     outer.left <= inner.left && outer.top <= inner.top && outer.right >= inner.right && outer.bottom >= inner.bottom
 }
 
+/// A window covering a whole monitor is fullscreen when it has no caption (exclusive /
+/// borderless fullscreen), or when it keeps its caption style but isn't maximized: games
+/// running "borderless windowed" often size themselves past the monitor so the title bar
+/// sits off-screen (e.g. an Unreal game at (-1, -31), 2562x1472 on a 2560x1440 monitor).
+/// A maximized app window on a monitor without a taskbar also covers it, but isn't one.
+fn is_fullscreen(rect: &RectI, monitors: &[Monitor], has_caption: bool, maximized: bool) -> bool {
+    (!has_caption || !maximized) && monitors.iter().any(|m| covers(rect, &m.rect))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -468,6 +478,20 @@ mod tests {
         assert!(covers(&m, &m));
         assert!(covers(&RectI::new(-5, -5, 105, 105), &m));
         assert!(!covers(&RectI::new(0, 0, 100, 99), &m));
+    }
+
+    #[test]
+    fn borderless_games_with_a_hidden_caption_are_fullscreen() {
+        let r = RectI::new(0, 0, 2560, 1440);
+        let mons = [Monitor { rect: r, work: r, primary: true, scale_milli: 1000 }];
+        // Exclusive / true borderless: no caption.
+        assert!(is_fullscreen(&r, &mons, false, false));
+        // Borderless windowed with the caption pushed off-screen (an Unreal game).
+        assert!(is_fullscreen(&RectI::new(-1, -31, 2561, 1441), &mons, true, false));
+        // A maximized app on a monitor without a taskbar is just maximized.
+        assert!(!is_fullscreen(&r, &mons, true, true));
+        // A normal window that doesn't cover the monitor.
+        assert!(!is_fullscreen(&RectI::new(100, 100, 1200, 900), &mons, true, false));
     }
 
     /// Smoke test against the live desktop: enumeration works and is reasonably fast.
