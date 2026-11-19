@@ -712,6 +712,9 @@ impl Pet {
         if let Some(id) = intent.greet {
             self.greet_visitor(id);
         }
+        if let Some(id) = intent.dream_visitor {
+            self.aim_dream_at_visitor(id);
+        }
         self.pokes.clear();
         self.brain_events.clear();
         self.stakes_events(&intent.stakes);

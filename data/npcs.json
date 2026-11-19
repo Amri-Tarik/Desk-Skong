@@ -1,5 +1,5 @@
 {
-  "$comment": "NPC visitors. Clips come from the exported vanilla libraries in data/hk/animations (NPC art is always vanilla: skins/Vanilla). `faces`: left|right (side-view art, mirrored to face the knight) or front (never mirrored; use talk/talk_right for direction). `arrive`: walk (in from the knight's monitor edge along the bottom), perch (sitting on a window edge), portal (steps out of a dream portal anywhere on the desktop), drop (falls out of a portal). `leave`: walk|fade|portal. `origin_above_feet` (game units) overrides the feet line measured from the idle frame (perched visitors: the seat line). `stand_off`: where the knight stands to talk (game units from the visitor). Lines are plain strings or {say, react}; `react` names knight acts from acts.json, `a|b` = first one that can start. Placeholders: {title} (a visible window title), {app} (a running app), {daypart}. `portal_style`: dust (small dust puffs + quick fade-in, default) or dream (dream-gate glow + ripple). `dream`: the knight's dream-nail thoughts per window (match = lowercase substrings of process name or title; an empty match is the generic pool). All lines are original writing.",
+  "$comment": "NPC visitors. Clips come from the exported vanilla libraries in data/hk/animations (NPC art is always vanilla: skins/Vanilla). `faces`: left|right (side-view art, mirrored to face the knight) or front (never mirrored; use talk/talk_right for direction). `arrive`: walk (in from the knight's monitor edge along the bottom), perch (sitting on a window edge), portal (steps out of a dream portal anywhere on the desktop), drop (falls out of a portal). `leave`: walk|fade|portal. `origin_above_feet` (game units) overrides the feet line measured from the idle frame (perched visitors: the seat line). `stand_off`: where the knight stands to talk (game units from the visitor). Lines are plain strings or {say, react}; `react` names knight acts from acts.json, `a|b` = first one that can start. Placeholders: {title} (a visible window title), {app} (a running app), {daypart}. `portal_style`: dust (small dust puffs + quick fade-in, default) or dream (dream-gate glow + ripple). `dream_thoughts`: what a visitor thinks when the knight dream-nails them after their talk (sometimes, never mid-conversation). `dream`: the knight's dream-nail thoughts per window (match = lowercase substrings of process name or title; an empty match is the generic pool). All lines are original writing.",
   "portal_style": "dust",
   "visits": {
     "enabled": true,
@@ -24,6 +24,7 @@
       "idle_lines": ["Hmm hm hmmm...", "Hm-hm, hm-hmm, la-la...", "Now, where does this ledge go...", "Hmmm-hm. A little more ink here..."],
       "idle_every": [9, 18],
       "greet_react": "look_up",
+      "dream_thoughts": ["...wonder if the little one will keep the map. They never keep the map.", "Hmm hm hmm... one more ledge and I am finished. One more...", "Did I leave the quill by the {app} window? Oh dear."],
       "conversations": [
         [
           { "say": "Oh! A fellow explorer, all the way up here!", "react": "look_up" },
@@ -55,6 +56,7 @@
       "stand_off": 1.6,
       "excitement": 0.95,
       "greet_react": "look_up",
+      "dream_thoughts": ["...so much I still want to see. So little I remember.", "That little one is braver than they look.", "Just a moment longer, then I move on."],
       "conversations": [
         [
           "Ah, we meet again, little wanderer.",
@@ -86,6 +88,7 @@
       "idle_lines": ["Hmph.", "Magnificent, as always.", "Where is my audience?"],
       "idle_every": [12, 24],
       "greet_react": "challenge",
+      "dream_thoughts": ["...did they see me trip? They saw me trip.", "Must practise the landing. Again. Tomorrow.", "Nobody will ever know about the fall. Nobody."],
       "conversations": [
         [
           "Halt! You stand before Zote the Mighty, conqueror of this {app} realm!",
@@ -116,6 +119,7 @@
       "stand_off": 1.9,
       "excitement": 0.9,
       "greet_react": "look_up",
+      "dream_thoughts": ["...such a kind little one. I do hope they come back.", "Everyone leaves in the end. But they always visit first.", "Perhaps I should get out more. Perhaps."],
       "conversations": [
         [
           "Oh my, a visitor! Hardly anyone stops by to chat anymore.",
@@ -148,6 +152,7 @@
       "stand_off": 2.0,
       "excitement": 1.0,
       "greet_react": "challenge",
+      "dream_thoughts": ["...they have grown. Good. They will need it.", "Do not get attached, Hornet. Do not.", "Hmph. Still, it was good to see them."],
       "conversations": [
         [
           "Little ghost. So you've found yourself a strange new kingdom.",

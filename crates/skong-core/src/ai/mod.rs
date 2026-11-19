@@ -144,6 +144,8 @@ pub struct Intent {
     pub waiting: bool,
     /// Standing beside this visitor: start the conversation.
     pub greet: Option<u32>,
+    /// The dream nail just requested is aimed at this visitor (their inner thoughts).
+    pub dream_visitor: Option<u32>,
     /// "reason | mood + needs | top-3 utilities", for an overlay.
     pub debug: String,
 }
@@ -852,6 +854,8 @@ impl Brain {
         let recover = if e.hurt > 0.35 { (0.5 + 0.4 * e.hurt).min(0.9) } else { 0.0 };
         // A visitor! Drop (almost) everything and go say hello.
         let greet = match self.visitors.target(&s.visitors, p.knight.pos, self.now) {
+            // Mid-conversation nothing else (but real emergencies) may cut in.
+            Some(v) if v.state == VisitorState::Talking => 0.99,
             Some(v) if !s.fullscreen => (0.86 + 0.08 * v.excitement + 0.04 * e.excitement).min(0.97),
             _ => 0.0,
         };

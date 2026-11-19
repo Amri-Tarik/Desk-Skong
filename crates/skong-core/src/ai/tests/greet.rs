@@ -118,3 +118,39 @@ fn a_visitor_already_beside_him_is_greeted_without_travel() {
     assert!(until(&mut sim, 6.0, |_, i| i.greet == Some(4)), "{}", sim.last_reason());
     assert_eq!(sim.nav.gos.len(), gos, "no trip needed");
 }
+
+#[test]
+fn dream_nails_a_visitor_only_after_the_talk_and_at_most_once() {
+    let (mut some, mut none) = (0, 0);
+    for seed in 0..40 {
+        let mut sim = calm(BrainConfig::default());
+        sim.brain = Brain::new(BrainConfig { personality: Some(Personality::default()), ..BrainConfig::default() }, sim.catalog.clone(), seed);
+        sim.run(1.0);
+        let mut v = visitor(7, 960.0 + STAND_OFF_UNITS * 64.0);
+        sim.brain.see_visitors(vec![v.clone()]);
+        assert!(until(&mut sim, 6.0, |_, i| i.greet == Some(7)), "seed {seed}: {}", sim.last_reason());
+        // Talking: only conversation reactions.
+        v.state = VisitorState::Talking;
+        for line in 0..3 {
+            v.line = Some(line);
+            sim.brain.see_visitors(vec![v.clone()]);
+            sim.run(3.0);
+            assert_eq!(sim.brain.behaviour(), BehaviourKind::Greet, "seed {seed}: conversation held");
+        }
+        assert!(!sim.started.iter().any(|a| a == "dream_nail"), "seed {seed}: no dream nail mid-conversation");
+        assert!(sim.intents.iter().all(|i| i.dream_visitor.is_none()));
+        // Over: lingering.
+        v.state = VisitorState::Waiting;
+        v.line = None;
+        v.greeted = true;
+        sim.brain.see_visitors(vec![v.clone()]);
+        let n = sim.started.len();
+        sim.run(8.0);
+        let dn = sim.started_since(n).iter().filter(|a| *a == "dream_nail").count();
+        let aimed = sim.intents.iter().filter(|i| i.dream_visitor == Some(7)).count();
+        assert!(dn <= 1 && aimed <= 1, "seed {seed}: at most once per visit ({dn}, {aimed})");
+        assert_eq!(dn, aimed, "seed {seed}: the dream nail is aimed at the visitor");
+        if dn == 1 { some += 1 } else { none += 1 }
+    }
+    assert!(some > 0 && none > 0, "sometimes, not always: {some} of 40");
+}

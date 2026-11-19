@@ -158,6 +158,10 @@ impl Bubbles {
         }
     }
 
+    pub fn is_open(&self, id: BubbleId) -> bool {
+        self.live.iter().any(|l| l.id == id && l.closing.is_none())
+    }
+
     pub fn raise_all(&self) {
         for l in &self.live {
             l.win.raise();

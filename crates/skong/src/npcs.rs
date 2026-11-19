@@ -81,6 +81,8 @@ pub struct Visitors {
     invited: Option<Option<String>>,
     /// Knight's dream nail: the slash clip started this tick; thought shows after a beat.
     thought_in: Option<f32>,
+    /// The next dream nail is aimed at this visitor (their inner thoughts), not a window.
+    dream_at: Option<u32>,
     knight_clip_was_slash: bool,
     /// Departure portals to draw (opened while handling visitor events).
     pending_fx: Vec<Vec2>,
@@ -122,6 +124,7 @@ impl Visitors {
             capturable: false,
             invited: None,
             thought_in: None,
+            dream_at: None,
             knight_clip_was_slash: false,
             pending_fx: Vec::new(),
             hidden: false,
@@ -338,7 +341,17 @@ impl Visitors {
 
     /// Debug: the dream test wants a dream nail now.
     pub fn take_dream_request(&mut self) -> bool {
-        std::mem::take(&mut self.dream_wanted)
+        std::mem::take(&mut self.dream_wanted) && !self.conversing()
+    }
+
+    /// A visitor is talking (no dream nails, no unrelated acts meanwhile).
+    pub fn conversing(&self) -> bool {
+        self.live.iter().any(|l| l.npc.phase() == NpcPhase::Talking)
+    }
+
+    /// The brain aimed its dream nail at visitor `id`.
+    pub fn aim_dream(&mut self, id: u32) {
+        self.dream_at = Some(id);
     }
 
     /// Watch the knight's clip: the dream nail's slash spawns its effect, then a thought.
@@ -483,6 +496,15 @@ impl Visitors {
     /// Thought bubble for the window the knight just dream-nailed (the one under him, else
     /// the nearest one around him).
     fn dream_thought(&mut self, w: &World) {
+        if let Some(id) = self.dream_at.take()
+            && let Some(i) = self.live.iter().position(|l| l.npc.id == id)
+        {
+            self.visitor_thought(i, w);
+            return;
+        }
+        if self.conversing() {
+            return; // never mid-conversation
+        }
         let k = w.knight;
         let owner = k.support.and_then(|s| s.owner);
         let near = |win: &&WindowInfo| {
@@ -527,4 +549,28 @@ pub fn shower_rect(feet: Vec2, width: f32, scale: f32) -> RectF {
     let w = width.min(2.5 * ppu).max(20.0);
     let top = feet.y - 2.0 * ppu;
     RectF::new(feet.x - w * 0.5, top - 10.0, feet.x + w * 0.5, top)
+}
+
+impl Visitors {
+    /// The dream-nailed visitor's inner thought (never over their own speech bubble).
+    fn visitor_thought(&mut self, i: usize, w: &World) {
+        let l = &self.live[i];
+        if l.npc.phase() == NpcPhase::Talking || l.bubble.is_some_and(|b| self.bubbles.is_open(b)) {
+            return;
+        }
+        let d = &self.set.defs[l.npc.def];
+        let ctx = TalkContext::from_desktop(w.desk, Some(w.hour));
+        let n = d.dream_thoughts.len();
+        if n == 0 {
+            return;
+        }
+        let start = self.rng.next_u32() as usize;
+        let Some(text) = (0..n).find_map(|k| ctx.fill(&d.dream_thoughts[(start + k) % n], &mut self.rng)) else { return };
+        log::info!("dream nail: {} thinks \"{text}\"", d.display);
+        let anchor = self.head(&l.npc);
+        let area = self.work_at(l.npc.pos, w.desk);
+        let secs = skong_core::bubble::read_secs(&text) + 1.0;
+        let id = self.bubbles.say(anchor, &text, BubbleStyle::Thought, secs, area);
+        self.live[i].bubble = id;
+    }
 }

@@ -75,6 +75,13 @@ impl Pet {
         }
     }
 
+    /// The brain's dream nail is aimed at a visitor.
+    pub(super) fn aim_dream_at_visitor(&mut self, id: u32) {
+        if let Some(v) = self.visitors.as_mut() {
+            v.aim_dream(id);
+        }
+    }
+
     pub(super) fn raise_visitors(&self) {
         if let Some(v) = &self.visitors {
             v.raise_all();
@@ -97,7 +104,9 @@ impl Pet {
                 None => log::warn!("visitors are not available"),
             },
             Command::DreamNail => {
-                if self.ch.is_grounded()
+                let talking = self.visitors.as_ref().is_some_and(|v| v.conversing());
+                if !talking
+                    && self.ch.is_grounded()
                     && let Some(id) = self.data.acts.id("dream_nail")
                 {
                     self.seat_y = None;

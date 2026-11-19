@@ -138,6 +138,10 @@ pub struct NpcDef {
     pub idle_lines: Vec<String>,
     #[serde(default = "hum_every")]
     pub idle_every: [f32; 2],
+    /// What the knight hears when he dream-nails them after their talk (original lines;
+    /// same placeholders as conversations).
+    #[serde(default)]
+    pub dream_thoughts: Vec<String>,
     /// Knight act when he arrives next to them, before the first line.
     #[serde(default)]
     pub greet_react: Option<String>,
@@ -268,6 +272,9 @@ fn validate(d: &NpcDef) -> Result<()> {
     }
     for line in d.conversations.iter().flatten() {
         talk::check_template(line.text()).with_context(|| format!("npc '{}'", d.name))?;
+    }
+    for t in &d.dream_thoughts {
+        talk::check_template(t).with_context(|| format!("npc '{}' dream thought", d.name))?;
     }
     Ok(())
 }

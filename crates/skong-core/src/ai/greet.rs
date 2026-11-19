@@ -48,6 +48,8 @@ pub struct Visitor {
     pub stand_off: f32,
 }
 
+/// Chance (at curiosity 0.5) that the knight dream-nails a visitor after their talk.
+pub const DREAM_NAIL_CHANCE: f32 = 0.25;
 /// Seconds the knight waits beside a visitor for the conversation to start.
 const START_PATIENCE: f32 = 6.0;
 /// Horizontal distance kept from the visitor's feet point, in game units.
@@ -109,6 +111,8 @@ pub(crate) struct Greet {
     phase: Phase,
     /// Gave up (no route, nobody answered): the brain snubs this visitor for a while.
     pub failed: bool,
+    /// The after-conversation dream nail was considered (at most once per visit).
+    dream_decided: bool,
 }
 
 impl Greet {
@@ -122,7 +126,7 @@ impl Greet {
         } else {
             Phase::Approach(Travel::to(ctx, goal, TravelStyle::Hurry))
         };
-        Self { id: v.id, name: v.name.clone(), phase, failed: false }
+        Self { id: v.id, name: v.name.clone(), phase, failed: false, dream_decided: false }
     }
 
     pub fn tick(&mut self, ctx: &mut Ctx) -> Status {
@@ -205,6 +209,19 @@ impl Greet {
                 }
                 ctx.out.waiting = false;
                 if !talking && act.is_none() {
+                    if v.greeted && !self.dream_decided {
+                        // Afterwards, sometimes: dream-nail them to hear what they really think.
+                        self.dream_decided = true;
+                        let chance = DREAM_NAIL_CHANCE * (0.5 + ctx.mind.personality.curiosity);
+                        if ctx.rng.chance(chance)
+                            && let Some(w) = ActWait::named(ctx, "dream_nail")
+                        {
+                            ctx.face_toward(v.pos.x);
+                            *act = Some(w);
+                            ctx.out.dream_visitor = Some(v.id);
+                            return Status::Running;
+                        }
+                    }
                     if v.greeted {
                         ctx.mind.adjust(|n| &mut n.loneliness, -0.4);
                         ctx.mind.excite(0.15);
