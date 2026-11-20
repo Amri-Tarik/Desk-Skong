@@ -249,16 +249,20 @@ impl Sim {
         })
     }
 
-    /// Start a cursor battle and lose it 0-3.
+    /// Start a cursor battle and lose it without landing a blow. (With his invulnerability
+    /// after each hit he answers between the cursor's hits, so a real 0-3 is no longer
+    /// forced in one tick: these tests are about what losing does, so one hit loses, and a
+    /// 1-hit margin counts as "badly".)
     fn lose_battle(&mut self) {
+        let mut cfg = self.brain.config().clone();
+        cfg.battle.lose_hits = 1;
+        cfg.stakes.death_margin = 1;
+        self.brain = Brain::new(cfg, self.catalog.clone(), 7);
         self.brain.mind_mut().needs.mischief = 1.0;
         self.cursor = Some(Cursor { pos: self.knight.body().center() + Vec2::new(150.0, -20.0), ..Default::default() });
         assert!(self.run_until(10.0, |s| s.brain.behaviour() == BehaviourKind::Battle), "battle starts");
         assert!(self.run_until(5.0, |s| s.brain.battle_score().is_some() && s.started.iter().any(|a| a == "challenge") && s.act.is_none()));
-        // Three hits in one go, before he lands any.
-        for _ in 0..3 {
-            self.pokes.push(Poke::Click { pos: self.knight.pos });
-        }
+        self.pokes.push(Poke::Click { pos: self.knight.pos });
         self.step();
     }
 }
@@ -383,6 +387,26 @@ fn a_shade_out_of_reach_is_retried_within_seconds_but_not_frantically() {
     }
     assert!(first_back.is_some_and(|t| t < 10.0), "back at it within seconds: {first_back:?}");
     assert!((2..=8).contains(&restarts), "keeps at it, calmly: {restarts} restarts in 2 min");
+}
+
+#[test]
+fn spam_clicking_lands_one_hit_per_invulnerability_window() {
+    // Regression (live): spam-clicking a provoked battle landed every click and killed him.
+    let mut sim = Sim::new();
+    sim.brain.mind_mut().needs.mischief = 1.0;
+    sim.cursor = Some(Cursor { pos: sim.knight.body().center() + Vec2::new(150.0, -20.0), ..Default::default() });
+    assert!(sim.run_until(10.0, |s| s.brain.behaviour() == BehaviourKind::Battle), "battle starts");
+    assert!(sim.run_until(5.0, |s| s.started.iter().any(|a| a == "challenge") && s.act.is_none()));
+    // Ten clicks a second for one second: one hit lands, the rest meet his invulnerability.
+    for _ in 0..10 {
+        sim.pokes.push(Poke::Click { pos: sim.knight.pos });
+        sim.pokes.push(Poke::Click { pos: sim.knight.pos });
+        sim.step();
+        sim.run_until(0.1, |_| false);
+    }
+    let score = sim.brain.battle_score().expect("still battling");
+    assert_eq!(score.cursor, 1, "{score:?}");
+    assert!(!sim.events.iter().any(|e| matches!(e, StakeEvent::Died { .. })));
 }
 
 #[test]
@@ -568,7 +592,7 @@ fn urgent_reactions_beat_engagements() {
     sim.pokes.push(Poke::Release { vel: Vec2::ZERO });
     assert!(sim.run_until(1.0, |s| s.brain.behaviour() == BehaviourKind::Dizzy), "a shake makes him reel mid-loot");
     assert!(sim.run_until(4.0, |s| s.brain.behaviour() == BehaviourKind::Loot), "back to the Geo");
-    assert!(sim.started.iter().any(|a| a == "stunned"), "{:?}", sim.started);
+    assert!(sim.started.iter().any(|a| a == "dizzy"), "{:?}", sim.started);
 }
 
 #[test]

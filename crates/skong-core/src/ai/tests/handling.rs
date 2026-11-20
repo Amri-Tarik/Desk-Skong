@@ -150,7 +150,7 @@ fn shaken_he_reels_dizzily() {
     sim.shake();
     assert!(sim.run_until(1.0, BehaviourKind::Dizzy), "{}", sim.last_reason());
     sim.run(0.2);
-    assert_eq!(sim.started.last().map(String::as_str), Some("stunned"));
+    assert_eq!(sim.started.last().map(String::as_str), Some("dizzy"));
     assert_eq!(emotes(&sim, n, Expression::Lost), 1, "a dazed \"?\"");
     assert!(sim.run_while(3.0, |s| s.brain.behaviour() == BehaviourKind::Dizzy), "it passes");
 }

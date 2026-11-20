@@ -126,9 +126,13 @@ impl Battle {
             return self.finish(ctx, Outcome::GaveUp);
         }
 
-        // The cursor's hits: clicks on the knight.
-        let hits = ctx.p.pokes.iter().filter(|p| matches!(p, Poke::Click { .. })).count() as u32;
-        if hits > 0 && !matches!(self.phase, Phase::Approach) {
+        // The cursor's hits: clicks on the knight. At most one a tick, and none while he's
+        // invulnerable after the last one (spam-clicking used to land every click and kill
+        // him in a second).
+        let clicked = ctx.p.pokes.iter().any(|p| matches!(p, Poke::Click { .. }));
+        let invulnerable = ((ctx.now - self.last_hit_taken) as f32) < b.invulnerable_secs;
+        let hits = u32::from(clicked && !invulnerable && !matches!(self.phase, Phase::Approach));
+        if hits > 0 {
             self.score.cursor += hits;
             ctx.mind.hurt(0.1 * hits as f32);
             if self.score.cursor >= b.lose_hits {

@@ -101,6 +101,9 @@ pub struct BattleConfig {
     pub lose_hits: u32,
     /// Two cursor hits within this window stun the knight (s).
     pub stun_window: f32,
+    /// After a cursor hit he's invulnerable this long (s), as in the game: spam-clicking
+    /// can't land hits faster than he can answer.
+    pub invulnerable_secs: f32,
     /// Give up after this long (s).
     pub max_duration: f32,
     /// Give up when the cursor stays farther than this for `give_up_secs` (px).
@@ -122,7 +125,8 @@ impl Default for BattleConfig {
             dodge_speed: 1400.0,
             win_hits: 5,
             lose_hits: 3,
-            stun_window: 1.5,
+            stun_window: 2.5,
+            invulnerable_secs: 1.3,
             max_duration: 90.0,
             give_up_distance: 1400.0,
             give_up_secs: 6.0,
