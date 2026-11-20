@@ -283,6 +283,28 @@ fn a_spar_opens_with_a_challenge_and_blows_land_without_killing() {
     assert!(a.killed.is_empty());
 }
 
+#[test]
+fn no_swing_before_the_spar_begins() {
+    // Hornet / Zote still saying their challenge (`waiting`, not yet struck-able): he squares
+    // up facing them, but starts no attack, casts nothing and lands nothing until it's said.
+    let mut a = Arena::new(calm(BrainConfig::default()));
+    a.run(0.5);
+    a.fixed.push(Foe { waiting: true, vulnerable: false, attacking: false, ..dummy(FoeKind::Sparring, 1080.0) });
+    assert!(a.run_until(1.0, BehaviourKind::Fight), "{}", a.sim.last_reason());
+    let n = a.sim.intents.len();
+    a.run(5.0);
+    let early = &a.sim.intents[n..];
+    assert!(early.iter().all(|i| i.attack.is_none()), "no swing while she's still talking");
+    assert!(early.iter().all(|i| !i.stakes.iter().any(|e| matches!(e, StakeEvent::Cast { .. }))), "no spells either");
+    assert!(a.strikes.is_empty(), "nothing struck: {:?}", a.strikes);
+    assert_eq!(a.sim.brain.behaviour(), BehaviourKind::Fight, "still squared up: {}", a.sim.last_reason());
+    assert!(early.iter().rev().take(30).all(|i| i.face.is_none_or(|f| f == Side::Right)), "facing her");
+    // Her line is over, she's on guard: now the blows come.
+    a.fixed[0] = dummy(FoeKind::Sparring, 1080.0);
+    a.run(3.0);
+    assert!(a.strikes.iter().any(|s| s.kind == FoeKind::Sparring), "then he fights");
+}
+
 // --- The combat kit: pogo, spells by situation, dive, dodge ------------------------------
 
 use crate::ai::Technique;

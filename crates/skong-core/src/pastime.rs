@@ -15,8 +15,8 @@ use crate::canvas::{Image, premul};
 use crate::desktop::DesktopSnapshot;
 use crate::discovery::Mix;
 use crate::geom::{RectF, Vec2};
-use crate::shiny::{self, Spot};
-use crate::terrain::{Ledge, Terrain};
+use crate::shiny::{self, ShinySite, Spot};
+use crate::terrain::{Ledge, LedgeKind, Terrain};
 
 // --- the training dummy ---------------------------------------------------------------
 
@@ -204,6 +204,90 @@ impl Yard {
         let alpha = ((clock - d.born) as f32 / DUMMY_FADE_IN).min((d.leave_at - clock) as f32 / DUMMY_FADE_OUT + 1.0).clamp(0.0, 1.0);
         Some(ShownDummy { id: d.id, pos, span, alpha })
     }
+}
+
+/// Why no dummy could be placed (for the log).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DummyMiss {
+    /// Ledges with room for one (lasting, in the area).
+    pub ledges: usize,
+    /// Spots on them that are free, off game monitors and not under his feet.
+    pub spots: usize,
+    /// Of those, how many were route-planned (none had a stand spot he'd walk to).
+    pub tried: usize,
+}
+
+impl std::fmt::Display for DummyMiss {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.ledges == 0 {
+            write!(f, "no lasting ledge with room for one on his monitor")
+        } else if self.spots == 0 {
+            write!(f, "{} ledges, but every spot is taken, on a game monitor or too close to him", self.ledges)
+        } else {
+            write!(f, "{} free spots on {} ledges; none of the {} nearest has a stand spot his routes land on", self.spots, self.ledges, self.tried)
+        }
+    }
+}
+
+/// Most spots route-planned per placement, and per ledge.
+const DUMMY_PLANS: usize = 16;
+const DUMMY_PER_LEDGE: u8 = 3;
+/// Spots are sampled this far apart along a ledge (px).
+const DUMMY_STEP: f32 = 48.0;
+
+/// Choose where a new training dummy stands: the shinies' rules (lasting ledges, free, off
+/// game monitors, not right under his feet; `site.reachable` is not used) and, checked
+/// last, `practisable(foot, ledge span)`: the brain's own test that he would walk over and
+/// practise there (`ai::dummy_stand`), so the two always agree. Nearer and on his level (or
+/// the floor) first, high window tops last; `salt` varies the pick among similar spots.
+pub fn place_dummy(site: &ShinySite, salt: u64, practisable: &mut dyn FnMut(Vec2, (f32, f32)) -> bool) -> Result<(Spot, Vec2), DummyMiss> {
+    let fp = site.footprint;
+    let ledges = shiny::candidates(site);
+    let mut miss = DummyMiss { ledges: ledges.len(), ..Default::default() };
+    let mut mix = Mix(salt);
+    let k = site.knight;
+    // A comfortable distance: a little past the minimum.
+    let want = (2.0 * site.min_distance).max(300.0);
+    let mut spots: Vec<(f32, usize, f32)> = Vec::new();
+    for (li, &(l, lo, hi)) in ledges.iter().enumerate() {
+        let n = ((hi - lo) / DUMMY_STEP).ceil().clamp(1.0, 60.0) as usize;
+        for i in 0..=n {
+            let x = lo + (hi - lo) * i as f32 / n as f32;
+            let p = Vec2::new(x, l.y);
+            let free = p.distance(k) >= site.min_distance && site.occupancy.is_free(fp.rect(p), None) && !site.avoid.iter().any(|m| m.contains(x as i32, l.y as i32 - 1));
+            if !free {
+                continue;
+            }
+            let dy = (l.y - k.y).abs();
+            let level = if dy < 4.0 {
+                0.0
+            } else if l.kind == LedgeKind::Ground {
+                120.0
+            } else {
+                200.0 + 1.5 * dy
+            };
+            let cost = level + 0.5 * ((x - k.x).abs() - want).abs() + 160.0 * mix.f32();
+            spots.push((cost, li, x));
+        }
+    }
+    miss.spots = spots.len();
+    spots.sort_by(|a, b| a.0.total_cmp(&b.0));
+    // A few tries per ledge at most: an unreachable ledge shouldn't use up every plan.
+    let mut per_ledge = vec![0u8; ledges.len()];
+    for &(_, li, x) in &spots {
+        if miss.tried >= DUMMY_PLANS || per_ledge[li] >= DUMMY_PER_LEDGE {
+            continue;
+        }
+        per_ledge[li] += 1;
+        let l = ledges[li].0;
+        miss.tried += 1;
+        if practisable(Vec2::new(x, l.y), (l.x0, l.x1))
+            && let Some(placed) = shiny::spot_on(site.terrain, l, x)
+        {
+            return Ok(placed);
+        }
+    }
+    Err(miss)
 }
 
 /// Stand-in drawing when the dummy's art isn't exported: a post with a crossbar and a

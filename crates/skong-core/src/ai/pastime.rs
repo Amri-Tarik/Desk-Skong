@@ -22,7 +22,7 @@
 //! done (no dithering back to company).
 use std::collections::BTreeMap;
 
-use crate::controller::{MoveInput, Side};
+use crate::controller::{Character, MoveInput, Side};
 use crate::geom::{RectF, Vec2};
 use crate::nav::{NavGoal, TravelStyle};
 use crate::pastime::DummyHit;
@@ -31,7 +31,7 @@ use crate::terrain::LedgeKind;
 use super::behaviours::{ActWait, Active, BehaviourKind, Ctx, SEAT_TOL, Status, Travel, TravelStep, on_point};
 use super::combat::{Mark, Stance, pogo_now};
 use super::interest::PoiTarget;
-use super::navigator::Navigator;
+use super::navigator::{Navigator, Reach};
 use super::percept::Percepts;
 use super::{Attack, AttackDir, Brain, Motion, spots};
 
@@ -107,6 +107,8 @@ pub(crate) struct PastimeChoice {
     pub target: u64,
     /// Whose edge (process name), for the reason line.
     pub place: String,
+    /// The travel style whose route was checked to land on `at` (he travels with it).
+    pub style: TravelStyle,
 }
 
 /// What the brain knows and remembers about pastimes (lives in the interest map).
@@ -134,6 +136,13 @@ pub struct PastimeMemory {
     forced: Option<(PastimeKind, f64)>,
     /// What came of a forced pastime, for the panel (see [`Brain::take_test_notes`]).
     notes: Vec<String>,
+    /// A dummy he set out for and couldn't get to: left alone until then (pastimes keep
+    /// their own memory; the shared failure map is coarse and would hide it).
+    dummy_skip: Option<(u64, f64)>,
+    /// The dummy he would like to practise on but can't get to, and since when.
+    dummy_unreached: Option<(u64, f64)>,
+    /// What he last made of each dummy (logged when it changes, to diagnose live).
+    dummy_view: Option<(u64, &'static str)>,
 }
 
 impl PastimeMemory {
@@ -151,6 +160,16 @@ impl PastimeMemory {
         }
     }
 
+    /// Log what he makes of dummy `id` whenever that changes (why he ignores it, or that he
+    /// would practise on it).
+    fn note_dummy(&mut self, id: u64, what: &'static str, now: f64) {
+        if self.dummy_view != Some((id, what)) {
+            self.dummy_view = Some((id, what));
+            let at = self.dummy.map_or(Vec2::ZERO, |d| d.pos);
+            log::info!("brain: training dummy #{id} at ({:.0},{:.0}): {what} (t {now:.0})", at.x, at.y);
+        }
+    }
+
     fn rest(&mut self, kind: PastimeKind, now: f64) {
         self.ready_at.insert(kind, now + kind.cooldown() as f64);
     }
@@ -160,6 +179,10 @@ impl PastimeMemory {
 const STRIKE_GAP: f32 = 0.55;
 /// Arrival tolerance at the dummy stand spot (px).
 const STAND_TOL: f32 = 10.0;
+/// Travel styles tried for a dummy stand spot, gentlest first.
+const DUMMY_STYLES: [TravelStyle; 2] = [TravelStyle::Stroll, TravelStyle::Normal];
+/// A dummy he set out for and couldn't reach is left alone this long (s).
+const DUMMY_SKIP_SECS: f64 = 90.0;
 /// He jumps at a lumafly at most this far above his body centre (units; with the wings).
 const FLY_JUMP_REACH: f32 = 4.0;
 /// ... and at most this far to the side (units).
@@ -203,6 +226,28 @@ fn stand_spot(d: &KnownDummy, side: f32, ppu: f32) -> Vec2 {
     Vec2::new(if lo < hi { x.clamp(lo, hi) } else { d.pos.x }, d.pos.y)
 }
 
+/// Where and how he'd go to practise on a dummy (see [`dummy_stand`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DummyStand {
+    pub at: Vec2,
+    pub style: TravelStyle,
+    pub eta: f32,
+}
+
+/// The brain's test for a training dummy, shared with the app's placement so the two always
+/// agree: a stand spot beside it (the side he comes from first) that he stands on already,
+/// or that a route with the gentlest style that does ([`DUMMY_STYLES`]) lands on within
+/// the arrival tolerance. `reach` plans from where he is (`Navigator::reach`).
+pub fn dummy_stand(d: &KnownDummy, k: &Character, reach: &mut dyn FnMut(Vec2, TravelStyle) -> Option<Reach>) -> Option<DummyStand> {
+    let ppu = k.params.px_per_unit;
+    let side = if k.pos.x >= d.pos.x { 1.0 } else { -1.0 };
+    let spots = [stand_spot(d, side, ppu), stand_spot(d, -side, ppu)];
+    if let Some(&at) = spots.iter().find(|&&at| on_point(k, at, STAND_TOL)) {
+        return Some(DummyStand { at, style: TravelStyle::Stroll, eta: 0.0 });
+    }
+    spots.into_iter().find_map(|at| DUMMY_STYLES.into_iter().find_map(|style| reach(at, style).filter(|r| r.lands_on(at, STAND_TOL)).map(|r| DummyStand { at, style, eta: r.eta })))
+}
+
 impl Brain {
     /// The pastime props on screen (call before [`Brain::tick`]).
     pub fn set_pastimes(&mut self, dummy: Option<KnownDummy>, flies: &[KnownLumafly]) {
@@ -232,6 +277,15 @@ impl Brain {
     /// What came of the test panel's requests since the last call (one line each).
     pub fn take_test_notes(&mut self) -> Vec<String> {
         std::mem::take(&mut self.interest.pastimes.notes)
+    }
+
+    /// The training dummy he'd like to practise on but can't get to (no stand spot a route
+    /// lands on, or he set out and failed), and for how many seconds: the app moves it.
+    pub fn dummy_unreachable(&self) -> Option<(u64, f32)> {
+        if matches!(self.active, Active::Pastime(_)) {
+            return None;
+        }
+        self.interest.pastimes.dummy_unreached.map(|(id, since)| (id, (self.now - since) as f32))
     }
 
     /// The pastime under way, if any.
@@ -280,26 +334,33 @@ impl Brain {
         let ready = |m: &PastimeMemory, kind: PastimeKind| m.ready_at.get(&kind).is_none_or(|&t| now >= t);
         let mut options: Vec<PastimeChoice> = Vec::new();
 
-        // The dummy: stand beside it, on the side he comes from.
-        if let Some(d) = self.interest.pastimes.dummy
-            && ready(&self.interest.pastimes, PastimeKind::Dummy)
-        {
-            let side = if k.pos.x >= d.pos.x { 1.0 } else { -1.0 };
-            let spots = [stand_spot(&d, side, ppu), stand_spot(&d, -side, ppu)];
-            for at in spots {
-                if self.interest.is_blocked(PoiTarget::Spot(at)) {
-                    continue;
-                }
-                let eta = if on_point(k, at, STAND_TOL) {
-                    Some(0.0)
-                } else {
-                    nav.reach(k, NavGoal::Point(at), style).filter(|r| r.lands_on(at, STAND_TOL)).map(|r| r.eta)
-                };
-                if let Some(eta) = eta {
-                    options.push(PastimeChoice { kind: PastimeKind::Dummy, at, eta, value: 0.0, target: d.id, place: String::new() });
-                    break;
+        // The dummy: stand beside it, on the side he comes from (its own skip memory, not the
+        // shared failure map: that one is coarse and kept dummies out of mind for good).
+        let mem = &mut self.interest.pastimes;
+        mem.dummy_skip = mem.dummy_skip.filter(|&(id, until)| now < until && mem.dummy.is_some_and(|d| d.id == id));
+        match mem.dummy {
+            Some(d) if ready(mem, PastimeKind::Dummy) => {
+                let stand = if mem.dummy_skip.is_some() { None } else { dummy_stand(&d, k, &mut |at, st| nav.reach(k, NavGoal::Point(at), st)) };
+                match stand {
+                    Some(s) => {
+                        mem.dummy_unreached = None;
+                        mem.note_dummy(d.id, "practisable", now);
+                        options.push(PastimeChoice { kind: PastimeKind::Dummy, at: s.at, eta: s.eta, value: 0.0, target: d.id, place: String::new(), style: s.style });
+                    }
+                    None => {
+                        let why = if mem.dummy_skip.is_some() { "skipped: he set out for it and couldn't get there" } else { "unreachable: no stand spot beside it that a stroll or a run lands on" };
+                        mem.note_dummy(d.id, why, now);
+                        if mem.dummy_unreached.is_none_or(|(id, _)| id != d.id) {
+                            mem.dummy_unreached = Some((d.id, now));
+                        }
+                    }
                 }
             }
+            Some(d) => {
+                mem.dummy_unreached = None;
+                mem.note_dummy(d.id, "on its cooldown (he practised a little while ago)", now);
+            }
+            None => mem.dummy_unreached = None,
         }
 
         // A lumafly: the ledge under it.
@@ -311,7 +372,7 @@ impl Brain {
                 && let Some(r) = nav.reach(k, NavGoal::Point(under), style)
                 && r.end.is_none_or(|e| e.distance(under) < 3.0 * ppu)
             {
-                options.push(PastimeChoice { kind: PastimeKind::Lumafly, at: under, eta: r.eta, value: 0.0, target: f.id, place: String::new() });
+                options.push(PastimeChoice { kind: PastimeKind::Lumafly, at: under, eta: r.eta, value: 0.0, target: f.id, place: String::new(), style });
             }
         }
 
@@ -355,6 +416,9 @@ impl Brain {
                 _ if ok => (base + bonus - again - 0.01 * o.eta).clamp(0.0, 0.8),
                 _ => 0.0,
             };
+        }
+        if let Some(o) = options.iter().find(|o| o.kind == PastimeKind::Dummy && o.value <= 0.0) {
+            self.interest.pastimes.note_dummy(o.target, "not up to it: too tired or too sore", now);
         }
         options.retain(|o| o.value > 0.0);
         // Test panel: the view / the stars now, if there is a spot for them.
@@ -412,9 +476,9 @@ impl Brain {
         }
         seats.sort_by(|a, b| a.0.distance(k.pos).total_cmp(&b.0.distance(k.pos)));
         for (at, place) in seats.into_iter().take(3) {
-            let reach = [TravelStyle::Stroll, TravelStyle::Normal].into_iter().find_map(|st| nav.reach(k, NavGoal::Point(at), st).filter(|r| r.lands_on(at, SEAT_TOL)));
-            if let Some(r) = reach {
-                return Some(PastimeChoice { kind: PastimeKind::View, at, eta: r.eta, value: 0.0, target: 0, place });
+            let reach = [TravelStyle::Stroll, TravelStyle::Normal].into_iter().find_map(|st| nav.reach(k, NavGoal::Point(at), st).filter(|r| r.lands_on(at, SEAT_TOL)).map(|r| (r, st)));
+            if let Some((r, style)) = reach {
+                return Some(PastimeChoice { kind: PastimeKind::View, at, eta: r.eta, value: 0.0, target: 0, place, style });
             }
         }
         None
@@ -444,10 +508,10 @@ impl Brain {
         spots_.sort_by(|a, b| a.0.y.total_cmp(&b.0.y));
         for (at, place) in spots_.into_iter().take(3) {
             if on_point(k, at, 40.0) {
-                return Some(PastimeChoice { kind: PastimeKind::Stargaze, at: k.pos, eta: 0.0, value: 0.0, target: 0, place });
+                return Some(PastimeChoice { kind: PastimeKind::Stargaze, at: k.pos, eta: 0.0, value: 0.0, target: 0, place, style: TravelStyle::Normal });
             }
             if let Some(r) = nav.reach(k, NavGoal::Point(at), TravelStyle::Normal).filter(|r| r.lands_on(at, 40.0)) {
-                return Some(PastimeChoice { kind: PastimeKind::Stargaze, at, eta: r.eta, value: 0.0, target: 0, place });
+                return Some(PastimeChoice { kind: PastimeKind::Stargaze, at, eta: r.eta, value: 0.0, target: 0, place, style: TravelStyle::Normal });
             }
         }
         None
@@ -576,6 +640,8 @@ pub(crate) struct Pastime {
     target: u64,
     at: Vec2,
     place: String,
+    /// The style checked to land on `at`.
+    style: TravelStyle,
     phase: Phase,
     started: f64,
     drills_left: u32,
@@ -618,7 +684,7 @@ impl Pastime {
         };
         let drills = 4 + (ctx.rng.f32() * 3.0) as u32;
         log::debug!("brain: pastime {} ({:.2}) at ({:.0},{:.0})", c.kind.label(), c.value, c.at.x, c.at.y);
-        Self { kind: c.kind, target: c.target, at: c.at, place: c.place, phase, started: ctx.now, drills_left: drills, drills_done: 0, last_drill: None, goal_set_at: f64::NEG_INFINITY, jumps: 0, over: false }
+        Self { kind: c.kind, target: c.target, at: c.at, place: c.place, style: c.style, phase, started: ctx.now, drills_left: drills, drills_done: 0, last_drill: None, goal_set_at: f64::NEG_INFINITY, jumps: 0, over: false }
     }
 
     fn finish(&mut self, ctx: &mut Ctx, satisfied: bool) -> Status {
@@ -661,9 +727,14 @@ impl Pastime {
     }
 
     fn travel_to(&mut self, ctx: &mut Ctx, at: Vec2, tol: f32) {
-        let style = match super::behaviours::style_for(ctx, at) {
-            TravelStyle::Hurry => TravelStyle::Normal,
-            s => s,
+        let style = match self.kind {
+            // The style whose route was checked to land there (a stroll may not get up to a
+            // spot a run does: it stops underneath).
+            PastimeKind::Dummy | PastimeKind::View | PastimeKind::Stargaze => self.style,
+            PastimeKind::Lumafly => match super::behaviours::style_for(ctx, at) {
+                TravelStyle::Hurry => TravelStyle::Normal,
+                s => s,
+            },
         };
         self.phase = Phase::Travel(Travel::exact(ctx, at, style, tol));
     }
@@ -695,7 +766,17 @@ impl Pastime {
             }
             Phase::Travel(t) => match t.tick(ctx) {
                 TravelStep::Moving => Status::Running,
-                TravelStep::Failed => self.finish(ctx, self.drills_done > 0),
+                TravelStep::Failed if self.drills_done == 0 => {
+                    // Couldn't get to it after all: leave this one be (his own memory; the app
+                    // moves a dummy he can't reach), not the whole pastime.
+                    log::debug!("brain: couldn't get to training dummy #{}; leaving it be", d.id);
+                    let st = self.finish(ctx, false);
+                    let mem = &mut ctx.interest.pastimes;
+                    mem.dummy_skip = Some((d.id, ctx.now + DUMMY_SKIP_SECS));
+                    mem.ready_at.insert(PastimeKind::Dummy, ctx.now);
+                    st
+                }
+                TravelStep::Failed => self.finish(ctx, true),
                 TravelStep::Arrived => {
                     self.phase = Phase::Breather { left: 0.3 };
                     Status::Running

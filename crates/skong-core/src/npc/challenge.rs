@@ -122,6 +122,14 @@ impl Challenge {
         }
     }
 
+    /// Her parting line, said once the outcome is in (not when it's called off).
+    pub fn set_farewell(&mut self, text: Option<String>) {
+        match self {
+            Challenge::Race(r) => r.farewell = text,
+            Challenge::Duel(d) => d.farewell = text,
+        }
+    }
+
     pub fn tick(&mut self, dt: f32, def: &ChallengeDef, clips: &ChallengeClips, body: &mut Body, env: &NpcEnv, events: &mut Vec<NpcEvent>) -> Next {
         match self {
             Challenge::Race(r) => r.tick(dt, &def.race, &clips.race, body, env, events),

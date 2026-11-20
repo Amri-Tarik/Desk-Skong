@@ -307,7 +307,12 @@ impl Pet {
         match what {
             Placeable::Dummy => {
                 if self.pastimes.place_dummy_at(&self.terrain, s.at, s.owner) {
-                    self.note(true, format!("placed the training dummy at {at}{wait}"));
+                    // The brain's own test, so the panel says whether he will practise there.
+                    if self.dummy_practisable_at(s.at, s.span) {
+                        self.note(true, format!("placed the training dummy at {at}{wait}; he'll go and practise"));
+                    } else {
+                        self.note(false, format!("placed the training dummy at {at}{wait}, but he can't practise there: no stand spot beside it that his routes (a stroll or a run) land on"));
+                    }
                 } else {
                     self.note(false, "training dummy: that window is gone");
                 }

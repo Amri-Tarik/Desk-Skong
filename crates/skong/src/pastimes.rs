@@ -16,9 +16,9 @@ use skong_core::assets::{Frame, Skin, SpriteBank, SpriteKey};
 use skong_core::desktop::DesktopSnapshot;
 use skong_core::discovery::Footprint;
 use skong_core::geom::{RectF, RectI, Vec2};
-use skong_core::lasting::LedgeAges;
+use skong_core::lasting::{LedgeAges, SETTLED_SECS};
 use skong_core::occupancy::{ClaimKey, ClaimKind, Occupancy};
-use skong_core::pastime::{self, DummyHit, DummyRules, LumaflyRules, ShownDummy, ShownFly, Sky, Swipe, Yard};
+use skong_core::pastime::{self, DummyHit, DummyMiss, DummyRules, LumaflyRules, ShownDummy, ShownFly, Sky, Swipe, Yard};
 use skong_core::shiny::{self, LASTING_SECS, ShinySite};
 use skong_core::terrain::{Ledge, Terrain};
 use skong_win::sprite_window::SpriteWindow;
@@ -76,6 +76,8 @@ pub struct PastimeProps {
     dummy_win: Option<SpriteWindow>,
     dummy_drawn: Option<(Option<SpriteKey>, u8, i32)>,
     shown_dummy: Option<ShownDummy>,
+    /// The dummy the test panel placed (left where it is even if he can't get to it).
+    placed: Option<u64>,
     flies: Vec<FlyWin>,
     shown_flies: Vec<ShownFly>,
     game_monitors: Vec<RectI>,
@@ -90,7 +92,9 @@ pub struct Where<'a> {
     pub now: f64,
     pub occupancy: &'a Occupancy,
     pub knight: Vec2,
-    pub reachable: &'a dyn Fn(Vec2) -> bool,
+    /// Would the brain walk over and practise on a dummy standing there (its own test,
+    /// `skong_core::ai::dummy_stand`)?
+    pub practisable: &'a dyn Fn(&KnownDummy) -> bool,
 }
 
 /// What happened this tick, for the pet (hit markers).
@@ -129,6 +133,7 @@ impl PastimeProps {
             dummy_win: None,
             dummy_drawn: None,
             shown_dummy: None,
+            placed: None,
             flies: Vec::new(),
             shown_flies: Vec::new(),
             game_monitors: Vec::new(),
@@ -177,34 +182,39 @@ impl PastimeProps {
         dummy
     }
 
-    /// Put the dummy on a settled ledge he can get to on his monitor (`debug`: any surface).
-    pub fn spawn_dummy(&mut self, w: &Where, debug: bool) -> Option<Vec2> {
+    /// Put the dummy (a new one, or the one standing moved) on a lasting ledge of his monitor
+    /// where the brain's own test says he'd walk over and practise: near him, on his level
+    /// or the floor first (`debug`: any settled surface, nearer still). Why not, if not.
+    pub fn spawn_dummy(&mut self, w: &Where, debug: bool) -> Result<Vec2, DummyMiss> {
         let fp = self.footprint();
         let area = w.desk.monitor_at(w.knight.x as i32, w.knight.y as i32 - 1).or(w.desk.primary()).map(|m| m.work.to_f());
+        let no_check = |_: Vec2| true;
         let site = ShinySite {
             terrain: w.terrain,
             ages: w.ages,
             now: w.now,
-            min_age: if debug { 0.0 } else { LASTING_SECS },
+            // Settled at least: a dummy on a younger ledge isn't drawn (or seen) until it is.
+            min_age: if debug { SETTLED_SECS } else { LASTING_SECS },
             occupancy: w.occupancy,
             footprint: fp,
             knight: w.knight,
-            min_distance: self.drules.min_distance * self.scale,
+            min_distance: self.drules.min_distance * self.scale * if debug { 0.6 } else { 1.0 },
             area,
             avoid: &self.game_monitors,
-            reachable: w.reachable,
+            reachable: &no_check,
         };
         let salt = (self.yard.clock() * 1000.0) as u64 ^ w.knight.x.to_bits() as u64;
-        match shiny::place(&site, &[], salt) {
-            Some((spot, pos)) => {
+        let mut practisable = |foot: Vec2, span: (f32, f32)| (w.practisable)(&self.known(0, foot, span));
+        match pastime::place_dummy(&site, salt, &mut practisable) {
+            Ok((spot, pos)) => {
                 let id = self.yard.add(spot, &self.drules);
-                log::info!("a training dummy stands at ({:.0},{:.0}) (#{id})", pos.x, pos.y);
-                Some(pos)
+                self.placed = None;
+                log::info!("a training dummy stands at ({:.0},{:.0}) (#{id}; the knight at ({:.0},{:.0}))", pos.x, pos.y, w.knight.x, w.knight.y);
+                Ok(pos)
             }
-            None => {
+            Err(miss) => {
                 self.yard.retry_soon();
-                log::debug!("training dummy: no room for one right now");
-                None
+                Err(miss)
             }
         }
     }
@@ -214,13 +224,39 @@ impl PastimeProps {
     pub fn place_dummy_at(&mut self, terrain: &Terrain, at: Vec2, owner: Option<skong_core::desktop::WindowId>) -> bool {
         let Some(spot) = shiny::spot_at(terrain, at, owner) else { return false };
         let id = self.yard.add(spot, &self.drules);
+        self.placed = Some(id);
         log::info!("a training dummy placed at ({:.0},{:.0}) (#{id})", at.x, at.y);
         true
+    }
+
+    /// Did the test panel place dummy `id`?
+    pub fn placed_by_user(&self, id: u64) -> bool {
+        self.placed == Some(id)
+    }
+
+    /// The brain's view of a dummy that would stand at `foot` (a ledge spanning `span`).
+    pub fn known_at(&self, foot: Vec2, span: (f32, f32)) -> KnownDummy {
+        self.known(0, foot, span)
     }
 
     /// The dummy's half width (px), for placement.
     pub fn dummy_half_width(&self) -> f32 {
         0.5 * self.dummy_size().0
+    }
+
+    /// The dummy standing, if one is up and not on its way out (its id).
+    pub fn dummy_id(&self) -> Option<u64> {
+        self.yard.dummy().filter(|d| d.leave_at > self.yard.clock()).map(|d| d.id)
+    }
+
+    /// Fade the dummy out (one he can't get to and no better place for it).
+    pub fn retire_dummy(&mut self) {
+        self.yard.dismiss();
+    }
+
+    /// The brain's view of a dummy standing at `foot` on a ledge spanning `span`.
+    fn known(&self, id: u64, foot: Vec2, span: (f32, f32)) -> KnownDummy {
+        KnownDummy { id, pos: foot, span, body: self.body(foot) }
     }
 
     /// A lumafly now (debug), on `area`.
@@ -368,7 +404,7 @@ impl PastimeProps {
 
     /// What the brain knows.
     pub fn percepts(&self) -> (Option<KnownDummy>, Vec<KnownLumafly>) {
-        let dummy = self.shown_dummy.filter(|d| d.alpha > 0.5).map(|d| KnownDummy { id: d.id, pos: d.pos, span: d.span, body: self.body(d.pos) });
+        let dummy = self.shown_dummy.filter(|d| d.alpha > 0.5).map(|d| self.known(d.id, d.pos, d.span));
         let flies = self.shown_flies.iter().map(|f| KnownLumafly { id: f.id, pos: f.pos, leaving: f.leaving || f.alpha < 0.3 }).collect();
         (dummy, flies)
     }

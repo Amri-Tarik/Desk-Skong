@@ -119,6 +119,7 @@ impl Hazard {
             winding_up: cue,
             lunging: self.armed() && self.flies(),
             vel: if self.armed() { self.vel } else { Vec2::ZERO },
+            waiting: false,
         }
     }
 }
@@ -378,6 +379,7 @@ impl Grimm {
             winding_up: self.winding_up(),
             lunging: self.lunging(),
             vel: self.vel,
+            waiting: false,
         })
     }
 

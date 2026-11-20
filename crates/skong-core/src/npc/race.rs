@@ -335,6 +335,9 @@ enum Stage {
     Finish,
     /// Plucks the needle out.
     Retrieve,
+    /// Then a pause and her parting line (the conversation's closing line, held back until
+    /// now; `said` once it's up).
+    Farewell { said: bool },
     /// Called off: a parting word.
     Abandon,
     /// Leaps away (and fades).
@@ -369,6 +372,8 @@ pub struct Race {
     go: bool,
     abandoned: bool,
     depart_from: Vec2,
+    /// Her parting line, said after the outcome (see `Stage::Farewell`).
+    pub(super) farewell: Option<String>,
 }
 
 /// The needle's resting point: its middle, a little above the ledge (the point stuck in).
@@ -401,6 +406,7 @@ impl Race {
             go: false,
             abandoned: false,
             depart_from,
+            farewell: None,
         }
     }
 
@@ -466,6 +472,7 @@ impl Race {
             events.push(NpcEvent::RaceOver { knight_won: None });
         }
         self.needle = Needle::Gone;
+        self.farewell = None;
         let text = pick_line(body.rng, &def.abandon);
         self.len = crate::bubble::read_secs(&text).min(3.0);
         events.push(NpcEvent::Say { text, secs: self.len });
@@ -595,6 +602,29 @@ impl Race {
                     body.play(clips.throw_recover, true);
                     self.needle = Needle::Gone;
                     self.next(Stage::Retrieve, once_secs(body.lib, clips.throw_recover).max(0.4));
+                }
+            }
+            Stage::Retrieve if self.t >= self.len && self.farewell.is_some() => {
+                body.face(env.knight.x);
+                body.play(clips.ready, true);
+                self.next(Stage::Farewell { said: false }, 0.4);
+            }
+            Stage::Farewell { said } => {
+                body.face(env.knight.x);
+                if self.t >= self.len {
+                    match self.farewell.take() {
+                        Some(text) if !said => {
+                            let len = crate::bubble::read_secs(&text);
+                            events.push(NpcEvent::Say { text, secs: len });
+                            self.next(Stage::Farewell { said: true }, len);
+                        }
+                        _ => {
+                            events.push(NpcEvent::LineDone);
+                            body.play(clips.depart, true);
+                            self.depart_from = *body.pos;
+                            self.next(Stage::Depart, 0.8);
+                        }
+                    }
                 }
             }
             Stage::Retrieve | Stage::Abandon => {
