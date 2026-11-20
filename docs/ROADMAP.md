@@ -202,6 +202,19 @@ Checked in tests only (unless noted). Note anything that looks off:
       - shadow-dash dodge through a Husk lunge;
       - crystal-dash opener;
       - wraiths at a Vengefly.
+- [ ] Reactions to handling (`ai::handling`):
+      - a click: he turns to the cursor for 1.5 s (only when standing still in a pastime —
+        does the turn read as "looking at you"?); a 2nd click within 25 s: anger mark;
+      - 5 clicks within 8 s: the provoked cursor battle (challenge, then the fight; reason
+        "battle: provoked, …"); 7 while typing; not over Geo / visitors / the Shade / fights;
+        is 5 the right number, and is 15 s the right time for a provocation to wait;
+      - a click while napping: wakes with an anger mark, no running off any more;
+      - shaking him while held (4 swings of 40 px within 2 s): "?" and the Stun clip once he
+        lands — is the threshold too easy / too hard with a real mouse, and does Stun read
+        as dizzy;
+      - 3 throws within a minute: anger mark, keeps the polite distance from the cursor for
+        90 s, no battles / pestering meanwhile, more mischief after;
+      - a gentle carry (held ≥ 0.3 s, let go < 250 px/s): nothing, or now and then a heart.
 - [ ] Gauntlet: wave pacing, drop-in dust puffs, the reward burst; how often he finishes one
 - [ ] Dream Gate: gate size, glow, warp timing
 - [ ] Pastimes (tray → Discoveries (debug) → "Put up a training dummy" / "Let a lumafly

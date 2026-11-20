@@ -21,6 +21,7 @@ mod fight;
 mod gauntlet;
 mod greet;
 mod grimm;
+mod handling;
 mod highlight;
 mod pastime;
 mod priorities;
@@ -477,6 +478,31 @@ impl Sim {
         self.knight.body().center()
     }
 
+    /// Pick him up, move him along `path` (offset from where he stood, by seconds held) for
+    /// `secs`, let go with `vel`, and set him back on his feet where he was.
+    fn handle(&mut self, secs: f32, path: impl Fn(f32) -> Vec2, vel: Vec2) {
+        let (home, support) = (self.knight.pos, self.knight.support);
+        self.pokes.push(Poke::Grab);
+        self.act = None; // like the app: picking him up ends the act
+        self.knight.state = MoveState::Airborne;
+        self.knight.support = None;
+        let n = (secs / self.dt).round() as usize;
+        for i in 0..n {
+            self.knight.pos = home + path(i as f32 * self.dt);
+            self.step();
+        }
+        self.pokes.push(Poke::Release { vel });
+        self.step();
+        self.knight.pos = home;
+        self.knight.support = support;
+        self.knight.state = MoveState::Grounded;
+    }
+
+    /// Shake him about (100 px back and forth, ~3 times a second) for 1.5 s.
+    fn shake(&mut self) {
+        self.handle(1.5, |t| Vec2::new(100.0 * (t * 18.0).sin(), -200.0), Vec2::ZERO);
+    }
+
     fn park_cursor(&mut self, offset: Vec2) {
         self.cursor = Some(Cursor { pos: self.body_center() + offset, ..Default::default() });
     }
@@ -768,7 +794,7 @@ fn without_a_seat_it_sleeps_face_down() {
 }
 
 #[test]
-fn poke_during_nap_wakes_and_startles() {
+fn poke_during_nap_wakes_him_grumpy() {
     let mut sim = sleepy_with_bench();
     assert!(sim.run_until(3.0, BehaviourKind::Nap));
     sim.run(8.0);
@@ -776,10 +802,10 @@ fn poke_during_nap_wakes_and_startles() {
     sim.pokes.push(Poke::Click { pos: sim.body_center() });
     let intent = sim.step();
     assert_eq!(intent.signal, Some("woken"));
-    assert!(sim.brain.mind().emotions.startle > 0.5);
-    assert!(sim.run_until(1.0, BehaviourKind::Flee));
-    sim.run(4.0);
-    assert!(sim.started.iter().any(|a| a == "startled"), "acts: {:?}", sim.started);
+    assert_eq!(intent.emote, Some(Expression::Angry), "woken by a poke: grumpy");
+    assert!(sim.brain.mind().emotions.annoyance > 0.3);
+    let kinds = sim.run(5.0);
+    assert!(!kinds.contains(&BehaviourKind::Flee), "a poke isn't a fright: {kinds:?}");
 }
 
 // --- Wall pushing -----------------------------------------------------------------------

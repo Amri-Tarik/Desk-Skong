@@ -114,10 +114,12 @@ pub enum BehaviourKind {
     /// A visitor scene: Hornet's race, watching the Troupe Master's visit, lingering by a
     /// scarlet flame (see `ai::scene`).
     Scene,
+    /// Shaken about while held: he lands and reels, dazed (see `ai::handling`).
+    Dizzy,
 }
 
 impl BehaviourKind {
-    pub const ALL: [BehaviourKind; 27] = [
+    pub const ALL: [BehaviourKind; 28] = [
         BehaviourKind::Idle,
         BehaviourKind::Companion,
         BehaviourKind::Watch,
@@ -145,6 +147,7 @@ impl BehaviourKind {
         BehaviourKind::Company,
         BehaviourKind::Pastime,
         BehaviourKind::Scene,
+        BehaviourKind::Dizzy,
     ];
 
     pub fn label(self) -> &'static str {
@@ -176,6 +179,7 @@ impl BehaviourKind {
             BehaviourKind::Company => "company",
             BehaviourKind::Pastime => "pastime",
             BehaviourKind::Scene => "scene",
+            BehaviourKind::Dizzy => "dizzy",
         }
     }
 
@@ -186,7 +190,8 @@ impl BehaviourKind {
     /// Extension point: a new engagement (e.g. the NPC `Greet`) is one line here.
     pub fn tier(self) -> Tier {
         match self {
-            BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead => Tier::Urgent,
+            // Reeling after a shake is a reflex, like a knock-out: brief, and before anything.
+            BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Dead | BehaviourKind::Dizzy => Tier::Urgent,
             // Geo and visitors keep him busy: they beat anything cursor-related.
             // Fights rank with visitors, above Geo (by utility within the tier).
             BehaviourKind::ShadeHunt | BehaviourKind::Loot | BehaviourKind::Shiny | BehaviourKind::Greet | BehaviourKind::Train | BehaviourKind::Fight => Tier::Engagement,
@@ -221,6 +226,7 @@ impl BehaviourKind {
                 | BehaviourKind::Flee
                 | BehaviourKind::Hide
                 | BehaviourKind::KnockedOut
+                | BehaviourKind::Dizzy
                 | BehaviourKind::Dead
                 | BehaviourKind::ShadeHunt
                 | BehaviourKind::Loot
@@ -910,6 +916,37 @@ impl KnockedOut {
     }
 }
 
+/// Shaken about while held: once he lands, he reels ("stunned": the Stun clip).
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Dizzy {
+    act: Option<ActWait>,
+    airborne: f32,
+}
+
+impl Dizzy {
+    /// Still falling after this long (s, a drop onto a far ledge): the daze wore off.
+    const LAND_WITHIN: f32 = 4.0;
+
+    pub fn start(_ctx: &mut Ctx) -> Self {
+        Self { act: None, airborne: 0.0 }
+    }
+
+    pub fn tick(&mut self, ctx: &mut Ctx) -> Status {
+        ctx.nav.stop();
+        if !ctx.grounded() {
+            self.airborne += ctx.dt();
+            return if self.airborne > Self::LAND_WITHIN { Status::Done } else { Status::Running };
+        }
+        if self.act.is_none() {
+            self.act = ActWait::named(ctx, "stunned");
+            if self.act.is_none() {
+                return Status::Done;
+            }
+        }
+        if self.act.as_mut().is_some_and(|w| w.tick(ctx)) { Status::Done } else { Status::Running }
+    }
+}
+
 /// After being hurt: `hurt_idle` for a bit, then `focus` to heal.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Recover {
@@ -1102,6 +1139,7 @@ pub(crate) enum Active {
     Company(Box<super::company::Company>),
     Pastime(Box<super::pastime::Pastime>),
     Scene(Box<super::scene::Scene>),
+    Dizzy(Dizzy),
 }
 
 impl Active {
@@ -1134,6 +1172,7 @@ impl Active {
             Active::Company(_) => BehaviourKind::Company,
             Active::Pastime(_) => BehaviourKind::Pastime,
             Active::Scene(_) => BehaviourKind::Scene,
+            Active::Dizzy(_) => BehaviourKind::Dizzy,
         }
     }
 
@@ -1166,6 +1205,7 @@ impl Active {
             Active::Company(b) => b.tick(ctx),
             Active::Pastime(b) => b.tick(ctx),
             Active::Scene(b) => b.tick(ctx),
+            Active::Dizzy(b) => b.tick(ctx),
         }
     }
 
@@ -1199,6 +1239,7 @@ impl Active {
             Active::Company(b) => b.reason(ctx),
             Active::Pastime(b) => b.reason(),
             Active::Scene(b) => b.reason(),
+            Active::Dizzy(_) => "dizzy: shaken about".into(),
         }
     }
 }

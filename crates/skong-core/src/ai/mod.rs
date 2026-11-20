@@ -37,6 +37,7 @@ mod company;
 mod companion;
 mod config;
 mod greet;
+mod handling;
 mod death;
 mod expression;
 mod highlight;
@@ -279,7 +280,8 @@ pub struct Brain {
     flee_from: Option<Vec2>,
     /// A huge fall knocked the knight flat.
     knocked_out: bool,
-    recent_clicks: Vec<f64>,
+    /// Clicks, shakes and throws, and what he makes of them (see [`handling`]).
+    handling: handling::Handling,
     last_switch: Option<Switch>,
     last_motion: Motion,
     exertion: f32,
@@ -346,7 +348,7 @@ impl Brain {
             nap_ready_at: 0.0,
             flee_from: None,
             knocked_out: false,
-            recent_clicks: Vec::new(),
+            handling: Default::default(),
             last_switch: None,
             last_motion: Motion::Hold,
             exertion: 0.0,
@@ -481,6 +483,7 @@ impl Brain {
         self.since_switch += dt;
         self.think_in -= dt;
         self.senses.update(p, self.now, &self.cfg);
+        self.senses.wary = self.handling.wary(self.now);
         self.spots.update(p.activity, dt);
         self.interest.highlight.observe(p.selection, dt);
 
@@ -514,6 +517,8 @@ impl Brain {
             // Bumps while the user holds him don't count (nor pile up for the release: a
             // backlog would land all at once, a sudden death against Grimm).
             self.stakes.fight.hits = 0;
+            // The app moves him with the cursor: a shake shows in where he is.
+            self.handling.held(self.now, p.knight.pos);
             nav.stop();
             out.behaviour = Some(self.active.kind());
             out.reason = "held by the user".into();
@@ -557,6 +562,7 @@ impl Brain {
             }
             self.think(p, nav, &mut out, true);
         }
+        self.look_after_click(p, &mut out);
         self.stir_from_slug(p, &mut out);
         self.dream_gate_landed();
         self.carry_tick(p, &mut out);
@@ -644,6 +650,19 @@ impl Brain {
         self.pester_ready_at = self.pester_ready_at.max(self.now + (120.0 / self.cfg.bother_level.max(0.05)) as f64);
     }
 
+    /// Clicked: he turns to look at the cursor for a moment (standing, in a pastime; a fight,
+    /// a visitor or Geo keep his attention).
+    fn look_after_click(&self, p: &Percepts, out: &mut Intent) {
+        let Some(at) = self.handling.look(self.now) else { return };
+        let kind = self.active.kind();
+        let pastime = matches!(kind.tier(), Tier::Ambient | Tier::Needs) && !matches!(kind, BehaviourKind::Battle | BehaviourKind::Pester);
+        if !pastime || !matches!(out.motion, Motion::Hold) {
+            return;
+        }
+        let at = self.senses.cursor.map_or(at, |c| c.pos);
+        out.face = Side::of(at.x - p.knight.pos.x).or(out.face);
+    }
+
     /// Sleeping: the seated "nap" act, or deep sleep ("bow_down") during a nap.
     fn asleep(&self, p: &Percepts) -> bool {
         let Some(act) = p.act else { return false };
@@ -682,38 +701,67 @@ impl Brain {
         let fighting = matches!(self.active, Active::Battle(_) | Active::Pester(_));
         let mut woken = false;
 
-        self.recent_clicks.retain(|t| self.now - *t < 2.0);
+        // How the user handles him (`ai::handling`). Clicks don't scare him off any more:
+        // they try his patience (a look, an anger mark, then a fight with the cursor).
         for poke in p.pokes {
             match *poke {
+                // In a cursor fight, clicks are the cursor's hits (the battle counts them).
+                Poke::Click { .. } if fighting => {}
                 Poke::Click { pos } => {
+                    let click = self.handling.click(self.now, pos, self.senses.user_busy);
+                    let busy = if self.senses.user_busy { 0.5 } else { 1.0 };
+                    self.mind.annoy(0.15 * busy);
                     if napping {
+                        // Woken by a poke: up, grumpy (whatever the count).
                         woken = true;
-                        self.mind.startle(0.8);
-                        self.flee_from = Some(pos);
-                    } else if !fighting {
-                        self.recent_clicks.push(self.now);
-                        self.mind.annoy(0.15);
-                        self.mind.excite(0.1 * self.mind.personality.boldness);
-                        if self.recent_clicks.len() >= 3 {
-                            // Poked hard: that's enough.
-                            self.mind.startle(0.7);
-                            self.flee_from = Some(pos);
-                            self.recent_clicks.clear();
+                        self.mind.startle(0.2);
+                        self.mind.annoy(0.3);
+                        self.handling.emote(Expression::Angry);
+                    } else {
+                        match click {
+                            handling::Click::Look => self.mind.startle(0.1),
+                            handling::Click::Irked => self.mind.annoy(0.1 * busy),
+                            handling::Click::Provoked => {
+                                log::info!("brain: clicked once too often; picking a fight with the cursor");
+                                self.mind.annoy(0.3);
+                                self.mind.excite(0.3);
+                            }
                         }
                     }
                 }
                 Poke::Grab => {
                     woken |= napping;
                     self.mind.startle(0.3);
+                    self.handling.grabbed(self.now);
                 }
-                Poke::Release { vel } => {
-                    if vel.length() > 1200.0 {
+                Poke::Release { vel } => match self.handling.released(self.now, vel) {
+                    handling::Release::Shaken => {
+                        log::info!("brain: shaken about; dizzy once he lands");
+                        self.mind.annoy(0.2);
+                    }
+                    handling::Release::Thrown { grumpy } => {
                         self.mind.excite(0.4 * self.mind.personality.boldness);
                         self.mind.startle(0.4);
                         self.mind.hurt(0.4);
                         self.mind.annoy(0.2);
+                        if grumpy {
+                            // Thrown around once too often: wary of the cursor for a while,
+                            // and the mischief comes out later (pestering it).
+                            log::info!("brain: thrown around once too often; wary of the cursor");
+                            self.mind.annoy(0.3);
+                            self.mind.adjust(|n| &mut n.mischief, 0.3);
+                        }
                     }
-                }
+                    handling::Release::Gentle => {
+                        // Set down softly: the pick-up's jolt is forgotten.
+                        self.mind.emotions.startle *= 0.5;
+                        let content = self.mind.emotions.annoyance < 0.2 && !self.handling.wary(self.now);
+                        if content && self.rng.chance(handling::CONTENT_CHANCE) {
+                            self.handling.emote(Expression::Fond);
+                        }
+                    }
+                    handling::Release::Plain => {}
+                },
             }
         }
 
@@ -984,6 +1032,14 @@ impl Brain {
         if kind == BehaviourKind::KnockedOut {
             self.knocked_out = false;
         }
+        if kind == BehaviourKind::Dizzy {
+            self.handling.reeling();
+        }
+        // A battle while provoked is the provoked one (also when he'd have picked it anyway).
+        let provoked = kind == BehaviourKind::Battle && self.handling.provoked(self.now);
+        if provoked {
+            self.handling.settle_provocation();
+        }
         if let Active::Greet(g) = &self.active
             && g.failed
         {
@@ -1062,7 +1118,11 @@ impl Brain {
             BehaviourKind::Companion => Active::Companion(Box::new(Companion::start(&mut ctx))),
             BehaviourKind::Rest => Active::Rest(Rest::start(&mut ctx)),
             BehaviourKind::Nap => Active::Nap(Nap::start(&mut ctx)),
-            BehaviourKind::Battle => Active::Battle(Box::new(Battle::start(&mut ctx))),
+            BehaviourKind::Battle => {
+                let mut b = Battle::start(&mut ctx);
+                b.provoked = provoked;
+                Active::Battle(Box::new(b))
+            }
             BehaviourKind::Pester => Active::Pester(Box::new(pester::Pester::start(&mut ctx))),
             BehaviourKind::Flee => Active::Flee(Flee::start(&mut ctx, flee_from)),
             BehaviourKind::Hide => Active::Hide(Hide::start(&mut ctx)),
@@ -1113,6 +1173,7 @@ impl Brain {
                 None => Active::Idle(Idle::start(&mut ctx)),
             },
             BehaviourKind::Scene => Active::Scene(Box::new(scene::Scene::start(&mut ctx))),
+            BehaviourKind::Dizzy => Active::Dizzy(behaviours::Dizzy::start(&mut ctx)),
         };
         let kind = active.kind();
         log::debug!("brain: {} -> {} ({reason:?})", from.label(), kind.label());
@@ -1299,11 +1360,26 @@ impl Brain {
             }
             _ => 0.0,
         };
+        // Wary after being thrown around: he keeps away from the cursor (unless provoked).
+        let battle = if s.wary && !self.fight_mode { 0.0 } else { battle };
+        // Clicked once too often: he fights the cursor now, bored or not and whatever the
+        // cooldown — still only as a pastime (anything more important comes first) and never
+        // while the user types, is away or has a fullscreen app up (`ai::handling`).
+        let provoked = self.handling.provoked(self.now)
+            && s.cursor.is_some()
+            && cfg.bother_level > 0.0
+            && !s.user_busy
+            && !s.user_away
+            && !s.fullscreen
+            && n.energy > 0.15
+            && e.hurt < 0.6;
+        let battle = if provoked { battle.max(handling::PROVOKED_UTILITY) } else { battle };
 
         // Pestering: a playful cursor nearby, or he was bored stiff and asked for it.
         let pester = match s.cursor {
             Some(c)
                 if cfg.bother_level > 0.0
+                    && !s.wary
                     && self.now >= self.pester_ready_at
                     && !s.user_busy
                     && !s.user_away
@@ -1328,6 +1404,7 @@ impl Brain {
         let hide = if s.fullscreen { 1.3 } else { 0.0 };
         let ride = if s.since_carried(self.now) < 2.0 && p.knight.is_grounded() { 0.65 + 0.2 * e.excitement } else { 0.0 };
         let knocked = if self.knocked_out { 1.25 } else { 0.0 };
+        let dizzy = if self.handling.dizzy(self.now) { handling::DIZZY_UTILITY } else { 0.0 };
         let recover = if e.hurt > 0.35 { (0.5 + 0.4 * e.hurt).min(0.9) } else { 0.0 };
         // A visitor! Drop (almost) everything and go say hello.
         let greet = match self.visitors.target(&s.visitors, p.knight.pos, self.now) {
@@ -1379,6 +1456,7 @@ impl Brain {
             (BehaviourKind::Gauntlet, self.gauntlet_utility(p)),
             (BehaviourKind::Pastime, self.pastime_utility(p)),
             (BehaviourKind::Scene, self.scene_utility()),
+            (BehaviourKind::Dizzy, dizzy),
         ];
         u.extend(self.stakes_utilities(p));
         let calm = self.now < self.calm_until;

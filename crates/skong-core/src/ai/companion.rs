@@ -66,7 +66,8 @@ impl Companion {
     /// Bother-scaled (comfort radius, stand-beside offset).
     fn radii(ctx: &Ctx) -> (f32, f32) {
         let c = &ctx.cfg.companion;
-        let b = ctx.cfg.bother_level.clamp(0.0, 1.0);
+        // Wary after being thrown around: he keeps the polite distance for a while.
+        let b = if ctx.senses.wary { 0.0 } else { ctx.cfg.bother_level.clamp(0.0, 1.0) };
         (c.polite_comfort + (c.comfort - c.polite_comfort) * b, c.polite_beside + (c.beside - c.polite_beside) * b)
     }
 

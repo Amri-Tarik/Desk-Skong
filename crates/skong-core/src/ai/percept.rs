@@ -219,6 +219,9 @@ pub struct Senses {
     pub perch: bool,
     /// Something woke the knight this tick (poke, user returned). Set by reflexes.
     pub woken: bool,
+    /// Grumpy after being thrown around: wary of the cursor (see `ai::handling`). Set by
+    /// the brain.
+    pub wary: bool,
     /// Seconds spent pressing a direction while grounded without moving.
     pub push_for: f32,
     /// Became stuck this tick (`push_for` crossed [`STUCK_SECS`]).
