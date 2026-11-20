@@ -338,6 +338,21 @@ fn on_a_cooked_desktop_he_works_around_the_knight_wherever_he_stands() {
 }
 
 #[test]
+fn a_ledge_narrower_than_a_slash_spot_never_crashes_him() {
+    use super::sim::slash_x;
+    // Regression (review): the slash spot was clamped to [x0 + 0.7u, x1 − 0.7u], which
+    // panics when the ledge under the knight is narrower than 1.4 units (a 40 px content
+    // ledge at 38.4 px per unit did).
+    let u = 38.4;
+    assert_eq!(slash_x(940.0, 920.0, 960.0, 1.0, u), None);
+    assert_eq!(slash_x(940.0, 920.0, 960.0, -1.0, u), None);
+    // A wide ledge: a few steps away on the asked side, or none when it's too short there.
+    let x = slash_x(900.0, 0.0, 1920.0, 1.0, PPU).expect("fits");
+    assert!((x - (900.0 + 4.5 * PPU)).abs() < 0.01);
+    assert_eq!(slash_x(1900.0, 0.0, 1920.0, 1.0, PPU), None, "too close to the end on that side");
+}
+
+#[test]
 fn flames_hurt_him_but_not_twice_in_a_breath() {
     let set = troupe();
     let terrain = desk(vec![]);

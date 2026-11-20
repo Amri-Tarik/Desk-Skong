@@ -578,6 +578,11 @@ impl Pet {
             input = mt.input(dt, &mut self.ch, Vec2::new((w.left + w.right) as f32 * 0.5, w.top as f32 + 120.0));
             self.act = None;
         } else if manual_input.is_none()
+            // In a fight the combat kit picks its own dives: a quiet fall there is a pogo
+            // bounce's apex or a jump over spikes, not a drop to shorten (a dive here cut
+            // pogo chains to one bounce and cost Grimm fights). Fatal falls are still caught
+            // by the hard-landing rule below.
+            && !self.brain_steers_jumps()
             // Never mid-jump or mid-climb of a planned route: only where it plans a drop.
             && self.nav.follower().is_none_or(|f| f.dive_ok(&self.ch))
             && let Some(dark) = self.ch.auto_dive(&self.terrain, &input, self.brain.mind().arousal() > 0.6)
@@ -916,6 +921,15 @@ impl Pet {
                 log::debug!("surroundings {} (luma {l:.2})", if self.dark.0 { "dark" } else { "light" });
             }
         }
+    }
+
+    /// The brain is steering his jumps itself (fights, battles, pester, the Shade): no
+    /// automatic dives on top of them.
+    fn brain_steers_jumps(&self) -> bool {
+        matches!(
+            self.brain.behaviour(),
+            BehaviourKind::Fight | BehaviourKind::Battle | BehaviourKind::Pester | BehaviourKind::ShadeHunt | BehaviourKind::Gauntlet | BehaviourKind::Train
+        )
     }
 
     fn think(&mut self, dt: f32) -> MoveInput {
