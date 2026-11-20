@@ -227,6 +227,11 @@ pub(crate) struct Fight {
     double_jumped: bool,
     goal_at: Vec2,
     out_of_reach: f32,
+    /// Closing the gap to the target (until well inside the reach; see `close_in`).
+    closing: bool,
+    /// The target last tick (id, x) and its smoothed horizontal speed (px/s).
+    foe_seen: Option<(u32, f32)>,
+    foe_vx: f32,
     /// Foes beaten in this fight.
     pub beaten: u32,
     /// Blows landed on the current target.
@@ -310,6 +315,9 @@ impl Fight {
             double_jumped: false,
             goal_at: Vec2::ZERO,
             out_of_reach: 0.0,
+            closing: false,
+            foe_seen: None,
+            foe_vx: 0.0,
             beaten: 0,
             landed: 0,
             kit: Kit::new(ctx.now),
@@ -839,8 +847,22 @@ impl Fight {
             input.x = (off.x / ppu).clamp(-1.0, 1.0);
             return;
         }
-        if off.x.abs() > 0.8 * reach_x {
+        self.track_foe(foe, ctx.dt());
+        // Close in with slack: start at 0.8 of the reach, stop at 0.5. With one line for
+        // both he started and stopped every frame behind a foe walking away (live: 30
+        // toggles a second, creeping at its pace). In between he keeps pace with one that
+        // is leaving, so the gap holds instead of opening and closing.
+        let gap = off.x.abs();
+        if gap > 0.8 * reach_x {
+            self.closing = true;
+        } else if gap < 0.5 * reach_x {
+            self.closing = false;
+        }
+        if self.closing {
             input.x = side.sign();
+        } else if grounded && self.foe_vx * side.sign() > 0.0 {
+            let run = k.params.run_speed * ppu;
+            input.x = side.sign() * (self.foe_vx.abs() / run).clamp(0.0, 1.0);
         }
         if grounded {
             self.double_jumped = false;
@@ -885,6 +907,23 @@ impl Fight {
                 }
             }
         }
+    }
+
+    /// The target's horizontal speed (px/s): its own when it reports one, else smoothed
+    /// from how far it moved since the last tick (walking enemies only report knockback).
+    fn track_foe(&mut self, foe: &Foe, dt: f32) {
+        let raw = match self.foe_seen {
+            _ if foe.vel.x != 0.0 => foe.vel.x,
+            Some((id, x)) if id == foe.id && dt > 0.0 => (foe.pos.x - x) / dt,
+            _ => {
+                self.foe_vx = 0.0;
+                self.foe_seen = Some((foe.id, foe.pos.x));
+                return;
+            }
+        };
+        let k = 1.0 - (-6.0 * dt).exp();
+        self.foe_vx += (raw - self.foe_vx) * k;
+        self.foe_seen = Some((foe.id, foe.pos.x));
     }
 
     pub fn reason(&self) -> String {
