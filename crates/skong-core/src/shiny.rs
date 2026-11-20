@@ -101,7 +101,7 @@ pub struct ShinySite<'a> {
 }
 
 /// Ledges that could carry a shiny, each with the x range its centre may take.
-fn candidates<'t>(site: &'t ShinySite) -> Vec<(&'t Ledge, f32, f32)> {
+pub(crate) fn candidates<'t>(site: &'t ShinySite) -> Vec<(&'t Ledge, f32, f32)> {
     let t = site.terrain;
     let fp = site.footprint;
     t.ledges
@@ -148,10 +148,15 @@ pub fn place(site: &ShinySite, taken: &[RectF], salt: u64) -> Option<(Spot, Vec2
         ok(l, x).then_some((l, x))
     });
     let (l, x) = random.or_else(|| ledges.iter().find_map(|&(l, lo, hi)| (0..=20).map(|i| lo + (hi - lo) * i as f32 / 20.0).find(|&x| ok(l, x)).map(|x| (l, x))))?;
+    spot_on(site.terrain, l, x)
+}
+
+/// The [`Spot`] at `x` on ledge `l` (window-relative on a window), with its position.
+pub(crate) fn spot_on(terrain: &Terrain, l: &Ledge, x: f32) -> Option<(Spot, Vec2)> {
     let pos = Vec2::new(x, l.y);
     let spot = match l.owner {
         Some(id) => {
-            let rect = site.terrain.window_rect(id)?;
+            let rect = terrain.window_rect(id)?;
             Spot::Window { id, anchor: Anchor { fx: (x - rect.left) / rect.width().max(1.0), dy: l.y - rect.top } }
         }
         None => Spot::Ground { pos },

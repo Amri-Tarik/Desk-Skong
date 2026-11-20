@@ -449,3 +449,44 @@ fn half_an_hour_at_the_desk_spends_much_less_time_in_plain_company() {
         }
     }
 }
+
+#[test]
+fn an_unreachable_dummy_is_reported_for_moving_and_the_failure_map_never_hides_one() {
+    // Routes to both stand spots end elsewhere (under a ledge he can't mount): no pastime,
+    // and the brain reports the dummy as unreachable, for longer and longer (the app moves
+    // it after a while).
+    let mut sim = in_company();
+    let d = dummy_at(1400.0);
+    for x in [1400.0 - 30.0 - 0.55 * 64.0, 1400.0 + 30.0 + 0.55 * 64.0] {
+        sim.nav.ends.push((Vec2::new(x, FLOOR), None, Vec2::new(1200.0, FLOOR)));
+    }
+    sim.dummy = Some(d);
+    let kinds = sim.run(25.0);
+    assert!(!kinds.contains(&BehaviourKind::Pastime), "{}", sim.last_reason());
+    let (id, secs) = sim.brain.dummy_unreachable().expect("reported");
+    assert!(id == 1 && secs > 20.0, "#{id} for {secs} s");
+    // Moved (a new dummy) where he can get to it: the report clears and he goes at once,
+    // even with its stand spots in the shared failure map (other behaviours' failures).
+    sim.nav.ends.clear();
+    let moved = KnownDummy { id: 2, ..dummy_at(600.0) };
+    for x in [600.0 - 30.0 - 0.55 * 64.0, 600.0 + 30.0 + 0.55 * 64.0] {
+        sim.brain.interest.block(super::super::interest::PoiTarget::Spot(Vec2::new(x, FLOOR)), 1e9);
+    }
+    sim.dummy = Some(moved);
+    assert!(sim.run_until(3.0, BehaviourKind::Pastime), "{}", sim.last_reason());
+    assert!(sim.brain.dummy_unreachable().is_none());
+}
+
+#[test]
+fn a_dummy_he_set_out_for_and_couldnt_reach_is_skipped_and_reported() {
+    // The planner says yes, but he never gets there (pressing into a wall): the trip fails,
+    // he leaves that dummy be (his own memory) and it's reported for moving.
+    let mut sim = in_company();
+    sim.dummy = Some(dummy_at(1400.0));
+    assert!(sim.run_until(5.0, BehaviourKind::Pastime), "{}", sim.last_reason());
+    sim.wall = true;
+    assert!(sim.run_while(40.0, |s| s.brain.behaviour() == BehaviourKind::Pastime), "gives up: {}", sim.last_reason());
+    sim.wall = false;
+    sim.run(5.0);
+    assert!(sim.brain.dummy_unreachable().is_some_and(|(id, _)| id == 1), "{:?}", sim.brain.dummy_unreachable());
+}

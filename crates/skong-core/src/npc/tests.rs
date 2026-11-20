@@ -322,7 +322,7 @@ fn zote_after_talk(s: &NpcSet, t: &Terrain, knight: Vec2, ev: &mut Vec<NpcEvent>
     }
     assert!(npc.can_talk(), "{:?}", npc.phase());
     npc.plan_spar(s);
-    assert!(npc.begin_talk(vec![("Halt!".into(), None)], knight.x, s, ev));
+    assert!(npc.begin_talk(vec![("Halt!".into(), None), ("Now begone.".into(), None)], knight.x, s, ev));
     for _ in 0..(10.0 / DT) as usize {
         npc.tick(DT, s, &env_at(t, knight), ev);
         if npc.phase() == NpcPhase::Sparring {
@@ -330,7 +330,12 @@ fn zote_after_talk(s: &NpcSet, t: &Terrain, knight: Vec2, ev: &mut Vec<NpcEvent>
         }
     }
     assert_eq!(npc.phase(), NpcPhase::Sparring, "the talk ends in a challenge");
+    assert!(!said(ev, "Now begone."), "the goodbye waits until after the spar");
     npc
+}
+
+fn said(ev: &[NpcEvent], line: &str) -> bool {
+    ev.iter().any(|e| matches!(e, NpcEvent::Say { text, .. } if text == line))
 }
 
 #[test]
@@ -343,7 +348,7 @@ fn zote_challenges_spars_goes_down_and_concedes() {
     assert_eq!(npc.percept(&s, 64.0).state, VisitorState::Sparring);
     let f = npc.foe(&s, 64.0).expect("a sparring partner");
     assert_eq!(f.kind, crate::ai::FoeKind::Sparring);
-    assert!(!f.vulnerable, "not while he is still saying his challenge");
+    assert!(!f.vulnerable && f.waiting, "not while he is still saying his challenge");
     // On guard: now he can be struck; his charges catch a knight who stands there.
     let mut hits = 0;
     let mut charged = false;
@@ -379,7 +384,10 @@ fn zote_challenges_spars_goes_down_and_concedes() {
     }
     assert!(ev.contains(&NpcEvent::SparOver { lost: true }));
     let lose = &s.defs[npc.def].spar.as_ref().unwrap().lose;
-    assert!(ev.iter().any(|e| matches!(e, NpcEvent::Say { text, .. } if lose.contains(text))), "saves face: {ev:?}");
+    let face = ev.iter().position(|e| matches!(e, NpcEvent::Say { text, .. } if lose.contains(text)));
+    let bye = ev.iter().position(|e| matches!(e, NpcEvent::Say { text, .. } if text == "Now begone."));
+    assert!(face.is_some(), "saves face: {ev:?}");
+    assert!(bye > face, "then the talk's goodbye, last: {ev:?}");
     assert_eq!(npc.phase(), NpcPhase::Gone, "and leaves");
 }
 

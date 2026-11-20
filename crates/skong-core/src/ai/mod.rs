@@ -83,7 +83,7 @@ pub use company::{CompanyCue, CompanyStage, PARTED};
 pub use interest::{InterestMap, Poi, PoiKey, PoiKind, PoiTarget, ScoredPoi};
 pub use navigator::{GraphNavigator, NavStatus, Navigator, Reach};
 pub use needs::{Emotions, MOOD_TAGS, Mind, Needs};
-pub use pastime::{KnownDummy, KnownLumafly, PastimeEvent, PastimeKind};
+pub use pastime::{DummyStand, KnownDummy, KnownLumafly, PastimeEvent, PastimeKind, dummy_stand};
 pub use percept::{ClosedWindow, Cursor, CursorSense, DesktopChanges, Percepts, Poke, RunningAct, STUCK_SECS, Senses, UserActivity};
 pub use places::{DiscoveryEvent, KnownPlace, PlaceId, PlaceKind, PlaceMemory};
 pub use shiny::{KnownShiny, ShinyMemory};

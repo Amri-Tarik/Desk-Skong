@@ -344,6 +344,99 @@ fn hornet_duels_fast_and_always_wins() {
     assert!(taken >= 1, "she can be struck, on guard");
 }
 
+/// Everything said in a full visit ending in a duel (a three-line talk whose last line is a
+/// goodbye), the knight `gap` units to her right striking whenever she can be struck (if
+/// `strikes`). Checks on the way that she is a `waiting` foe — never struck-able — while
+/// her challenge is being said. Returns the lines in order and his blows that landed.
+fn duel_visit(strikes: bool, seed: u32) -> (Vec<String>, u32, Vec<NpcEvent>) {
+    let s = set();
+    let t = terrain(vec![]);
+    let start = Vec2::new(900.0, FLOOR);
+    let k = Vec2::new(900.0 + 2.0 * PPU, FLOOR);
+    let mut npc = hornet_seeded(&s, &t, start, k, seed);
+    let mut ev = Vec::new();
+    npc.plan_challenge(ChallengePlan::Duel, &s);
+    let talk = ["Little ghost.", "Stay sharp up here.", "Farewell, little ghost."];
+    assert!(npc.begin_talk(talk.iter().map(|l| (l.to_string(), None)).collect(), k.x, &s, &mut ev));
+    let challenge = &s.defs[npc.def].challenge.as_ref().unwrap().duel.challenge;
+    let mut said: Vec<String> = ev.iter().filter_map(|e| if let NpcEvent::Say { text, .. } = e { Some(text.clone()) } else { None }).collect();
+    let (mut landed, mut cd, mut in_challenge) = (0, 0.0, false);
+    for _ in 0..(90.0 / DT) as usize {
+        let n = ev.len();
+        npc.tick(DT, &s, &env(&t, k), &mut ev);
+        for e in &ev[n..] {
+            match e {
+                NpcEvent::Say { text, .. } => {
+                    in_challenge = challenge.contains(text);
+                    said.push(text.clone());
+                }
+                NpcEvent::LineDone => in_challenge = false,
+                _ => {}
+            }
+        }
+        cd -= DT;
+        if let Some(f) = npc.foe(&s, PPU) {
+            if in_challenge {
+                assert!(f.waiting && !f.vulnerable, "still saying her challenge: no fight yet ({f:?})");
+            } else {
+                assert!(!f.waiting, "her line is over: the duel is on");
+            }
+            if strikes && f.vulnerable && cd <= 0.0 {
+                cd = 0.3;
+                npc.spar_strike(1, k.x, &s, &env(&t, k));
+                landed += 1;
+            }
+        } else {
+            assert!(!in_challenge || said.is_empty(), "a foe while she says her challenge");
+        }
+        if npc.phase() == NpcPhase::Gone {
+            break;
+        }
+    }
+    assert_eq!(npc.phase(), NpcPhase::Gone, "she leaves in the end: {said:?}");
+    (said, landed, ev)
+}
+
+#[test]
+fn the_duel_goes_talk_challenge_fight_outcome_then_goodbye() {
+    let s = set();
+    let duel = &s.defs[s.id("hornet").unwrap()].challenge.as_ref().unwrap().duel;
+    let mut respected = false;
+    for (strikes, seed) in [(false, 5), (true, 5), (true, 11), (false, 23)] {
+        let (said, landed, ev) = duel_visit(strikes, seed);
+        // The goodbye comes last, never before the challenge.
+        assert_eq!(said.len(), 5, "talk (2), challenge, outcome, goodbye: {said:?}");
+        assert_eq!(said[..2], ["Little ghost.", "Stay sharp up here."], "{said:?}");
+        assert!(duel.challenge.contains(&said[2]), "then the challenge: {said:?}");
+        let outcome = if landed >= duel.respect_after { &duel.respect } else { &duel.win };
+        respected |= landed >= duel.respect_after;
+        assert!(outcome.contains(&said[3]), "the outcome fits ({landed} blows landed): {said:?}");
+        assert_eq!(said[4], "Farewell, little ghost.", "the goodbye last: {said:?}");
+        // The duel is over before her word on it.
+        let over = ev.iter().position(|e| *e == NpcEvent::DuelOver { finished: true }).expect("she won");
+        let word = ev.iter().position(|e| matches!(e, NpcEvent::Say { text, .. } if *text == said[3])).unwrap();
+        assert!(over < word);
+    }
+    assert!(respected, "landing several blows earns her grudging word");
+}
+
+#[test]
+fn a_challenge_called_off_during_the_talk_keeps_its_goodbye() {
+    let s = set();
+    let t = terrain(vec![]);
+    let k = Vec2::new(1100.0, FLOOR);
+    let mut npc = hornet(&s, &t, Vec2::new(900.0, FLOOR), k);
+    let mut ev = Vec::new();
+    npc.plan_challenge(ChallengePlan::Duel, &s);
+    assert!(npc.begin_talk(vec![("Little ghost.".into(), None), ("Farewell, little ghost.".into(), None)], k.x, &s, &mut ev));
+    assert!(npc.call_off(&s, &mut ev), "the planned one is dropped");
+    for _ in 0..(12.0 / DT) as usize {
+        npc.tick(DT, &s, &env(&t, k), &mut ev);
+    }
+    let said: Vec<&str> = ev.iter().filter_map(|e| if let NpcEvent::Say { text, .. } = e { Some(text.as_str()) } else { None }).collect();
+    assert_eq!(said, ["Little ghost.", "Farewell, little ghost."]);
+}
+
 #[test]
 fn a_duel_called_off_or_walked_away_from_ends_without_a_winner() {
     let s = set();

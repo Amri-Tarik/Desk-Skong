@@ -62,6 +62,9 @@ pub struct Foe {
     pub lunging: bool,
     /// Where it is heading (px/s; flames in flight, a dashing boss), zero when unknown.
     pub vel: Vec2,
+    /// A spar that hasn't begun yet (the challenge is still being said): he squares up in a
+    /// ready stance facing it, but never swings until it has.
+    pub waiting: bool,
 }
 
 /// A blow that connects (nail or spell); the app applies it to the foe.
@@ -609,6 +612,15 @@ impl Fight {
                     self.phase = Phase::Act(Some(w));
                 }
             }
+            return;
+        }
+        if foe.waiting {
+            // The spar hasn't begun (the challenge is still being said): ready, facing it,
+            // no swings and no spells until it has.
+            ctx.nav.stop();
+            ctx.out.face = Some(side);
+            ctx.out.motion = Motion::Hold;
+            self.out_of_reach = 0.0;
             return;
         }
         let mut input = MoveInput { gait: Gait::Run, ..Default::default() };

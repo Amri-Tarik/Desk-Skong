@@ -338,7 +338,7 @@
         [
           "There you are. Idle, as usual.",
           { "say": "All this glass and light, and you just stand on it.", "react": "look_down" },
-          { "say": "Let's see if you remember how to move.", "react": "challenge" }
+          { "say": "Keep moving, little ghost. Stillness makes you prey.", "react": "challenge" }
         ]
       ],
       "challenge": {
@@ -384,15 +384,17 @@
             "Your guard is lazy. Let me fix that."
           ],
           "win": [
-            "Enough. You're still open on the left.",
-            "That will do. Keep your feet moving.",
-            "Yield. ...Good. You know when to stop."
+            "That's enough. You drop your guard after every swing.",
+            "Done. Watch my feet next time, not my needle.",
+            "Too slow to recover. Fix that.",
+            "Hm. You chase. A fighter should make the other one chase."
           ],
           "respect": [
-            "You landed a few. I felt them. Don't grin.",
-            "Better than last time. Still not enough."
+            "You found a few openings. I noticed. Don't make a habit of it.",
+            "Those blows were real. The duel is still mine.",
+            "Better. Much better. Not enough, but better."
           ],
-          "abandon": ["Hm. Our dance can wait."],
+          "abandon": ["Hm. Our dance can wait.", "Later. Keep your nail ready."],
           "clips": {
             "stance": "Boss Idle",
             "lunge_antic": "Boss G Dash Antic", "lunge": "Boss G Dash", "lunge_recover": "Boss G Dash Recover1",

@@ -160,6 +160,9 @@ pub enum DuelStage {
     Recover(DuelMove),
     /// She ends it: the flourish and her word.
     Win,
+    /// After her word on the duel: a pause, then her parting line (the conversation's
+    /// closing line, held back until now; `said` once it's up).
+    Farewell { said: bool },
     /// Called off.
     Abandon,
 }
@@ -182,10 +185,14 @@ pub struct Duel {
     far_for: f32,
     /// Struck on guard: step back next.
     evade_next: bool,
+    /// Her parting line, said after the outcome (see [`DuelStage::Farewell`]).
+    pub(super) farewell: Option<String>,
 }
 
 /// Antics play faster than in the game: she is quick.
 const ANTIC_SPEED: f32 = 1.3;
+/// Pause between her word on the duel and her parting line (s).
+pub(super) const FAREWELL_PAUSE: f32 = 0.6;
 
 impl Duel {
     pub(super) fn start(def: &DuelDef, clips: &DuelClips, body: &mut Body, knight_x: f32, events: &mut Vec<NpcEvent>) -> Duel {
@@ -194,7 +201,7 @@ impl Duel {
         body.face(knight_x);
         body.play(clips.stance, true);
         events.push(NpcEvent::Say { text, secs: len });
-        Duel { stage: DuelStage::Challenge, t: 0.0, len, elapsed: 0.0, dir: 1.0, hit_done: false, touches: 0, taken: 0, far_for: 0.0, evade_next: false }
+        Duel { stage: DuelStage::Challenge, t: 0.0, len, elapsed: 0.0, dir: 1.0, hit_done: false, touches: 0, taken: 0, far_for: 0.0, evade_next: false, farewell: None }
     }
 
     pub fn stage(&self) -> DuelStage {
@@ -206,10 +213,11 @@ impl Duel {
     }
 
     fn fighting(&self) -> bool {
-        !matches!(self.stage, DuelStage::Win | DuelStage::Abandon)
+        !matches!(self.stage, DuelStage::Win | DuelStage::Farewell { .. } | DuelStage::Abandon)
     }
 
-    /// The brain's view: a sparring partner (none once it's over).
+    /// The brain's view: a sparring partner (none once it's over). While she is still
+    /// saying her challenge it is `waiting`: he squares up, but nothing is struck yet.
     pub fn foe(&self, id: u32, feet: Vec2, def: &DuelDef, ppu: f32) -> Option<Foe> {
         if !self.fighting() {
             return None;
@@ -228,6 +236,7 @@ impl Duel {
             winding_up: matches!(self.stage, DuelStage::Antic(_)),
             lunging,
             vel: if lunging { Vec2::new(self.dir * def.lunge_speed * ppu, 0.0) } else { Vec2::ZERO },
+            waiting: self.stage == DuelStage::Challenge,
         })
     }
 
@@ -274,6 +283,8 @@ impl Duel {
         }
         events.push(NpcEvent::LineDone);
         events.push(NpcEvent::DuelOver { finished: false });
+        // Called off: her word on it is the parting line.
+        self.farewell = None;
         let text = pick_line(body.rng, &def.abandon);
         self.len = crate::bubble::read_secs(&text);
         events.push(NpcEvent::Say { text, secs: self.len });
@@ -382,7 +393,26 @@ impl Duel {
                 if self.t >= self.len {
                     events.push(NpcEvent::LineDone);
                     body.play(clips.stance, false);
-                    return Next::Linger(body.rng.range(1.5, 3.0));
+                    if self.farewell.is_none() {
+                        return Next::Linger(body.rng.range(1.5, 3.0));
+                    }
+                    self.go(DuelStage::Farewell { said: false }, FAREWELL_PAUSE);
+                }
+            }
+            DuelStage::Farewell { said } => {
+                body.face(k.x);
+                if self.t >= self.len {
+                    match self.farewell.take() {
+                        Some(text) if !said => {
+                            let len = crate::bubble::read_secs(&text);
+                            events.push(NpcEvent::Say { text, secs: len });
+                            self.go(DuelStage::Farewell { said: true }, len);
+                        }
+                        _ => {
+                            events.push(NpcEvent::LineDone);
+                            return Next::Linger(body.rng.range(1.0, 2.0));
+                        }
+                    }
                 }
             }
             DuelStage::Abandon => {

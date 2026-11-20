@@ -2,14 +2,17 @@
 //! up on their schedules (never while the user types hard, is away, a fullscreen app is up,
 //! or he's dead; never on a game monitor), the brain learns where they are, and its blows and
 //! swipes reach them. Kept out of `app.rs`.
-use skong_core::ai::{BehaviourKind, PastimeEvent};
+use skong_core::ai::{BehaviourKind, KnownDummy, PastimeEvent, Reach, dummy_stand};
 use skong_core::geom::Vec2;
-use skong_core::nav::{NavGoal, TravelStyle};
+use skong_core::nav::NavGoal;
 use skong_core::pastime::Swipe;
 use skong_core::terrain::LedgeKind;
 
 use super::Pet;
 use crate::pastimes::Where;
+
+/// A dummy the brain can't get to this long (s) is moved (or sent away).
+const DUMMY_UNREACHABLE_SECS: f32 = 20.0;
 
 impl Pet {
     pub(super) fn pastimes_tick(&mut self, dt: f32) {
@@ -29,6 +32,9 @@ impl Pet {
         if self.pastimes.due(dt, allowed, area, &bars, k) {
             self.spawn_dummy(false);
         }
+        if allowed && area.is_some() {
+            self.move_unreachable_dummy();
+        }
         let (discoveries, terrain) = (&self.discoveries, &self.terrain);
         let settled = |l: &skong_core::terrain::Ledge| discoveries.ledge_settled(terrain, l);
         let (created, news) = self.pastimes.update(dt, self.watcher.snapshot(), &self.terrain, &mut self.occupancy, &settled);
@@ -41,20 +47,54 @@ impl Pet {
         }
     }
 
-    /// Put the dummy somewhere he can get to on his monitor (`debug`: any surface).
+    /// Put the dummy where the brain's own test says he'd go and practise, on his monitor
+    /// (`debug`: nearer, any settled surface). Logs why not, if not.
     pub(super) fn spawn_dummy(&mut self, debug: bool) -> bool {
         let graph = self.nav.graph().map(|g| g.as_ref());
         let ch = &self.ch;
-        let reachable = |p: Vec2| {
-            graph.is_none_or(|g| {
-                [TravelStyle::Normal, TravelStyle::Hurry]
-                    .into_iter()
-                    .any(|st| g.plan(ch, NavGoal::Point(p), st).is_some_and(|r| (r.end.x - p.x).abs() <= 40.0 && (r.end.y - p.y).abs() <= 4.0))
-            })
+        let practisable = |d: &KnownDummy| {
+            graph.is_some_and(|g| dummy_stand(d, ch, &mut |at, st| g.plan(ch, NavGoal::Point(at), st).map(|r| Reach { eta: r.eta, end: Some(r.end) })).is_some())
         };
         let (ages, now) = self.discoveries.ages();
-        let w = Where { desk: self.watcher.snapshot(), terrain: &self.terrain, ages, now, occupancy: &self.occupancy, knight: ch.pos, reachable: &reachable };
-        self.pastimes.spawn_dummy(&w, debug).is_some()
+        let w = Where { desk: self.watcher.snapshot(), terrain: &self.terrain, ages, now, occupancy: &self.occupancy, knight: ch.pos, practisable: &practisable };
+        match self.pastimes.spawn_dummy(&w, debug) {
+            Ok(_) => true,
+            Err(miss) => {
+                let why = if graph.is_none() { "no route planner yet".to_string() } else { miss.to_string() };
+                if debug {
+                    log::warn!("training dummy: no spot he'd practise at near ({:.0},{:.0}): {why}", ch.pos.x, ch.pos.y);
+                } else {
+                    log::debug!("training dummy: not now ({why})");
+                }
+                false
+            }
+        }
+    }
+
+    /// Would he walk over and practise on a dummy standing at `foot` on a ledge `span` (the
+    /// brain's own test against the current route planner)? For the test panel's placement.
+    pub(super) fn dummy_practisable_at(&self, foot: Vec2, span: (f32, f32)) -> bool {
+        let ch = &self.ch;
+        let d = self.pastimes.known_at(foot, span);
+        self.nav.graph().is_some_and(|g| dummy_stand(&d, ch, &mut |at, st| g.plan(ch, NavGoal::Point(at), st).map(|r| Reach { eta: r.eta, end: Some(r.end) })).is_some())
+    }
+
+    /// A dummy the brain wants but can't get to for a while: moved somewhere he can, or (no
+    /// such place) sent away.
+    fn move_unreachable_dummy(&mut self) {
+        let Some((id, secs)) = self.brain.dummy_unreachable() else { return };
+        if secs < DUMMY_UNREACHABLE_SECS || self.pastimes.dummy_id() != Some(id) {
+            return;
+        }
+        if self.pastimes.placed_by_user(id) {
+            // The test panel put it there on purpose: it stays (the brain logs why he ignores it).
+            return;
+        }
+        log::info!("training dummy #{id}: the knight can't get to it ({secs:.0} s); moving it");
+        if !self.spawn_dummy(false) {
+            log::info!("training dummy #{id}: nowhere better for it; it fades away");
+            self.pastimes.retire_dummy();
+        }
     }
 
     /// A lumafly now (debug), on the knight's monitor.

@@ -187,6 +187,9 @@ enum SparStage {
     GetUp,
     /// Saving face after losing.
     Concede,
+    /// Then a pause and his parting line (the conversation's closing line, held back until
+    /// now; `said` once it's up).
+    Farewell { said: bool },
 }
 
 /// A spar in progress.
@@ -248,6 +251,9 @@ pub struct Npc {
     company: Option<company_run::Plan>,
     /// Hornet's challenge once the conversation is over.
     challenge_plan: Option<ChallengePlan>,
+    /// The conversation's closing line, held back while a spar / challenge follows the
+    /// talk: said after the outcome (a parting word before the fight read wrong).
+    farewell: Option<String>,
     /// White hit flash (sparring), 1 → 0.
     pub flash: f32,
 }
@@ -292,6 +298,7 @@ impl Npc {
             spar_planned: false,
             company: None,
             challenge_plan: None,
+            farewell: None,
             flash: 0.0,
         }
     }
@@ -345,10 +352,16 @@ impl Npc {
     }
 
     /// Start talking (the knight arrived next to us). `lines` come from
-    /// [`super::TalkContext::pick`]. Returns false if not possible right now.
-    pub fn begin_talk(&mut self, lines: Vec<(String, Option<String>)>, knight_x: f32, set: &NpcSet, events: &mut Vec<NpcEvent>) -> bool {
+    /// [`super::TalkContext::pick`]. Returns false if not possible right now. With a spar or
+    /// a challenge planned (call [`Self::plan_spar`] / [`Self::plan_challenge`] first), the
+    /// closing line is held back: talk → challenge → fight → outcome → that line.
+    pub fn begin_talk(&mut self, mut lines: Vec<(String, Option<String>)>, knight_x: f32, set: &NpcSet, events: &mut Vec<NpcEvent>) -> bool {
         if !self.can_talk() || lines.is_empty() {
             return false;
+        }
+        self.farewell = None;
+        if (self.spar_planned || self.challenge_plan.is_some()) && lines.len() >= 2 {
+            self.farewell = lines.pop().map(|l| l.0);
         }
         self.knight_right = knight_x > self.pos.x;
         self.looking_right = self.knight_right;
@@ -394,6 +407,7 @@ impl Npc {
                 self.call_off(set, events);
             }
             self.challenge_plan = None;
+            self.farewell = None;
             self.state = self.start_exit(set, env, events);
         }
     }
@@ -403,6 +417,12 @@ impl Npc {
     /// there was one.
     pub fn call_off(&mut self, set: &NpcSet, events: &mut Vec<NpcEvent>) -> bool {
         let planned = self.challenge_plan.take().is_some();
+        if let State::Talking { lines, .. } = &mut self.state
+            && let Some(text) = self.farewell.take()
+        {
+            // Still talking: no challenge after all, so the closing line closes the talk.
+            lines.push((text, None));
+        }
         let State::Challenge(c) = &mut self.state else { return planned };
         let Some(def) = set.defs[self.def].challenge.as_ref() else { return planned };
         let mut body = Body { pos: &mut self.pos, looking_right: &mut self.looking_right, alpha: &mut self.alpha, flash: &mut self.flash, anim: &mut self.anim, lib: set.lib(self.def), rng: &mut self.rng };
@@ -455,10 +475,11 @@ impl Npc {
             return State::Lingering { left: self.rng.range(3.0, 6.0) };
         };
         let mut body = Body { pos: &mut self.pos, looking_right: &mut self.looking_right, alpha: &mut self.alpha, flash: &mut self.flash, anim: &mut self.anim, lib: set.lib(self.def), rng: &mut self.rng };
-        let c = match plan {
+        let mut c = match plan {
             ChallengePlan::Race { finish, knight_eta, .. } => Challenge::Race(Box::new(super::race::Race::start(finish, knight_eta, &def.race, &clips.race, &mut body, events))),
             ChallengePlan::Duel => Challenge::Duel(Box::new(super::duel::Duel::start(&def.duel, &clips.duel, &mut body, env_knight_x, events))),
         };
+        c.set_farewell(self.farewell.take());
         State::Challenge(Box::new(c))
     }
 
@@ -915,7 +936,7 @@ impl Npc {
             return c.foe(self.id, self.pos, set.defs[self.def].challenge.as_ref()?, ppu);
         }
         let State::Sparring(s) = &self.state else { return None };
-        if matches!(s.stage, SparStage::Down | SparStage::GetUp | SparStage::Concede) {
+        if matches!(s.stage, SparStage::Down | SparStage::GetUp | SparStage::Concede | SparStage::Farewell { .. }) {
             return None;
         }
         let size = set.defs[self.def].spar.as_ref().map_or([1.0, 2.0], |d| d.size);
@@ -931,6 +952,8 @@ impl Npc {
             attacking: matches!(s.stage, SparStage::Antic | SparStage::Charge),
             winding_up: s.stage == SparStage::Antic,
             lunging: s.stage == SparStage::Charge,
+            // Still saying his challenge: the spar hasn't begun.
+            waiting: s.stage == SparStage::Challenge,
             ..Default::default()
         })
     }
@@ -987,6 +1010,8 @@ impl Npc {
         events.push(NpcEvent::LineDone);
         events.push(NpcEvent::SparOver { lost: false });
         self.anim.play(set.lib(self.def), set.clips[self.def].idle, false);
+        // The abandon line is the parting word.
+        self.farewell = None;
         let mut left = self.rng.range(1.5, 3.0);
         if let Some(def) = set.defs[self.def].spar.as_ref() {
             let text = def.abandon[self.rng.next_u32() as usize % def.abandon.len()].clone();
@@ -1005,7 +1030,7 @@ impl Npc {
         let ppu = env.ppu;
         s.t += dt;
         s.elapsed += dt;
-        let fighting = !matches!(s.stage, SparStage::Down | SparStage::GetUp | SparStage::Concede);
+        let fighting = !matches!(s.stage, SparStage::Down | SparStage::GetUp | SparStage::Concede | SparStage::Farewell { .. });
         let far = (env.knight.x - self.pos.x).abs() > 14.0 * ppu || (env.knight.y - self.pos.y).abs() > 5.0 * ppu;
         s.far_for = if far { s.far_for + dt } else { 0.0 };
         if fighting && (s.elapsed > def.max_secs || s.far_for > 8.0) {
@@ -1085,7 +1110,26 @@ impl Npc {
                 if s.t >= s.len {
                     events.push(NpcEvent::LineDone);
                     events.push(NpcEvent::SparOver { lost: true });
-                    return State::Lingering { left: self.rng.range(2.0, 3.5) };
+                    if self.farewell.is_none() {
+                        return State::Lingering { left: self.rng.range(2.0, 3.5) };
+                    }
+                    (s.stage, s.t, s.len) = (SparStage::Farewell { said: false }, 0.0, super::duel::FAREWELL_PAUSE);
+                }
+            }
+            SparStage::Farewell { said } => {
+                face_knight(self);
+                if s.t >= s.len {
+                    match self.farewell.take() {
+                        Some(text) if !said => {
+                            let len = crate::bubble::read_secs(&text);
+                            events.push(NpcEvent::Say { text, secs: len });
+                            (s.stage, s.t, s.len) = (SparStage::Farewell { said: true }, 0.0, len);
+                        }
+                        _ => {
+                            events.push(NpcEvent::LineDone);
+                            return State::Lingering { left: self.rng.range(1.0, 2.0) };
+                        }
+                    }
                 }
             }
         }
