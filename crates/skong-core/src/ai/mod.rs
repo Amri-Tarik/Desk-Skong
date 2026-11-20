@@ -36,6 +36,7 @@ mod companion;
 mod config;
 mod greet;
 mod death;
+mod expression;
 mod highlight;
 mod dream_gate;
 mod fight;
@@ -67,6 +68,7 @@ pub use battle::{BattleScore, Outcome};
 pub use behaviours::{BehaviourKind, Tier};
 pub use config::{BattleConfig, BoredomConfig, BrainConfig, CompanionConfig, NeedRates, Personality, SereneConfig, TierConfig, WatchConfig};
 pub use dream_gate::{DreamGateConfig, GateWish, Prize};
+pub use expression::{Expression, GeoHaul};
 pub use fight::{FightConfig, Foe, FoeKind, FoeStrike};
 pub use greet::{STAND_OFF_UNITS, Visitor, VisitorState};
 pub use train::{LessonCue, LessonReport, LessonSignal, LessonStage};
@@ -179,6 +181,8 @@ pub struct Intent {
     /// Dream Gate traffic: plant a gate at a prize no route reaches, or close it (see
     /// [`crate::dreamgate::GateRuntime`] for the app's side).
     pub gate: Option<crate::dreamgate::GateEvent>,
+    /// A small emote bubble to show above him (rare; see `ai::expression`).
+    pub emote: Option<Expression>,
 }
 
 /// Something the bored knight asks the world for (see [`Intent::request`]).
@@ -297,6 +301,8 @@ pub struct Brain {
     last_fight_at: f32,
     /// The gauntlet ceremony (serial, stage) already done (see `ai::gauntlet`).
     gauntlet_done: Option<(u32, crate::enemy::GauntletStage)>,
+    /// Emote bubbles: cooldowns and need latches (see [`expression`]).
+    expr: expression::Expressions,
 }
 
 impl Brain {
@@ -343,6 +349,7 @@ impl Brain {
             oscillations: 0,
             last_fight_at: f32::NEG_INFINITY,
             gauntlet_done: None,
+            expr: Default::default(),
             cfg,
         }
     }
@@ -502,6 +509,7 @@ impl Brain {
             if status == Status::Running {
                 break;
             }
+            self.note_ending(status);
             if self.active.kind() == BehaviourKind::Pester {
                 // Before re-thinking, or it would pick pestering again straight away.
                 self.pester_over();
@@ -538,6 +546,7 @@ impl Brain {
             self.last_fight_at = self.now;
         }
         self.maybe_request_event(p, &mut out);
+        out.emote = self.express(dt, asleep, &out);
         self.last_motion = out.motion;
         out.behaviour = Some(self.active.kind());
         out.reason = self.reason(p, nav);

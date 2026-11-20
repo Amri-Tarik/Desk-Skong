@@ -188,9 +188,11 @@ struct Pet {
     benches: Benches,
     /// Silent knight: emote icons above his head.
     emotes: Emotes,
-    /// Last brain switch / act already turned into an emote.
-    emote_seen: (f32, Option<ActId>),
+    /// Last act already turned into an emote.
+    emote_seen: Option<ActId>,
     emote_test: bool,
+    /// Geo picked up lately: a big haul earns a sparkle.
+    haul: skong_core::ai::GeoHaul,
     /// Things found in windows (benches, hot springs, geo deposits).
     discoveries: Discoveries,
     /// Shinies on the ground for the knight to pick up.
@@ -345,8 +347,9 @@ pub fn run(args: &Args) -> Result<()> {
         seat_y: None,
         benches,
         emotes,
-        emote_seen: (-1.0, None),
+        emote_seen: None,
         emote_test: args.emote_test,
+        haul: Default::default(),
         discoveries,
         shinies,
         occupancy: Default::default(),
@@ -670,33 +673,20 @@ impl Pet {
         self.fx.update(dt, origin, self.ch.facing == Side::Right, self.ch.params.px_per_unit)
     }
 
-    /// Turn what he does into silent emotes: zzz while asleep, Geo when he goes for loot,
-    /// "!" when startled or excited, "?" when something catches his curiosity.
+    /// Silent emotes besides the brain's expressions (`Intent::emote`, shown as each brain
+    /// tick ends): zzz while asleep, "!" on the startled act.
     fn emote_tick(&mut self, dt: f32, origin: Vec2) -> Result<()> {
-        if let Some(sw) = self.brain.last_switch()
-            && sw.at != self.emote_seen.0
-        {
-            self.emote_seen.0 = sw.at;
-            match sw.to {
-                BehaviourKind::Loot => self.emotes.show(Emote::Geo),
-                BehaviourKind::Flee | BehaviourKind::Greet | BehaviourKind::ShadeHunt => self.emotes.show(Emote::Bang),
-                BehaviourKind::Explore | BehaviourKind::Watch | BehaviourKind::Shiny | BehaviourKind::Highlight => self.emotes.show(Emote::Question),
-                // A gauntlet's announcement: a brief "!" before he readies himself.
-                BehaviourKind::Gauntlet if self.brain.senses().gauntlet.is_some_and(|c| c.stage == skong_core::enemy::GauntletStage::Announce) => self.emotes.show(Emote::Bang),
-                _ => {}
-            }
-        }
         let act = self.act.as_ref().map(|p| p.act());
-        if act != self.emote_seen.1 {
-            self.emote_seen.1 = act;
+        if act != self.emote_seen {
+            self.emote_seen = act;
             if act.is_some_and(|id| self.data.acts.get(id).name == "startled") {
                 self.emotes.show(Emote::Bang);
             }
         }
         if self.emote_test {
             // Debug (`--emote-test`): cycle every emote.
-            let n = (self.emotes.clock() / 2.5) as usize % 4;
-            self.emotes.show([Emote::Zzz, Emote::Geo, Emote::Bang, Emote::Question][n]);
+            let n = (self.emotes.clock() / 2.5) as usize % Emote::ALL.len();
+            self.emotes.show(Emote::ALL[n]);
         }
         let clip = self.data.lib.get(self.anim.clip()).name.as_str();
         self.emotes.sleeping(matches!(clip, "Sitting Asleep" | "Sitting Asleep Breathe" | "Prostrate" | "Prostrate Breathe"));
@@ -967,6 +957,10 @@ impl Pet {
         let visitors = self.visitor_percepts();
         self.brain.see_visitors(visitors);
         let intent = self.brain.tick(&percepts, &mut self.nav);
+        if let Some(e) = intent.emote {
+            log::debug!("emote: {e:?}");
+            self.emotes.show(e.into());
+        }
         self.apply_strikes(&intent.strikes);
         let quiet = lingering_fits(&intent, self.ch.facing);
         if let Some(id) = intent.greet {
