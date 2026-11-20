@@ -53,11 +53,12 @@ pub mod ids {
     pub const HORNET_RACE: &str = "hornet_race";
     pub const HORNET_DUEL: &str = "hornet_duel";
     pub const GRIMM_CAMEO: &str = "grimm_cameo";
+    pub const INTERIOR_DECORATOR: &str = "interior_decorator";
 
     pub const ALL: &[&str] = &[
         HORNET_TALK, DREAM_WINDOW, DREAM_VISITOR, FIRST_SPELL, POGO, VENGEFLY_AIRBORNE, FALL_AND_RECLAIM, WINDOW_RIDE, CURSOR_DEFEAT, CURSOR_VICTOR, WALL_CRYSTAL_DASH, DREAM_GATE, EVERY_REGION, EVERY_BENCH, EVERY_VISITOR, SLY_LESSON, ZOTE_SPAR, GAUNTLET,
         UNN_FORM, HIGHLIGHTED_TEXT, SHATTERED_WINDOW, GEO_HOARD, NAP_POKE, THROW, MIDAIR_CATCH, STEP_BEHIND, WALL_JUMP_CHAIN, SUPER_HARD_LANDING, EVERY_ENEMY, TROUPE_MASTER, TROUPE_ENCORE,
-        CORNIFER_MAPS, QUIRREL_VIEW, MYLA_SONG, HORNET_RACE, HORNET_DUEL, GRIMM_CAMEO,
+        CORNIFER_MAPS, QUIRREL_VIEW, MYLA_SONG, HORNET_RACE, HORNET_DUEL, GRIMM_CAMEO, INTERIOR_DECORATOR,
     ];
 }
 use ids::*;
@@ -216,6 +217,9 @@ pub enum AchievementEvent {
     HornetDuelDone,
     /// The Troupe Master's friendly visit was seen through to his farewell.
     GrimmCameoSeen,
+    /// The user dragged a prop or a visitor somewhere else; `what` names that one thing
+    /// (kind and id, e.g. "dummy#3").
+    Dragged { what: String },
 }
 
 /// Unlock state and every criterion.
@@ -421,6 +425,13 @@ impl Tracker {
             E::HornetRaceWon => unlock(HORNET_RACE),
             E::HornetDuelDone => unlock(HORNET_DUEL),
             E::GrimmCameoSeen => unlock(GRIMM_CAMEO),
+            E::Dragged { what } => {
+                // Different things (dummies, visitors, benches, deposits all count).
+                let goal = self.goal(INTERIOR_DECORATOR) as usize;
+                if self.see(INTERIOR_DECORATOR, what, goal) {
+                    unlock(INTERIOR_DECORATOR);
+                }
+            }
         }
         let mut fresh = Vec::new();
         for id in new {

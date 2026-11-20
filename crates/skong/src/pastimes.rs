@@ -6,7 +6,9 @@
 //!   then a light / heavy hit swing per blow, with the game's hit marker.
 //! * **lumaflies**: a procedural glow (`pastime::glow`), bobbing as it drifts.
 //!
-//! One small click-through, capture-excluded sprite window each. Nothing is saved.
+//! One small capture-excluded sprite window each (lumaflies' are click-through; the
+//! dummy's opaque pixels catch the mouse: the user can drag it, see `app/drag.rs`).
+//! Nothing is saved.
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -76,8 +78,8 @@ pub struct PastimeProps {
     dummy_win: Option<SpriteWindow>,
     dummy_drawn: Option<(Option<SpriteKey>, u8, i32)>,
     shown_dummy: Option<ShownDummy>,
-    /// The dummy the test panel placed (left where it is even if he can't get to it).
-    placed: Option<u64>,
+    /// In the user's hand (or falling from it): its foot. The brain doesn't see it meanwhile.
+    held: Option<Vec2>,
     flies: Vec<FlyWin>,
     shown_flies: Vec<ShownFly>,
     game_monitors: Vec<RectI>,
@@ -133,7 +135,7 @@ impl PastimeProps {
             dummy_win: None,
             dummy_drawn: None,
             shown_dummy: None,
-            placed: None,
+            held: None,
             flies: Vec::new(),
             shown_flies: Vec::new(),
             game_monitors: Vec::new(),
@@ -208,7 +210,7 @@ impl PastimeProps {
         match pastime::place_dummy(&site, salt, &mut practisable) {
             Ok((spot, pos)) => {
                 let id = self.yard.add(spot, &self.drules);
-                self.placed = None;
+                self.held = None;
                 log::info!("a training dummy stands at ({:.0},{:.0}) (#{id}; the knight at ({:.0},{:.0}))", pos.x, pos.y, w.knight.x, w.knight.y);
                 Ok(pos)
             }
@@ -224,14 +226,69 @@ impl PastimeProps {
     pub fn place_dummy_at(&mut self, terrain: &Terrain, at: Vec2, owner: Option<skong_core::desktop::WindowId>) -> bool {
         let Some(spot) = shiny::spot_at(terrain, at, owner) else { return false };
         let id = self.yard.add(spot, &self.drules);
-        self.placed = Some(id);
+        self.yard.pin(id);
+        self.held = None;
         log::info!("a training dummy placed at ({:.0},{:.0}) (#{id})", at.x, at.y);
         true
     }
 
-    /// Did the test panel place dummy `id`?
-    pub fn placed_by_user(&self, id: u64) -> bool {
-        self.placed == Some(id)
+    /// May dummy `id` be moved elsewhere when he can't get to it? Not one the user put
+    /// where it is (the Test tab placed it, or it was dragged there).
+    pub fn relocatable(&self, id: u64) -> bool {
+        self.yard.relocatable(id)
+    }
+
+    /// Mouse events on the dummy's window since the last call, with its id (the user's
+    /// hand, `app/drag.rs`).
+    pub fn take_mouse(&self) -> Vec<(u64, skong_win::sprite_window::MouseEvent)> {
+        let events = self.dummy_win.as_ref().map(|w| w.take_mouse()).unwrap_or_default();
+        match self.yard.dummy() {
+            Some(d) => events.into_iter().map(|e| (d.id, e)).collect(),
+            None => Vec::new(),
+        }
+    }
+
+    /// Where dummy `id` stands (or hangs in the user's hand).
+    pub fn dummy_at(&self, id: u64) -> Option<Vec2> {
+        self.yard.dummy().filter(|d| d.id == id)?;
+        self.held.or(self.shown_dummy.map(|d| d.pos))
+    }
+
+    /// The user picked dummy `id` up: it wobbles; the brain loses sight of it.
+    pub fn pick_up(&mut self, id: u64) -> bool {
+        let Some(at) = self.dummy_at(id) else { return false };
+        self.held = Some(at);
+        self.wobble(DummyHit { heavy: false, from_right: false });
+        true
+    }
+
+    /// Carried / falling: its foot is at `foot`.
+    pub fn hold(&mut self, foot: Vec2) {
+        if self.held.is_some() {
+            self.held = Some(foot);
+        }
+    }
+
+    /// Dummy `id` landed at `at` on window `owner`'s edge (`None`: the floor): it stays there
+    /// (pinned: never moved away by itself), with a thud.
+    pub fn set_down(&mut self, id: u64, terrain: &Terrain, at: Vec2, owner: Option<skong_core::desktop::WindowId>) -> bool {
+        self.held = None;
+        let spot = shiny::spot_at(terrain, at, owner).unwrap_or(shiny::Spot::Ground { pos: at });
+        if !self.yard.moved(id, spot) {
+            return false;
+        }
+        self.wobble(DummyHit { heavy: true, from_right: true });
+        true
+    }
+
+    /// Swing as if struck (`hit`'s clip, or the stand-in's tilt).
+    fn wobble(&mut self, hit: DummyHit) {
+        self.swing = if hit.from_right { -1.0 } else { 1.0 } * if hit.heavy { 1.0 } else { 0.6 };
+        if let (Some(art), Some(anim)) = (&self.art, self.anim.as_mut())
+            && let Some(clip) = art.lib.id(hit.clip())
+        {
+            anim.play(&art.lib, clip, true);
+        }
     }
 
     /// The brain's view of a dummy that would stand at `foot` (a ledge spanning `span`).
@@ -280,9 +337,18 @@ impl PastimeProps {
         let mut news = PastimeNews::default();
         let (w, h) = self.dummy_size();
         let mut shown = self.yard.shown(desk, terrain, self.footprint().w, settled);
-        shown = shown.filter(|d| !self.game_monitors.iter().any(|m| m.contains(d.pos.x as i32, d.pos.y as i32 - 1)));
+        match self.held {
+            // In the user's hand: drawn where the hand is (its stay still runs out).
+            Some(p) => {
+                shown = self.yard.dummy().map(|d| ShownDummy { id: d.id, pos: p, span: (p.x, p.x), alpha: shown.map_or(1.0, |s| s.alpha) });
+                if shown.is_none() {
+                    self.held = None;
+                }
+            }
+            None => shown = shown.filter(|d| !self.game_monitors.iter().any(|m| m.contains(d.pos.x as i32, d.pos.y as i32 - 1))),
+        }
         occ.release(DUMMY_CLAIM);
-        if let Some(d) = shown {
+        if let Some(d) = shown.filter(|_| self.held.is_none()) {
             occ.claim(DUMMY_CLAIM, self.footprint().rect(d.pos), 20);
         }
         // Blows that landed: swing, hit marker.
@@ -290,12 +356,7 @@ impl PastimeProps {
             if let Some(d) = shown {
                 news.hits.push((self.body(d.pos).center(), hit));
             }
-            self.swing = if hit.from_right { -1.0 } else { 1.0 } * if hit.heavy { 1.0 } else { 0.6 };
-            if let (Some(art), Some(anim)) = (&self.art, self.anim.as_mut())
-                && let Some(clip) = art.lib.id(hit.clip())
-            {
-                anim.play(&art.lib, clip, true);
-            }
+            self.wobble(hit);
         }
         self.swing *= (-dt * 5.0).exp();
         match shown {
@@ -311,7 +372,7 @@ impl PastimeProps {
                     && let Ok(win) = SpriteWindow::new()
                 {
                     win.set_capturable(self.capturable);
-                    win.set_click_through(true);
+                    // Its opaque pixels catch the mouse: the user can pick it up.
                     self.dummy_win = Some(win);
                     created = true;
                 }
@@ -404,20 +465,20 @@ impl PastimeProps {
 
     /// What the brain knows.
     pub fn percepts(&self) -> (Option<KnownDummy>, Vec<KnownLumafly>) {
-        let dummy = self.shown_dummy.filter(|d| d.alpha > 0.5).map(|d| self.known(d.id, d.pos, d.span));
+        let dummy = self.shown_dummy.filter(|d| d.alpha > 0.5 && self.held.is_none()).map(|d| self.known(d.id, d.pos, d.span));
         let flies = self.shown_flies.iter().map(|f| KnownLumafly { id: f.id, pos: f.pos, leaving: f.leaving || f.alpha < 0.3 }).collect();
         (dummy, flies)
     }
 
     /// The dummy's foot, if one stands (its ledge stays in the planner).
     pub fn dummy_foot(&self) -> Option<Vec2> {
-        self.shown_dummy.map(|d| d.pos)
+        self.shown_dummy.filter(|_| self.held.is_none()).map(|d| d.pos)
     }
 
     /// Nothing on monitors running a fullscreen game: the dummy leaves, lumaflies drift off.
     pub fn hide_on(&mut self, game_monitors: &[RectI]) {
         self.game_monitors = game_monitors.to_vec();
-        if self.shown_dummy.is_some_and(|d| game_monitors.iter().any(|m| m.contains(d.pos.x as i32, d.pos.y as i32 - 1))) {
+        if self.held.is_none() && self.shown_dummy.is_some_and(|d| game_monitors.iter().any(|m| m.contains(d.pos.x as i32, d.pos.y as i32 - 1))) {
             self.yard.dismiss();
         }
         if self.sky.flies().iter().any(|f| game_monitors.iter().any(|m| m.contains(f.pos.x as i32, f.pos.y as i32))) {
@@ -437,6 +498,7 @@ impl PastimeProps {
     pub fn clear(&mut self) {
         self.yard.clear();
         self.sky.clear();
+        self.held = None;
     }
 }
 

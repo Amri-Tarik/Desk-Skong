@@ -48,6 +48,7 @@ use skong_ipc::Command;
 
 mod achievements;
 mod discover;
+mod drag;
 mod dreamgate;
 mod enemy;
 mod grimm;
@@ -252,6 +253,8 @@ struct Pet {
     grab: Grab,
     /// Clicks / grabs / throws since the brain last looked.
     pokes: Vec<Poke>,
+    /// The user's hand on props and visitors (`app/drag.rs`).
+    hand: drag::Hand,
 
     win: SpriteWindow,
     tray: Tray,
@@ -394,6 +397,7 @@ pub fn run(args: &Args) -> Result<()> {
         paused: false,
         grab: Grab::default(),
         pokes: Vec::new(),
+        hand: drag::Hand::default(),
         win,
         tray,
         drawn: None,
@@ -515,6 +519,7 @@ pub fn run(args: &Args) -> Result<()> {
 impl Pet {
     fn tick(&mut self, dt: f32) -> Result<()> {
         self.handle_mouse();
+        self.drag_tick(dt);
         self.look.tick(dt);
         self.move_events.clear();
         if let Some(g) = self.navb.poll() {
@@ -968,7 +973,7 @@ impl Pet {
     fn think(&mut self, dt: f32) -> MoveInput {
         self.stakes_sense();
         self.see_foes();
-        let mut benches: Vec<Vec2> = self.benches.placed.iter().map(|(b, _)| b.pos).collect();
+        let mut benches: Vec<Vec2> = self.benches.standing();
         let seat = self.discovery_percepts(&mut benches).or_else(|| self.benches.seat_here(&self.ch, &self.terrain));
         let (left, right) = input::mouse_buttons();
         let cursor = monitor::cursor_pos().map(|(x, y)| Cursor { pos: Vec2::new(x as f32, y as f32), left, right });

@@ -217,6 +217,16 @@ fn throws_and_midair_catches() {
 }
 
 #[test]
+fn five_different_things_dragged() {
+    let mut t = tracker();
+    let drag = |w: &str| E::Dragged { what: w.into() };
+    // The same thing again doesn't count twice.
+    assert!(feed(&mut t, &[drag("dummy#1"), drag("dummy#1"), drag("bench#0"), drag("visitor#2"), drag("deposit#9")]).is_empty());
+    assert_eq!(feed(&mut t, &[drag("dummy#2")]), [INTERIOR_DECORATOR]);
+    assert!(feed(&mut t, &[drag("dummy#3")]).is_empty(), "once");
+}
+
+#[test]
 fn no_achievement_needs_special_hardware_or_apps() {
     for gone in ["dash_across_monitors", "air_mail", "game_retreat"] {
         assert!(!ALL.contains(&gone), "{gone}");

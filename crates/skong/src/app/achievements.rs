@@ -208,7 +208,7 @@ impl Pet {
     }
 
     /// One event into the tracker; unlocks are announced quietly.
-    fn achieve(&mut self, ev: E) {
+    pub(super) fn achieve(&mut self, ev: E) {
         let Some(t) = self.achievements.tracker.as_mut() else { return };
         let fresh: Vec<String> = t.on(&ev, now_unix()).into_iter().map(|d| d.title.clone()).collect();
         if fresh.is_empty() {

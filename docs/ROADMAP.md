@@ -203,6 +203,14 @@ checklist, with how to trigger each from the panel's Sandbox tab, is [TESTING.md
       behind other windows), the new Home page look, the Geo coin, the sandbox gate
       ([TESTING.md](TESTING.md), "The window")
 
+- [ ] Dragging props and visitors (`skong_core::drag`, `app/drag.rs`; TESTING.md "Dragging
+      props & visitors"): only opaque pixels catch the mouse (soft / semi-transparent
+      edges do too); the grab offset and fall speed; the dummy's wobble on lift and thud on
+      landing; visitors' picked-up / set-down lines and the knight's "!"; a talk resuming
+      from its line; scenes (lessons, spars, calm scenes, Hornet's race / duel) ending
+      cleanly when their visitor is lifted; a seated knight getting up when his bench is
+      lifted; a dragged deposit's new region look and its kept hits; nothing landing on a
+      game monitor
 - [ ] Step-behind crossings (TurnToBG / TurnFromBG at drawn lines)
 - [ ] Pester tricks and their persistence (45–90 s)
 - [ ] Sly's lesson: demo arcs vs. nearby windows; his nail vanishing at the bow

@@ -89,7 +89,23 @@ pub struct Find {
     /// Deposit: unix time it broke (old saves only: broken rocks are removed now).
     #[serde(default)]
     pub broken_at: Option<u64>,
+    /// The user dragged it onto a monitor floor: its feet point there (it stays in its
+    /// app's room, and shows whether that app's windows are open or not).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub floor: Option<[f32; 2]>,
 }
+
+/// Where the user dropped a find (see [`World::move_find`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FindSpot {
+    /// On a ledge of window `id` at feet point `at`.
+    Window { id: WindowId, at: Vec2 },
+    /// On a monitor floor at `at`.
+    Floor { at: Vec2 },
+}
+
+/// [`Shown::window`] of a find on the floor (no window holds it).
+pub const FLOOR_WINDOW: WindowId = 0;
 
 impl Find {
     /// 0 = never used, → 1 for a favourite.
@@ -378,7 +394,7 @@ impl World {
     fn add(&mut self, key: &str, kind: FindKind) -> FindId {
         let id = self.next_id.max(1);
         self.next_id = id + 1;
-        self.rooms.entry(key.to_string()).or_default().finds.push(Find { id, kind, anchor: None, visits: 0, hits: 0, broken_at: None });
+        self.rooms.entry(key.to_string()).or_default().finds.push(Find { id, kind, anchor: None, visits: 0, hits: 0, broken_at: None, floor: None });
         id
     }
 
@@ -468,6 +484,7 @@ impl World {
         let finds = self.rooms.get(key).map_or(&[][..], |r| r.finds.as_slice());
         finds
             .iter()
+            .filter(|f| f.floor.is_none())
             .filter_map(|f| f.anchor.map(|a| (site.footprint)(f.kind).rect(Vec2::new(rect.left + a.fx * rect.width(), rect.top + a.dy))))
             .map(|r| RectF::new(r.left - 8.0, r.top, r.right + 8.0, r.bottom))
             .collect()
@@ -488,7 +505,16 @@ impl World {
         let mut out = vec![];
         let mut hosts = BTreeMap::new();
         for (key, room) in &self.rooms {
-            let live: Vec<&Find> = room.finds.iter().filter(|f| f.anchor.is_some() && f.broken_at.is_none()).collect();
+            // Dragged onto a floor: there, on its ground ledge (hidden while that's gone).
+            for f in room.finds.iter().filter(|f| f.broken_at.is_none()) {
+                let Some([x, y]) = f.floor else { continue };
+                let half = footprint(f.kind).w * 0.5;
+                let ground = terrain.ledges.iter().find(|l| l.kind == LedgeKind::Ground && (l.y - y).abs() <= LEDGE_SLACK && l.x0 <= x - half && x + half <= l.x1);
+                if let Some(l) = ground {
+                    out.push(Shown { id: f.id, kind: f.kind, window: FLOOR_WINDOW, pos: Vec2::new(x, l.y), span: (l.x0, l.x1), favour: f.favour() });
+                }
+            }
+            let live: Vec<&Find> = room.finds.iter().filter(|f| f.anchor.is_some() && f.floor.is_none() && f.broken_at.is_none()).collect();
             if live.is_empty() {
                 continue;
             }
@@ -514,6 +540,52 @@ impl World {
             self.hosts.insert(k, v);
         }
         out
+    }
+
+    /// The app (room) find `id` belongs to.
+    pub fn room_of(&self, id: FindId) -> Option<&str> {
+        self.rooms.iter().find(|(_, r)| r.finds.iter().any(|f| f.id == id)).map(|(k, _)| k.as_str())
+    }
+
+    /// Can a find be dropped on window `id`'s edges? Only windows that are rooms (an app's,
+    /// not fullscreen, not ours).
+    pub fn is_room(desk: &DesktopSnapshot, id: WindowId) -> bool {
+        desk.window(id).filter(|w| !w.fullscreen).and_then(app_key).is_some()
+    }
+
+    /// The user dragged find `id` to `spot`. Its visits and hits (a half-mined rock) go
+    /// with it. Dropped on a window, it moves into that app's room, anchored there (it
+    /// rides that window from now on and, a deposit, takes that app's region's look);
+    /// dropped on a floor, it stays in its own room and lies there. `false`: no such find,
+    /// or that window isn't a room.
+    pub fn move_find(&mut self, id: FindId, spot: FindSpot, desk: &DesktopSnapshot, terrain: &Terrain, rules: &Rules) -> bool {
+        let Some(from) = self.room_of(id).map(str::to_string) else { return false };
+        match spot {
+            FindSpot::Floor { at } => {
+                let Some(f) = self.find_mut(id) else { return false };
+                f.floor = Some([at.x, at.y]);
+                true
+            }
+            FindSpot::Window { id: wid, at } => {
+                let Some(key) = desk.window(wid).filter(|w| !w.fullscreen).and_then(app_key) else { return false };
+                let Some(rect) = terrain.window_rect(wid) else { return false };
+                let Some(i) = self.rooms.get(&from).and_then(|r| r.finds.iter().position(|f| f.id == id)) else { return false };
+                let Some(mut f) = self.rooms.get_mut(&from).map(|r| r.finds.remove(i)) else { return false };
+                f.floor = None;
+                f.anchor = Some(Anchor { fx: (at.x - rect.left) / rect.width().max(1.0), dy: at.y - rect.top });
+                if !self.rooms.contains_key(&key) {
+                    // A room never explored: rolled now (what it always held), plus this.
+                    let kinds = roll(self.seed, &key, rules);
+                    self.rooms.insert(key.clone(), Room::default());
+                    for k in kinds {
+                        self.add(&key, k);
+                    }
+                }
+                self.rooms.entry(key.clone()).or_default().finds.push(f);
+                self.hosts.insert(key, wid);
+                true
+            }
+        }
     }
 
     /// The knight used a find (sat, mined).
@@ -868,5 +940,39 @@ mod tests {
         occ.claim(ClaimKey::new(ClaimKind::Bench, 9), RectF::new(430.0, 340.0, 570.0, 400.0), 100);
         let s = settle(vec![shown_at(1, FindKind::Bench { style: 0 }, 500.0, (420.0, 600.0))], &mut occ, &fp);
         assert!(s.is_empty());
+    }
+
+    #[test]
+    fn a_dragged_find_moves_rooms_or_lies_on_the_floor_keeping_its_hits() {
+        let rules = always(FindKind::Deposit);
+        let (d, t) = desk(vec![win(1, RectI::new(200, 400, 900, 900), "paint.exe"), win(2, RectI::new(1000, 300, 1800, 700), "notes.exe")]);
+        let env = Env::new(t);
+        let mut world = World::new(3);
+        let id = world.explored(1, &d, &env.site(), &rules)[0];
+        let at = world.shown(&d, &env.terrain, 0, &rules, &fp, &|_| true)[0].pos;
+        assert_eq!(world.strike(id, at, 1000, &rules), None, "half mined");
+        // Onto the other app's title bar: its room now, riding that window.
+        assert!(world.move_find(id, FindSpot::Window { id: 2, at: Vec2::new(1400.0, 300.0) }, &d, &env.terrain, &rules));
+        assert_eq!(world.room_of(id), Some("notes"));
+        let s = world.shown(&d, &env.terrain, 0, &rules, &fp, &|_| true);
+        let s = s.iter().find(|s| s.id == id).expect("shown");
+        assert_eq!((s.window, s.pos), (2, Vec2::new(1400.0, 300.0)));
+        assert_eq!(world.find(id).map(|f| f.hits), Some(1), "its hits go with it");
+        // The room it came from was rolled already; the new one was rolled on the way in
+        // (what it always held, placed once he gets there).
+        assert!(world.rooms["notes"].finds.len() >= 2);
+        // Onto the floor: it stays in its room and shows there, the window or not.
+        assert!(world.move_find(id, FindSpot::Floor { at: Vec2::new(150.0, 1040.0) }, &d, &env.terrain, &rules));
+        let (d2, t2) = desk(vec![]);
+        let s = world.shown(&d2, &t2, 0, &rules, &fp, &|_| true);
+        assert_eq!(s.iter().find(|s| s.id == id).map(|s| (s.window, s.pos)), Some((FLOOR_WINDOW, Vec2::new(150.0, 1040.0))));
+        // It round-trips through the save.
+        let back = World::from_json(&world.to_json()).expect("json");
+        assert_eq!(back.find(id).and_then(|f| f.floor), Some([150.0, 1040.0]));
+        // Not onto a window that isn't a room (ours, fullscreen), nor a find that isn't.
+        let (d3, t3) = desk(vec![win(5, RectI::new(200, 100, 600, 300), "skong.exe")]);
+        assert!(!World::is_room(&d3, 5));
+        assert!(!world.move_find(id, FindSpot::Window { id: 5, at: Vec2::new(300.0, 100.0) }, &d3, &t3, &rules));
+        assert!(!world.move_find(999, FindSpot::Floor { at: Vec2::ZERO }, &d, &env.terrain, &rules));
     }
 }
