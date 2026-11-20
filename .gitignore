@@ -60,3 +60,7 @@ build/
 # User-provided skins (copyrighted assets)
 skins/
 /target
+
+# README GIFs rendered from game art (readme_gifs example): never commit
+docs/media/*.gif
+docs/media/*.png

@@ -192,6 +192,15 @@ in a temp folder. A test that genuinely needs exported art must look for
 early instead of failing. Tests never write to the real `%APPDATA%\Desk-Skong` (use
 `std::env::temp_dir()`).
 
+**README GIFs (placeholders).** The `readme_gifs` example renders three scripted scenes
+offline from the clips on a drawn desktop: the knight exploring, a fight and a visitor.
+It needs the extracted art, and its output is game art, so it writes into git-ignored
+`docs/media/` (`STRIP=1` also writes a contact strip of each scene):
+
+```
+cargo run -p skong-core --example readme_gifs --release -- data/hk skins/Vanilla docs/media
+```
+
 ---
 
 ## Releasing
@@ -201,7 +210,7 @@ early instead of failing. Tests never write to the real `%APPDATA%\Desk-Skong` (
 2. Locally, `powershell -ExecutionPolicy Bypass -File scripts\package.ps1` builds
    `dist\Desk-Skong-<version>-windows-x64.zip` to try out: `skong.exe`,
    `skong-panel.exe`, `data\` (metadata JSON tracked by git, nothing else), `README.md`
-   and `LICENSE.txt` (a placeholder until a licence is chosen). The script fails if
+   and `LICENSE.txt` (the MIT `LICENSE`). The script fails if
    anything in it looks like game art (images, audio, Unity assets, embedded PNG data,
    non-JSON files in `data\`) and checks the finished zip entry by entry.
 3. Tag `v<version>` and push the tag: `.github/workflows/release.yml` runs the tests,

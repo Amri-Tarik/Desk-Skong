@@ -174,8 +174,9 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
       > note: built on `build_feat-release-basics`: player README (screenshot spots,
       > requirements, privacy, fan notice), `scripts/package.ps1` (zip with an art guard),
       > CI + a tag-triggered draft release, the opt-in log file + crash reports, atomic
-      > saves with `.bak` for malformed files, settings that keep unknown fields. Open:
-      > **choose a licence** (Cargo says MIT, no LICENSE file), screenshots/GIFs.
+      > saves with `.bak` for malformed files, settings that keep unknown fields.
+      > Licence: MIT (`LICENSE`, code only). Open: real screenshots/GIFs (placeholders
+      > rendered offline by the `readme_gifs` example meanwhile).
 - [ ] Make the repo page public when ready.
 
 ## 6. Parked
