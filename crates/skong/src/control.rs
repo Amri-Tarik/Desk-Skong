@@ -29,9 +29,54 @@ pub struct ControlServer {
     usage: UsageSampler,
     /// The last achievements message (sent to each new panel; broadcast only on change).
     achievements: Option<Arc<str>>,
+    /// When we last launched `skong-panel.exe` and no panel has connected since.
+    launched: Option<Instant>,
+}
+
+/// A panel we launched gets this long to connect before another click launches a new one
+/// (egui + GL take a moment to start; a double click mustn't open two windows).
+const LAUNCH_GRACE: Duration = Duration::from_secs(8);
+
+/// Bring the panel back (tray click, a second launch): raise a connected one (`panels`
+/// > 0), else launch one unless one we launched is still starting up.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Reopen {
+    Raise,
+    Launch,
+    /// One is starting: wait for it.
+    Starting,
+}
+
+impl Reopen {
+    pub fn decide(panels: usize, launched: Option<Instant>, now: Instant) -> Self {
+        if panels > 0 {
+            Reopen::Raise
+        } else if launched.is_some_and(|t| now.saturating_duration_since(t) < LAUNCH_GRACE) {
+            Reopen::Starting
+        } else {
+            Reopen::Launch
+        }
+    }
 }
 
 impl ControlServer {
+    /// Show the panel: raises a connected one and returns false, or returns true when the
+    /// caller should launch `skong-panel.exe` (no panel connected: never opened, hidden to
+    /// the tray, crashed or killed).
+    pub fn reopen(&mut self) -> bool {
+        match Reopen::decide(self.panels(), self.launched, Instant::now()) {
+            Reopen::Raise => {
+                self.raise();
+                false
+            }
+            Reopen::Starting => false,
+            Reopen::Launch => {
+                self.launched = Some(Instant::now());
+                true
+            }
+        }
+    }
+
     /// Serve `\\.\pipe\desk-skong`. Never fails: without the pipe, panels just can't connect.
     pub fn start() -> Self {
         let server = match Server::start(skong_ipc::PIPE_NAME) {
@@ -51,6 +96,7 @@ impl ControlServer {
             last_status: Instant::now(),
             usage: UsageSampler::new(),
             achievements: None,
+            launched: None,
         }
     }
 
@@ -76,6 +122,7 @@ impl ControlServer {
         for ev in server.poll() {
             match ev {
                 ServerEvent::Connected(id) => {
+                    self.launched = None;
                     log::info!("control panel #{id} connected");
                     self.hello.log_level = Some(logring::panel_level());
                     server.send(id, encode(&PetMsg::Hello(self.hello.clone())).into());
@@ -140,6 +187,40 @@ impl ControlServer {
         self.panels() > 0 && self.last_status.elapsed() >= STATUS_EVERY
     }
 
+    /// Publish a status on the next tick (something the panels show just changed).
+    pub fn status_now(&mut self) {
+        self.last_status = Instant::now() - STATUS_EVERY;
+    }
+
+    /// Tell every panel a command was refused.
+    pub fn refused(&mut self, why: String) {
+        if let Some(s) = self.server.as_mut() {
+            s.broadcast(&encode(&PetMsg::Refused(why)));
+        }
+    }
+
+    /// Bring the connected panels to the front; false when none is connected (launch one).
+    pub fn raise(&mut self) -> bool {
+        match self.server.as_mut() {
+            Some(s) if s.client_count() > 0 => {
+                s.broadcast(&encode(&PetMsg::Raise));
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// The pet is quitting: every panel closes with it. Waits a moment so the writer
+    /// threads get the line out before the process ends.
+    pub fn goodbye(&mut self) {
+        if let Some(s) = self.server.as_mut()
+            && s.client_count() > 0
+        {
+            s.broadcast(&encode(&PetMsg::Bye));
+            std::thread::sleep(Duration::from_millis(150));
+        }
+    }
+
     /// The achievements changed (or are known for the first time): keep them for panels
     /// that connect later and tell the connected ones now.
     pub fn publish_achievements(&mut self, info: AchievementsInfo) {
@@ -170,6 +251,20 @@ impl ControlServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reopening_raises_launches_or_waits() {
+        let now = Instant::now() + Duration::from_secs(60);
+        // A panel is connected (maybe behind other windows): raise it.
+        assert_eq!(Reopen::decide(1, None, now), Reopen::Raise);
+        assert_eq!(Reopen::decide(2, Some(now), now), Reopen::Raise);
+        // None (hidden to the tray, crashed, killed, never opened): launch one...
+        assert_eq!(Reopen::decide(0, None, now), Reopen::Launch);
+        // ...unless the one just launched is still starting (double click on the tray).
+        assert_eq!(Reopen::decide(0, Some(now - Duration::from_secs(2)), now), Reopen::Starting);
+        // It never connected (failed to start): the next click tries again.
+        assert_eq!(Reopen::decide(0, Some(now - LAUNCH_GRACE), now), Reopen::Launch);
+    }
 
     #[test]
     fn panel_keys_never_switch_manual_mode() {

@@ -84,6 +84,20 @@ hook), `settings.rs`, `keyboard.rs`, `browser.rs` (`--browse`). Saves go through
 `skong_core::persist` (atomic writes, malformed files kept as `.bak`); see
 [DEVELOPING.md](DEVELOPING.md#saved-files).
 
+**The panel is the app's window.** The pet launches `skong-panel.exe` on start (setting
+`open_panel`; `--no-panel` skips it). Closing the panel sends `Quit`; its **Hide to tray**
+just ends the panel process. A tray left-click (or launching `skong.exe` again) raises a
+connected panel (`PetMsg::Raise`) or launches a fresh one, which also recovers from a
+crashed / killed panel (`control::Reopen`). A quitting pet broadcasts `PetMsg::Bye` and the
+panels close with it.
+
+**Sandbox.** "Make him do X" commands and debug tools (`Command::needs_sandbox`) are
+refused by `Pet::apply` (whoever sends them: hotkey, tray, panel) until
+`Command::EnableSandbox`, which lasts until restart: `Tracker::set_paused` makes the
+achievement tracker ignore every event, the Geo wallet stops saving, the tray shows its
+Sandbox submenu, `Status::sandbox` turns on. Forcing debug flags (`--visit`, `--goto-test`,
+…) and `--sandbox` start with it on.
+
 ## Data files (`data/`)
 
 | File | Content |
@@ -105,11 +119,13 @@ under `skins/`, `%APPDATA%\Desk-Skong\{settings,world,achievements}.json` and
 
 `skong.exe` flags: `--skin`, `--scale`, `--data`, `--skins`, `--no-vision`, `--panel` /
 `--no-panel`, `--capturable` (let screenshots see our windows), `--capture-stats`,
-`--browse` (clip/act/skin browser), `--sit-test`, `--fx-test`, `--goto-test`, `--move-test`.
+`--browse` (clip/act/skin browser), `--sandbox`, and (each turning the sandbox on)
+`--sit-test`, `--fx-test`, `--goto-test`, `--move-test`, `--emote-test`, `--visit`, `--dream-test`.
 Examples: `skong-core`: `contact_sheet`, `fx_sheet`, `particles_bench`, `nav_bench`, `vision_bench`, `vision_png`;
-`skong-win`: `terrain_debug`, `capture_probe`. `skong-panel --self-test` inspects a running pet.
-The panel's **Test** tab triggers each interaction on demand; the manual checklist is
-[TESTING.md](TESTING.md).
+`skong-win`: `terrain_debug`, `capture_probe`. `skong-panel --self-test` inspects a running pet
+(`--self-test-overlay` needs the sandbox on).
+The panel's **Sandbox** tab (after its consent) triggers each interaction on demand; the
+manual checklist is [TESTING.md](TESTING.md).
 
 ## Performance (release, 2560×1440 + 1920×1080)
 

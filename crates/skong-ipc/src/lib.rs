@@ -7,7 +7,16 @@
 //!   backlog, then [`Status`] ~4 Hz and new [`LogLine`]s as they are produced, plus
 //!   [`AchievementsInfo`] on connect and whenever an achievement unlocks.
 //!
-//! Any number of panels may connect; the pet keeps running when one goes away.
+//! Any number of panels may connect. The panel is the app's window: closing it sends
+//! [`Command::Quit`]; "Hide to tray" just closes the panel process (the pet keeps running
+//! in the tray, and a tray click brings a panel back: [`PetMsg::Raise`] to a connected one,
+//! or a fresh `skong-panel.exe`, which also covers a crashed panel). A quitting pet says
+//! [`PetMsg::Bye`] so every panel closes with it.
+//!
+//! **Sandbox.** Commands that make the knight do something on request, and debug tools,
+//! are refused ([`PetMsg::Refused`]) until the user enables the sandbox
+//! ([`Command::EnableSandbox`]), which pauses achievements until the pet restarts. Which
+//! ones: [`Command::needs_sandbox`].
 use serde::{Deserialize, Serialize};
 
 pub mod achievements;
@@ -68,14 +77,13 @@ pub enum Command {
     SendEnemy,
     /// Start a gauntlet (waves of enemies, a reward) at the next good moment.
     StartGauntlet,
-    /// Debug (the panel's hidden Debug section only): the secret boss at the next good
-    /// moment; `lantern`: light his scarlet flame first instead of skipping to the show.
+    /// Sandbox (never in the tray: spoilers): the secret boss at the next good moment;
+    /// `lantern`: light his scarlet flame first instead of skipping to the show.
     SummonGrimm { lantern: bool },
-    /// Debug (hidden Debug section): the troupe master's friendly visit, at the next good
-    /// moment.
+    /// Sandbox: the troupe master's friendly visit, at the next good moment.
     GrimmVisit,
-    /// Debug (hidden Debug section): Hornet drops by and challenges the knight to a race
-    /// (`race`) or a duel after their talk.
+    /// Sandbox: Hornet drops by and challenges the knight to a race (`race`) or a duel
+    /// after their talk.
     HornetChallenge { race: bool },
     /// The knight dream-nails the window he stands on (thought bubble).
     DreamNail,
@@ -87,7 +95,63 @@ pub enum Command {
     ResetAchievements,
     /// The panel's Test tab (see [`test`]).
     Test(TestCommand),
+    /// Unlock every "make him do X" command and debug tool for the rest of this session;
+    /// achievements stop counting (and the Geo wallet stops saving) until the pet restarts.
+    /// There is no way back short of a restart.
+    EnableSandbox,
     Quit,
+}
+
+impl Command {
+    /// Refused unless the sandbox is on: the knight doing something because you asked
+    /// (which would hand out achievements), placing / revealing things, debug views.
+    ///
+    /// Always allowed: settings (skin, size, mischief, share visibility, highlighted text,
+    /// lantern, fight mode, vision, pause), waking him, walking / hurrying to the cursor
+    /// (he gets there on his own legs, like following you), placed benches (furniture
+    /// nothing is earned from), forgetting finds, resetting achievements, the panel, quit.
+    pub fn needs_sandbox(&self) -> bool {
+        match self {
+            Command::ToggleManual
+            | Command::SetManual(_)
+            | Command::RandomAct
+            | Command::RespawnAtCursor
+            | Command::Discover(_)
+            | Command::ToggleDebugOverlay
+            | Command::SetOverlayLayers(_)
+            | Command::InviteVisitor
+            | Command::SendEnemy
+            | Command::StartGauntlet
+            | Command::SummonGrimm { .. }
+            | Command::GrimmVisit
+            | Command::HornetChallenge { .. }
+            | Command::DreamNail
+            | Command::Stakes(_)
+            | Command::Test(_) => true,
+            Command::Wake
+            | Command::NextSkin
+            | Command::SetSkin(_)
+            | Command::SetScale(_)
+            | Command::SetBother(_)
+            | Command::ToggleShareVisible
+            | Command::ToggleFightMode
+            | Command::ToggleTextCuriosity
+            | Command::ToggleLantern
+            | Command::PlaceBenchAtCursor(_)
+            | Command::PlaceBenchNearKnight(_)
+            | Command::ClearBenches
+            | Command::ForgetDiscoveries
+            | Command::TogglePause
+            | Command::ToggleVision
+            | Command::OpenPanel
+            | Command::GoToCursor { .. }
+            | Command::ResetAchievements
+            | Command::EnableSandbox
+            | Command::ToggleLogFile
+            | Command::OpenLogFolder
+            | Command::Quit => false,
+        }
+    }
 }
 
 /// Debug overlay layers.
@@ -189,6 +253,12 @@ pub enum PetMsg {
     Logs(Vec<LogLine>),
     /// Hidden achievements: on connect and whenever one unlocks (not in the status).
     Achievements(AchievementsInfo),
+    /// Someone asked for the window (tray icon, a second launch): come to the front.
+    Raise,
+    /// The pet is quitting: close too (the panel is the app's window).
+    Bye,
+    /// A command was refused (it needs the sandbox): a line for the user.
+    Refused(String),
 }
 
 /// Static information, sent once per connection.
@@ -251,6 +321,8 @@ pub struct Status {
     pub panels: usize,
     /// The Test tab: placing, feedback (absent from older pets).
     pub test: Option<TestInfo>,
+    /// Sandbox on: debug commands allowed, achievements paused until the pet restarts.
+    pub sandbox: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -456,6 +528,72 @@ mod tests {
         assert!(old.test.is_none() && !old.lantern && !old.log_file && old.log_dir.is_empty());
         let h: Hello = decode("{\"version\":\"0.1\"}").unwrap();
         assert!(h.visitors.is_empty() && h.enemies.is_empty());
+    }
+
+    #[test]
+    fn sandbox_and_lifecycle_round_trip() {
+        round_trip(PanelMsg::Command(Command::EnableSandbox));
+        assert_eq!(encode(&PanelMsg::Command(Command::EnableSandbox)), "{\"Command\":\"EnableSandbox\"}\n");
+        for m in [PetMsg::Raise, PetMsg::Bye, PetMsg::Refused("\"Send an enemy\" needs the sandbox\n(achievements)".into())] {
+            round_trip(m);
+        }
+        assert_eq!(encode(&PetMsg::Bye), "\"Bye\"\n");
+        let s = Status { sandbox: true, ..Default::default() };
+        round_trip(PetMsg::Status(Box::new(s)));
+        // An older pet's status: no sandbox field, so the sandbox reads as off.
+        let old: Status = decode("{\"paused\":false}").unwrap();
+        assert!(!old.sandbox);
+    }
+
+    #[test]
+    fn what_needs_the_sandbox() {
+        // "Make him do X" and debug tools.
+        for c in [
+            Command::ToggleManual,
+            Command::SetManual(true),
+            Command::RandomAct,
+            Command::RespawnAtCursor,
+            Command::Discover(1),
+            Command::ToggleDebugOverlay,
+            Command::SetOverlayLayers(OverlayLayers::default()),
+            Command::InviteVisitor,
+            Command::SendEnemy,
+            Command::StartGauntlet,
+            Command::SummonGrimm { lantern: true },
+            Command::GrimmVisit,
+            Command::HornetChallenge { race: false },
+            Command::DreamNail,
+            Command::Stakes(StakesCommand::SpillGeo),
+            Command::Stakes(StakesCommand::Cast(0)),
+            Command::Test(TestCommand::View),
+            Command::Test(TestCommand::CancelPlace),
+        ] {
+            assert!(c.needs_sandbox(), "{c:?} should need the sandbox");
+        }
+        // Everyday settings, navigation and the app itself.
+        for c in [
+            Command::Wake,
+            Command::NextSkin,
+            Command::SetScale(0.6),
+            Command::SetBother(0.5),
+            Command::ToggleShareVisible,
+            Command::ToggleFightMode,
+            Command::ToggleTextCuriosity,
+            Command::ToggleLantern,
+            Command::TogglePause,
+            Command::ToggleVision,
+            Command::PlaceBenchNearKnight(0),
+            Command::ClearBenches,
+            Command::GoToCursor { hurry: true },
+            Command::OpenPanel,
+            Command::ResetAchievements,
+            Command::EnableSandbox,
+            Command::ToggleLogFile,
+            Command::OpenLogFolder,
+            Command::Quit,
+        ] {
+            assert!(!c.needs_sandbox(), "{c:?} should always be allowed");
+        }
     }
 
     #[test]

@@ -232,11 +232,30 @@ pub struct Tracker {
     /// Monitor he was thrown from (while he flies).
     thrown_from: Option<usize>,
     dirty: bool,
+    /// The sandbox is on: every event is ignored (nothing unlocks, no progress counts).
+    paused: bool,
 }
 
 impl Tracker {
     pub fn new(defs: Vec<AchievementDef>, save: AchievementSave) -> Self {
-        Self { defs, save, totals: Totals::default(), fights: BTreeMap::new(), wall_jumps: 0, thrown_from: None, dirty: false }
+        Self { defs, save, totals: Totals::default(), fights: BTreeMap::new(), wall_jumps: 0, thrown_from: None, dirty: false, paused: false }
+    }
+
+    /// Pause (the sandbox) or resume counting. Paused, [`Tracker::on`] ignores every event:
+    /// nothing unlocks and no counter, "seen" set or streak moves.
+    pub fn set_paused(&mut self, paused: bool) {
+        self.paused = paused;
+        if paused {
+            // Half-done streaks (an off-the-floor fight, wall jumps, a throw in flight)
+            // started before the pause mustn't finish with help from the sandbox.
+            self.fights.clear();
+            self.wall_jumps = 0;
+            self.thrown_from = None;
+        }
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.paused
     }
 
     pub fn set_totals(&mut self, totals: Totals) {
@@ -282,6 +301,9 @@ impl Tracker {
     /// Feed one event; returns the definitions it unlocked (usually none).
     pub fn on(&mut self, ev: &AchievementEvent, now: u64) -> Vec<&AchievementDef> {
         use AchievementEvent as E;
+        if self.paused {
+            return Vec::new();
+        }
         let mut new: Vec<&'static str> = Vec::new();
         let mut unlock = |id: &'static str| new.push(id);
         match ev {

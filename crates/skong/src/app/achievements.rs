@@ -11,6 +11,10 @@
 //! An unlock is announced quietly: a small sparkle above his head, a line in the tray
 //! tooltip, a log line, and the panel's Achievements tab (sent only on change). Progress is
 //! saved to `%APPDATA%\Desk-Skong\achievements.json`.
+//!
+//! **The sandbox** also lives here: once the user enables it ([`Pet::enable_sandbox`]),
+//! the tracker ignores every event until the pet restarts, the Geo wallet stops saving,
+//! and [`Pet::sandbox_refuses`] stops letting "make him do X" commands through.
 use std::path::{Path, PathBuf};
 
 use skong_core::achievements::{self, AchievementEvent as E, Tracker, Totals};
@@ -66,6 +70,8 @@ pub struct Achievements {
     /// Something changed for the panel.
     changed: bool,
     since_save: f32,
+    /// The sandbox is on (for the rest of this session).
+    sandbox: bool,
 }
 
 impl Achievements {
@@ -102,7 +108,25 @@ impl Achievements {
             tip: None,
             changed: true,
             since_save: 0.0,
+            sandbox: false,
         }
+    }
+
+    /// The sandbox is on: achievements paused, debug commands allowed.
+    pub fn sandbox(&self) -> bool {
+        self.sandbox
+    }
+
+    /// Turn the sandbox on (no way back but a restart). Returns false if it already was.
+    fn enable_sandbox(&mut self) -> bool {
+        if self.sandbox {
+            return false;
+        }
+        self.sandbox = true;
+        if let Some(t) = self.tracker.as_mut() {
+            t.set_paused(true);
+        }
+        true
     }
 
     /// How many are unlocked (the troupe's lantern waits for enough of them).
@@ -112,10 +136,12 @@ impl Achievements {
 
     /// The tray tooltip, with the latest unlock for a while.
     pub fn tray_tip(&self, base: String) -> String {
-        match &self.tip {
+        let mut tip = match &self.tip {
             Some((title, _)) => format!("{base}\nAchieved: {title}"),
             None => base,
-        }
+        };
+        tip.push_str(if self.sandbox { "\nSandbox: achievements paused" } else { "\nClick to open" });
+        tip
     }
 
     /// For the panel: locked entries carry only their hint.
@@ -149,6 +175,25 @@ impl Pet {
         }
         (a.geo, a.shades, a.shattered) = (self.stakes.save.geo, self.stakes.save.shades_defeated, self.stakes.shattered);
         a.pos = self.ch.pos;
+    }
+
+    /// "Enable sandbox": every debug command from now on, achievements paused until restart.
+    pub(super) fn enable_sandbox(&mut self, why: &str) {
+        if self.achievements.enable_sandbox() {
+            log::info!("sandbox on ({why}): achievements paused and the Geo wallet unsaved until restart; debug commands allowed");
+        }
+    }
+
+    /// Should `c` (from a hotkey, the tray or a panel) be refused? Says why when it is,
+    /// in the log and to the panels.
+    pub(super) fn sandbox_refuses(&mut self, c: &skong_ipc::Command) -> bool {
+        if !c.needs_sandbox() || self.achievements.sandbox {
+            return false;
+        }
+        let msg = format!("{c:?} needs the sandbox: enable it in the control panel (Sandbox tab; achievements pause until restart)");
+        log::info!("refused: {msg}");
+        self.control.refused(msg);
+        true
     }
 
     /// Debug: forget everything.

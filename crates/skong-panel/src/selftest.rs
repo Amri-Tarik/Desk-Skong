@@ -71,6 +71,11 @@ pub fn run(pipe: String, overlay: bool) -> Result<()> {
         println!("TogglePause -> paused={expect} (confirmed by status)");
     }
     if overlay {
+        // The overlay is a debug tool: the pet refuses it outside the sandbox, and this test
+        // won't switch the sandbox on behind the user's back (it pauses achievements).
+        if !link.shared().status.as_ref().is_some_and(|s| s.sandbox) {
+            bail!("--self-test-overlay needs the sandbox on (start the pet with --sandbox, or enable it in the panel)");
+        }
         for expect in [true, false] {
             link.send(PanelMsg::Command(Command::ToggleDebugOverlay));
             let cpu = wait_until(&link, "overlay toggle in status", 5, |s| s.status.as_ref().filter(|st| st.overlay == expect).map(|st| st.process.cpu_percent))?;

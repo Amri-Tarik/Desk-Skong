@@ -2,8 +2,8 @@
 //! after the talk, an enemy of one kind, a pastime, a spell...), optionally at a spot the
 //! user clicks on screen ("📍 Place…"), and hear back what came of it.
 //!
-//! The precursor of the planned sandbox (it will sit behind an "achievements off for this
-//! session" gate; not yet).
+//! Part of the sandbox: the pet refuses every [`TestCommand`] until the user enabled it
+//! (achievements paused until restart; see [`crate::Command::needs_sandbox`]).
 use serde::{Deserialize, Serialize};
 
 /// What follows a visitor's talk.

@@ -52,7 +52,15 @@ impl Pet {
             }
             Command::ToggleDebugOverlay => self.overlay.toggle(&self.terrain),
             Command::SetOverlayLayers(l) => self.overlay.set_layers(l),
-            Command::OpenPanel => open_panel(),
+            Command::OpenPanel => {
+                if self.control.reopen() {
+                    open_panel();
+                }
+            }
+            Command::EnableSandbox => {
+                self.enable_sandbox("from the control panel");
+                self.control.status_now();
+            }
             other => return self.apply(other),
         }
         Ok(Flow::Continue)
@@ -106,6 +114,7 @@ impl Pet {
             nav: self.nav_info(),
             stakes: Some(self.stakes.info(self.brain.soul())),
             test: Some(self.test_info()),
+            sandbox: self.achievements.sandbox(),
             ..Status::default() // process usage, panel count: filled by ControlServer::publish
         }
     }

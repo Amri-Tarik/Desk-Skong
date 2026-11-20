@@ -1,10 +1,16 @@
 # Desk-Skong — manual test checklist
 
-Grouped like the control panel's **Test** tab. Each line: **how to trigger it** → what
-should happen · *look for* what tests can't check. "On its own" says when it happens
-without the panel. Tick the box, or add `> note: …` under a line.
+Grouped like the panel's **Sandbox** tab (its right half, the Test buttons). Each line:
+**how to trigger it** → what should happen · *look for* what tests can't check. "On its
+own" says when it happens without the panel. Tick the box, or add `> note: …` under a line.
 
-**How the Test tab works.** Every button acts now; the box at the top shows what came of
+**First, enable the sandbox.** In the Desk-Skong window, open the **🔒 Sandbox** tab, tick
+"I understand…" and press **Enable sandbox** (or start the pet with `--sandbox`; the
+forcing debug flags such as `--visit` turn it on too). A "Sandbox on — achievements
+paused until restart" banner appears. Until then the pet refuses every button below (and
+the K / A / R / D hotkeys, the tray's debug items): the footer says so.
+
+**How the Test buttons work.** Every button acts now; the box at the top shows what came of
 it (✔ / ✖ with the reason, e.g. "Myla can't sing by a Geo deposit: no Geo deposit on
 screen"). **📍** buttons place the thing where you click next: the next left click
 anywhere on screen is taken (it doesn't reach the app under it) and lands on the nearest
@@ -14,8 +20,28 @@ or the panel's **Cancel** stops it; it gives up after 30 s. Clicks on the panel 
 still work while placing. Placed things skip the "lasting ledge" age rule for *where* they
 may go, but on a window moved in the last ~15 s they only show once it has settled.
 
-**Achievements:** everything here still counts towards achievements (the sandbox's
-"achievements off for this session" gate isn't built yet). Nothing is disabled.
+**Achievements:** in the sandbox nothing unlocks and no progress counts, and Geo collected
+isn't saved, until the pet restarts. To check an achievement itself, restart without the
+sandbox and make it happen naturally (or with the always-allowed tools: settings, placed
+benches, walk / hurry to the cursor).
+
+## The window (no sandbox needed)
+
+- [ ] **Close (X)** → the pet quits too (knight, tray icon gone).
+- [ ] **Hide to tray** → only the window goes; the knight stays; the hint line under the
+      button says how to get it back. **Left-click the tray icon** → the window comes back.
+- [ ] **Tray click with the window open but behind others** → it comes to the front (no
+      second window). A quick double click → still one window.
+- [ ] **Tray → Quit** or **Ctrl+Alt+Q** → the pet quits and the window closes with it.
+- [ ] **Kill `skong-panel.exe`** (Task Manager) → the knight carries on; a tray click opens a
+      new window.
+- [ ] **Run `skong.exe` again** while it runs → no second knight; the window comes up.
+- [ ] **Home**: achievements count, progress, Geo wallet (coin + number) by the header; the
+      settings (skin, size, mischief, the switches, benches) act at once.
+- [ ] **Advanced** (bottom right) → the Diagnostics tab (status + logs) appears.
+- [ ] **Locked sandbox**: the 🔒 Sandbox tab explains the cost; Enable stays greyed until
+      the box is ticked; Ctrl+Alt+K / A / R / D and panel letters K A R D do nothing (a log
+      line / footer says why); the tray menu has no Sandbox submenu.
 
 **General:** the knight never moves your cursor or windows; nothing of his shows on a
 monitor running a fullscreen game; visitors / enemies / Grimm wait while you type hard or
