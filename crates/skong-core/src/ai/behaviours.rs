@@ -114,7 +114,7 @@ pub enum BehaviourKind {
 }
 
 impl BehaviourKind {
-    pub const ALL: [BehaviourKind; 25] = [
+    pub const ALL: [BehaviourKind; 26] = [
         BehaviourKind::Idle,
         BehaviourKind::Companion,
         BehaviourKind::Watch,
