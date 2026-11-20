@@ -326,6 +326,8 @@ pub struct Status {
     pub test: Option<TestInfo>,
     /// Sandbox on: debug commands allowed, achievements paused until the pet restarts.
     pub sandbox: bool,
+    /// Seconds the pet has run over every session (time played; 0 from older pets).
+    pub played_secs: u64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
