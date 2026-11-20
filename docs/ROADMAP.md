@@ -96,19 +96,27 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
 - [x] **Cornifer:** they sit down together and both open their maps for a while, reviewing
       them (he hums). Standing with the map where there's no seat (the desktop floor).
       Calm scenes are `company` in `npcs.json` (`npc::company`, the brain's `Company`).
-- [ ] **Grimm, friendly:** appears with a flourish, bows, taunts, teleports a couple of
+- [x] **Grimm, friendly:** appears with a flourish, bows, taunts, teleports a couple of
       times and leaves. Sometimes he leaves the scarlet flame behind as a hint at the
-      secret.
-- [ ] **Hornet: race and duel, both** (50/50 at first; drop one if it doesn't hold up).
+      secret (only once its achievements are unlocked).
+      > done: `enemy::grimm::cameo`, rare (`cameo.schedule`), panel Debug "Grimm's friendly
+      > visit"; achievement "A Passing Troupe".
+- [x] **Hornet: race and duel, both** (50/50 at first; drop one if it doesn't hold up).
       - Race: she throws her needle and silk to mark the finish, and they race across the
         windows.
       - Duel: a short spar; she wins and leaves.
+      > done: `npc::race` / `npc::duel`, 60 % of her talks end in one; panel Debug
+      > "Hornet: race / duel". The knight wins ~1 race in 4 in the sim (`pace`).
+      > Achievements "Faster Than Silk" (win a race), "Needle Practice" (see a duel through).
+- [x] **Scarlet flame, clicked by the user:** the knight no longer strikes it; he lingers by
+      it wondering ("?", a pastime), the user clicks it to summon Grimm right there, and it
+      waits ~30 min (`lantern.secs`) so an arena can be built around it.
 - [x] **Quirrel** sits on a ledge beside the knight, admiring the view (window edges in the
       upper half of a monitor only).
 - [x] **Myla** sings while mining next to a Geo deposit (new visitor, art exported from the
       `Miner` library; she arrives beside a deposit when there is one, else visits plainly).
-- [ ] **New achievements** for each scene. Done for the calm scenes ("Comparing Notes",
-      "Room for Two", "Work Song"); Grimm and Hornet still to come.
+- [x] **New achievements** for each scene: "Comparing Notes", "Room for Two", "Work Song",
+      "Faster Than Silk", "Needle Practice", "A Passing Troupe".
 
 ## 4. Achievements: everyone can reach 100 %
 
@@ -216,6 +224,22 @@ Checked in tests only (unless noted). Note anything that looks off:
       - Myla: her size and feet line (new art), facing the rock while mining, standing beside
         a deposit without overlapping it or the knight's mining spot; the song bubbles' pace;
       - the abandon line when typing / an enemy / the Shade cuts a scene short.
+- [ ] The scarlet flame, clicked: the flame's window takes the click (only it; the rest stays
+      click-through), the knight's "?" every 7–13 s while he lingers by it, his pacing, and
+      Grimm stepping out of it; it waiting through visitors / enemies and him coming back.
+- [ ] Grimm's friendly visit: entrance flash + cape flourish (`TeleToIdle`), the bow and his
+      line, the teleports around the knight (flashes, `LookBack` / `Hand Click` poses), the
+      knight's startle / bow / glances, farewell; the flame left behind (8+ achievements).
+- [ ] Hornet's race:
+      - the needle (`Needle` + `Needle Thread` sprites) in flight and stuck on the finish
+        ledge: drawn horizontal whatever the angle; its height above the ledge;
+      - her course: runs, the ground dash, leaps up to windows (through them), the air dash
+        on long leaps, the landing; her pace (slowed up to ~2x to match the knight);
+      - the knight on "Go!" (Hurry route, crystal dash, wall jumps), touching the needle;
+      - her win `Flourish` / lose line, plucking the needle, the leap away.
+- [ ] Hornet's duel: lunges, needle throws (needle sprite out and back), the silk sphere
+      (`Sphere Ball`), step-backs, her flashes when struck, the knight dodging / pogoing;
+      the `Flourish` and her parting word.
 
 ## Recently done
 

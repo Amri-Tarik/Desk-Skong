@@ -193,6 +193,8 @@ struct Pet {
     emote_test: bool,
     /// Geo picked up lately: a big haul earns a sparkle.
     haul: skong_core::ai::GeoHaul,
+    /// Seconds until his next "?" by a scarlet flame (see `app/grimm.rs`).
+    flame_wonder_in: f32,
     /// Things found in windows (benches, hot springs, geo deposits).
     discoveries: Discoveries,
     /// Shinies on the ground for the knight to pick up.
@@ -353,6 +355,7 @@ pub fn run(args: &Args) -> Result<()> {
         emote_seen: None,
         emote_test: args.emote_test,
         haul: Default::default(),
+        flame_wonder_in: 1.0,
         discoveries,
         shinies,
         pastimes,
@@ -978,6 +981,8 @@ impl Pet {
         };
         let visitors = self.visitor_percepts();
         self.brain.see_visitors(visitors);
+        let scene = self.visitor_scene().or_else(|| self.troupe_scene());
+        self.brain.see_scene(scene);
         let intent = self.brain.tick(&percepts, &mut self.nav);
         if let Some(e) = intent.emote {
             log::debug!("emote: {e:?}");
@@ -1251,6 +1256,8 @@ impl Pet {
             },
             Command::StartGauntlet => self.start_gauntlet(),
             Command::SummonGrimm { lantern } => self.summon_grimm(lantern),
+            Command::GrimmVisit => self.grimm_visit(),
+            Command::HornetChallenge { race } => self.hornet_challenge(race),
             Command::Discover(_) | Command::ForgetDiscoveries => return self.apply_discovery(c),
             Command::Quit => return Ok(Flow::Quit),
             Command::Stakes(c) => self.apply_stakes(c),

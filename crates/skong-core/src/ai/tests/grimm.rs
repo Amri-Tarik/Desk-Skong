@@ -1,5 +1,6 @@
 //! The troupe master, fought for real: the brain and the real controller against the Grimm
-//! sim (`crate::enemy::grimm`). He strikes the lantern, answers the bow, uses his kit
+//! sim (`crate::enemy::grimm`). He lingers by the lantern (the user's click summons Grimm
+//! there), answers the bow, uses his kit
 //! against the routine (dodges, jumps the spikes, steps off the pillars), wins most shows
 //! and loses some; a loss is a real death (a Shade). The Shade still comes first.
 use std::path::Path;
@@ -48,15 +49,11 @@ impl Show {
         let foes = self.d.foes(&self.set, PPU);
         self.sim.brain.see_foes(foes, std::mem::take(&mut self.hits));
         self.sim.brain.sense_stakes(StakesSense { shade: self.shade, ..Default::default() });
+        self.sim.brain.see_scene(self.d.scene_cue(&self.set));
         let intent = self.sim.step();
-        let x = self.sim.knight.pos.x;
         for s in &intent.strikes {
-            match s.kind {
-                FoeKind::Boss => {
-                    self.d.strike(s.damage, &self.set);
-                }
-                FoeKind::Lantern => self.events.extend(self.d.strike_lantern(&self.set, x, PPU)),
-                _ => {}
+            if s.kind == FoeKind::Boss {
+                self.d.strike(s.damage, &self.set);
             }
         }
         if intent.stakes.iter().any(|e| matches!(e, StakeEvent::Died { kind: DeathKind::Fight, .. })) {
@@ -119,16 +116,25 @@ fn techniques(s: &Show) -> Vec<Technique> {
 }
 
 #[test]
-fn he_strikes_the_scarlet_flame_and_answers_the_troupe_masters_bow() {
+fn he_lingers_by_the_scarlet_flame_and_the_users_click_brings_the_troupe_master() {
     let mut s = Show::new(calm(BrainConfig::default()), 3);
     s.sim.run(0.5);
-    s.lantern_at = Some(Vec2::new(1350.0, FLOOR));
+    let flame = Vec2::new(1350.0, FLOOR);
+    s.lantern_at = Some(flame);
     s.d.request(Summon::Lantern);
     assert!(s.run_while(3.0, |s| s.d.lantern().is_none()), "the flame lights");
-    // Curious, he goes over and strikes it.
-    assert!(s.run_while(15.0, |s| s.d.grimm().is_none()), "strikes it: {}", s.sim.last_reason());
+    // Curious, he goes over and lingers by it, wondering; he never strikes it.
+    assert!(s.run_while(15.0, |s| !s.sim.last_reason().contains("lingering by the scarlet flame")), "lingers: {}", s.sim.last_reason());
+    assert_eq!(s.sim.brain.behaviour(), BehaviourKind::Scene);
+    assert!((s.sim.knight.pos.x - flame.x).abs() < 4.0 * PPU, "beside it: {:?}", s.sim.knight.pos);
+    s.run_while(20.0, |s| s.d.grimm().is_none());
+    assert!(s.d.grimm().is_none() && s.d.lantern().is_some(), "only the user's click summons him");
+    assert!(s.sim.intents.iter().all(|i| i.strikes.is_empty() && i.attack.is_none()), "no swings at the flame");
+    // The user clicks it: Grimm steps out of the flame, right there.
+    assert!(s.d.click_lantern());
+    assert!(s.run_while(1.0, |s| s.d.grimm().is_none()), "the click summons him");
     assert!(s.events.contains(&GrimmEvent::Summoned { via: Summon::Lantern }), "{:?}", s.events);
-    assert!(s.sim.intents.iter().any(|i| i.reason.contains("scarlet flame")), "a reason for it");
+    assert!((s.d.grimm().expect("grimm").pos.x - flame.x).abs() < 1.0, "the show opens at the flame");
     // The bow: he answers with his own, and no blows while Grimm is introducing himself.
     let before = s.sim.intents.len();
     assert!(s.run_while(5.0, |s| !s.sim.started.iter().any(|a| a == "challenge")), "answers the bow: {:?}", s.sim.started);

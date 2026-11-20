@@ -1,5 +1,5 @@
 {
-  "$comment": "The Troupe Master: a secret boss fight (skong-core `enemy::grimm`). Art is the vanilla `Grimm Anim` library (+ `Flameball Anim` for his fireballs, `Grimm Flash Anim` for teleport flashes); his art faces left and is mirrored to face right, drawn at `art_scale` x the knight's scale. Every distance is in game units and measured from the knight (his ledge, or the ledge under him), never from a fixed arena: Grimm teleports beside / above him, dashes and dives at him, slashes along his ledge and uppercuts out of it, sends firebats at his height, raises flame pillars under his feet and spikes along his ledge, and at each `phases` threshold (fraction of `hp` left) roars and floats up to spray fireballs (balloon). Flames ignore windows. Every attack has a wind-up the knight can read. `size`: body [w, h]. `hp`: blows he takes (spells count more). `tempo`: speed multiplier for his whole routine. `invuln`: seconds the knight can't be hurt again after a hit. `geo`: [min, max] burst when beaten. `max_secs`: he bows out of a fight that drags on. Typing at least `busy_keys_per_sec` for `busy_secs`, a fullscreen app or a visitor make him bow out too (no penalty). `lantern`: how he is found. Once `min_achievements` are unlocked, a dim scarlet flame appears now and then (`schedule`, like npcs.json `visits`: presence time, never during fullscreen apps, fast typing, a visitor, a gauntlet, other enemies or a waiting Shade) on a settled ledge the knight can reach; it fades after `secs` unless he strikes it, which summons Grimm. Lines: original writing only, `{daypart}` / `{app}` / `{title}` placeholders allowed (a line whose placeholder can't be filled is skipped).",
+  "$comment": "The Troupe Master: a secret boss fight (skong-core `enemy::grimm`). Art is the vanilla `Grimm Anim` library (+ `Flameball Anim` for his fireballs, `Grimm Flash Anim` for teleport flashes); his art faces left and is mirrored to face right, drawn at `art_scale` x the knight's scale. Every distance is in game units and measured from the knight (his ledge, or the ledge under him), never from a fixed arena: Grimm teleports beside / above him, dashes and dives at him, slashes along his ledge and uppercuts out of it, sends firebats at his height, raises flame pillars under his feet and spikes along his ledge, and at each `phases` threshold (fraction of `hp` left) roars and floats up to spray fireballs (balloon). Flames ignore windows. Every attack has a wind-up the knight can read. `size`: body [w, h]. `hp`: blows he takes (spells count more). `tempo`: speed multiplier for his whole routine. `invuln`: seconds the knight can't be hurt again after a hit. `geo`: [min, max] burst when beaten. `max_secs`: he bows out of a fight that drags on. Typing at least `busy_keys_per_sec` for `busy_secs`, a fullscreen app or a visitor make him bow out too (no penalty). `lantern`: how he is found. Once `min_achievements` are unlocked, a dim scarlet flame appears now and then (`schedule`, like npcs.json `visits`: presence time, never during fullscreen apps, fast typing, a visitor, a gauntlet, other enemies or a waiting Shade) on a settled ledge the knight can reach. The knight only lingers by it, wondering (a pastime); the user clicks it to summon Grimm, who steps out of it there (the arena is whatever the user built around it). It waits `secs` (long, time to arrange windows) and only a fullscreen app puts it out early. `cameo`: his rare friendly visit (`schedule` like `visits`; never during fullscreen apps, typing, visitors, fights, the Shade): a teleport flash and flourish, a bow, a `cameo` line, `hops` teleports around the knight, a `cameo_bye` line, gone; with `flame_chance` he leaves his scarlet flame behind, but only once `lantern.min_achievements` are unlocked.Lines: original writing only, `{daypart}` / `{app}` / `{title}` placeholders allowed (a line whose placeholder can't be filled is skipped).",
   "library": "Grimm Anim",
   "fx_library": "Flameball Anim",
   "flash_library": "Grimm Flash Anim",
@@ -16,8 +16,14 @@
   "lantern": {
     "enabled": true,
     "min_achievements": 8,
-    "secs": 150,
+    "secs": 1800,
     "schedule": { "enabled": true, "first": [1800, 4800], "gap": [5400, 14400], "busy_keys_per_sec": 2.5, "away_secs": 90, "retry": 60 }
+  },
+  "cameo": {
+    "enabled": true,
+    "hops": [2, 3],
+    "flame_chance": 0.4,
+    "schedule": { "enabled": true, "first": [2400, 6000], "gap": [7200, 18000], "busy_keys_per_sec": 2.5, "away_secs": 90, "retry": 60 }
   },
   "lines": {
     "intro": [
@@ -52,6 +58,17 @@
       "Ah, the house lights. We shall resume another night.",
       "An intermission, then. Pardon my exit.",
       "The stage is needed elsewhere. Adieu, for now."
+    ],
+    "cameo": [
+      "Merely passing through, little vessel. A troupe must keep moving.",
+      "Do not trouble your nail. Tonight I only came to look at you.",
+      "What a charming little stage you keep. The {app} window has real potential.",
+      "No performance this {daypart}. Only a bow between artists."
+    ],
+    "cameo_bye": [
+      "Until we meet in the light of a scarlet flame.",
+      "Keep dancing. I shall be watching.",
+      "Adieu. Do look for the flame, if it ever calls."
     ]
   }
 }

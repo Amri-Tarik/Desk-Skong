@@ -235,6 +235,8 @@ pub struct Senses {
     pub foes: Vec<super::Foe>,
     /// A gauntlet under way (from [`super::Brain::see_gauntlet`]).
     pub gauntlet: Option<crate::enemy::GauntletCue>,
+    /// A visitor scene under way (from [`super::Brain::see_scene`]).
+    pub scene: Option<super::SceneCue>,
 }
 
 impl Senses {

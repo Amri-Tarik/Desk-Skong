@@ -50,11 +50,14 @@ pub mod ids {
     pub const CORNIFER_MAPS: &str = "cornifer_maps";
     pub const QUIRREL_VIEW: &str = "quirrel_view";
     pub const MYLA_SONG: &str = "myla_song";
+    pub const HORNET_RACE: &str = "hornet_race";
+    pub const HORNET_DUEL: &str = "hornet_duel";
+    pub const GRIMM_CAMEO: &str = "grimm_cameo";
 
     pub const ALL: &[&str] = &[
         HORNET_TALK, DREAM_WINDOW, DREAM_VISITOR, FIRST_SPELL, POGO, VENGEFLY_AIRBORNE, FALL_AND_RECLAIM, WINDOW_RIDE, CURSOR_DEFEAT, CURSOR_VICTOR, WALL_CRYSTAL_DASH, DREAM_GATE, EVERY_REGION, EVERY_BENCH, EVERY_VISITOR, SLY_LESSON, ZOTE_SPAR, GAUNTLET,
         UNN_FORM, HIGHLIGHTED_TEXT, SHATTERED_WINDOW, GEO_HOARD, NAP_POKE, THROW, MIDAIR_CATCH, STEP_BEHIND, WALL_JUMP_CHAIN, SUPER_HARD_LANDING, EVERY_ENEMY, TROUPE_MASTER, TROUPE_ENCORE,
-        CORNIFER_MAPS, QUIRREL_VIEW, MYLA_SONG,
+        CORNIFER_MAPS, QUIRREL_VIEW, MYLA_SONG, HORNET_RACE, HORNET_DUEL, GRIMM_CAMEO,
     ];
 }
 use ids::*;
@@ -248,6 +251,12 @@ pub enum AchievementEvent {
     TroupeMasterBeaten,
     /// The Troupe Master beat him.
     FellToTroupeMaster,
+    /// He beat Hornet to her needle.
+    HornetRaceWon,
+    /// Hornet's duel was seen through to her final word.
+    HornetDuelDone,
+    /// The Troupe Master's friendly visit was seen through to his farewell.
+    GrimmCameoSeen,
 }
 
 /// Unlock state and every criterion.
@@ -428,6 +437,9 @@ impl Tracker {
             E::SteppedBehind => unlock(STEP_BEHIND),
             E::TroupeMasterBeaten => unlock(TROUPE_MASTER),
             E::FellToTroupeMaster => unlock(TROUPE_ENCORE),
+            E::HornetRaceWon => unlock(HORNET_RACE),
+            E::HornetDuelDone => unlock(HORNET_DUEL),
+            E::GrimmCameoSeen => unlock(GRIMM_CAMEO),
         }
         let mut fresh = Vec::new();
         for id in new {

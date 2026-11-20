@@ -111,10 +111,13 @@ pub enum BehaviourKind {
     /// Something to do on his own (`ai::pastime`): the training dummy, a lumafly, the view
     /// from a high window edge, the stars at night.
     Pastime,
+    /// A visitor scene: Hornet's race, watching the Troupe Master's visit, lingering by a
+    /// scarlet flame (see `ai::scene`).
+    Scene,
 }
 
 impl BehaviourKind {
-    pub const ALL: [BehaviourKind; 26] = [
+    pub const ALL: [BehaviourKind; 27] = [
         BehaviourKind::Idle,
         BehaviourKind::Companion,
         BehaviourKind::Watch,
@@ -141,6 +144,7 @@ impl BehaviourKind {
         BehaviourKind::Gauntlet,
         BehaviourKind::Company,
         BehaviourKind::Pastime,
+        BehaviourKind::Scene,
     ];
 
     pub fn label(self) -> &'static str {
@@ -171,6 +175,7 @@ impl BehaviourKind {
             BehaviourKind::Gauntlet => "gauntlet",
             BehaviourKind::Company => "company",
             BehaviourKind::Pastime => "pastime",
+            BehaviourKind::Scene => "scene",
         }
     }
 
@@ -191,6 +196,8 @@ impl BehaviourKind {
             BehaviourKind::Gauntlet => Tier::Engagement,
             // A visitor's calm scene ranks with visitors, above Geo.
             BehaviourKind::Company => Tier::Engagement,
+            // Races and guests' performances (the scarlet flame steps down: `Brain::tier_of`).
+            BehaviourKind::Scene => Tier::Engagement,
             BehaviourKind::Nap | BehaviourKind::Rest | BehaviourKind::Recover => Tier::Needs,
             // The cursor is a boredom killer (battles, pestering): an ambient pastime, never
             // allowed to interrupt Geo or visitors, and dropped the moment those show up.
@@ -221,6 +228,7 @@ impl BehaviourKind {
                 | BehaviourKind::Fight
                 | BehaviourKind::Gauntlet
                 | BehaviourKind::Company
+                | BehaviourKind::Scene
         )
     }
 }
@@ -1102,6 +1110,7 @@ pub(crate) enum Active {
     Gauntlet(super::gauntlet::Ceremony),
     Company(Box<super::company::Company>),
     Pastime(Box<super::pastime::Pastime>),
+    Scene(Box<super::scene::Scene>),
 }
 
 impl Active {
@@ -1133,6 +1142,7 @@ impl Active {
             Active::Gauntlet(_) => BehaviourKind::Gauntlet,
             Active::Company(_) => BehaviourKind::Company,
             Active::Pastime(_) => BehaviourKind::Pastime,
+            Active::Scene(_) => BehaviourKind::Scene,
         }
     }
 
@@ -1164,6 +1174,7 @@ impl Active {
             Active::Gauntlet(b) => b.tick(ctx),
             Active::Company(b) => b.tick(ctx),
             Active::Pastime(b) => b.tick(ctx),
+            Active::Scene(b) => b.tick(ctx),
         }
     }
 
@@ -1196,6 +1207,7 @@ impl Active {
             Active::Gauntlet(b) => b.reason(),
             Active::Company(b) => b.reason(ctx),
             Active::Pastime(b) => b.reason(),
+            Active::Scene(b) => b.reason(),
         }
     }
 }

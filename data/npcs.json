@@ -1,5 +1,5 @@
 {
-  "$comment": "NPC visitors. Clips come from the exported vanilla libraries in data/hk/animations (NPC art is always vanilla: skins/Vanilla). `faces`: left|right (side-view art, mirrored to face the knight) or front (never mirrored; use talk/talk_right for direction). `arrive`: walk (in from the knight's monitor edge along the bottom), perch (sitting on a window edge), portal (steps out of a dream portal anywhere on the desktop), drop (falls out of a portal). `leave`: walk|fade|portal. `origin_above_feet` (game units) overrides the feet line measured from the idle frame (perched visitors: the seat line). `stand_off`: where the knight stands to talk (game units from the visitor). Lines are plain strings or {say, react}; `react` names knight acts from acts.json, `a|b` = first one that can start. Placeholders: {title} (a visible window title), {app} (a running app), {daypart}. `portal_style`: dust (small dust puffs + quick fade-in, default) or dream (dream-gate glow + ripple). `dream_thoughts`: what a visitor thinks when the knight dream-nails them after their talk (sometimes, never mid-conversation). `dream`: the knight's dream-nail thoughts per window (match = lowercase substrings of process name or title; an empty match is the generic pool). `clips.leave`: a clip played once before leaving (a bow). `weight`: relative chance to be the next visitor (default 1). `after_fight` (s): only visits that soon after the knight fought (cursor battles, pestering, the Shade, spells; invitations by name ignore it). `demos`: named clip sequences the visitor can perform (a clip name, or {clip, secs} for looping clips). `lesson` (teachers, e.g. Sly): after the conversation a training session follows: `open_demo` once, then `count` drills from `drills` (the first always, the rest at random in listed order); each drill is announced (`say`, one picked), shown (`demo`), practised by the knight (`drill`: slash, up_slash, down_slash, dash, jump, or a knight act name such as great_slash), then answered from `praise` or `critique`; `closing` ends it, `abandon` is said when it is cut short; `stance` is the clip held while teaching, `practice_secs` how long the teacher waits for a drill. Feedback and closing lines may carry a `react` like conversation lines. `extra_libraries`: more clip libraries merged into the visitor's, clip names prefixed ({library, prefix}). `spar` (fighters, e.g. Zote): with probability `chance` the conversation ends in a challenge (one `challenge` line, `taunt` clip), then a short spar: on guard (`stance`, `pause` s), wind-up (`antic`), a charge along his ledge (`attack`, `charge_speed` units/s for `charge_secs`; catching the knight bumps him), `recover`; blows stagger him (`hit`); after `hits` blows he goes down (`fall`), gets up (`get_up`), says a `lose` line and leaves. `abandon` is said when it fizzles out (after `max_secs`, or the knight wandered off). `size`: his body [w, h] in game units. Spar lines are plain text (no placeholders). `company` (calm scenes): with probability `chance`, when the spot fits (`needs`: any; seat = a settled window edge the knight can sit on beside them; view = such a seat in the upper half of the monitor; deposit = a Geo deposit they arrived beside, which also places them there), the conversation ends in an invitation (one `invite` line), then they sit together: the visitor holds `clip` (default idle) and says one of `lines` every `every` s, the knight plays `knight` (acts from data/acts/company.json, `a|b` = first that can start) for `secs` (counted while he is beside them); a `parting` line, `clip_end` once, and they leave as usual. `abandon` is said when the knight is called away (the Shade, enemies, typing, a fullscreen app). Company lines are plain text. All lines are original writing.",
+  "$comment": "NPC visitors. Clips come from the exported vanilla libraries in data/hk/animations (NPC art is always vanilla: skins/Vanilla). `faces`: left|right (side-view art, mirrored to face the knight) or front (never mirrored; use talk/talk_right for direction). `arrive`: walk (in from the knight's monitor edge along the bottom), perch (sitting on a window edge), portal (steps out of a dream portal anywhere on the desktop), drop (falls out of a portal). `leave`: walk|fade|portal. `origin_above_feet` (game units) overrides the feet line measured from the idle frame (perched visitors: the seat line). `stand_off`: where the knight stands to talk (game units from the visitor). Lines are plain strings or {say, react}; `react` names knight acts from acts.json, `a|b` = first one that can start. Placeholders: {title} (a visible window title), {app} (a running app), {daypart}. `portal_style`: dust (small dust puffs + quick fade-in, default) or dream (dream-gate glow + ripple). `dream_thoughts`: what a visitor thinks when the knight dream-nails them after their talk (sometimes, never mid-conversation). `dream`: the knight's dream-nail thoughts per window (match = lowercase substrings of process name or title; an empty match is the generic pool). `clips.leave`: a clip played once before leaving (a bow). `weight`: relative chance to be the next visitor (default 1). `after_fight` (s): only visits that soon after the knight fought (cursor battles, pestering, the Shade, spells; invitations by name ignore it). `demos`: named clip sequences the visitor can perform (a clip name, or {clip, secs} for looping clips). `lesson` (teachers, e.g. Sly): after the conversation a training session follows: `open_demo` once, then `count` drills from `drills` (the first always, the rest at random in listed order); each drill is announced (`say`, one picked), shown (`demo`), practised by the knight (`drill`: slash, up_slash, down_slash, dash, jump, or a knight act name such as great_slash), then answered from `praise` or `critique`; `closing` ends it, `abandon` is said when it is cut short; `stance` is the clip held while teaching, `practice_secs` how long the teacher waits for a drill. Feedback and closing lines may carry a `react` like conversation lines. `extra_libraries`: more clip libraries merged into the visitor's, clip names prefixed ({library, prefix}). `spar` (fighters, e.g. Zote): with probability `chance` the conversation ends in a challenge (one `challenge` line, `taunt` clip), then a short spar: on guard (`stance`, `pause` s), wind-up (`antic`), a charge along his ledge (`attack`, `charge_speed` units/s for `charge_secs`; catching the knight bumps him), `recover`; blows stagger him (`hit`); after `hits` blows he goes down (`fall`), gets up (`get_up`), says a `lose` line and leaves. `abandon` is said when it fizzles out (after `max_secs`, or the knight wandered off). `size`: his body [w, h] in game units. Spar lines are plain text (no placeholders). `company` (calm scenes): with probability `chance`, when the spot fits (`needs`: any; seat = a settled window edge the knight can sit on beside them; view = such a seat in the upper half of the monitor; deposit = a Geo deposit they arrived beside, which also places them there), the conversation ends in an invitation (one `invite` line), then they sit together: the visitor holds `clip` (default idle) and says one of `lines` every `every` s, the knight plays `knight` (acts from data/acts/company.json, `a|b` = first that can start) for `secs` (counted while he is beside them); a `parting` line, `clip_end` once, and they leave as usual. `abandon` is said when the knight is called away (the Shade, enemies, typing, a fullscreen app). Company lines are plain text. An `extra_libraries` entry may list `clips` (unprefixed) to merge only those (a boss library: only their sprites get rasterized). `challenge` (Hornet): with probability `chance` the conversation ends in a challenge, a race `race_share` of the time, else a duel. Race: she points out the finish (a `challenge` line), throws her needle (`needle` + `thread` sprites) to a settled ledge the knight can reach `distance` units away, says a `go` line, and both race there; she runs (`run_speed`), ground-dashes, leaps (her clips), paced at `pace` x the knight's planned time; whoever gets within `reach` units of the needle first wins; she says a `win` or `lose` line, plucks the needle and leaps away (`abandon` when called off). Duel: a `challenge` line, then quick guards (`pause`), lunges (`lunge_speed` for `lunge_secs`), needle throws (`throw_reach`, `throw_secs`), silk spheres (`sphere_radius`, `sphere_secs`) and step-backs; she can be struck only on guard or recovering and never goes down; after `wins_after` touches on the knight (or `max_secs`) she ends it with her `win` pose and a `win` line (`respect` after `respect_after` of his blows). Challenge lines are plain text. All lines are original writing.",
   "portal_style": "dust",
   "visits": {
     "enabled": true,
@@ -296,6 +296,18 @@
       "name": "hornet",
       "display": "Hornet",
       "library": "Hornet Anim",
+      "extra_libraries": [
+        {
+          "library": "Hornet Boss Anim",
+          "prefix": "Boss ",
+          "clips": [
+            "Idle", "Run", "Jump", "Fall", "Land", "A Dash", "Flourish", "Evade Antic", "Evade",
+            "G Dash Antic", "G Dash Antic Q", "G Dash", "G Dash Recover1",
+            "Throw Antic", "Throw Antic Q", "Throw", "Throw Recover", "Needle", "Needle Thread",
+            "Sphere Antic G", "Sphere Attack", "Sphere Recover G", "Sphere Ball"
+          ]
+        }
+      ],
       "faces": "left",
       "clips": { "idle": "Idle", "talk": "Point", "talk_end": "Point End", "walk": "Run" },
       "talk_mirrored": false,
@@ -322,8 +334,88 @@
           { "say": "You've grown quicker. Good.", "react": "challenge" },
           "Not every glowing thing up here is friendly. Remember that.",
           "Farewell, little ghost."
+        ],
+        [
+          "There you are. Idle, as usual.",
+          { "say": "All this glass and light, and you just stand on it.", "react": "look_down" },
+          { "say": "Let's see if you remember how to move.", "react": "challenge" }
         ]
-      ]
+      ],
+      "challenge": {
+        "chance": 0.6,
+        "race_share": 0.5,
+        "race": {
+          "challenge": [
+            "See where my needle lands? Reach it before I do.",
+            "A race, little ghost. To my needle. Try to keep up.",
+            "Legs this time, not nails. Follow the thread."
+          ],
+          "go": ["Go!", "Now!", "Run."],
+          "win": [
+            "Too slow. The thread was mine before you left the ground.",
+            "Hm. Promising. Not yet enough.",
+            "Again, when you've grown some speed."
+          ],
+          "lose": [
+            "...You were faster. Don't let it go to your head.",
+            "Hmph. Well run, ghost.",
+            "Fine. That one is yours."
+          ],
+          "abandon": ["Another time, then.", "We'll settle it later."],
+          "clips": {
+            "point": "Point", "ready": "Boss Idle",
+            "throw_antic": "Boss Throw Antic Q", "throw": "Boss Throw", "throw_recover": "Boss Throw Recover",
+            "needle": "Boss Needle", "thread": "Boss Needle Thread",
+            "run": "Boss Run", "dash_antic": "Boss G Dash Antic Q", "dash": "Boss G Dash",
+            "jump": "Boss Jump", "fall": "Boss Fall", "air_dash": "Boss A Dash", "land": "Boss Land",
+            "win": "Boss Flourish", "depart": "Boss Jump"
+          },
+          "distance": [9, 22],
+          "run_speed": 10,
+          "dash_speed": 24,
+          "pace": [0.65, 1.0],
+          "needle_speed": 40,
+          "reach": 1.0
+        },
+        "duel": {
+          "challenge": [
+            "Show me how you've grown. Ready your nail.",
+            "Spar with me. I won't hold back much.",
+            "Your guard is lazy. Let me fix that."
+          ],
+          "win": [
+            "Enough. You're still open on the left.",
+            "That will do. Keep your feet moving.",
+            "Yield. ...Good. You know when to stop."
+          ],
+          "respect": [
+            "You landed a few. I felt them. Don't grin.",
+            "Better than last time. Still not enough."
+          ],
+          "abandon": ["Hm. Our dance can wait."],
+          "clips": {
+            "stance": "Boss Idle",
+            "lunge_antic": "Boss G Dash Antic", "lunge": "Boss G Dash", "lunge_recover": "Boss G Dash Recover1",
+            "throw_antic": "Boss Throw Antic", "throw": "Boss Throw", "throw_recover": "Boss Throw Recover",
+            "sphere_antic": "Boss Sphere Antic G", "sphere": "Boss Sphere Attack", "sphere_recover": "Boss Sphere Recover G",
+            "sphere_ball": "Boss Sphere Ball",
+            "evade_antic": "Boss Evade Antic", "evade": "Boss Evade",
+            "needle": "Boss Needle", "thread": "Boss Needle Thread",
+            "win": "Boss Flourish"
+          },
+          "wins_after": 3,
+          "respect_after": 4,
+          "lunge_speed": 26,
+          "lunge_secs": 0.45,
+          "throw_reach": 5.0,
+          "throw_secs": 0.55,
+          "sphere_radius": 2.2,
+          "sphere_secs": 0.6,
+          "pause": [0.35, 0.9],
+          "max_secs": 40,
+          "size": [1.0, 2.3]
+        }
+      }
     },
     {
       "name": "sly",

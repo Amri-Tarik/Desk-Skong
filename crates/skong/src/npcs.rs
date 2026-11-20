@@ -4,7 +4,10 @@
 //! bubble about the window he struck.
 //!
 //! The logic lives in `skong_core::npc` / `skong_core::portal`; this module is rendering and
-//! plumbing.
+//! plumbing. Hornet's challenges (planning the race's finish, the needle's windows, calling
+//! them off) live in `npcs/challenge.rs`.
+mod challenge;
+
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -44,6 +47,8 @@ struct LiveNpc {
     bubble: Option<BubbleId>,
     /// The Geo deposit they arrived beside (Myla mines it), rock bottom center.
     deposit: Option<Vec2>,
+    /// Windows for extra sprites (Hornet's needle and thread), see `npcs/challenge.rs`.
+    props: Vec<challenge::PropWin>,
 }
 
 /// A portal whose guest has not stepped out yet (`def` None: a departure portal).
@@ -65,6 +70,10 @@ pub enum VisitorNews {
     Company { who: String, finished: bool },
     /// The dream nail showed a thought: a visitor's (`Some`) or a window's (`None`).
     Dreamed { who: Option<String> },
+    /// Hornet's race was decided (`Some(true)`: the knight won) or called off.
+    RaceOver { who: String, knight_won: Option<bool> },
+    /// Hornet's duel ended (`finished`: seen through to her final word).
+    DuelOver { who: String, finished: bool },
 }
 
 /// What the visitors need to know about the world this tick.
@@ -135,6 +144,8 @@ pub struct Visitors {
     news: Vec<VisitorNews>,
     /// The visitor about to step out was placed beside this deposit.
     pending_deposit: Option<Vec2>,
+    /// Hornet's challenges (see `npcs/challenge.rs`).
+    challenges: challenge::Challenges,
 }
 
 const SLASH_CLIP: &str = "DN Slash";
@@ -177,6 +188,7 @@ impl Visitors {
             knight_hits: 0,
             news: Vec::new(),
             pending_deposit: None,
+            challenges: Default::default(),
         };
         v.rescale(vanilla, scale)?;
         Ok(v)
@@ -268,6 +280,9 @@ impl Visitors {
             // A calm scene follows: the visitor invites the knight to stay a while.
             let face = self.live[i].deposit.map(|d| d.x);
             self.live[i].npc.plan_company(&self.set, face);
+        } else {
+            // Hornet: a race or a duel, maybe.
+            self.plan_challenge(i, w);
         }
         let mut lines = lines;
         if self.live[i].npc.company_planned()
@@ -349,6 +364,9 @@ impl Visitors {
             self.hidden = true;
             for l in &self.live {
                 l.win.set_visible(false);
+                for p in &l.props {
+                    p.win.set_visible(false);
+                }
             }
             self.bubbles.set_visible(false);
         }
@@ -357,6 +375,9 @@ impl Visitors {
     pub fn raise_all(&self) {
         for l in &self.live {
             l.win.raise();
+            for p in &l.props {
+                p.win.raise();
+            }
         }
         self.bubbles.raise_all();
     }
@@ -423,7 +444,8 @@ impl Visitors {
             self.add_npc(def, at, w);
         }
 
-        // 3. Visitors.
+        // 3. Visitors (a challenge is called off when the user needs the screen...).
+        self.apply_hold(w);
         for i in 0..self.live.len() {
             let mut events = Vec::new();
             let area = self.area_at(self.live[i].npc.pos, w.desk);
@@ -443,6 +465,9 @@ impl Visitors {
             portal_fx(fx, self.set.portal_style, at);
         }
         if let Err(e) = self.draw() {
+            log::warn!("visitors: {e:#}");
+        }
+        if let Err(e) = self.draw_props() {
             log::warn!("visitors: {e:#}");
         }
 
@@ -594,7 +619,7 @@ impl Visitors {
         let area = self.area_at(at.feet, w.desk);
         npc.attach(&NpcEnv { terrain: w.terrain, knight: w.knight.pos, ppu: self.ppu, area });
         let deposit = self.pending_deposit.take();
-        self.live.push(LiveNpc { npc, win, drawn: None, bubble: None, deposit });
+        self.live.push(LiveNpc { npc, win, drawn: None, bubble: None, deposit, props: Vec::new() });
     }
 
     fn handle_events(&mut self, i: usize, events: Vec<NpcEvent>, w: &World) {
@@ -630,6 +655,20 @@ impl Visitors {
                     let who = &self.set.defs[self.live[i].npc.def];
                     log::info!("visitor: the calm scene with {} {}", who.display, if finished { "is over" } else { "was cut short" });
                     self.news.push(VisitorNews::Company { who: who.name.clone(), finished });
+                }
+                NpcEvent::RaceOver { knight_won } => {
+                    let who = self.set.defs[self.live[i].npc.def].name.clone();
+                    log::info!("visitor: the race with {who} is over ({})", match knight_won {
+                        Some(true) => "the knight won",
+                        Some(false) => "she won",
+                        None => "called off",
+                    });
+                    self.news.push(VisitorNews::RaceOver { who, knight_won });
+                }
+                NpcEvent::DuelOver { finished } => {
+                    let who = self.set.defs[self.live[i].npc.def].name.clone();
+                    log::info!("visitor: the duel with {who} is over ({})", if finished { "she won" } else { "called off" });
+                    self.news.push(VisitorNews::DuelOver { who, finished });
                 }
                 NpcEvent::OpenPortal(at) => {
                     self.portals.push(OpenPortal { portal: Portal::open(PortalSpot { at, owner: None }, self.set.portal_style), guest: None });

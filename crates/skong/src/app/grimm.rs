@@ -1,8 +1,10 @@
 //! Pet glue for the secret boss (see `crate::grimm` and `skong_core::enemy::grimm`): what
 //! the troupe needs to know about the world each tick, the lantern's placement (settled,
-//! reachable ledges near the knight, never on a game's monitor), his blows on Grimm and the
-//! lantern, Grimm's hits on him (they go to the brain with the enemies' bumps), the reward
-//! burst, the "!" when the show begins, and the events achievements care about.
+//! reachable ledges near the knight, never on a game's monitor), the "?" while he lingers by
+//! it (the user clicks it: `crate::grimm` passes the click on), his blows on Grimm, Grimm's
+//! hits on him (they go to the brain with the enemies' bumps), the reward burst, the "!" when
+//! the show begins, his friendly visit (debug request, scene cue), and the events
+//! achievements care about.
 use skong_core::ai::BehaviourKind;
 use skong_core::enemy::grimm::{GrimmEnv, GrimmEvent, GrimmWorld, plan_lantern};
 use skong_core::geom::{RectF, RectI, Vec2};
@@ -40,9 +42,41 @@ impl Pet {
         }
     }
 
-    /// The flame or the show is on (no visitors, no other enemies meanwhile).
+    /// Grimm is on stage or about to be (the show, his friendly visit): no visitors, no
+    /// other enemies meanwhile. A scarlet flame waiting for its click holds nothing up.
     pub(super) fn troupe_active(&self) -> bool {
-        self.troupe.as_ref().is_some_and(|t| t.active())
+        self.troupe.as_ref().is_some_and(|t| t.busy())
+    }
+
+    /// The scene the troupe cues for the knight (watching the friendly visit, lingering by
+    /// the flame).
+    pub(super) fn troupe_scene(&self) -> Option<skong_core::ai::SceneCue> {
+        self.troupe.as_ref().and_then(|t| t.scene_cue())
+    }
+
+    /// Debug: Grimm's friendly visit at the next good moment.
+    pub(super) fn grimm_visit(&mut self) {
+        match self.troupe.as_mut() {
+            Some(t) => {
+                t.request_cameo();
+                log::info!("grimm: a friendly visit requested (at the next good moment)");
+            }
+            None => log::warn!("grimm: not loaded (see data/grimm.json)"),
+        }
+    }
+
+    /// Lingering by the flame: now and then a "?" (drawing the user's attention to it).
+    fn flame_wonder(&mut self, dt: f32) {
+        let near = self.troupe.as_ref().and_then(|t| t.flame_at()).is_some_and(|at| at.distance(self.ch.pos) < 4.0 * 64.0 * self.settings.scale);
+        if !(near && self.brain.behaviour() == BehaviourKind::Scene) {
+            self.flame_wonder_in = 1.0;
+            return;
+        }
+        self.flame_wonder_in -= dt;
+        if self.flame_wonder_in <= 0.0 {
+            self.emotes.show(Emote::Question);
+            self.flame_wonder_in = 7.0 + 6.0 * (self.emotes.clock() * 0.37).fract() as f32;
+        }
     }
 
     /// The knight's monitor work area: the stage.
@@ -120,6 +154,7 @@ impl Pet {
         }
         self.achievements.troupe.extend(events);
         self.troupe = Some(t);
+        self.flame_wonder(dt);
     }
 
     /// A settled, reachable spot for the lantern near the knight (never on a game's monitor).
@@ -147,16 +182,6 @@ impl Pet {
                 self.fx.spawn("cursor_defeat", at, right);
             }
         }
-    }
-
-    /// The knight struck the scarlet flame: the show begins.
-    pub(super) fn strike_lantern(&mut self, at: Vec2, right: bool) {
-        let x = self.ch.pos.x;
-        let Some(ev) = self.troupe.as_mut().and_then(|t| t.strike_lantern(x)) else { return };
-        log::info!("event: {} {ev:?}", ev.name());
-        self.fx.spawn("cursor_hit", at, right);
-        self.emotes.show(Emote::Bang);
-        self.achievements.troupe.push(ev);
     }
 
     pub(super) fn hide_troupe(&mut self) {

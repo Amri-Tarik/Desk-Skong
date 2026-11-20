@@ -210,6 +210,16 @@ impl ClipLibrary {
         }
     }
 
+    /// [`Self::merge`], keeping only the clips of `other` named in `only` (all when empty):
+    /// a big second library (a boss's) adds just the clips a visitor plays, and only their
+    /// sprites get rasterized.
+    pub fn merge_only(&mut self, mut other: ClipLibrary, prefix: &str, only: &[String]) {
+        if !only.is_empty() {
+            other.clips.retain(|c| only.contains(&c.name));
+        }
+        self.merge(other, prefix);
+    }
+
     /// Every sprite referenced by any clip (for rasterizing up front).
     pub fn sprite_keys(&self) -> Vec<SpriteKey> {
         let mut v: Vec<SpriteKey> = self.clips.iter().flat_map(|c| c.frames.iter().filter_map(|f| f.sprite)).collect();

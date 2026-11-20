@@ -200,18 +200,21 @@ fn the_lantern_needs_achievements_then_shows_now_and_then() {
     let l = *d.lantern().expect("lantern");
     assert_eq!(l.at, Vec2::new(1400.0, FLOOR));
     assert!(d.active());
-    // It fades in, then it is something to strike.
+    // It fades in: the user's to click, not a foe; the knight lingers by it (a scene cue).
     direct(&mut d, &set, &terrain, &world(at), Some(knight_at(at)), 2.5, None);
-    let foe = d.foes(&set, PPU)[0];
-    assert!(foe.kind == crate::ai::FoeKind::Lantern && foe.vulnerable);
-    // Nobody strikes it: it goes out after its time.
+    assert!(d.foes(&set, PPU).is_empty(), "not something for the knight to strike");
+    assert!(d.lantern().is_some_and(|l| l.lit()));
+    assert_eq!(d.scene_cue(&set), Some(crate::ai::SceneCue::Flame { at: Vec2::new(1400.0, FLOOR) }));
+    assert!(!d.busy(), "a waiting flame holds nothing up");
+    // Nobody clicks it: it goes out after its (long) time.
+    assert!(set.cfg.lantern.secs >= 900.0, "time to build an arena");
     let ev = direct(&mut d, &set, &terrain, &world(at), Some(knight_at(at)), set.cfg.lantern.secs + 3.0, None);
     assert!(ev.contains(&GrimmEvent::LanternFaded), "{ev:?}");
     assert!(d.lantern().is_none() && !d.active());
 }
 
 #[test]
-fn the_lantern_goes_out_when_the_moment_passes() {
+fn the_flame_waits_through_visitors_and_fights_but_a_fullscreen_app_puts_it_out() {
     let set = troupe();
     let terrain = desk(vec![]);
     let at = Vec2::new(960.0, FLOOR);
@@ -219,19 +222,38 @@ fn the_lantern_goes_out_when_the_moment_passes() {
     d.request(Summon::Lantern);
     direct(&mut d, &set, &terrain, &world(at), Some(knight_at(at)), 3.0, Some(Vec2::new(1400.0, FLOOR)));
     assert!(d.lantern().is_some());
-    let ev = direct(&mut d, &set, &terrain, &GrimmWorld { visitor_present: true, ..world(at) }, Some(knight_at(at)), 2.0, None);
-    assert!(ev.contains(&GrimmEvent::LanternFaded), "a visitor came: {ev:?}");
+    let busy = [GrimmWorld { visitor_present: true, ..world(at) }, GrimmWorld { others_alive: 2, ..world(at) }, GrimmWorld { shade: true, ..world(at) }, GrimmWorld { knight_down: true, ..world(at) }];
+    for w in busy {
+        let ev = direct(&mut d, &set, &terrain, &w, Some(knight_at(at)), 20.0, None);
+        assert!(ev.is_empty() && d.lantern().is_some_and(|l| l.lit()), "still burning: {w:?} {ev:?}");
+    }
+    // A click while a visitor is around waits for them to go.
+    assert!(d.click_lantern());
+    direct(&mut d, &set, &terrain, &GrimmWorld { visitor_present: true, ..world(at) }, Some(knight_at(at)), 5.0, None);
+    assert!(d.grimm().is_none() && d.lantern().is_some(), "waits for a good moment");
+    let ev = direct(&mut d, &set, &terrain, &world(at), Some(knight_at(at)), 0.5, None);
+    assert!(ev.contains(&GrimmEvent::Summoned { via: Summon::Lantern }), "{ev:?}");
+    // Another flame: a fullscreen app puts it out.
+    let mut d = GrimmDirector::new(&set.cfg, 8);
+    d.request(Summon::Lantern);
+    direct(&mut d, &set, &terrain, &world(at), Some(knight_at(at)), 3.0, Some(Vec2::new(1400.0, FLOOR)));
+    let ev = direct(&mut d, &set, &terrain, &GrimmWorld { fullscreen: true, ..world(at) }, Some(knight_at(at)), 2.0, None);
+    assert!(ev.contains(&GrimmEvent::LanternFaded), "{ev:?}");
+    assert!(!d.click_lantern(), "nothing left to click");
 }
 
 #[test]
-fn striking_the_lantern_brings_him_out_of_the_flame_with_a_bow_and_a_line() {
+fn clicking_the_flame_brings_him_out_of_it_with_a_bow_and_a_line() {
     let set = troupe();
     let terrain = desk(vec![]);
     let at = Vec2::new(960.0, FLOOR);
     let mut d = GrimmDirector::new(&set.cfg, 7);
+    assert!(!d.click_lantern(), "no flame yet");
     d.request(Summon::Lantern);
     direct(&mut d, &set, &terrain, &world(at), Some(knight_at(at)), 3.0, Some(Vec2::new(1300.0, FLOOR)));
-    assert_eq!(d.strike_lantern(&set, at.x, PPU), Some(GrimmEvent::Summoned { via: Summon::Lantern }));
+    assert!(d.click_lantern());
+    let ev = direct(&mut d, &set, &terrain, &world(at), Some(knight_at(at)), 1.5 * DT, None);
+    assert_eq!(ev, [GrimmEvent::Summoned { via: Summon::Lantern }]);
     let g = d.grimm().expect("grimm");
     assert_eq!(g.pos, Vec2::new(1300.0, FLOOR), "out of the flame");
     assert!(!g.facing_right, "facing the knight");

@@ -23,6 +23,7 @@ mod grimm;
 mod highlight;
 mod pastime;
 mod priorities;
+mod scene;
 mod shiny;
 mod train;
 mod slug;

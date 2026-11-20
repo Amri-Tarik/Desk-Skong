@@ -33,7 +33,8 @@ pub enum FoeKind {
     /// The Troupe Master (`crate::enemy::grimm`): fought to the end; losing every mask
     /// kills him (a Shade is left).
     Boss,
-    /// The scarlet flame that summons him: walked up to and struck once.
+    /// Something to walk up to and strike once (the scarlet flame used to be one; it is the
+    /// user's to click now, and the troupe no longer reports it as a foe).
     Lantern,
     /// One of the boss's flames: never a target; dodged, jumped or stepped away from.
     Hazard,
