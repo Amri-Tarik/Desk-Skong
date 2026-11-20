@@ -203,45 +203,21 @@
       ]
     },
     {
-      "name": "map_stroll",
+      "name": "take_out_map",
       "tags": [
         "calm",
         "curious"
       ],
       "requires": "grounded",
       "weight": 0.0,
-      "cooldown": 120,
+      "cooldown": 0,
       "steps": [
         {
-          "clip": "Map Open"
-        },
-        {
-          "clip": "Map Idle",
-          "hold": [
-            1.5,
-            3.0
-          ]
-        },
-        {
-          "clip": "Map Walk",
-          "move": "walk",
-          "turn": "Map Turn",
-          "hold": [
-            2.0,
-            5.0
-          ]
-        },
-        {
-          "clip": "Map Idle",
-          "hold": [
-            1.0,
-            2.5
-          ]
-        },
-        {
-          "clip": "Map Away"
+          "clip": "Map Open",
+          "interruptible": false
         }
-      ]
+      ],
+      "$comment": "Only takes the map out: from then on it's a carried item (ai::carry), locomotion plays Map Idle / Map Walk while he goes on with what he was doing; `put_map_away` (acts/exits.json) folds it."
     },
     {
       "name": "stare_at_user",
@@ -467,40 +443,6 @@
         }
       ],
       "$comment": "Not idle: used when knocked out (lost a cursor battle, big fall) or deep sleep while the user is away."
-    },
-    {
-      "name": "lantern_patrol",
-      "tags": [
-        "calm",
-        "curious"
-      ],
-      "requires": "grounded",
-      "weight": 0.0,
-      "cooldown": 300,
-      "steps": [
-        {
-          "clip": "Lantern Idle",
-          "hold": [
-            1.0,
-            2.0
-          ]
-        },
-        {
-          "clip": "Lantern Run",
-          "move": "walk",
-          "hold": [
-            3.0,
-            8.0
-          ]
-        },
-        {
-          "clip": "Lantern Idle",
-          "hold": [
-            1.0,
-            2.0
-          ]
-        }
-      ]
     },
     {
       "name": "wake_up",

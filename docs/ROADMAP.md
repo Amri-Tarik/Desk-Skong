@@ -186,6 +186,15 @@ Checked in tests only (unless noted). Note anything that looks off:
 - [ ] Geo Rock art and gleam (all regions, sizes); shiny glint and pick-up
 - [ ] Cursor hit markers and the defeat burst; fight mode; screen-share toggle
 - [ ] Lantern in dark places (dark-theme detection thresholds)
+- [ ] Carried map / lantern (`ai::carry`; the old `map_stroll` / `lantern_patrol` patrol acts
+      are gone): following the cursor with Map Walk / Lantern Run, standing in Map Idle /
+      Lantern Idle; Map Open → Map Idle and Map Away → Idle without a snap; Map Turn when he
+      turns in place; the map folded before a fight / hurrying / sitting, dropped mid-jump;
+      the lantern popping off over acts and jumps (game-faithful, no clips for it); how
+      often the map comes out (every ~2 min, 15–40 s) and whether the lantern being out
+      the whole time on a dark-themed desktop feels right
+- [ ] Dummy / lumafly now beat plain company at once (utility 0.75–0.79 vs companion
+      ≤ 0.62): does he run off to them too eagerly; does the summoned flame still win
 - [ ] Fatal falls → Shade
 - [ ] Combat kit:
       - pogo chains (enemies, Zote, the cursor in battles and pester);

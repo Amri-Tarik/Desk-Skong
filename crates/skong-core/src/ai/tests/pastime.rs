@@ -28,7 +28,7 @@ fn restless_in_company_he_practises_on_the_dummy_and_comes_back() {
     sim.dummy = Some(dummy_at(1400.0));
     assert!(sim.run_until(150.0, BehaviourKind::Pastime), "took it up: {}", sim.last_reason());
     assert!(sim.last_reason().contains("training dummy"), "{}", sim.last_reason());
-    assert!(sim.last_reason().contains("restless"), "the reason says why: {}", sim.last_reason());
+    assert!(sim.last_reason().contains("more fun than standing around"), "the reason says why: {}", sim.last_reason());
     let n = sim.intents.len();
     assert!(sim.run_while(90.0, |s| s.brain.behaviour() == BehaviourKind::Pastime), "ends: {}", sim.last_reason());
     // He stood beside it, on its side he came from, and practised.
@@ -49,6 +49,85 @@ fn restless_in_company_he_practises_on_the_dummy_and_comes_back() {
     // Then a while back with the user before practising again.
     let kinds = sim.run(40.0);
     assert!(!kinds.contains(&BehaviourKind::Pastime) || sim.brain.pastime() != Some(PastimeKind::Dummy), "a cooldown");
+}
+
+#[test]
+fn a_dummy_beats_following_the_cursor_right_away() {
+    // Just started keeping company (no restless stretch), content, the cursor moving about
+    // near him: a dummy turning up is still more fun.
+    for seed in 0..4 {
+        let mut sim = calm(BrainConfig::default());
+        sim.brain = Brain::new(BrainConfig { personality: Some(Personality::default()), ..Default::default() }, sim.catalog.clone(), 3 + seed);
+        sim.brain.mind_mut().needs = Needs { energy: 0.85, boredom: 0.1, loneliness: 0.6, mischief: 0.1 };
+        sim.park_cursor(Vec2::new(150.0, -120.0));
+        assert!(sim.run_until(3.0, BehaviourKind::Companion), "{}", sim.last_reason());
+        sim.dummy = Some(dummy_at(1400.0));
+        let mut took_up = false;
+        for i in 0..(5.0 / DT) as usize {
+            // The user wiggles the mouse around near him.
+            let wiggle = Vec2::new(150.0 + 60.0 * ((i / 30) % 3) as f32, -120.0);
+            sim.cursor = Some(Cursor { pos: sim.body_center() + wiggle, ..Default::default() });
+            sim.user.idle_secs = 0.0;
+            sim.step();
+            if sim.brain.behaviour() == BehaviourKind::Pastime {
+                took_up = true;
+                break;
+            }
+        }
+        assert!(took_up, "seed {seed}: {}", sim.last_reason());
+        assert!(sim.last_reason().contains("training dummy"), "{}", sim.last_reason());
+        // Committed: no dithering back to company while he goes over and practises.
+        let kinds = sim.run(15.0);
+        assert!(kinds.iter().all(|k| *k == BehaviourKind::Pastime), "seed {seed}: {:?}", sim.switches.last());
+        assert!(!hits(&sim).is_empty(), "practised: {}", sim.last_reason());
+    }
+}
+
+#[test]
+fn a_lumafly_drifting_by_beats_plain_company_right_away() {
+    let mut sim = calm(BrainConfig::default());
+    sim.brain.mind_mut().needs.boredom = 0.1;
+    sim.park_cursor(Vec2::new(150.0, -120.0));
+    assert!(sim.run_until(3.0, BehaviourKind::Companion), "{}", sim.last_reason());
+    sim.flies = vec![KnownLumafly { id: 3, pos: Vec2::new(1300.0, FLOOR - 120.0), leaving: false }];
+    assert!(sim.run_until(3.0, BehaviourKind::Pastime), "{}", sim.last_reason());
+    assert!(sim.last_reason().contains("lumafly"), "{}", sim.last_reason());
+}
+
+#[test]
+fn a_coin_or_a_visitor_still_come_before_a_fresh_dummy() {
+    // Geo on the floor and a dummy at once: Geo first.
+    let mut sim = calm(BrainConfig::default());
+    sim.park_cursor(Vec2::new(150.0, -120.0));
+    assert!(sim.run_until(3.0, BehaviourKind::Companion), "{}", sim.last_reason());
+    sim.dummy = Some(dummy_at(1400.0));
+    sim.brain.sense_stakes(StakesSense { coins: vec![Vec2::new(500.0, FLOOR)], ..Default::default() });
+    assert!(sim.run_until(1.0, BehaviourKind::Loot), "{}", sim.last_reason());
+    // Practising: a visitor cuts in.
+    let mut sim = calm(BrainConfig::default());
+    sim.park_cursor(Vec2::new(150.0, -120.0));
+    sim.dummy = Some(dummy_at(1400.0));
+    assert!(sim.run_until(5.0, BehaviourKind::Pastime), "{}", sim.last_reason());
+    let v = Visitor { id: 5, name: "cornifer".into(), pos: Vec2::new(500.0, FLOOR), state: VisitorState::Waiting, excitement: 1.0, ..Default::default() };
+    sim.brain.see_visitors(vec![v]);
+    assert!(sim.run_until(1.0, BehaviourKind::Greet), "{}", sim.last_reason());
+}
+
+#[test]
+fn the_summoned_flame_and_a_dummy_take_turns_without_dithering() {
+    // Both at once: the flame the user summoned first, the dummy after (not starved).
+    let mut sim = in_company();
+    sim.dummy = Some(dummy_at(1400.0));
+    sim.brain.see_scene(Some(SceneCue::Flame { at: Vec2::new(500.0, FLOOR) }));
+    assert!(sim.run_until(3.0, BehaviourKind::Scene), "{}", sim.last_reason());
+    let kinds = sim.run(20.0);
+    assert!(kinds.iter().all(|k| *k == BehaviourKind::Scene), "no dithering: {:?}", sim.switches.last());
+    sim.brain.see_scene(None);
+    assert!(sim.run_until(5.0, BehaviourKind::Pastime), "{}", sim.last_reason());
+    // Practising when a flame turns up: he finishes first (no flip-flop).
+    sim.brain.see_scene(Some(SceneCue::Flame { at: Vec2::new(500.0, FLOOR) }));
+    let kinds = sim.run(5.0);
+    assert!(kinds.iter().all(|k| *k == BehaviourKind::Pastime), "{:?}", sim.switches.last());
 }
 
 #[test]

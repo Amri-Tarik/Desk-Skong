@@ -31,6 +31,7 @@
 mod activity;
 mod battle;
 mod behaviours;
+mod carry;
 mod combat;
 mod company;
 mod companion;
@@ -69,6 +70,7 @@ use std::fmt::Write as _;
 pub use activity::{Activity, ActivitySpot, ActivityTracker, QUIET, TrackedSpot};
 pub use battle::{BattleScore, Outcome};
 pub use behaviours::{BehaviourKind, Tier};
+pub use carry::Carry;
 pub use config::{BattleConfig, BoredomConfig, BrainConfig, CompanionConfig, NeedRates, Personality, SereneConfig, TierConfig, WatchConfig};
 pub use dream_gate::{DreamGateConfig, GateWish, Prize};
 pub use expression::{Expression, GeoHaul};
@@ -191,6 +193,9 @@ pub struct Intent {
     pub gate: Option<crate::dreamgate::GateEvent>,
     /// A small emote bubble to show above him (rare; see `ai::expression`).
     pub emote: Option<Expression>,
+    /// What he has in his hands (the map, the lantern): the app's locomotion swaps its idle /
+    /// walk clips for the carried variants (see `ai::carry`).
+    pub carry: Option<Carry>,
 }
 
 /// Something the bored knight asks the world for (see [`Intent::request`]).
@@ -315,6 +320,8 @@ pub struct Brain {
     scene_reacted: Option<u32>,
     /// The scarlet flame doesn't draw him back before this time.
     flame_rest_until: f64,
+    /// The map / lantern in his hands (see [`carry`]).
+    carry: carry::Carrying,
 }
 
 impl Brain {
@@ -364,6 +371,7 @@ impl Brain {
             expr: Default::default(),
             scene_reacted: None,
             flame_rest_until: f64::NEG_INFINITY,
+            carry: carry::Carrying::default(),
             cfg,
         }
     }
@@ -551,6 +559,7 @@ impl Brain {
         }
         self.stir_from_slug(p, &mut out);
         self.dream_gate_landed();
+        self.carry_tick(p, &mut out);
         if p.act.is_some() || out.act.is_some() || !matches!(out.motion, Motion::Hold) {
             out.waiting = false;
         }
@@ -577,6 +586,9 @@ impl Brain {
         self.last_motion = out.motion;
         out.behaviour = Some(self.active.kind());
         out.reason = self.reason(p, nav);
+        if let Some(c) = self.carry.item {
+            out.reason = format!("{} [{}]", out.reason, c.label());
+        }
         if self.now < self.calm_until {
             out.reason = format!("calming down (was dithering) | {}", out.reason);
         }

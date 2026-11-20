@@ -571,8 +571,10 @@ impl Pet {
             self.nav.stop();
         }
         let mut input = if self.forced_nav {
+            self.loco.set_carry(None);
             self.follow_forced(dt)
         } else if let Some(i) = manual_input {
+            self.loco.set_carry(None);
             i
         } else {
             self.think(dt)
@@ -617,7 +619,7 @@ impl Pet {
             }
         }
         if let Some(g) = self.act.as_ref().and_then(|p| p.gait(&d.acts)) {
-            // Walking acts (map stroll, lantern patrol) pace their ledge: turn around at its
+            // Walking acts (the slug's crawl) pace their ledge: turn around at its
             // ends and when blocked, instead of pushing into walls or walking off.
             let near_end = self.ch.support.as_ref().is_some_and(|s| {
                 let margin = self.ch.size.x;
@@ -1124,6 +1126,8 @@ impl Pet {
             }
             self.ch.facing = f;
         }
+        // The map / lantern in his hands: only his idle and walk clips change.
+        self.loco.set_carry(intent.carry);
         match intent.motion {
             Motion::Hold => MoveInput::default(),
             Motion::Navigate { .. } => self.nav.next_input(&self.ch, &self.terrain, dt),

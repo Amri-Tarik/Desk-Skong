@@ -8,6 +8,7 @@
 //! so turning in place, getting up or finishing an act flows into idle without a snap.
 use anyhow::{Context, Result};
 
+use crate::ai::Carry;
 use crate::anim::{AnimEvent, ClipId, ClipLibrary};
 use crate::controller::{Character, CharacterParams, BehindPhase, DivePhase, Gait, MoveEvent, MoveState};
 
@@ -56,6 +57,12 @@ struct Clips {
     quake_fall_2: ClipId,
     quake_land: ClipId,
     quake_land_2: ClipId,
+    /// Carried-item variants (optional: a library without them just shows the plain clips).
+    map_idle: Option<ClipId>,
+    map_walk: Option<ClipId>,
+    map_turn: Option<ClipId>,
+    lantern_idle: Option<ClipId>,
+    lantern_run: Option<ClipId>,
 }
 
 impl Clips {
@@ -104,7 +111,20 @@ impl Clips {
             quake_fall_2: id("Quake Fall 2")?,
             quake_land: id("Quake Land")?,
             quake_land_2: id("Quake Land 2")?,
+            map_idle: lib.id("Map Idle"),
+            map_walk: lib.id("Map Walk"),
+            map_turn: lib.id("Map Turn"),
+            lantern_idle: lib.id("Lantern Idle"),
+            lantern_run: lib.id("Lantern Run"),
         })
+    }
+
+    /// The (still, moving) clips for a carried item, if the library has both.
+    fn carried(&self, carry: Carry) -> Option<(ClipId, ClipId)> {
+        match carry {
+            Carry::Map => self.map_idle.zip(self.map_walk),
+            Carry::Lantern => self.lantern_idle.zip(self.lantern_run),
+        }
     }
 
     /// Transition clips that end by looping idle (usable as the standing-still base).
@@ -152,6 +172,10 @@ pub struct Locomotion {
     walk_run: f32,
     run_sprint: f32,
     moving_eps: f32,
+    /// What he has in his hands (the brain's `Intent::carry`): standing and walking on the
+    /// ground use its variants (`Map Idle` / `Map Walk`, `Lantern Idle` / `Lantern Run`);
+    /// everything else (jumps, dashes, landings, acts) plays the usual clips.
+    carry: Option<Carry>,
 }
 
 impl Locomotion {
@@ -171,7 +195,18 @@ impl Locomotion {
             walk_run: (w + r) * 0.5,
             run_sprint: (r + s) * 0.5,
             moving_eps: w * 0.15,
+            carry: None,
         })
+    }
+
+    /// Carry the map / the lantern (or nothing): only changes the ground idle / walk clips.
+    pub fn set_carry(&mut self, carry: Option<Carry>) {
+        self.carry = carry;
+    }
+
+    /// The (still, moving) clips of the carried item, if any.
+    fn carried(&self) -> Option<(ClipId, ClipId)> {
+        self.carry.and_then(|c| self.clips.carried(c))
     }
 
     /// Feed this tick's controller and animation events; returns the clip to play.
@@ -232,7 +267,11 @@ impl Locomotion {
                 }
                 MoveEvent::SuperdashHitWall => self.accent(Some(c.sd_hit_wall)),
                 MoveEvent::SuperdashEnded if !ch.is_grounded() => self.accent(Some(c.sd_air_brake)),
-                MoveEvent::TurnedAround if still => self.idle_intro(c.turn_to_idle),
+                // Turning with the map open: its own turn; otherwise into idle.
+                MoveEvent::TurnedAround if still => match (self.carry, c.map_turn) {
+                    (Some(Carry::Map), Some(turn)) if self.carried().is_some() => self.accent(Some(turn)),
+                    _ => self.idle_intro(c.turn_to_idle),
+                },
                 MoveEvent::DiveStarted { .. } => {
                     self.jump_t = None;
                     self.accent(None);
@@ -249,7 +288,9 @@ impl Locomotion {
         }
 
         let moving = ch.is_grounded() && ch.vel.x.abs() > self.moving_eps;
-        if self.was_moving && !moving && matches!(ch.state, MoveState::Grounded) && self.one_shot.is_none() {
+        let carried = self.carried();
+        // (Carrying something: the walk flows straight into its idle, no run-to-idle skid.)
+        if self.was_moving && !moving && matches!(ch.state, MoveState::Grounded) && self.one_shot.is_none() && carried.is_none() {
             self.accent(Some(c.run_to_idle));
         }
         self.was_moving = moving;
@@ -260,7 +301,7 @@ impl Locomotion {
         // Drop accents that no longer fit the state.
         if let Some(a) = self.one_shot {
             let grounded_accent =
-                [c.land, c.run_to_idle, c.dash_to_idle, c.hard_land, c.dash_down_land, c.quake_land, c.quake_land_2].contains(&a);
+                [c.land, c.run_to_idle, c.dash_to_idle, c.hard_land, c.dash_down_land, c.quake_land, c.quake_land_2].contains(&a) || Some(a) == c.map_turn && carried.is_some();
             let air_accent = [c.double_jump, c.walljump, c.sd_air_brake, c.slash, c.up_slash, c.down_slash].contains(&a);
             let dash_accent =
                 [c.dash, c.shadow_dash, c.shadow_dash_sharp, c.dash_down, c.shadow_dash_down, c.shadow_dash_down_sharp].contains(&a);
@@ -291,6 +332,7 @@ impl Locomotion {
         }
 
         let base = match ch.state {
+            MoveState::Grounded if carried.is_some() => carried.map_or(c.idle, |(still, walk)| if moving { walk } else { still }),
             MoveState::Grounded if moving => {
                 let v = ch.vel.x.abs();
                 if v >= self.run_sprint {
@@ -358,7 +400,8 @@ impl Locomotion {
         self.restart = false;
         self.was_moving = false;
         self.idle_variant = if self.clips.idle_variants().contains(&last_clip) { last_clip } else { self.clips.idle };
-        self.idle_variant
+        // Something in his hands (the map just taken out, the lantern): its idle, no snap.
+        self.carried().map_or(self.idle_variant, |(still, _)| still)
     }
 
     fn accent(&mut self, clip: Option<ClipId>) {
@@ -433,6 +476,29 @@ mod tests {
             let (lib, mut loco, mut ch, t) = setup();
             let seen = sim(&lib, &mut loco, &mut ch, &t, MoveInput { x: 1.0, gait, ..Default::default() }, 1.0);
             assert_eq!(seen.last().map(String::as_str), Some(clip), "{gait:?}: {seen:?}");
+        }
+    }
+
+    #[test]
+    fn carried_items_change_only_the_ground_idle_and_walk() {
+        for (carry, idle, walk) in [(Carry::Map, "Map Idle", "Map Walk"), (Carry::Lantern, "Lantern Idle", "Lantern Run")] {
+            let (lib, mut loco, mut ch, t) = setup();
+            loco.set_carry(Some(carry));
+            let seen = sim(&lib, &mut loco, &mut ch, &t, MoveInput { x: 1.0, gait: Gait::Walk, ..Default::default() }, 1.0);
+            assert_eq!(seen.last().map(String::as_str), Some(walk), "{seen:?}");
+            // Stopping: straight into its idle (no run-to-idle skid).
+            let seen = sim(&lib, &mut loco, &mut ch, &t, MoveInput::default(), 1.0);
+            assert_eq!(seen.last().map(String::as_str), Some(idle), "{seen:?}");
+            assert!(!seen.iter().any(|s| s == "Run To Idle" || s == "Idle"), "{seen:?}");
+            // A jump plays the usual clips, then back to its idle.
+            let seen = sim(&lib, &mut loco, &mut ch, &t, MoveInput { jump_pressed: true, jump_held: true, ..Default::default() }, 2.5);
+            assert!(order(&seen, &["Airborne", "Fall", "Land", idle]), "{seen:?}");
+            // An act ending: its idle, no snap to plain Idle.
+            assert_eq!(loco.after_act(lib.id("Map Open").unwrap()), lib.id(idle).unwrap());
+            // Put away: the plain clips again.
+            loco.set_carry(None);
+            let seen = sim(&lib, &mut loco, &mut ch, &t, MoveInput::default(), 0.5);
+            assert_eq!(seen.last().map(String::as_str), Some("Idle"), "{seen:?}");
         }
     }
 

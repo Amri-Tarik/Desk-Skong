@@ -245,17 +245,11 @@ impl Companion {
             self.last_stare = ctx.now;
             return (ActWait::named(ctx, "stare_at_user"), "cursor resting near me");
         }
-        // The lantern comes out right next to you in the dark; the map only when you're
-        // not right here.
-        if (ctx.senses.dark || c.dist() > 250.0)
+        // (The map and the lantern are carried while he keeps you company: `ai::carry`.)
+        if c.dist() > 250.0
             && let Some(a) = ctx.wander_act()
         {
-            let why = match ctx.rep.catalog.get(a.id).map(|i| i.name.as_str()) {
-                Some("lantern_patrol") => "it's dark",
-                Some(super::behaviours::SLUG_ACT) => "feeling serene",
-                _ => "checking his map",
-            };
-            return (Some(a), why);
+            return (Some(a), "feeling serene");
         }
         if ctx.senses.can_sit() && c.still_for > 2.0 && ctx.may_sit() {
             return (ctx.seated_act(), "sitting with you");
