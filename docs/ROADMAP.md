@@ -40,7 +40,48 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
       way, and he does **not** dodge your typing on his own.
 - [ ] **Highlighted-text curiosity on by default**, with a toggle to turn it off.
 
-## 2. Public release (GitHub)
+## 2. Expression and variety
+
+- [ ] **Expression bubbles** (small, in an HK style, never noisy):
+      - "…" when bored;
+      - an anger mark when there are enemies or a cursor to fight;
+      - "!" on spotting the Shade, Geo or a flame;
+      - "?" when he can't reach something;
+      - "z" when drowsy;
+      - a heart after a nice visitor chat.
+- [ ] **Less time in companion mode.** More things to do on his own:
+      - the training dummy (`Training Dummy Real Anim`, sharedassets321);
+      - chasing a lumafly across windows;
+      - sitting on a window edge taking in the view;
+      - swapping charms on a bench;
+      - stargazing at night;
+      - the lantern raised on dark-themed windows (exists; tune how often it happens).
+
+## 3. Visitor scenes
+
+- [ ] **Cornifer:** they sit down together and both open their maps for a while, reviewing
+      them (he hums).
+- [ ] **Grimm, friendly:** appears with a flourish, bows, taunts, teleports a couple of
+      times and leaves. Sometimes he leaves the scarlet flame behind as a hint at the
+      secret.
+- [ ] **Hornet: race and duel, both** (50/50 at first; drop one if it doesn't hold up).
+      - Race: she throws her needle and silk to mark the finish, and they race across the
+        windows.
+      - Duel: a short spar; she wins and leaves.
+- [ ] **Quirrel** sits on a ledge beside the knight, admiring the view.
+- [ ] **Myla** sings while mining next to a Geo deposit.
+- [ ] **New achievements** for each scene.
+
+## 4. Achievements: everyone can reach 100 %
+
+- [ ] **Remove anything that needs specific hardware or software:**
+      - multi-monitor ones: "Border Crossing" (crystal dash across monitors) and "Air Mail"
+        (thrown onto another monitor);
+      - review "Not My Kind of Game" (needs a detected fullscreen game);
+      - review anything else tied to hardware or a particular app.
+- [ ] Achievements stay locked in sandbox sessions (see 5).
+
+## 5. Public release (GitHub), last: ship a more complete pet first
 
 - [ ] **Legit install required, art extracted locally.** No game art or text ever ships.
       - On first run, look for Hollow Knight at the default Steam location (all Steam
@@ -69,47 +110,6 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
       - an opt-in crash/log file the user can attach to an issue;
       - settings and achievements that survive updates.
 - [ ] Make the repo page public when ready.
-
-## 3. Expression and variety
-
-- [ ] **Expression bubbles** (small, in an HK style, never noisy):
-      - "…" when bored;
-      - an anger mark when there are enemies or a cursor to fight;
-      - "!" on spotting the Shade, Geo or a flame;
-      - "?" when he can't reach something;
-      - "z" when drowsy;
-      - a heart after a nice visitor chat.
-- [ ] **Less time in companion mode.** More things to do on his own:
-      - the training dummy (`Training Dummy Real Anim`, sharedassets321);
-      - chasing a lumafly across windows;
-      - sitting on a window edge taking in the view;
-      - swapping charms on a bench;
-      - stargazing at night;
-      - the lantern raised on dark-themed windows (exists; tune how often it happens).
-
-## 4. Visitor scenes
-
-- [ ] **Cornifer:** they sit down together and both open their maps for a while, reviewing
-      them (he hums).
-- [ ] **Grimm, friendly:** appears with a flourish, bows, taunts, teleports a couple of
-      times and leaves. Sometimes he leaves the scarlet flame behind as a hint at the
-      secret.
-- [ ] **Hornet: race and duel, both** (50/50 at first; drop one if it doesn't hold up).
-      - Race: she throws her needle and silk to mark the finish, and they race across the
-        windows.
-      - Duel: a short spar; she wins and leaves.
-- [ ] **Quirrel** sits on a ledge beside the knight, admiring the view.
-- [ ] **Myla** sings while mining next to a Geo deposit.
-- [ ] **New achievements** for each scene.
-
-## 5. Achievements: everyone can reach 100 %
-
-- [ ] **Remove anything that needs specific hardware or software:**
-      - multi-monitor ones: "Border Crossing" (crystal dash across monitors) and "Air Mail"
-        (thrown onto another monitor);
-      - review "Not My Kind of Game" (needs a detected fullscreen game);
-      - review anything else tied to hardware or a particular app.
-- [ ] Achievements stay locked in sandbox sessions (see 2).
 
 ## 6. Parked
 
