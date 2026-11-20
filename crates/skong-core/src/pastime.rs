@@ -69,6 +69,9 @@ pub struct Dummy {
     /// [`Yard::clock`] when it turned up and when it starts fading away.
     pub born: f64,
     pub leave_at: f64,
+    /// The user put it there (the Test tab placed it, or it was dragged): it stays, even
+    /// where he can't get to it (see [`Yard::relocatable`]).
+    pub pinned: bool,
 }
 
 /// The dummy on screen this frame.
@@ -155,10 +158,33 @@ impl Yard {
         self.next_id += 1;
         let [lo, hi] = rules.stay_secs;
         let stay = lo + (hi - lo).max(0.0) * self.mix.f32();
-        self.dummy = Some(Dummy { id, spot, born: self.clock, leave_at: self.clock + stay as f64 });
+        self.dummy = Some(Dummy { id, spot, born: self.clock, leave_at: self.clock + stay as f64, pinned: false });
         self.pending.clear();
         self.landed.clear();
         id
+    }
+
+    /// The user put dummy `id` where it stands (the Test tab): it stays there.
+    pub fn pin(&mut self, id: u64) {
+        if let Some(d) = self.dummy.as_mut().filter(|d| d.id == id) {
+            d.pinned = true;
+        }
+    }
+
+    /// The user dragged dummy `id` to `spot`: same dummy (and stay), new place, pinned there.
+    /// Blows on their way miss.
+    pub fn moved(&mut self, id: u64, spot: Spot) -> bool {
+        let Some(d) = self.dummy.as_mut().filter(|d| d.id == id) else { return false };
+        d.spot = spot;
+        d.pinned = true;
+        self.pending.clear();
+        true
+    }
+
+    /// May dummy `id` be moved elsewhere (or sent away) when he can't get to it? Not one the
+    /// user put where it is.
+    pub fn relocatable(&self, id: u64) -> bool {
+        self.dummy.is_some_and(|d| d.id == id && !d.pinned)
     }
 
     /// A blow lands after `delay` seconds (the swing / the fireball's flight).
@@ -732,6 +758,31 @@ mod tests {
         let (d, t) = desk(vec![w]);
         assert!(yard.shown(&d, &t, 40.0, &|_| true).is_none());
         assert!(yard.dummy().is_none());
+    }
+
+    #[test]
+    fn a_dragged_dummy_stays_where_the_user_dropped_it() {
+        let rules = DummyRules::default();
+        let w = WindowInfo { id: 7, rect: RectI::new(300, 400, 1200, 900), title: String::new(), class: String::new(), process: "x.exe".into(), pid: 1, maximized: false, fullscreen: false, foreground: false, topmost: false };
+        let (d, t) = desk(vec![w]);
+        let mut yard = Yard::new(3, &rules);
+        let id = yard.add(Spot::Ground { pos: Vec2::new(500.0, 1040.0) }, &rules);
+        assert!(yard.relocatable(id), "one the schedule put up may be moved when he can't reach it");
+        let leave_at = yard.dummy().unwrap().leave_at;
+        yard.strike(DummyHit { heavy: false, from_right: true }, 0.5);
+        // Dragged onto the window's title bar: same dummy and stay, the new spot, pinned.
+        assert!(yard.moved(id, Spot::Window { id: 7, anchor: crate::discovery::Anchor { fx: 0.5, dy: 0.0 } }));
+        let s = yard.shown(&d, &t, 40.0, &|_| true).expect("on the title bar");
+        assert_eq!((s.id, s.pos), (id, Vec2::new(750.0, 400.0)));
+        assert_eq!(yard.dummy().unwrap().leave_at, leave_at);
+        assert!(!yard.relocatable(id), "never moved away from where the user put it");
+        yard.due(1.0, true, &rules);
+        assert!(yard.take_landed().is_empty(), "the blow aimed at the old spot misses");
+        // The Test tab's placement pins it too; another id is not this dummy.
+        let id2 = yard.add(Spot::Ground { pos: Vec2::new(500.0, 1040.0) }, &rules);
+        assert!(!yard.moved(id, Spot::Ground { pos: Vec2::ZERO }));
+        yard.pin(id2);
+        assert!(!yard.relocatable(id2));
     }
 
     #[test]

@@ -9,7 +9,7 @@ use skong_core::controller::Character;
 use skong_core::geom::Vec2;
 use skong_core::props::{Bench, BenchStyle, load_bench_styles};
 use skong_core::terrain::{LedgeKind, Terrain};
-use skong_win::sprite_window::SpriteWindow;
+use skong_win::sprite_window::{MouseEvent, SpriteWindow};
 
 /// Sitting clips (Sit, Sit Idle, Sitting Asleep, Sit Map …) put the seat line this far below
 /// the sprite origin, in game units (y down). Tuned visually on the Dirtmouth bench at
@@ -36,6 +36,9 @@ pub struct Benches {
     scaled: Vec<Option<Image>>,
     scale: f32,
     pub placed: Vec<(Bench, SpriteWindow)>,
+    /// The bench the user is carrying (or that is falling from their hand): it rides no
+    /// window, claims no room, and the knight doesn't count on it meanwhile.
+    held: Option<usize>,
     /// Debug: let screenshots see bench windows.
     pub capturable: bool,
 }
@@ -55,7 +58,7 @@ impl Benches {
             .collect::<Vec<_>>();
         let available = src.iter().filter(|s| s.is_some()).count();
         log::info!("benches: {available}/{} styles available", styles.len());
-        let mut b = Benches { styles, scaled: vec![None; src.len()], src, scale: 0.0, placed: Vec::new(), capturable: false };
+        let mut b = Benches { styles, scaled: vec![None; src.len()], src, scale: 0.0, placed: Vec::new(), held: None, capturable: false };
         b.rescale(scale);
         Ok(b)
     }
@@ -102,11 +105,71 @@ impl Benches {
 
     pub fn clear(&mut self) {
         self.placed.clear();
+        self.held = None;
+    }
+
+    /// Mouse events on the bench windows since the last call (bench index; the user's
+    /// hand, see `app/drag.rs`). Only the art's opaque pixels catch the mouse.
+    pub fn take_mouse(&self) -> Vec<(usize, MouseEvent)> {
+        self.placed.iter().enumerate().flat_map(|(i, (_, w))| w.take_mouse().into_iter().map(move |e| (i, e))).collect()
+    }
+
+    /// Bench `i`'s foot (bottom centre).
+    pub fn foot(&self, i: usize) -> Option<Vec2> {
+        self.placed.get(i).map(|(b, _)| b.pos)
+    }
+
+    /// Half the width of bench `i`'s art (px).
+    pub fn half_width(&self, i: usize) -> f32 {
+        let style = self.placed.get(i).map_or(0, |(b, _)| b.style);
+        self.art(style).map_or(60.0 * self.scale, |img| 0.5 * img.width as f32)
+    }
+
+    /// The user picked bench `i` up.
+    pub fn pick_up(&mut self, i: usize) -> bool {
+        if i >= self.placed.len() {
+            return false;
+        }
+        self.held = Some(i);
+        self.placed[i].0.owner = None;
+        true
+    }
+
+    /// Carried / falling: bench `i`'s foot is at `foot`.
+    pub fn hold(&mut self, i: usize, foot: Vec2) {
+        if self.held != Some(i) {
+            return;
+        }
+        let Some((b, w)) = self.placed.get_mut(i) else { return };
+        b.pos = foot;
+        if let Some(img) = &self.scaled[b.style] {
+            let _ = w.move_to((b.pos.x - img.width as f32 * 0.5).round() as i32, (b.pos.y - img.height as f32).round() as i32);
+        }
+    }
+
+    /// Bench `i` landed at `foot` on window `owner`'s edge (`None`: the floor). It rides that
+    /// window from now on.
+    pub fn set_down(&mut self, i: usize, foot: Vec2, owner: Option<skong_core::desktop::WindowId>) {
+        self.hold(i, foot);
+        if self.held == Some(i) {
+            self.held = None;
+            if let Some((b, _)) = self.placed.get_mut(i) {
+                b.owner = owner;
+            }
+        }
+    }
+
+    /// Feet of the benches standing (not the one in the user's hand), for the brain.
+    pub fn standing(&self) -> Vec<Vec2> {
+        self.placed.iter().enumerate().filter(|(i, _)| self.held != Some(*i)).map(|(_, (b, _))| b.pos).collect()
     }
 
     /// Keep benches on their windows; move their windows when they moved.
     pub fn follow(&mut self, old: &Terrain, new: &Terrain) {
-        for (b, w) in &mut self.placed {
+        for (i, (b, w)) in self.placed.iter_mut().enumerate() {
+            if self.held == Some(i) {
+                continue; // in the user's hand
+            }
             let before = b.pos;
             b.follow(old, new);
             if b.pos != before
@@ -130,6 +193,9 @@ impl Benches {
         use skong_core::occupancy::{ClaimKey, ClaimKind};
         occ.release_kind(ClaimKind::Bench);
         for (i, (b, _)) in self.placed.iter().enumerate() {
+            if self.held == Some(i) {
+                continue;
+            }
             if let Some(img) = &self.scaled[b.style] {
                 let (w, h) = (img.width as f32, img.height as f32);
                 let r = skong_core::geom::RectF::new(b.pos.x - w * 0.5, b.pos.y - h, b.pos.x + w * 0.5, b.pos.y);
@@ -157,7 +223,7 @@ impl Benches {
         self.placed
             .iter()
             .enumerate()
-            .filter(|(_, (b, _))| (b.pos.y - s.y).abs() < 1.0 && b.pos.x >= s.x0 && b.pos.x <= s.x1)
+            .filter(|(i, (b, _))| self.held != Some(*i) && (b.pos.y - s.y).abs() < 1.0 && b.pos.x >= s.x0 && b.pos.x <= s.x1)
             .min_by(|a, b| (a.1.0.pos.x - ch.pos.x).abs().total_cmp(&(b.1.0.pos.x - ch.pos.x).abs()))
             .map(|(i, _)| i)
     }

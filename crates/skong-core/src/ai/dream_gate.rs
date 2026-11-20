@@ -343,7 +343,7 @@ impl DreamGate {
     /// The prize is still there.
     fn prize_here(&self, ctx: &Ctx) -> bool {
         match self.wish.prize {
-            Prize::Visitor(id) => ctx.senses.visitors.iter().any(|v| v.id == id && !v.greeted && v.state != VisitorState::Leaving),
+            Prize::Visitor(id) => ctx.senses.visitors.iter().any(|v| v.id == id && !v.greeted && !matches!(v.state, VisitorState::Leaving | VisitorState::Held)),
             Prize::Shade => ctx.stakes.sense.shade.is_some(),
             Prize::Coin => ctx.stakes.sense.coins.iter().any(|c| c.distance(self.wish.target) < 12.0),
             Prize::Deposit(id) => ctx.interest.places.get(id).is_some(),

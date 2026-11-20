@@ -14,12 +14,12 @@ use skong_core::assets::{Atlas, read_json};
 use skong_core::canvas::{Image, over, premul};
 use skong_core::controller::Character;
 use skong_core::desktop::{DesktopSnapshot, WindowId};
-use skong_core::discovery::{self, DepositDrop, FindId, FindKind, Footprint, LASTING_SECS, Rules, Shown, Site, World};
+use skong_core::discovery::{self, DepositDrop, FindId, FindKind, FindSpot, Footprint, LASTING_SECS, Rules, Shown, Site, World};
 use skong_core::geom::{RectI, Vec2};
 use skong_core::lasting::LedgeAges;
 use skong_core::occupancy::Occupancy;
 use skong_core::terrain::Terrain;
-use skong_win::sprite_window::SpriteWindow;
+use skong_win::sprite_window::{MouseEvent, SpriteWindow};
 
 use crate::benches::Benches;
 use crate::fx::Fx;
@@ -252,6 +252,9 @@ pub struct Discoveries {
     pub capturable: bool,
     /// Regions ([`REGIONS`] index) of the Geo rocks broken since the pet last looked.
     pub mined: Vec<usize>,
+    /// The find in the user's hand (or falling from it) and its foot: drawn there, not
+    /// claimed, not known to the brain until it lands.
+    held: Option<(FindId, Vec2)>,
 }
 
 /// How many regions Geo rocks come from.
@@ -304,6 +307,12 @@ fn window_region(desk: &DesktopSnapshot, id: WindowId) -> usize {
     desk.window(id).and_then(discovery::app_key).map_or(FALLBACK_REGION, |k| region_of(&k))
 }
 
+/// The region of find `id`'s rocks: its room's app (a rock dragged onto the floor keeps
+/// its look; one dragged into another app's window takes that app's).
+fn find_region(world: &World, id: FindId) -> usize {
+    world.room_of(id).map_or(FALLBACK_REGION, region_of)
+}
+
 impl Discoveries {
     pub fn load(data: &Path, props_json: &Path, vanilla: Option<&Path>, scale: f32) -> Discoveries {
         let names = read_json::<PropsFile>(props_json).map(|p| p.discoveries).unwrap_or_default();
@@ -335,6 +344,7 @@ impl Discoveries {
             relocate_checked: 0.0,
             capturable: false,
             mined: Vec::new(),
+            held: None,
         };
         d.rescale(scale);
         d
@@ -418,7 +428,17 @@ impl Discoveries {
             }
         }
         raw.retain(|s| !self.game_monitors.iter().any(|m| m.contains(s.pos.x as i32, s.pos.y as i32 - 1)));
-        let shown = discovery::settle(raw, occ, &fp);
+        // In the user's hand: where the hand is (not settled against the others, no claim).
+        let held = self.held.and_then(|(id, at)| {
+            let p = self.props.iter().find(|p| p.shown.id == id)?;
+            Some(Shown { pos: at, span: (at.x, at.x), ..p.shown })
+        });
+        if self.held.is_some() && held.is_none() {
+            self.held = None; // gone meanwhile (broken, forgotten)
+        }
+        raw.retain(|s| held.is_none_or(|h| h.id != s.id));
+        let mut shown = discovery::settle(raw, occ, &fp);
+        shown.extend(held);
 
         self.props.retain(|p| {
             let keep = shown.iter().any(|s| s.id == p.shown.id);
@@ -435,8 +455,10 @@ impl Discoveries {
                     if p.shown.pos != s.pos {
                         p.dirty = true;
                     }
-                    if p.shown.window != s.window {
-                        p.region = window_region(desk, s.window);
+                    let region = find_region(&self.world, s.id);
+                    if p.region != region {
+                        p.region = region;
+                        p.dirty = true;
                     }
                     p.shown = *s;
                     if fresh_seen {
@@ -446,13 +468,13 @@ impl Discoveries {
                 None => {
                     let Ok(win) = SpriteWindow::new() else { continue };
                     win.set_capturable(self.capturable);
-                    win.set_click_through(true);
+                    // Its opaque pixels catch the mouse: the user can pick it up.
                     log::debug!("discoveries: {} #{} shown at ({:.0},{:.0})", s.kind.label(), s.id, s.pos.x, s.pos.y);
                     let revealed = self.reveals.iter().find(|r| r.0 == s.id).map(|r| r.1);
                     if revealed.is_some() {
                         fx.spawn(REVEAL_FX, s.pos, knight.pos.x < s.pos.x);
                     }
-                    let region = window_region(desk, s.window);
+                    let region = find_region(&self.world, s.id);
                     if s.kind == FindKind::Deposit {
                         log::debug!("discoveries: deposit #{} is a {} rock", s.id, REGIONS[rocks_for(&self.rocks, region).0].name);
                     }
@@ -487,9 +509,71 @@ impl Discoveries {
     /// Hide everything on monitors running a fullscreen game (like `Benches::hide_on`).
     pub fn hide_on(&mut self, game_monitors: &[RectI]) {
         self.game_monitors = game_monitors.to_vec();
-        let on_game = |s: &Shown| game_monitors.iter().any(|m| m.contains(s.pos.x as i32, s.pos.y as i32 - 1));
+        let held = self.held.map(|h| h.0);
+        let on_game = |s: &Shown| held != Some(s.id) && game_monitors.iter().any(|m| m.contains(s.pos.x as i32, s.pos.y as i32 - 1));
         self.props.retain(|p| !on_game(&p.shown));
         self.shown.retain(|s| !on_game(s));
+    }
+
+    /// Mouse events on the finds' windows since the last call: (find, a bench?, event) (the
+    /// user's hand, `app/drag.rs`). Only the art's opaque pixels catch the mouse.
+    pub fn take_mouse(&self) -> Vec<(FindId, bool, MouseEvent)> {
+        self.props.iter().flat_map(|p| {
+            let bench = matches!(p.shown.kind, FindKind::Bench { .. });
+            p.win.take_mouse().into_iter().map(move |e| (p.shown.id, bench, e))
+        })
+        .collect()
+    }
+
+    /// Where find `id` stands (or hangs in the user's hand).
+    pub fn foot(&self, id: FindId) -> Option<Vec2> {
+        match self.held {
+            Some((h, at)) if h == id => Some(at),
+            _ => self.props.iter().find(|p| p.shown.id == id).map(|p| p.shown.pos),
+        }
+    }
+
+    /// Half the width of find `id` on screen (px).
+    pub fn half_width(&self, id: FindId, benches: &Benches) -> f32 {
+        let kind = self.world.find(id).map_or(FindKind::Deposit, |f| f.kind);
+        0.5 * footprint(self.scale, benches, self.deposit_box, kind).w
+    }
+
+    /// The user picked find `id` up (the brain loses sight of it until it lands).
+    pub fn pick_up(&mut self, id: FindId) -> bool {
+        let Some(at) = self.foot(id) else { return false };
+        self.held = Some((id, at));
+        true
+    }
+
+    /// Carried / falling: its foot is at `foot`.
+    pub fn hold(&mut self, foot: Vec2) {
+        if let Some((_, at)) = self.held.as_mut() {
+            *at = foot;
+        }
+    }
+
+    /// Find `id` landed at `at` on window `owner`'s edge (`None`: the floor): anchored there
+    /// (see [`World::move_find`]), its visits and hits kept, saved. Returns the app whose
+    /// room it is in now.
+    pub fn set_down(&mut self, id: FindId, at: Vec2, owner: Option<WindowId>, (desk, terrain): (&DesktopSnapshot, &Terrain)) -> Option<String> {
+        if self.held.is_some_and(|h| h.0 == id) {
+            self.held = None;
+        }
+        let spot = match owner {
+            Some(w) => FindSpot::Window { id: w, at },
+            None => FindSpot::Floor { at },
+        };
+        let moved = self.world.move_find(id, spot, desk, terrain, &self.rules);
+        if moved {
+            self.save();
+            // Its prop shows there right away (a fresh line resolves once settled).
+            if let Some(p) = self.props.iter_mut().find(|p| p.shown.id == id) {
+                p.shown.pos = at;
+                p.dirty = true;
+            }
+        }
+        moved.then(|| self.world.room_of(id).unwrap_or("?").to_string())
     }
 
     /// How long each surface has lasted, and the clock it is measured on (shinies use the
@@ -524,13 +608,17 @@ impl Discoveries {
 
     /// Found benches' standing spots (they count as benches for the brain).
     pub fn bench_spots(&self) -> impl Iterator<Item = Vec2> + '_ {
-        self.shown.iter().filter(|s| matches!(s.kind, FindKind::Bench { .. })).map(|s| s.pos)
+        self.shown.iter().filter(|s| matches!(s.kind, FindKind::Bench { .. }) && !self.is_held(s.id)).map(|s| s.pos)
+    }
+
+    fn is_held(&self, id: FindId) -> bool {
+        self.held.is_some_and(|h| h.0 == id)
     }
 
     /// Where the knight would sit right now on a found bench.
     pub fn seat_here(&self, ch: &Character, benches: &Benches) -> Option<f32> {
         let sup = ch.support.as_ref().filter(|_| ch.is_grounded())?;
-        self.shown.iter().filter(|s| (s.pos.y - sup.y).abs() < 1.0 && (s.pos.x - ch.pos.x).abs() < 6.0).find_map(|s| match s.kind {
+        self.shown.iter().filter(|s| !self.is_held(s.id) && (s.pos.y - sup.y).abs() < 1.0 && (s.pos.x - ch.pos.x).abs() < 6.0).find_map(|s| match s.kind {
             FindKind::Bench { style } => {
                 let h = benches.art(style).map_or(0.0, |i| i.height as f32);
                 Some(s.pos.y - h * benches.styles.get(style).map_or(0.45, |st| st.seat))
@@ -543,7 +631,7 @@ impl Discoveries {
     pub fn places(&self) -> Vec<KnownPlace> {
         // Only finds that still exist (a broken rock lingers on screen a moment; the knight
         // must not keep swinging at it).
-        let live: Vec<Shown> = self.shown.iter().filter(|s| self.world.find(s.id).is_some()).copied().collect();
+        let live: Vec<Shown> = self.shown.iter().filter(|s| self.world.find(s.id).is_some() && !self.is_held(s.id)).copied().collect();
         discovery::known_places(
             &live,
             |id| self.reveals.iter().any(|r| r.0 == id),
@@ -670,6 +758,7 @@ impl Discoveries {
 
     pub fn forget(&mut self) {
         self.world.clear();
+        self.held = None;
         self.props.clear();
         self.shown.clear();
         self.save();

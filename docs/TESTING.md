@@ -188,6 +188,43 @@ Pick a visitor in the drop-down, or use the "Every scene" row.
 - [ ] On its own: exploring a new app's window may reveal a bench or deposit (persisted);
       shinies now and then on lasting ledges.
 
+## Dragging props & visitors
+
+Draggable: the training dummy, visitors, Geo deposits, benches (placed and found). Not:
+enemies, Grimm and his flames (the scarlet flame's click still summons him), the Shade,
+Geo coins, shinies, lumaflies. Press on one and move a few px → picked up; let go → it
+falls onto the first ledge below that's wide enough for it (a title bar, the floor, or a
+content line that has settled); over a fullscreen game's monitor it drops onto the nearest
+other monitor instead. A plain click does nothing.
+
+- [ ] **Hit-testing**: click a *transparent* part of a prop's / visitor's box (beside the
+      dummy's pole, around a bench's legs) → the click reaches the window under it; click
+      the art itself → nothing happens (no click on the app below) · *look for* soft edges
+      (semi-transparent pixels catch the mouse too), the cursor never moving.
+- [ ] **Training dummy**: drag it (it wobbles when lifted, thuds on landing) onto another
+      window / the floor → it stays there, never moved away by itself; the log has "training
+      dummy #… stays where it was dropped; he'll go and practise there" or "… he can't
+      practise there …", and the brain's own verdict line again · *look for* the grab offset
+      (it hangs from where you took it), the fall speed, the foot on the ledge.
+- [ ] **Visitor, waiting**: pick them up → a surprised line in their voice, the knight's
+      "!" (and he turns to look when free); drop them elsewhere → they wait, he runs over
+      and they talk as usual.
+- [ ] **Visitor, mid-talk**: pick them up during the 2nd line → the bubble closes, their
+      surprised line; set down → he comes over again (or talks from nearby) and the talk
+      goes on from the line it stopped at (no fresh conversation).
+- [ ] **Visitor, mid-lesson / spar / calm scene / Hornet's race or duel**: pick them up →
+      the scene ends at once (no stuck knight, no needle left behind); set down → a parting
+      line ("set_down" in `data/npcs.json`), then they leave as usual · *look for* the
+      knight going back to his own business, Zote's held-back goodbye not said.
+- [ ] **Geo deposit**: half-mine one (1–2 hits), drag it onto another app's window → it
+      rides that window and takes that app's region's rock look; the remaining hits are
+      kept; it's still there after a restart (`world.json`). Onto the floor → it lies there
+      (same look), whatever windows open or close. Never on a fullscreen window / the pet's
+      own windows (it falls past them).
+- [ ] **Benches**: drag a placed bench (📍 Bench) or a found one while he **sits** on it →
+      he gets up first; the bench lands and rides its new window; he may come back and sit.
+- [ ] **Interior Decorator**: five different things dragged and set down → unlocked.
+
 ## Knight
 
 - [ ] **Kill him** → death, a Shade where he fell holding his Geo, respawn; ~4 s later he

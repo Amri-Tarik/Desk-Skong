@@ -74,8 +74,31 @@ pub enum NpcPhase {
     Company,
     /// Hornet's race.
     Racing,
+    /// Picked up by the user (carried or falling).
+    Held,
     Leaving,
     Gone,
+}
+
+/// A conversation's lines: (text, the knight's react act).
+type Lines = Vec<(String, Option<String>)>;
+
+/// What a visitor goes back to once the user sets them down (see [`Npc::grab`]).
+#[derive(Clone, Debug)]
+enum AfterHeld {
+    /// Was arriving: done arriving, waits for the knight.
+    Arrive,
+    /// Was waiting: waits on (this much of their stay left).
+    Wait { left: f32 },
+    /// Was lingering after the talk: lingers on, then leaves.
+    Linger { left: f32 },
+    /// Was talking: waits for the knight to come over again, then picks up at line `i`.
+    Talk { lines: Lines, i: usize },
+    /// Was in a lesson, spar, calm scene or challenge (ended at the grab): a parting word,
+    /// then leaves.
+    Part,
+    /// Was leaving: leaves.
+    Leave,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -105,6 +128,8 @@ enum State {
     Lingering { left: f32 },
     /// `hold`: seconds of the leave clip still to play before moving / fading.
     Exit { to_x: Option<f32>, hold: f32 },
+    /// In the user's hand (or falling from it): the app moves them.
+    Held { after: AfterHeld },
     Gone,
 }
 
@@ -256,6 +281,9 @@ pub struct Npc {
     farewell: Option<String>,
     /// White hit flash (sparring), 1 → 0.
     pub flash: f32,
+    /// A conversation the user interrupted (picked them up): the lines and where it
+    /// stopped, picked up again when the knight comes back to talk.
+    resume: Option<(Lines, usize)>,
 }
 
 const FADE_IN: f32 = 0.4;
@@ -265,6 +293,10 @@ const GAP: f32 = 0.5;
 const DRILL_GAP: f32 = 0.6;
 /// A lesson ends after this many drills in a row the knight never did.
 const MAX_MISSES: u32 = 2;
+/// Set down while waiting, they wait at least this much longer (s): time for him to come.
+const MIN_WAIT_AFTER_HELD: f32 = 20.0;
+/// Set down mid-talk, they wait this long for him to come back and go on (s).
+const RESUME_PATIENCE: f32 = 45.0;
 
 impl Npc {
     pub fn new(id: u32, def: usize, set: &NpcSet, at: Placement, seed: u32, ppu: f32) -> Self {
@@ -300,6 +332,7 @@ impl Npc {
             challenge_plan: None,
             farewell: None,
             flash: 0.0,
+            resume: None,
         }
     }
 
@@ -314,6 +347,7 @@ impl Npc {
             State::Challenge(ref c) if c.is_race() => NpcPhase::Racing,
             State::Challenge(_) => NpcPhase::Sparring,
             State::Exit { .. } => NpcPhase::Leaving,
+            State::Held { .. } => NpcPhase::Held,
             State::Gone => NpcPhase::Gone,
         }
     }
@@ -356,12 +390,24 @@ impl Npc {
     /// a challenge planned (call [`Self::plan_spar`] / [`Self::plan_challenge`] first), the
     /// closing line is held back: talk → challenge → fight → outcome → that line.
     pub fn begin_talk(&mut self, mut lines: Vec<(String, Option<String>)>, knight_x: f32, set: &NpcSet, events: &mut Vec<NpcEvent>) -> bool {
-        if !self.can_talk() || lines.is_empty() {
+        if !self.can_talk() {
             return false;
         }
-        self.farewell = None;
-        if (self.spar_planned || self.challenge_plan.is_some()) && lines.len() >= 2 {
-            self.farewell = lines.pop().map(|l| l.0);
+        // Picked up mid-conversation: carry on where it stopped (the scene planned after it
+        // and the held-back closing line were settled before).
+        let resumed = self.resume.take().map(|(rest, i)| rest.into_iter().skip(i).collect::<Vec<_>>()).filter(|l| !l.is_empty());
+        let fresh = resumed.is_none();
+        if let Some(rest) = resumed {
+            lines = rest;
+        }
+        if lines.is_empty() {
+            return false;
+        }
+        if fresh {
+            self.farewell = None;
+            if (self.spar_planned || self.challenge_plan.is_some()) && lines.len() >= 2 {
+                self.farewell = lines.pop().map(|l| l.0);
+            }
         }
         self.knight_right = knight_x > self.pos.x;
         self.looking_right = self.knight_right;
@@ -393,6 +439,11 @@ impl Npc {
 
     /// Leave now (e.g. nobody can reach us, or the app shuts visits off).
     pub fn leave(&mut self, set: &NpcSet, env: &NpcEnv, events: &mut Vec<NpcEvent>) {
+        if let State::Held { after } = &mut self.state {
+            // In the user's hand: they go once set down.
+            *after = AfterHeld::Leave;
+            return;
+        }
         if !matches!(self.state, State::Exit { .. } | State::Gone) {
             if matches!(self.state, State::Talking { .. } | State::Teaching(_) | State::Sparring(_) | State::Company(_)) {
                 events.push(NpcEvent::LineDone);
@@ -428,6 +479,143 @@ impl Npc {
         let mut body = Body { pos: &mut self.pos, looking_right: &mut self.looking_right, alpha: &mut self.alpha, flash: &mut self.flash, anim: &mut self.anim, lib: set.lib(self.def), rng: &mut self.rng };
         c.abandon(def, &mut body, events);
         true
+    }
+
+    /// The user picked them up (the app carries them now, see [`Self::hold_at`], and sets
+    /// them down with [`Self::set_down`]). Whatever was going on stops gracefully: a talk
+    /// pauses (it picks up where it stopped once the knight comes back over); a lesson, a
+    /// spar, a calm scene or one of Hornet's challenges ends (cut short / called off) and
+    /// they take their leave once down; arriving, waiting, lingering and leaving go on
+    /// afterwards. They say one of their `handled.picked_up` lines. `false`: they're gone
+    /// (nothing to pick up).
+    pub fn grab(&mut self, set: &NpcSet, events: &mut Vec<NpcEvent>) -> bool {
+        match self.state {
+            State::Gone => return false,
+            State::Held { .. } => return true,
+            _ => {}
+        }
+        // A talk keeps its closing line if no challenge follows any more.
+        if matches!(self.state, State::Talking { .. }) {
+            self.call_off(set, events);
+            self.company = None; // the calm scene was planned for where they stood
+        }
+        let mut over = Vec::new();
+        if matches!(self.state, State::Challenge(_)) {
+            // Called off (its outcome events); her own parting word waits until she's down.
+            self.call_off(set, &mut over);
+            over.retain(|e| !matches!(e, NpcEvent::Say { .. }));
+        }
+        let state = std::mem::replace(&mut self.state, State::Gone);
+        let after = match state {
+            State::Enter { .. } | State::Landing { .. } => AfterHeld::Arrive,
+            State::Waiting { left, .. } => AfterHeld::Wait { left },
+            State::Lingering { left } => AfterHeld::Linger { left },
+            State::Talking { lines, i, .. } => AfterHeld::Talk { lines, i },
+            State::Teaching(_) => {
+                over.push(NpcEvent::LessonOver { finished: false });
+                AfterHeld::Part
+            }
+            State::Sparring(_) => {
+                over.push(NpcEvent::SparOver { lost: false });
+                AfterHeld::Part
+            }
+            State::Company(_) => {
+                over.push(NpcEvent::CompanyOver { finished: false });
+                AfterHeld::Part
+            }
+            State::Challenge(_) => AfterHeld::Part,
+            State::Exit { .. } => AfterHeld::Leave,
+            // (Returned above.)
+            State::Held { after } => after,
+            State::Gone => AfterHeld::Leave,
+        };
+        if matches!(after, AfterHeld::Part) {
+            self.lesson = None;
+            self.spar_planned = false;
+            self.challenge_plan = None;
+            self.farewell = None;
+        }
+        events.push(NpcEvent::LineDone);
+        events.extend(over);
+        self.vy = None;
+        self.owner = None;
+        self.flash = 0.0;
+        if !matches!(after, AfterHeld::Leave) {
+            self.alpha = 1.0;
+        }
+        let c = &set.clips[self.def];
+        self.anim.play(set.lib(self.def), c.idle, false);
+        let lines = &set.defs[self.def].handled.picked_up;
+        if !lines.is_empty() {
+            let text = lines[self.rng.next_u32() as usize % lines.len()].clone();
+            events.push(NpcEvent::Say { secs: crate::bubble::read_secs(&text).min(2.5), text });
+        }
+        self.state = State::Held { after };
+        true
+    }
+
+    /// Carried: their feet are at `feet` now.
+    pub fn hold_at(&mut self, feet: Vec2) {
+        if matches!(self.state, State::Held { .. }) {
+            self.pos = feet;
+        }
+    }
+
+    /// Picked up by the user and not yet set down.
+    pub fn held(&self) -> bool {
+        matches!(self.state, State::Held { .. })
+    }
+
+    /// A paused conversation waits for the knight (see [`Self::grab`]).
+    pub fn resuming(&self) -> bool {
+        self.resume.is_some()
+    }
+
+    /// The user's drop landed: feet at `feet` on window `owner`'s edge (`None`: the floor).
+    /// They carry on with what they were doing (see [`Self::grab`]).
+    pub fn set_down(&mut self, feet: Vec2, owner: Option<WindowId>, set: &NpcSet, env: &NpcEnv, events: &mut Vec<NpcEvent>) {
+        let State::Held { after } = std::mem::replace(&mut self.state, State::Gone) else {
+            return;
+        };
+        self.pos = feet;
+        self.owner = owner;
+        self.vy = None;
+        self.resync_rel(env);
+        self.knight_right = env.knight.x > self.pos.x;
+        self.looking_right = self.knight_right;
+        let lib = set.lib(self.def);
+        self.state = match after {
+            AfterHeld::Arrive => self.start_wait(set),
+            AfterHeld::Wait { left } => match self.start_wait(set) {
+                State::Waiting { hum_in, .. } => State::Waiting { left: left.max(MIN_WAIT_AFTER_HELD), hum_in },
+                s => s,
+            },
+            AfterHeld::Talk { lines, i } => {
+                // Back to waiting for him: the knight comes over again (or talks from nearby).
+                self.resume = Some((lines, i));
+                match self.start_wait(set) {
+                    State::Waiting { hum_in, .. } => State::Waiting { left: RESUME_PATIENCE, hum_in },
+                    s => s,
+                }
+            }
+            AfterHeld::Linger { left } => {
+                self.anim.play(lib, set.clips[self.def].idle, false);
+                State::Lingering { left: left.max(1.0) }
+            }
+            AfterHeld::Part => {
+                self.anim.play(lib, set.clips[self.def].idle, false);
+                let lines = &set.defs[self.def].handled.set_down;
+                let mut left = 1.2;
+                if !lines.is_empty() {
+                    let text = lines[self.rng.next_u32() as usize % lines.len()].clone();
+                    let secs = crate::bubble::read_secs(&text);
+                    left += secs;
+                    events.push(NpcEvent::Say { text, secs });
+                }
+                State::Lingering { left }
+            }
+            AfterHeld::Leave => self.start_exit(set, env, events),
+        };
     }
 
     /// The knight's part in a scene with this visitor (Hornet's race).
@@ -500,6 +688,7 @@ impl Npc {
                 let s = match self.phase() {
                     NpcPhase::Arriving => VisitorState::Arriving,
                     NpcPhase::Waiting => VisitorState::Waiting,
+                    NpcPhase::Held => VisitorState::Held,
                     _ => VisitorState::Leaving,
                 };
                 (s, None, None)
@@ -636,6 +825,8 @@ impl Npc {
                     if self.alpha <= 0.0 { self.gone(events) } else { State::Exit { to_x, hold: 0.0 } }
                 }
             },
+            // The app carries them (and lets them fall): nothing of their own meanwhile.
+            State::Held { after } => State::Held { after },
             State::Gone => State::Gone,
         };
     }
@@ -1140,6 +1331,9 @@ impl Npc {
     fn follow(&mut self, env: &NpcEnv, dt: f32) {
         if matches!(&self.state, State::Challenge(c) if c.airborne()) {
             return; // mid-leap: her course carries her
+        }
+        if matches!(self.state, State::Held { .. }) {
+            return; // in the user's hand: the app moves them
         }
         if let Some(r) = self.owner.and_then(|id| env.terrain.window_rect(id))
             && self.vy.is_none()

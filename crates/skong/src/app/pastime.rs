@@ -86,8 +86,9 @@ impl Pet {
         if secs < DUMMY_UNREACHABLE_SECS || self.pastimes.dummy_id() != Some(id) {
             return;
         }
-        if self.pastimes.placed_by_user(id) {
-            // The test panel put it there on purpose: it stays (the brain logs why he ignores it).
+        if !self.pastimes.relocatable(id) {
+            // The user put it there on purpose (the Test tab, or dragged it): it stays (the
+            // brain logs why he ignores it).
             return;
         }
         log::info!("training dummy #{id}: the knight can't get to it ({secs:.0} s); moving it");

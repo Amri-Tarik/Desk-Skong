@@ -30,6 +30,8 @@ pub enum VisitorState {
     Company,
     /// Racing the knight after the talk (Hornet; the race itself is a [`super::SceneCue`]).
     Racing,
+    /// Picked up by the user (carried or falling): nobody to greet until they're down.
+    Held,
     Leaving,
 }
 
@@ -110,7 +112,7 @@ impl VisitorMemory {
     pub fn target<'v>(&self, visitors: &'v [Visitor], knight: Vec2, now: f64) -> Option<&'v Visitor> {
         visitors
             .iter()
-            .filter(|v| !v.greeted && v.state != VisitorState::Leaving && !self.snubbed.get(&v.id).is_some_and(|t| *t > now))
+            .filter(|v| !v.greeted && !matches!(v.state, VisitorState::Leaving | VisitorState::Held) && !self.snubbed.get(&v.id).is_some_and(|t| *t > now))
             .min_by(|a, b| {
                 let key = |v: &Visitor| (v.state != VisitorState::Talking, v.pos.distance(knight));
                 let (ka, kb) = (key(a), key(b));
@@ -192,7 +194,9 @@ impl Greet {
             return Status::Done;
         };
         let talking = v.state == VisitorState::Talking;
-        if v.state == VisitorState::Leaving || (v.greeted && !matches!(self.phase, Phase::Converse { .. })) {
+        // Picked up by the user: this greeting is over (once set down they're greeted
+        // afresh: he comes over again, or talks from nearby).
+        if matches!(v.state, VisitorState::Leaving | VisitorState::Held) || (v.greeted && !matches!(self.phase, Phase::Converse { .. })) {
             ctx.nav.stop();
             return Status::Done;
         }

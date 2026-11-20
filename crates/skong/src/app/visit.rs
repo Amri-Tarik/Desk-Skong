@@ -61,7 +61,7 @@ impl Pet {
     }
 
     /// Build the visitors' view of the world and run `f` on them.
-    fn with_visitors(&mut self, f: impl FnOnce(&mut Visitors, &World, &mut crate::fx::Fx)) {
+    pub(super) fn with_visitors(&mut self, f: impl FnOnce(&mut Visitors, &World, &mut crate::fx::Fx)) {
         let hold = self.challenge_hold();
         let Some(v) = self.visitors.as_mut() else { return };
         v.set_challenge_hold(hold);

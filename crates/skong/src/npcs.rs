@@ -26,7 +26,7 @@ use skong_core::npc::company::{CompanyNeeds, beside_deposit, high_up, seat_besid
 use skong_core::npc::forced::{self, CompanyWorld, ForcedScene, SeatCheck};
 use skong_core::portal::{Footing, Portal, PortalPhase, PortalSpot, PortalStyle, SpotOptions, arrival_footings, has_headroom, pick_spot};
 use skong_core::terrain::Terrain;
-use skong_win::sprite_window::SpriteWindow;
+use skong_win::sprite_window::{MouseEvent, SpriteWindow};
 
 use crate::bubble::{BubbleId, Bubbles, faded};
 use crate::fx::Fx;
@@ -307,8 +307,11 @@ impl Visitors {
         let ctx = TalkContext::from_desktop(w.desk, Some(w.hour));
         let def = self.live[i].npc.def;
         let Some(lines) = ctx.pick(&self.set.defs[def].conversations, &mut self.rng) else { return };
-        let forced = self.forced_scene.take();
-        if let Some(scene) = forced {
+        let forced = if self.live[i].npc.resuming() { None } else { self.forced_scene.take() };
+        if self.live[i].npc.resuming() {
+            // A talk the user interrupted (picked them up): it goes on where it stopped,
+            // with whatever was planned after it.
+        } else if let Some(scene) = forced {
             self.plan_forced(i, scene, &ctx, w);
         } else if let Some(l) = &self.set.defs[def].lesson
             && let Some(lesson) = Lesson::plan(l, &ctx, &mut self.rng)
@@ -361,6 +364,66 @@ impl Visitors {
         let Some(i) = self.live.iter().position(|l| l.npc.id == id) else { return };
         let mut events = Vec::new();
         self.live[i].npc.end_company(&self.set, &mut events);
+        self.handle_events(i, events, w);
+    }
+
+    /// Mouse events on the visitors' windows since the last call, by visitor id (the user's
+    /// hand, `app/drag.rs`). Only their art's opaque pixels catch the mouse.
+    pub fn take_mouse(&self) -> Vec<(u32, MouseEvent)> {
+        self.live.iter().flat_map(|l| l.win.take_mouse().into_iter().map(move |e| (l.npc.id, e))).collect()
+    }
+
+    /// Visitor `id`'s feet (or seat point), while they're here.
+    pub fn feet(&self, id: u32) -> Option<Vec2> {
+        self.live.iter().find(|l| l.npc.id == id && l.npc.phase() != NpcPhase::Gone).map(|l| l.npc.pos)
+    }
+
+    /// Half a visitor's width (px), for landing.
+    pub fn half_width(&self) -> f32 {
+        0.8 * self.ppu
+    }
+
+    /// The user picked visitor `id` up (see `Npc::grab`): what they were doing stops
+    /// gracefully, they say a word about it. `false`: no such visitor.
+    pub fn grab(&mut self, id: u32, w: &World) -> bool {
+        let Some(i) = self.live.iter().position(|l| l.npc.id == id) else { return false };
+        let mut events = Vec::new();
+        if !self.live[i].npc.grab(&self.set, &mut events) {
+            return false;
+        }
+        log::info!("visitor: the user picked up {} ({:?} before)", self.set.defs[self.live[i].npc.def].display, self.live[i].npc.phase());
+        self.handle_events(i, events, w);
+        true
+    }
+
+    /// Carried / falling: visitor `id`'s feet are at `feet` (their bubble follows).
+    pub fn hold(&mut self, id: u32, feet: Vec2) {
+        let Some(i) = self.live.iter().position(|l| l.npc.id == id) else { return };
+        self.live[i].npc.hold_at(feet);
+        if let Some(b) = self.live[i].bubble {
+            let anchor = self.head(&self.live[i].npc);
+            self.bubbles.follow(b, anchor);
+        }
+    }
+
+    /// Visitor `id` landed at `feet` on window `owner`'s edge (`None`: the floor): they go
+    /// on (a paused talk waits for the knight) or take their leave.
+    pub fn set_down(&mut self, id: u32, feet: Vec2, owner: Option<skong_core::desktop::WindowId>, w: &World) {
+        let Some(i) = self.live.iter().position(|l| l.npc.id == id) else { return };
+        let area = self.area_at(feet, w.desk);
+        let env = NpcEnv { terrain: w.terrain, knight: w.knight.pos, ppu: self.ppu, area };
+        let mut events = Vec::new();
+        self.live[i].npc.set_down(feet, owner, &self.set, &env, &mut events);
+        // Whatever they arrived beside is elsewhere now.
+        self.live[i].deposit = None;
+        let npc = &self.live[i].npc;
+        log::info!("visitor: {} set down at ({:.0},{:.0}): {}", self.set.defs[npc.def].display, feet.x, feet.y, match npc.phase() {
+            NpcPhase::Waiting if npc.resuming() => "waiting for the knight to come back and finish the talk",
+            NpcPhase::Waiting if npc.can_talk() => "waiting for the knight",
+            NpcPhase::Waiting => "taking their leave",
+            NpcPhase::Leaving => "leaving",
+            _ => "carrying on",
+        });
         self.handle_events(i, events, w);
     }
 
@@ -472,14 +535,16 @@ impl Visitors {
             self.bubbles.set_visible(true);
         }
         // Games: nothing of ours on their monitors.
+        // (Not one in the user's hand: carried over a game, they're set down elsewhere.)
         let on_game = |p: Vec2| w.game_monitors.iter().any(|r| r.contains(p.x as i32, (p.y - 1.0) as i32));
+        let gone = |l: &LiveNpc| !l.npc.held() && on_game(l.npc.pos);
         let before = self.live.len();
-        for l in self.live.iter().filter(|l| on_game(l.npc.pos)) {
+        for l in self.live.iter().filter(|l| gone(l)) {
             if let Some(b) = l.bubble {
                 self.bubbles.close(b);
             }
         }
-        self.live.retain(|l| !on_game(l.npc.pos));
+        self.live.retain(|l| !gone(l));
         if self.live.len() != before {
             log::info!("visitor: a game took their monitor; they left");
         }
@@ -606,7 +671,7 @@ impl Visitors {
     /// Claim every live visitor's footprint so props, finds and coins keep clear of them.
     pub fn claim(&self, occ: &mut Occupancy) {
         occ.release_kind(ClaimKind::Npc);
-        for (i, l) in self.live.iter().enumerate() {
+        for (i, l) in self.live.iter().enumerate().filter(|(_, l)| !l.npc.held()) {
             occ.claim(ClaimKey::new(ClaimKind::Npc, i as u64), footprint(l.npc.pos, self.ppu), 60);
         }
     }
@@ -742,7 +807,7 @@ impl Visitors {
                 return;
             }
         };
-        win.set_click_through(true);
+        // Their opaque pixels catch the mouse: the user can pick them up (`app/drag.rs`).
         win.set_capturable(self.capturable);
         let id = self.next_id;
         self.next_id += 1;

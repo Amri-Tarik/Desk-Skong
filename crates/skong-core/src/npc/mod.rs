@@ -35,6 +35,8 @@ mod visits;
 mod tests;
 #[cfg(test)]
 mod challenge_tests;
+#[cfg(test)]
+mod held_tests;
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
@@ -194,6 +196,22 @@ pub struct NpcDef {
     /// [`challenge`]).
     #[serde(default)]
     pub challenge: Option<ChallengeDef>,
+    /// What they say when the user picks them up and, when what they were doing can't go
+    /// on, as they take their leave after being set down (see [`Npc::grab`]).
+    #[serde(default)]
+    pub handled: Handled,
+}
+
+/// A visitor's lines about being picked up by the user (plain text, original writing).
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Handled {
+    /// Said as they're lifted (one picked).
+    #[serde(default)]
+    pub picked_up: Vec<String>,
+    /// Said once set down when the scene they were in can't go on, before they leave.
+    #[serde(default)]
+    pub set_down: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

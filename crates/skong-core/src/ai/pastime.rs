@@ -288,6 +288,23 @@ impl Brain {
         self.interest.pastimes.dummy_unreached.map(|(id, since)| (id, (self.now - since) as f32))
     }
 
+    /// The user moved dummy `id` (dragged it): whether he can get to it is judged afresh,
+    /// and his verdict logged again.
+    pub fn dummy_moved(&mut self, id: u64) {
+        let mem = &mut self.interest.pastimes;
+        if mem.dummy_skip.is_some_and(|(d, _)| d == id) {
+            mem.dummy_skip = None;
+        }
+        if mem.dummy_unreached.is_some_and(|(d, _)| d == id) {
+            mem.dummy_unreached = None;
+        }
+        if mem.dummy_view.is_some_and(|(d, _)| d == id) {
+            mem.dummy_view = None;
+        }
+        // Lifted from under his nail mid-drill: no cooldown for that (he may go on).
+        mem.ready_at.remove(&PastimeKind::Dummy);
+    }
+
     /// The pastime under way, if any.
     pub fn pastime(&self) -> Option<PastimeKind> {
         match &self.active {
