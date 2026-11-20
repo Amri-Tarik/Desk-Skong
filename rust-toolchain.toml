@@ -1,0 +1,5 @@
+# The toolchain CI and local builds share, so clippy's lints match on both sides.
+# Bump deliberately (update here, fix any new lints, then merge).
+[toolchain]
+channel = "1.97.1"
+components = ["clippy", "rustfmt"]
