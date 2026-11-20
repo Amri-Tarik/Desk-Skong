@@ -244,6 +244,9 @@ struct Pet {
     brain_events: Vec<MoveEvent>,
     /// Input applied on the last physics step (the brain notices walking into walls).
     last_input: MoveInput,
+    /// The last ~20 s of movement, saved on a detected flicker or on request.
+    rec: crate::recorder::Recorder,
+    rec_seen: (Option<(u32, skong_core::enemy::GauntletStage, usize)>, f64),
     /// Screen activity for the brain, mirrored from the vision feed.
     activity: Activity,
     /// Where highlighted text is (`text_curiosity`, on by default; `None` while off).
@@ -400,6 +403,8 @@ pub fn run(args: &Args) -> Result<()> {
         user_input: UserInput::new()?,
         brain_events: Vec::new(),
         last_input: MoveInput::default(),
+        rec: crate::recorder::Recorder::new(),
+        rec_seen: (None, -1.0),
         activity: Activity::default(),
         selection: None,
         brain_debug: String::new(),
@@ -615,9 +620,12 @@ impl Pet {
         }
         let mut input = if self.forced_nav {
             self.loco.set_carry(None);
-            self.follow_forced(dt)
+            let i = self.follow_forced(dt);
+            self.rec.bypass(crate::recorder::Source::Forced, &i);
+            i
         } else if let Some(i) = manual_input {
             self.loco.set_carry(None);
+            self.rec.bypass(crate::recorder::Source::Manual, &i);
             i
         } else {
             self.think(dt)
@@ -692,6 +700,10 @@ impl Pet {
             self.ch.step(&input, &self.terrain, dt, &mut self.move_events);
             self.last_input = input;
         }
+        let act = self.act.as_ref().map(|p| self.data.acts.get(p.act()).name.clone());
+        let held = self.grab.held_pos().is_some();
+        let following = self.nav.follower().is_some();
+        let _ = self.rec.frame(dt, &input, self.ch.state, self.ch.is_grounded(), self.ch.pos, self.ch.vel, self.ch.facing, act, following, held);
         if self.act.is_some() && !self.ch.is_grounded() {
             self.act = None; // knocked off / fell: acts are grounded choreography
         }
@@ -1173,11 +1185,34 @@ impl Pet {
         }
         // The map / lantern in his hands: only his idle and walk clips change.
         self.loco.set_carry(intent.carry);
-        match intent.motion {
-            Motion::Hold => MoveInput::default(),
-            Motion::Navigate { .. } => self.nav.next_input(&self.ch, &self.terrain, dt),
-            Motion::Direct(i) => i,
+        use crate::recorder::Source;
+        let (source, input) = match intent.motion {
+            Motion::Hold => (Source::Hold, MoveInput::default()),
+            Motion::Navigate { .. } => (Source::Navigate, self.nav.next_input(&self.ch, &self.terrain, dt)),
+            Motion::Direct(i) => (Source::Direct, i),
+        };
+        self.record_thought(source, &input, &intent.reason);
+        input
+    }
+
+    /// The brain's side of this tick for the flight recorder, with notes on gauntlet stage
+    /// changes and behaviour switches.
+    fn record_thought(&mut self, source: crate::recorder::Source, input: &MoveInput, reason: &str) {
+        let cue = self.brain.senses().gauntlet.map(|c| (c.serial, c.stage, c.wave));
+        if cue != self.rec_seen.0 {
+            match cue {
+                Some((_, stage, wave)) => self.rec.note(format!("gauntlet {stage:?} wave {wave}")),
+                None => self.rec.note("gauntlet over"),
+            }
+            self.rec_seen.0 = cue;
         }
+        if let Some(s) = self.brain.last_switch()
+            && s.at != self.rec_seen.1
+        {
+            self.rec_seen.1 = s.at;
+            self.rec.note(format!("switch {} -> {} ({:?})", s.from.label(), s.to.label(), s.reason));
+        }
+        self.rec.think(self.brain.behaviour().label(), reason, source, input);
     }
 
     /// Clicks on the knight poke him; press-and-drag picks him up; release throws him.
@@ -1295,6 +1330,9 @@ impl Pet {
                 self.settings.save();
             }
             Command::OpenLogFolder => crate::logfile::open_folder(),
+            Command::SaveTrace => {
+                let _ = self.rec.save("saved from the panel");
+            }
             Command::ReextractArt => {
                 let game = self.settings.game_dir.as_ref().map(std::path::PathBuf::from).or_else(crate::art::recorded_game);
                 crate::art::reextract(&self.data.args_data, game.as_deref());
