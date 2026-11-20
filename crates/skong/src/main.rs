@@ -14,6 +14,7 @@ mod enemies;
 mod grimm;
 mod discoveries;
 mod shinies;
+mod pastimes;
 mod emotes;
 mod fx;
 mod gameguard;

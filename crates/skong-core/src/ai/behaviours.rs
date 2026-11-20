@@ -108,6 +108,9 @@ pub enum BehaviourKind {
     Gauntlet,
     /// A visitor's calm scene after the talk: sit with them a while (maps, the view, a song).
     Company,
+    /// Something to do on his own (`ai::pastime`): the training dummy, a lumafly, the view
+    /// from a high window edge, the stars at night.
+    Pastime,
 }
 
 impl BehaviourKind {
@@ -137,6 +140,7 @@ impl BehaviourKind {
         BehaviourKind::Fight,
         BehaviourKind::Gauntlet,
         BehaviourKind::Company,
+        BehaviourKind::Pastime,
     ];
 
     pub fn label(self) -> &'static str {
@@ -166,6 +170,7 @@ impl BehaviourKind {
             BehaviourKind::Fight => "fight",
             BehaviourKind::Gauntlet => "gauntlet",
             BehaviourKind::Company => "company",
+            BehaviourKind::Pastime => "pastime",
         }
     }
 
@@ -190,6 +195,8 @@ impl BehaviourKind {
             // The cursor is a boredom killer (battles, pestering): an ambient pastime, never
             // allowed to interrupt Geo or visitors, and dropped the moment those show up.
             BehaviourKind::Battle | BehaviourKind::Pester => Tier::Ambient,
+            // Things to do on his own: below every prize, fight and visitor.
+            BehaviourKind::Pastime => Tier::Ambient,
             BehaviourKind::Idle | BehaviourKind::Companion | BehaviourKind::Watch | BehaviourKind::Explore | BehaviourKind::Ride | BehaviourKind::Visit | BehaviourKind::Highlight => {
                 Tier::Ambient
             }
@@ -1094,6 +1101,7 @@ pub(crate) enum Active {
     Fight(Box<super::fight::Fight>),
     Gauntlet(super::gauntlet::Ceremony),
     Company(Box<super::company::Company>),
+    Pastime(Box<super::pastime::Pastime>),
 }
 
 impl Active {
@@ -1124,6 +1132,7 @@ impl Active {
             Active::Fight(_) => BehaviourKind::Fight,
             Active::Gauntlet(_) => BehaviourKind::Gauntlet,
             Active::Company(_) => BehaviourKind::Company,
+            Active::Pastime(_) => BehaviourKind::Pastime,
         }
     }
 
@@ -1154,6 +1163,7 @@ impl Active {
             Active::Fight(b) => b.tick(ctx),
             Active::Gauntlet(b) => b.tick(ctx),
             Active::Company(b) => b.tick(ctx),
+            Active::Pastime(b) => b.tick(ctx),
         }
     }
 
@@ -1185,6 +1195,7 @@ impl Active {
             Active::Fight(b) => b.reason(),
             Active::Gauntlet(b) => b.reason(),
             Active::Company(b) => b.reason(ctx),
+            Active::Pastime(b) => b.reason(),
         }
     }
 }
@@ -1201,7 +1212,7 @@ pub(crate) fn exit_act_for(act: &ActInfo) -> Option<&'static str> {
         SLUG_ACT => Some(SLUG_EXIT),
         "look_up" => Some("look_up_end"),
         "look_down" => Some("look_down_end"),
-        "gaze_into_screen" => Some("turn_from_screen"),
+        "gaze_into_screen" | "stargaze" => Some("turn_from_screen"),
         "map_stroll" | "company_maps_stand" => Some("put_map_away"),
         _ if act.requires == crate::acts::Requirement::Seat => Some("get_up"),
         _ => None,

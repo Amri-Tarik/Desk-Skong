@@ -134,6 +134,8 @@ pub struct InterestMap {
     pub(crate) shinies: super::shiny::ShinyMemory,
     /// Where the user's highlighted text is (see [`super::highlight`]).
     pub(crate) highlight: super::highlight::HighlightMemory,
+    /// The training dummy, lumaflies, pastime cooldowns (see [`super::pastime`]).
+    pub(crate) pastimes: super::pastime::PastimeMemory,
 }
 
 impl InterestMap {

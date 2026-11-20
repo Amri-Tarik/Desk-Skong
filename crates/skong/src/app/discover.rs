@@ -15,9 +15,12 @@ use crate::shinies::Where;
 
 const ID_DISCOVER0: u32 = 5000;
 const ID_FORGET: u32 = 5003;
-const KINDS: [&str; 3] = ["Reveal a bench here", "Reveal a geo deposit here", "Drop a shiny nearby"];
+const KINDS: [&str; 5] = ["Reveal a bench here", "Reveal a geo deposit here", "Drop a shiny nearby", "Put up a training dummy", "Let a lumafly drift by"];
 /// `Command::Discover` kind that drops a shiny instead of revealing a find.
 const SHINY: u8 = 2;
+/// ... that puts up the training dummy / sends a lumafly (pastimes).
+const DUMMY: u8 = 3;
+const LUMAFLY: u8 = 4;
 /// The pick-up act and the step at which the shiny is in his hand.
 const PICK_ACT: &str = "pick_up_trinket";
 const PICK_CLIP: &str = "Collect Normal 2";
@@ -43,6 +46,7 @@ impl Pet {
         self.benches.claim(&mut self.occupancy);
         self.discoveries.update(dt, (self.watcher.snapshot(), &self.terrain), &self.benches, &mut self.occupancy, &mut self.fx, (&self.ch, &self.win));
         self.shinies_tick(dt);
+        self.pastimes_tick(dt);
     }
 
     /// Shinies: turn up now and then (never while the user types hard, is away, or a
@@ -93,6 +97,7 @@ impl Pet {
         benches.extend(self.discoveries.bench_spots());
         self.brain.set_places(&self.discoveries.places());
         self.brain.set_shinies(&self.shinies.percepts());
+        self.pastime_percepts();
         self.discoveries.seat_here(&self.ch, &self.benches)
     }
 
@@ -125,6 +130,12 @@ impl Pet {
                     log::warn!("shiny: no free, reachable spot on the knight's monitor");
                 }
             }
+            Command::Discover(DUMMY) => {
+                if !self.spawn_dummy(true) {
+                    log::warn!("training dummy: no free, reachable spot on the knight's monitor");
+                }
+            }
+            Command::Discover(LUMAFLY) => self.send_lumafly(),
             Command::Discover(kind) => {
                 let desk = self.watcher.snapshot();
                 let under_cursor = || {
@@ -139,6 +150,7 @@ impl Pet {
             Command::ForgetDiscoveries => {
                 self.discoveries.forget();
                 self.shinies.clear();
+                self.pastimes.clear();
             }
             other => return self.apply(other),
         }
