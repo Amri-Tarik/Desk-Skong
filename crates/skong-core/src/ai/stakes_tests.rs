@@ -539,7 +539,7 @@ fn geo_where_something_else_failed_is_still_gathered() {
     let mut sim = Sim::new();
     sim.run_until(1.0, |_| false);
     let coin = Vec2::new(1300.0, FLOOR);
-    sim.brain.interest.block(PoiTarget::Spot(coin + Vec2::new(20.0, 0.0)), sim.brain.now + 60.0);
+    sim.brain.interest.block(PoiTarget::Spot(coin + Vec2::new(10.0, 0.0)), sim.brain.now + 60.0);
     sim.coins = vec![coin];
     assert!(sim.run_until(1.0, |s| s.brain.behaviour() == BehaviourKind::Loot), "loot: {:?}", sim.brain.utilities());
     assert!(sim.run_until(10.0, |s| s.coins.is_empty()));
