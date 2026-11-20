@@ -217,6 +217,13 @@ fn settings(p: &mut Panel, ui: &mut egui::Ui, s: &Status, h: &Hello) {
             if ui.button("Open folder").on_hover_text("log and crash files").clicked() {
                 p.cmd(Command::OpenLogFolder);
             }
+            if ui
+                .button("Save trace")
+                .on_hover_text("Saves the knight's last 20 seconds of movement (what he was doing, why, and every step) as a trace file in the logs folder. Click it right after something odd happens. A move/stop flicker is saved on its own.")
+                .clicked()
+            {
+                p.cmd(Command::SaveTrace);
+            }
         });
         if ui
             .button("Re-extract game art…")

@@ -10,6 +10,7 @@ mod app;
 mod logfile;
 mod control;
 mod logring;
+mod recorder;
 mod overlay;
 mod benches;
 mod banner;

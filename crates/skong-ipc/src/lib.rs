@@ -55,6 +55,8 @@ pub enum Command {
     ToggleLogFile,
     /// Open the logs folder (log and crash files) in Explorer.
     OpenLogFolder,
+    /// Save the flight recorder (the last ~20 s of movement) to the logs folder.
+    SaveTrace,
     /// Open the art setup window to read the sprites from the game again.
     ReextractArt,
     PlaceBenchAtCursor(usize),
@@ -151,6 +153,7 @@ impl Command {
             | Command::EnableSandbox
             | Command::ToggleLogFile
             | Command::OpenLogFolder
+            | Command::SaveTrace
             | Command::ReextractArt
             | Command::Quit => false,
         }
@@ -494,6 +497,7 @@ mod tests {
             Command::ToggleLantern,
             Command::ToggleLogFile,
             Command::OpenLogFolder,
+            Command::SaveTrace,
             Command::ReextractArt,
             Command::Test(TestCommand::Enemy { kind: 2 }),
             Command::Test(TestCommand::View),
