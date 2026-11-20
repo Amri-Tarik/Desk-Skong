@@ -544,3 +544,35 @@ fn a_foe_in_the_way_becomes_the_target() {
     a.run(0.2);
     assert!(a.sim.last_reason().contains("#78"), "the one in the way first: {}", a.sim.last_reason());
 }
+
+#[test]
+fn he_trails_a_foe_walking_away_without_stuttering() {
+    // Live: behind a crawler walking away he started and stopped every frame (the stop
+    // line of his approach was also its start line), creeping along at its pace. Now he
+    // keeps pace with it on the ground instead of standing until it is out of reach again.
+    let mut a = Arena::physical(calm(BrainConfig::default()));
+    a.run(0.5);
+    a.fixed.push(Foe { vulnerable: false, attacking: false, ..dummy(FoeKind::Enemy, 1100.0) });
+    assert!(a.run_until(1.0, BehaviourKind::Fight), "{}", a.sim.last_reason());
+    a.run(1.0);
+    let start = a.sim.knight.pos.x;
+    let (mut ground, mut standing) = (0, 0);
+    for _ in 0..(4.0 / DT) as usize {
+        a.fixed[0].pos.x += 60.0 * DT;
+        a.fixed[0].feet.x += 60.0 * DT;
+        let i = a.step();
+        if let Motion::Direct(input) = i.motion
+            && a.sim.knight.is_grounded()
+        {
+            ground += 1;
+            if input.x == 0.0 {
+                standing += 1;
+            }
+        }
+    }
+    let gap = a.fixed[0].pos.x - a.sim.knight.pos.x;
+    assert!(a.sim.knight.pos.x - start > 150.0, "he follows it: {start} -> {}", a.sim.knight.pos.x);
+    assert!(gap < 4.0 * PPU, "and keeps up (gap {gap})");
+    assert!(ground > 10, "walking it down on the ground: {ground} ticks");
+    assert!(standing * 5 <= ground, "keeps pace instead of standing until it is out of reach: stood {standing} of {ground} ground ticks");
+}
