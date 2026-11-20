@@ -31,12 +31,11 @@ pub enum Command {
     SetSkin(usize),
     SetScale(f32),
     SetBother(f32),
-    ToggleClickThrough,
     /// Show the pet in screen shares and screenshots (Discord, OBS...); off by default.
     ToggleShareVisible,
     /// Fight the cursor, round after round (until toggled off).
     ToggleFightMode,
-    /// Curious about highlighted text (UI Automation, rectangles only); off by default.
+    /// Curious about highlighted text (UI Automation, rectangles only); on by default.
     ToggleTextCuriosity,
     PlaceBenchAtCursor(usize),
     PlaceBenchNearKnight(usize),
@@ -197,12 +196,11 @@ pub struct Status {
     pub manual: bool,
     /// A panel is currently driving the knight.
     pub driven: bool,
-    pub click_through: bool,
     /// Fighting the cursor on request (round after round).
     pub fight_mode: bool,
     /// Visible in screen shares and screenshots.
     pub share_visible: bool,
-    /// Curious about highlighted text (opt-in).
+    /// Curious about highlighted text (on by default).
     pub text_curiosity: bool,
     pub vision: bool,
     pub overlay: bool,

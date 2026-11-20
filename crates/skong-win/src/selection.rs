@@ -1,5 +1,5 @@
 //! Where the user's highlighted text is, via UI Automation — **rectangles only, never the
-//! text** (opt-in; the pet's "Curious about highlighted text" toggle).
+//! text** (on by default; the pet's "Curious about highlighted text" toggle).
 //!
 //! One background thread (COM in the MTA) does everything; the pet's 120 Hz loop only
 //! drains a channel ([`SelectionWatcher::poll`]):

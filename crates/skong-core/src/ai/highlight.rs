@@ -1,4 +1,4 @@
-//! Curiosity about highlighted text (opt-in; the app's "Curious about highlighted text"
+//! Curiosity about highlighted text (on by default; the app's "Curious about highlighted text"
 //! toggle). The app reports only *where* the user's text selection is on screen
 //! ([`Percepts::selection`]: a rectangle, never the text). A fresh selection that has
 //! settled (the user stopped dragging) catches his eye: "?" (the app's emote on the switch),

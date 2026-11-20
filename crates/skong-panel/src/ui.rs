@@ -21,7 +21,6 @@ const LETTERS: &[(Key, Command, &str)] = &[
     (Key::H, Command::GoToCursor { hurry: true }, "hurry to cursor"),
     (Key::S, Command::NextSkin, "next skin"),
     (Key::B, Command::PlaceBenchNearKnight(0), "bench near knight"),
-    (Key::C, Command::ToggleClickThrough, "click-through"),
     (Key::P, Command::TogglePause, "pause"),
     (Key::D, Command::ToggleDebugOverlay, "debug overlay"),
 ];
@@ -247,7 +246,6 @@ impl Panel {
                 }
             };
             toggle(ui, s.manual, "Manual control  [K]", Command::ToggleManual);
-            toggle(ui, s.click_through, "Click-through  [C]", Command::ToggleClickThrough);
             toggle(ui, s.fight_mode, "Fight the cursor", Command::ToggleFightMode);
             toggle(ui, s.share_visible, "Visible in screen shares", Command::ToggleShareVisible);
             toggle(ui, s.text_curiosity, "Curious about highlighted text", Command::ToggleTextCuriosity);

@@ -49,7 +49,7 @@ pub struct Percepts<'a> {
     pub local_hour: Option<f32>,
     /// The knight's surroundings are dark (dark-themed window behind him, dimmed screen).
     pub dark: bool,
-    /// Where the user's highlighted text is on screen (opt-in; the app sends `None` while
+    /// Where the user's highlighted text is on screen (on by default; the app sends `None` while
     /// the feature is off). Only the rectangle: the brain never sees the text.
     pub selection: Option<RectI>,
 }
