@@ -247,6 +247,26 @@ fn lethal_fights_can_kill_him() {
 }
 
 #[test]
+fn bumps_while_the_user_holds_him_do_not_land_on_release() {
+    let mut cfg = BrainConfig::default();
+    cfg.fight.lethal = true;
+    let mut a = Arena::new(calm(cfg));
+    a.run(0.5);
+    a.fixed.push(dummy(FoeKind::Enemy, 1060.0));
+    assert!(a.run_until(1.0, BehaviourKind::Fight));
+    // Picked up mid-fight; the foe keeps bumping the dangling knight for a while.
+    a.sim.pokes.push(Poke::Grab);
+    for _ in 0..(5.0 / DT) as usize {
+        a.hits += 1;
+        a.step();
+    }
+    a.sim.pokes.push(Poke::Release { vel: Vec2::ZERO });
+    let kinds = a.run(2.0);
+    assert!(!kinds.contains(&BehaviourKind::Dead), "a backlog of bumps killed him on release: {}", a.sim.last_reason());
+    assert_eq!(a.sim.brain.stakes.fight.hits, 0);
+}
+
+#[test]
 fn a_spar_opens_with_a_challenge_and_blows_land_without_killing() {
     let mut a = Arena::new(calm(BrainConfig::default()));
     a.run(0.5);

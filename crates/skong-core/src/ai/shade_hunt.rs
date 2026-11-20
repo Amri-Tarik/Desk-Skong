@@ -136,9 +136,9 @@ impl ShadeHunt {
     fn no_way(&mut self, ctx: &mut Ctx, why: &str) -> Status {
         log::debug!("brain: shade hunt: {why}; trying again in {:.0} s", ctx.cfg.stakes.shade_retry);
         ctx.nav.stop();
-        ctx.stakes.shade_ready_at = ctx.now + ctx.cfg.stakes.shade_retry;
+        ctx.stakes.shade_ready_at = ctx.now + ctx.cfg.stakes.shade_retry as f64;
         ctx.stakes.shade_way = false;
-        ctx.stakes.shade_probe_at = ctx.now + ctx.cfg.stakes.shade_retry;
+        ctx.stakes.shade_probe_at = ctx.now + ctx.cfg.stakes.shade_retry as f64;
         Status::Done
     }
 
@@ -155,7 +155,7 @@ impl ShadeHunt {
             ctx.mind.startle(0.2);
             if self.masks == 0 {
                 ctx.stakes.pending_death = Some((DeathKind::Fight, true));
-                ctx.stakes.shade_ready_at = ctx.now + cfg.shade_breather;
+                ctx.stakes.shade_ready_at = ctx.now + cfg.shade_breather as f64;
                 return Status::Done;
             }
             ctx.nav.stop();

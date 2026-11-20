@@ -53,7 +53,7 @@ pub struct Achievements {
     /// The troupe's events since the last tick (set by `tick_troupe`).
     pub(super) troupe: Vec<skong_core::enemy::grimm::GrimmEvent>,
     /// Brain switch already looked at (its time).
-    switch_at: f32,
+    switch_at: f64,
     act: Option<String>,
     pos: Vec2,
     state: MoveState,

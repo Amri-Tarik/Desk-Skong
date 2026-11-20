@@ -119,21 +119,21 @@ pub struct InterestMap {
     /// Event-driven POIs with decaying novelty.
     events: Vec<Poi>,
     /// When each place was last visited (brain clock).
-    visited: BTreeMap<PoiKey, f32>,
+    visited: BTreeMap<PoiKey, f64>,
     /// When a window of each process was last visited.
-    processes: BTreeMap<String, f32>,
+    processes: BTreeMap<String, f64>,
     /// Unreachable targets, skipped until the given time.
-    blocked: BTreeMap<PoiKey, f32>,
+    blocked: BTreeMap<PoiKey, f64>,
     /// Coins he gave up on for now (no route, kept for a Dream Gate), by where they rest,
     /// until the given time. Kept apart from `blocked`: a seat, a cursor spot or a fight
     /// goal that failed nearby (same 64 px cell) must never hide fresh Geo.
-    skipped_coins: Vec<(Vec2, f32)>,
+    skipped_coins: Vec<(Vec2, f64)>,
     /// Things found in windows (see [`super::places`]).
     pub(crate) places: PlaceMemory,
     /// How long each window ledge has been on screen (seats must have settled).
     pub(crate) ages: crate::lasting::LedgeAges,
     /// Brain clock and terrain generation of the last age update (`None`: never).
-    pub(crate) ages_seen: Option<(f32, u64)>,
+    pub(crate) ages_seen: Option<(f64, u64)>,
     /// Shinies on the ground (see [`super::shiny`]).
     pub(crate) shinies: super::shiny::ShinyMemory,
     /// Where the user's highlighted text is (see [`super::highlight`]).
@@ -144,7 +144,7 @@ pub struct InterestMap {
 
 impl InterestMap {
     /// Fold this tick's desktop changes into the event list and decay novelty.
-    pub(crate) fn observe(&mut self, now: f32, dt: f32, senses: &Senses, desk: &DesktopSnapshot, cfg: &BrainConfig) {
+    pub(crate) fn observe(&mut self, now: f64, dt: f32, senses: &Senses, desk: &DesktopSnapshot, cfg: &BrainConfig) {
         let decay = 0.5f32.powf(dt / cfg.novelty_half_life.max(1.0));
         for e in &mut self.events {
             e.novelty *= decay;
@@ -186,17 +186,17 @@ impl InterestMap {
     }
 
     /// 1 = a window of this process was just visited, 0 = never / long ago.
-    fn process_familiarity(&self, process: &str, now: f32, cfg: &BrainConfig) -> f32 {
-        self.processes.get(process).map_or(0.0, |&t| (1.0 - (now - t) / cfg.visit_memory_secs.max(1.0)).clamp(0.0, 1.0))
+    fn process_familiarity(&self, process: &str, now: f64, cfg: &BrainConfig) -> f32 {
+        self.processes.get(process).map_or(0.0, |&t| (1.0 - (now - t) as f32 / cfg.visit_memory_secs.max(1.0)).clamp(0.0, 1.0))
     }
 
     /// 1 = just visited, 0 = never / forgotten.
-    pub fn familiarity(&self, key: PoiKey, now: f32, cfg: &BrainConfig) -> f32 {
-        self.visited.get(&key).map_or(0.0, |&t| (1.0 - (now - t) / cfg.visit_memory_secs.max(1.0)).clamp(0.0, 1.0))
+    pub fn familiarity(&self, key: PoiKey, now: f64, cfg: &BrainConfig) -> f32 {
+        self.visited.get(&key).map_or(0.0, |&t| (1.0 - (now - t) as f32 / cfg.visit_memory_secs.max(1.0)).clamp(0.0, 1.0))
     }
 
     /// Everything currently worth considering, novelty already reduced by familiarity.
-    pub(crate) fn candidates(&self, now: f32, knight: &Character, world: (&DesktopSnapshot, &Terrain), cfg: &BrainConfig) -> Vec<Poi> {
+    pub(crate) fn candidates(&self, now: f64, knight: &Character, world: (&DesktopSnapshot, &Terrain), cfg: &BrainConfig) -> Vec<Poi> {
         let (desk, terrain) = world;
         let support = knight.support.and_then(|s| s.owner);
         let mut out: Vec<Poi> = self.events.clone();
@@ -232,7 +232,7 @@ impl InterestMap {
     }
 
     /// The knight arrived: remember the place (and its process) and drop its events.
-    pub(crate) fn visit(&mut self, target: PoiTarget, now: f32, desk: &DesktopSnapshot) {
+    pub(crate) fn visit(&mut self, target: PoiTarget, now: f64, desk: &DesktopSnapshot) {
         let key = target.key();
         self.visited.insert(key, now);
         if let PoiTarget::Window(id) = target
@@ -249,7 +249,7 @@ impl InterestMap {
     }
 
     /// Skip this target for a while (no route).
-    pub(crate) fn block(&mut self, target: PoiTarget, until: f32) {
+    pub(crate) fn block(&mut self, target: PoiTarget, until: f64) {
         self.blocked.insert(target.key(), until);
     }
 
@@ -264,7 +264,7 @@ impl InterestMap {
     }
 
     /// Leave the coin at `at` alone until `until` (no route to it).
-    pub(crate) fn skip_coin(&mut self, at: Vec2, until: f32) {
+    pub(crate) fn skip_coin(&mut self, at: Vec2, until: f64) {
         self.skipped_coins.retain(|(c, _)| c.distance(at) >= COIN_SAME);
         self.skipped_coins.push((at, until));
     }

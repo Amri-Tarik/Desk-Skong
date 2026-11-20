@@ -67,8 +67,8 @@ pub struct Dummy {
     pub id: u64,
     pub spot: Spot,
     /// [`Yard::clock`] when it turned up and when it starts fading away.
-    pub born: f32,
-    pub leave_at: f32,
+    pub born: f64,
+    pub leave_at: f64,
 }
 
 /// The dummy on screen this frame.
@@ -88,12 +88,12 @@ pub struct ShownDummy {
 pub struct Yard {
     dummy: Option<Dummy>,
     /// Blows on their way (clock time they land).
-    pending: Vec<(f32, DummyHit)>,
+    pending: Vec<(f64, DummyHit)>,
     /// Blows that landed since the app last looked.
     landed: Vec<DummyHit>,
     next_id: u64,
-    clock: f32,
-    next_at: f32,
+    clock: f64,
+    next_at: f64,
     mix: Mix,
 }
 
@@ -109,10 +109,10 @@ impl Yard {
 
     fn schedule(&mut self, rules: &DummyRules) {
         let [lo, hi] = rules.every_secs;
-        self.next_at = self.clock + lo + (hi - lo).max(0.0) * self.mix.f32();
+        self.next_at = self.clock + (lo + (hi - lo).max(0.0) * self.mix.f32()) as f64;
     }
 
-    pub fn clock(&self) -> f32 {
+    pub fn clock(&self) -> f64 {
         self.clock
     }
 
@@ -123,7 +123,7 @@ impl Yard {
     /// Advance the clock and land due blows. `true` when a dummy should turn up now (then
     /// [`place`] one, or [`Self::retry_soon`]). The timer only runs while `allowed`.
     pub fn due(&mut self, dt: f32, allowed: bool, rules: &DummyRules) -> bool {
-        self.clock += dt;
+        self.clock += dt as f64;
         let now = self.clock;
         let (due, later): (Vec<_>, Vec<_>) = self.pending.drain(..).partition(|(t, _)| *t <= now);
         self.pending = later;
@@ -134,7 +134,7 @@ impl Yard {
             return false;
         }
         if !allowed {
-            self.next_at += dt;
+            self.next_at += dt as f64;
             return false;
         }
         if self.clock < self.next_at {
@@ -155,7 +155,7 @@ impl Yard {
         self.next_id += 1;
         let [lo, hi] = rules.stay_secs;
         let stay = lo + (hi - lo).max(0.0) * self.mix.f32();
-        self.dummy = Some(Dummy { id, spot, born: self.clock, leave_at: self.clock + stay });
+        self.dummy = Some(Dummy { id, spot, born: self.clock, leave_at: self.clock + stay as f64 });
         self.pending.clear();
         self.landed.clear();
         id
@@ -164,7 +164,7 @@ impl Yard {
     /// A blow lands after `delay` seconds (the swing / the fireball's flight).
     pub fn strike(&mut self, hit: DummyHit, delay: f32) {
         if self.dummy.is_some() {
-            self.pending.push((self.clock + delay.max(0.0), hit));
+            self.pending.push((self.clock + delay.max(0.0) as f64, hit));
         }
     }
 
@@ -195,13 +195,13 @@ impl Yard {
             Spot::Window { id, .. } => desk.window(id).is_some_and(|w| !w.fullscreen),
             Spot::Ground { .. } => true,
         };
-        if !open || clock >= d.leave_at + DUMMY_FADE_OUT {
+        if !open || clock >= d.leave_at + DUMMY_FADE_OUT as f64 {
             self.dummy = None;
             self.pending.clear();
             return None;
         }
         let (pos, span) = shiny::resolve(terrain, d.spot, width, settled)?;
-        let alpha = ((clock - d.born) / DUMMY_FADE_IN).min((d.leave_at + DUMMY_FADE_OUT - clock) / DUMMY_FADE_OUT).clamp(0.0, 1.0);
+        let alpha = ((clock - d.born) as f32 / DUMMY_FADE_IN).min((d.leave_at - clock) as f32 / DUMMY_FADE_OUT + 1.0).clamp(0.0, 1.0);
         Some(ShownDummy { id: d.id, pos, span, alpha })
     }
 }
@@ -274,11 +274,11 @@ pub enum FlyState {
     /// Drifting to its next waypoint (and hovering a moment there).
     Drift,
     /// Swiped at and missed: darting away until then.
-    Darting { until: f32 },
+    Darting { until: f64 },
     /// Caught: a bright flare, then it slips out of his hands and floats up and away.
-    Caught { at: f32 },
+    Caught { at: f64 },
     /// Its time is up: floating up and away, fading.
-    Leaving { since: f32 },
+    Leaving { since: f64 },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -289,9 +289,9 @@ pub struct Lumafly {
     pub vel: Vec2,
     pub target: Vec2,
     /// Hover at the waypoint until then.
-    pub hover_until: f32,
-    pub born: f32,
-    pub leave_at: f32,
+    pub hover_until: f64,
+    pub born: f64,
+    pub leave_at: f64,
     pub state: FlyState,
     /// Bob / flicker phase (0..1).
     pub phase: f32,
@@ -335,8 +335,8 @@ const ABOVE_BAR: [f32; 2] = [50.0, 130.0];
 pub struct Sky {
     flies: Vec<Lumafly>,
     next_id: u64,
-    clock: f32,
-    next_at: f32,
+    clock: f64,
+    next_at: f64,
     mix: Mix,
 }
 
@@ -352,10 +352,10 @@ impl Sky {
 
     fn schedule(&mut self, rules: &LumaflyRules) {
         let [lo, hi] = rules.every_secs;
-        self.next_at = self.clock + lo + (hi - lo).max(0.0) * self.mix.f32();
+        self.next_at = self.clock + (lo + (hi - lo).max(0.0) * self.mix.f32()) as f64;
     }
 
-    pub fn clock(&self) -> f32 {
+    pub fn clock(&self) -> f64 {
         self.clock
     }
 
@@ -369,7 +369,7 @@ impl Sky {
             return false;
         }
         if !allowed {
-            self.next_at += dt;
+            self.next_at += dt as f64;
             return false;
         }
         if self.clock < self.next_at {
@@ -414,7 +414,7 @@ impl Sky {
             target,
             hover_until: 0.0,
             born: self.clock,
-            leave_at: self.clock + life,
+            leave_at: self.clock + life as f64,
             state: FlyState::Drift,
             phase,
             area,
@@ -425,7 +425,7 @@ impl Sky {
 
     /// Move them. `bars` as in [`Self::spawn`].
     pub fn step(&mut self, dt: f32, bars: &[(f32, f32, f32)], rules: &LumaflyRules, scale: f32) {
-        self.clock += dt;
+        self.clock += dt as f64;
         let now = self.clock;
         let mut flies = std::mem::take(&mut self.flies);
         for f in &mut flies {
@@ -444,7 +444,7 @@ impl Sky {
                     let off = f.target - f.pos;
                     if off.length() < 6.0 * scale {
                         if f.hover_until <= 0.0 {
-                            f.hover_until = now + 2.0 + 4.0 * self.mix.f32();
+                            f.hover_until = now + (2.0 + 4.0 * self.mix.f32()) as f64;
                         } else if now >= f.hover_until {
                             f.hover_until = 0.0;
                             f.target = self.waypoint(f.area, bars, scale);
@@ -472,8 +472,8 @@ impl Sky {
         }
         // Gone once faded out (or flown off the top).
         flies.retain(|f| match f.state {
-            FlyState::Leaving { since } => now - since < LEAVE_SECS,
-            FlyState::Caught { at } => now - at < FLARE_SECS + LEAVE_SECS,
+            FlyState::Leaving { since } => ((now - since) as f32) < LEAVE_SECS,
+            FlyState::Caught { at } => ((now - at) as f32) < FLARE_SECS + LEAVE_SECS,
             _ => true,
         });
         self.flies = flies;
@@ -524,16 +524,16 @@ impl Sky {
         self.flies
             .iter()
             .map(|f| {
-                let bob = Vec2::new((TAU * (now / 3.1 + f.phase)).sin() * 3.0, (TAU * (now / 1.7 + f.phase)).sin() * 5.0) * scale;
-                let fade_in = ((now - f.born) / FLY_FADE_IN).clamp(0.0, 1.0);
+                let bob = Vec2::new((TAU * ((now / 3.1).fract() as f32 + f.phase)).sin() * 3.0, (TAU * ((now / 1.7).fract() as f32 + f.phase)).sin() * 5.0) * scale;
+                let fade_in = ((now - f.born) as f32 / FLY_FADE_IN).clamp(0.0, 1.0);
                 let (alpha, glow, leaving) = match f.state {
                     FlyState::Drift | FlyState::Darting { .. } => (fade_in, 1.0, false),
                     FlyState::Caught { at } => {
-                        let t = now - at;
+                        let t = (now - at) as f32;
                         let flare = if t < FLARE_SECS { 1.0 + 1.5 * (1.0 - t / FLARE_SECS) } else { 1.0 };
                         (fade_in * (1.0 - ((t - FLARE_SECS).max(0.0) / LEAVE_SECS)).clamp(0.0, 1.0), flare, true)
                     }
-                    FlyState::Leaving { since } => (fade_in * (1.0 - (now - since) / LEAVE_SECS).clamp(0.0, 1.0), 1.0, true),
+                    FlyState::Leaving { since } => (fade_in * (1.0 - (now - since) as f32 / LEAVE_SECS).clamp(0.0, 1.0), 1.0, true),
                 };
                 ShownFly { id: f.id, pos: f.pos + bob, alpha, glow, leaving, phase: f.phase }
             })
@@ -543,7 +543,7 @@ impl Sky {
 
 /// The lumafly's glow, `size` px square: a soft cyan halo, a bright pale core and two
 /// faint flickering wings. `glow` > 1 brightens and widens it (the catch flare).
-pub fn glow(size: u32, t: f32, phase: f32, glow: f32, alpha: f32) -> Image {
+pub fn glow(size: u32, t: f64, phase: f32, glow: f32, alpha: f32) -> Image {
     use std::f32::consts::TAU;
     let size = size.max(7);
     let s = size as f32;
@@ -552,12 +552,12 @@ pub fn glow(size: u32, t: f32, phase: f32, glow: f32, alpha: f32) -> Image {
     if alpha <= 0.0 {
         return img;
     }
-    let flicker = 0.85 + 0.15 * (TAU * (t / 0.9 + phase)).sin();
+    let flicker = 0.85 + 0.15 * (TAU * ((t / 0.9).fract() as f32 + phase)).sin();
     let g = glow.max(0.0);
     let (cx, cy) = (s * 0.5, s * 0.5);
     let halo_r = s * 0.22 * (0.8 + 0.2 * g);
     let core_r = (s * 0.05).max(0.7);
-    let wing = (TAU * (t * 9.0 + phase)).sin().abs();
+    let wing = (TAU * ((t * 9.0).fract() as f32 + phase)).sin().abs();
     for y in 0..size {
         for x in 0..size {
             let (dx, dy) = (x as f32 + 0.5 - cx, y as f32 + 0.5 - cy);
@@ -672,7 +672,7 @@ mod tests {
         let aged = |secs: f32| {
             let mut a = LedgeAges::default();
             let mut now = 0.0;
-            while now <= secs {
+            while now <= secs as f64 {
                 a.observe(&t, now);
                 now += 1.0;
             }
@@ -685,7 +685,7 @@ mod tests {
             let ages = aged(age);
             let mut on_window = 0;
             for salt in 0..60 {
-                let site = ShinySite { terrain: &t, ages: &ages, now: age, min_age: LASTING_SECS, occupancy: &occ, footprint: fp, knight: Vec2::new(100.0, 1040.0), min_distance: 220.0, area: None, avoid: &game, reachable: &|_| true };
+                let site = ShinySite { terrain: &t, ages: &ages, now: age as f64, min_age: LASTING_SECS, occupancy: &occ, footprint: fp, knight: Vec2::new(100.0, 1040.0), min_distance: 220.0, area: None, avoid: &game, reachable: &|_| true };
                 let (spot, pos) = place(&site, &[], salt).expect("somewhere");
                 assert!(pos.x < 1920.0, "never on the game's monitor: {pos:?}");
                 if let Spot::Window { .. } = spot {

@@ -237,7 +237,7 @@ pub(crate) enum Status {
 /// Everything a behaviour may read or poke during its tick.
 pub(crate) struct Ctx<'a, 'p> {
     pub p: &'a Percepts<'p>,
-    pub now: f32,
+    pub now: f64,
     pub cfg: &'a BrainConfig,
     pub senses: &'a Senses,
     pub mind: &'a mut Mind,
@@ -558,7 +558,7 @@ pub(crate) fn block(ctx: &mut Ctx, goal: NavGoal, secs: f32) {
         NavGoal::Point(p) => PoiTarget::Spot(p),
         NavGoal::OnWindow(id) => PoiTarget::Window(id),
     };
-    ctx.interest.block(target, ctx.now + secs);
+    ctx.interest.block(target, ctx.now + secs as f64);
 }
 
 /// Travel timeout from a straight-line guess (planner etas are better but optional).
@@ -600,7 +600,7 @@ pub(crate) fn find_seat(ctx: &mut Ctx, near: Vec2, range: f32) -> Option<(Vec2, 
         if let Some(&style) = styles.iter().find(|&&st| ctx.nav.reaches(k, s, st, SEAT_TOL)) {
             return Some((s, style));
         }
-        ctx.interest.block(PoiTarget::Spot(s), ctx.now + FAILED_TARGET_SECS);
+        ctx.interest.block(PoiTarget::Spot(s), ctx.now + FAILED_TARGET_SECS as f64);
     }
     None
 }
@@ -796,7 +796,7 @@ impl Rest {
             if !ctx.senses.can_sit() {
                 // Nowhere to sit here (no seat found, or the seat moved / closed).
                 let here = ctx.p.knight.pos;
-                ctx.interest.block(PoiTarget::Spot(here), ctx.now + FAILED_TARGET_SECS);
+                ctx.interest.block(PoiTarget::Spot(here), ctx.now + FAILED_TARGET_SECS as f64);
                 return Status::Failed;
             }
             let act = ctx.seated_act();

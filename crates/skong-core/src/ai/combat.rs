@@ -199,17 +199,19 @@ pub(crate) struct Kit {
     pub chain: u32,
     /// Jumped to pogo: stay over the target.
     pub pogo_run: bool,
-    pogo_jumped_at: f32,
-    pub pogo_ready_at: f32,
+    pogo_jumped_at: f64,
+    pub pogo_ready_at: f64,
     /// A dive is on its way down (since this time): strike where it lands.
-    diving: Option<f32>,
-    pub dive_ready_at: f32,
-    pub dodge_ready_at: f32,
+    diving: Option<f64>,
+    pub dive_ready_at: f64,
+    pub dodge_ready_at: f64,
     /// Shadow dashing through a foe: its bumps don't count until then.
-    pub untouchable_until: f32,
+    pub untouchable_until: f64,
     opener: Option<Opener>,
-    pub opener_ready_at: f32,
-    pub leap_ready_at: f32,
+    pub opener_ready_at: f64,
+    pub leap_ready_at: f64,
+    /// Play, not a fight (pestering the cursor): no spells, so no dives (soul is for foes).
+    play: bool,
 }
 
 /// What the kit did with this tick's input.
@@ -232,24 +234,29 @@ pub(crate) enum KitMove {
 }
 
 impl Kit {
-    pub fn new(now: f32) -> Self {
+    pub fn new(now: f64) -> Self {
         // A fresh fight: openers allowed, a first pogo run right away.
         Self { pogo_ready_at: now, ..Default::default() }
     }
 
+    /// The kit for play (pestering the cursor): pogos, never a dive.
+    pub fn playful(now: f64) -> Self {
+        Self { play: true, ..Self::new(now) }
+    }
+
     /// Bumps that land now count (not while shadow dashing through a foe).
-    pub fn touchable(&self, now: f32) -> bool {
+    pub fn touchable(&self, now: f64) -> bool {
         now >= self.untouchable_until
     }
 
     /// May he bounce now (on a pogo run, or rested since the last one)?
-    pub fn may_pogo(&self, now: f32) -> bool {
+    pub fn may_pogo(&self, now: f64) -> bool {
         self.pogo_run || now >= self.pogo_ready_at
     }
 
     /// The down slash connected: bounce (sets `input.pogo`), and end the run after
     /// [`POGO_CHAIN`] bounces (no more until he has rested).
-    pub fn bounce(&mut self, now: f32, input: &mut MoveInput) {
+    pub fn bounce(&mut self, now: f64, input: &mut MoveInput) {
         if !self.may_pogo(now) {
             return;
         }
@@ -260,9 +267,9 @@ impl Kit {
         }
     }
 
-    fn end_pogo(&mut self, now: f32) {
+    fn end_pogo(&mut self, now: f64) {
         if self.pogo_run || self.chain > 0 {
-            self.pogo_ready_at = now + POGO_REST;
+            self.pogo_ready_at = now + POGO_REST as f64;
         }
         self.pogo_run = false;
         self.chain = 0;
@@ -310,13 +317,13 @@ impl Kit {
             return Some(mv);
         }
         // (Not out of his own pogo jump: that one is for bouncing.)
-        if !self.pogo_run && now >= self.dive_ready_at && ctx.stakes.spells.soul + 1e-4 >= SPELL_SOUL && dive_now(m, &s) {
+        if !self.play && !self.pogo_run && now >= self.dive_ready_at && ctx.stakes.spells.soul + 1e-4 >= SPELL_SOUL && dive_now(m, &s) {
             let dark = ctx.stakes.spells.soul >= 2.0 * SPELL_SOUL - 1e-4;
             ctx.stakes.spells.soul = (ctx.stakes.spells.soul - SPELL_SOUL).max(0.0);
             input.dive_pressed = true;
             input.dive_dark = dark;
             self.diving = Some(now);
-            self.dive_ready_at = now + DIVE_COOLDOWN;
+            self.dive_ready_at = now + DIVE_COOLDOWN as f64;
             self.end_pogo(now);
             ctx.out.stakes.push(StakeEvent::Technique(Technique::Dive { dark }));
             log::debug!("brain: {} onto the foe below", if dark { "descending dark" } else { "desolate dive" });
@@ -334,13 +341,13 @@ impl Kit {
         if now >= self.leap_ready_at && wall_leap_now(m, &s) {
             input.jump_pressed = true;
             input.jump_held = true;
-            self.leap_ready_at = now + LEAP_COOLDOWN;
+            self.leap_ready_at = now + LEAP_COOLDOWN as f64;
             ctx.out.stakes.push(StakeEvent::Technique(Technique::WallLeap));
             return Some(KitMove::WallLeap);
         }
         if now >= self.opener_ready_at && opener_now(m, &s, same_ledge) {
             self.opener = Some(Opener::Charging(0.0));
-            self.opener_ready_at = now + OPENER_COOLDOWN;
+            self.opener_ready_at = now + OPENER_COOLDOWN as f64;
             ctx.out.stakes.push(StakeEvent::Technique(Technique::CrystalOpener));
             log::debug!("brain: crystal dash at the far foe");
             return self.opening(ctx, m, &s, input);
@@ -368,8 +375,8 @@ impl Kit {
         let side = dodge_now(m, &Stance::of(k))?;
         input.x = side.sign();
         input.dash_pressed = true;
-        self.dodge_ready_at = now + DODGE_COOLDOWN;
-        self.untouchable_until = now + k.params.dash_time + 0.2;
+        self.dodge_ready_at = now + DODGE_COOLDOWN as f64;
+        self.untouchable_until = now + (k.params.dash_time + 0.2) as f64;
         self.end_pogo(now);
         ctx.out.stakes.push(StakeEvent::Technique(Technique::Dodge));
         log::debug!("brain: shadow dash through the lunge");

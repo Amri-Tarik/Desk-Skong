@@ -50,9 +50,9 @@ struct Prop {
     win: SpriteWindow,
     /// Twinkle phase (0..1): neighbours don't pulse in step.
     phase: f32,
-    drawn_at: f32,
+    drawn_at: f64,
     /// Clock time it was picked up (fading away fast).
-    vanishing: Option<f32>,
+    vanishing: Option<f64>,
 }
 
 pub struct ShinyProps {
@@ -62,7 +62,7 @@ pub struct ShinyProps {
     props: Vec<Prop>,
     shown: Vec<ShownShiny>,
     /// The knight is picking this one up (since this clock time).
-    pending: Option<(ShinyId, f32)>,
+    pending: Option<(ShinyId, f64)>,
     game_monitors: Vec<RectI>,
     pub capturable: bool,
 }
@@ -73,7 +73,7 @@ pub struct Where<'a> {
     pub terrain: &'a Terrain,
     pub ages: &'a LedgeAges,
     /// Clock of `ages`.
-    pub now: f32,
+    pub now: f64,
     pub occupancy: &'a Occupancy,
     pub knight: Vec2,
     pub reachable: &'a dyn Fn(Vec2) -> bool,
@@ -89,7 +89,7 @@ impl ShinyProps {
     pub fn rescale(&mut self, scale: f32) {
         self.scale = scale;
         for p in &mut self.props {
-            p.drawn_at = f32::NEG_INFINITY;
+            p.drawn_at = f64::NEG_INFINITY;
         }
     }
 
@@ -149,7 +149,7 @@ impl ShinyProps {
         raw.retain(|s| !self.game_monitors.iter().any(|m| m.contains(s.pos.x as i32, s.pos.y as i32 - 1)));
         let shown = shiny::settle(raw, occ, fp);
         let mut created = false;
-        if self.pending.is_some_and(|(id, t)| clock - t > PENDING_SECS || self.shinies.get(id).is_none()) {
+        if self.pending.is_some_and(|(id, t)| (clock - t) as f32 > PENDING_SECS || self.shinies.get(id).is_none()) {
             self.pending = None;
         }
 
@@ -157,10 +157,10 @@ impl ShinyProps {
         for p in &mut self.props {
             if p.vanishing.is_none() && !shown.iter().any(|s| s.id == p.id) {
                 p.win.set_visible(false);
-                p.vanishing = Some(f32::NEG_INFINITY); // hidden / expired: drop now
+                p.vanishing = Some(f64::NEG_INFINITY); // hidden / expired: drop now
             }
         }
-        self.props.retain(|p| p.vanishing.is_none_or(|t| clock - t < VANISH));
+        self.props.retain(|p| p.vanishing.is_none_or(|t| ((clock - t) as f32) < VANISH));
         for s in &shown {
             match self.props.iter_mut().find(|p| p.id == s.id) {
                 Some(p) => p.pos = s.pos,
@@ -169,21 +169,21 @@ impl ShinyProps {
                     win.set_capturable(self.capturable);
                     win.set_click_through(true);
                     let phase = (s.id as f32 * 0.618).fract();
-                    self.props.push(Prop { id: s.id, pos: s.pos, win, phase, drawn_at: f32::NEG_INFINITY, vanishing: None });
+                    self.props.push(Prop { id: s.id, pos: s.pos, win, phase, drawn_at: f64::NEG_INFINITY, vanishing: None });
                     created = true;
                 }
             }
         }
         let size = ((GLINT * self.scale).round() as u32).max(9);
         for p in &mut self.props {
-            if clock - p.drawn_at < 1.0 / FPS {
+            if ((clock - p.drawn_at) as f32) < 1.0 / FPS {
                 continue;
             }
             p.drawn_at = clock;
             let age = shown.iter().find(|s| s.id == p.id).map_or(0.0, |s| s.age);
             let left = self.rules.lifetime_secs - age;
             let alpha = match p.vanishing {
-                Some(t) => 1.0 - (clock - t) / VANISH,
+                Some(t) => 1.0 - (clock - t) as f32 / VANISH,
                 None => (age / FADE_IN).min(left / FADE_OUT).clamp(0.0, 1.0),
             };
             let img = shiny::glint(size, clock, p.phase, alpha);
@@ -219,7 +219,7 @@ impl ShinyProps {
         let clock = self.shinies.clock();
         if let Some(p) = self.props.iter_mut().find(|p| p.id == id) {
             p.vanishing = Some(clock);
-            p.drawn_at = f32::NEG_INFINITY;
+            p.drawn_at = f64::NEG_INFINITY;
         }
         self.shown.retain(|s| s.id != id);
         let geo = self.shinies.reward(&self.rules);

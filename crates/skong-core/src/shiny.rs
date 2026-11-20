@@ -64,7 +64,7 @@ pub struct Shiny {
     pub id: ShinyId,
     pub spot: Spot,
     /// [`Shinies::clock`] when it turned up.
-    pub born: f32,
+    pub born: f64,
 }
 
 /// A shiny on screen this frame.
@@ -84,7 +84,7 @@ pub struct ShinySite<'a> {
     pub terrain: &'a Terrain,
     pub ages: &'a LedgeAges,
     /// Clock of `ages`.
-    pub now: f32,
+    pub now: f64,
     /// Window ledges younger than this (s) carry nothing ([`LASTING_SECS`]; 0 for debug).
     pub min_age: f32,
     pub occupancy: &'a Occupancy,
@@ -164,8 +164,8 @@ pub fn place(site: &ShinySite, taken: &[RectF], salt: u64) -> Option<(Spot, Vec2
 pub struct Shinies {
     list: Vec<Shiny>,
     next_id: ShinyId,
-    clock: f32,
-    next_at: f32,
+    clock: f64,
+    next_at: f64,
     mix: Mix,
 }
 
@@ -178,10 +178,10 @@ impl Shinies {
 
     fn schedule(&mut self, rules: &ShinyRules) {
         let [lo, hi] = rules.every_secs;
-        self.next_at = self.clock + lo + (hi - lo).max(0.0) * self.mix.f32();
+        self.next_at = self.clock + (lo + (hi - lo).max(0.0) * self.mix.f32()) as f64;
     }
 
-    pub fn clock(&self) -> f32 {
+    pub fn clock(&self) -> f64 {
         self.clock
     }
 
@@ -201,9 +201,9 @@ impl Shinies {
     /// [`place`]s it, or calls [`Self::retry_soon`] when there is no room). The timer
     /// only runs while `allowed`.
     pub fn due(&mut self, dt: f32, allowed: bool, rules: &ShinyRules) -> bool {
-        self.clock += dt;
+        self.clock += dt as f64;
         if !allowed {
-            self.next_at += dt;
+            self.next_at += dt as f64;
             return false;
         }
         if self.clock < self.next_at {
@@ -255,7 +255,7 @@ impl Shinies {
     pub fn shown(&mut self, desk: &DesktopSnapshot, terrain: &Terrain, rules: &ShinyRules, width: f32, settled: &dyn Fn(&crate::terrain::Ledge) -> bool) -> Vec<ShownShiny> {
         let clock = self.clock;
         self.list.retain(|s| {
-            let alive = clock - s.born < rules.lifetime_secs;
+            let alive = ((clock - s.born) as f32) < rules.lifetime_secs;
             let open = match s.spot {
                 Spot::Window { id, .. } => desk.window(id).is_some_and(|w| !w.fullscreen),
                 Spot::Ground { .. } => true,
@@ -266,7 +266,7 @@ impl Shinies {
             .iter()
             .filter_map(|s| {
                 let (pos, span) = resolve(terrain, s.spot, width, settled)?;
-                Some(ShownShiny { id: s.id, pos, span, age: clock - s.born })
+                Some(ShownShiny { id: s.id, pos, span, age: (clock - s.born) as f32 })
             })
             .collect()
     }
@@ -323,7 +323,7 @@ pub const PULSE_SECS: f32 = 2.2;
 /// four-point star that breathes slowly, and two tiny satellite sparks that wink now and
 /// then. Mostly dim with a brief brighter twinkle (subtle, never a flash). `phase` (0..1)
 /// keeps neighbouring shinies out of step; `alpha` fades the whole thing.
-pub fn glint(size: u32, t: f32, phase: f32, alpha: f32) -> Image {
+pub fn glint(size: u32, t: f64, phase: f32, alpha: f32) -> Image {
     use std::f32::consts::TAU;
     let size = size.max(5);
     let s = size as f32;
@@ -333,7 +333,7 @@ pub fn glint(size: u32, t: f32, phase: f32, alpha: f32) -> Image {
         return img;
     }
     // 0..1, lingering low with a short rise: sin² sharpened.
-    let wave = 0.5 + 0.5 * (TAU * (t / PULSE_SECS + phase)).sin();
+    let wave = 0.5 + 0.5 * (TAU * ((t / PULSE_SECS as f64).fract() as f32 + phase)).sin();
     let pulse = wave * wave * wave;
     let glow = 0.4 + 0.6 * pulse;
     let (cx, cy) = (s * 0.5, s * 0.5);
@@ -353,7 +353,7 @@ pub fn glint(size: u32, t: f32, phase: f32, alpha: f32) -> Image {
             shape += 0.3 * (ray(u, v, arm * 0.45) + ray(v, u, arm * 0.45));
             let mut a = glow * shape.min(1.0);
             for &(fx, fy, period, off) in &sparks {
-                let wink = (TAU * (t / period + off + phase)).sin().max(0.0).powi(6);
+                let wink = (TAU * ((t / period).fract() as f32 + off + phase)).sin().max(0.0).powi(6);
                 let r = (s * 0.05).max(0.6);
                 let (sx, sy) = (cx + fx * s, cy + fy * s);
                 a += 0.7 * wink * (-((x as f32 + 0.5 - sx).hypot(y as f32 + 0.5 - sy) / r).powi(2)).exp();
@@ -391,7 +391,7 @@ mod tests {
     fn aged(t: &Terrain, secs: f32) -> LedgeAges {
         let mut a = LedgeAges::default();
         let mut now = 0.0;
-        while now <= secs {
+        while now <= secs as f64 {
             a.observe(t, now);
             now += 1.0;
         }
@@ -400,7 +400,7 @@ mod tests {
 
     const FP: Footprint = Footprint { w: 20.0, h: 18.0, room: 60.0 };
 
-    fn site<'a>(t: &'a Terrain, ages: &'a LedgeAges, now: f32, occ: &'a Occupancy) -> ShinySite<'a> {
+    fn site<'a>(t: &'a Terrain, ages: &'a LedgeAges, now: f64, occ: &'a Occupancy) -> ShinySite<'a> {
         ShinySite { terrain: t, ages, now, min_age: LASTING_SECS, occupancy: occ, footprint: FP, knight: Vec2::new(100.0, 1040.0), min_distance: 160.0, area: None, avoid: &[], reachable: &|_| true }
     }
 
@@ -531,7 +531,7 @@ mod tests {
     fn the_glint_twinkles_softly() {
         let size = 24;
         let c = size / 2;
-        let at = |t: f32| glint(size, t, 0.0, 1.0);
+        let at = |t: f32| glint(size, t as f64, 0.0, 1.0);
         // Over one pulse: brightest and dimmest centre.
         let centres: Vec<u32> = (0..44).map(|i| alpha(&at(i as f32 * PULSE_SECS / 44.0), c, c)).collect();
         let (lo, hi) = (*centres.iter().min().unwrap(), *centres.iter().max().unwrap());

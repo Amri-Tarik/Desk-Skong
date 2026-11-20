@@ -50,7 +50,7 @@ pub(crate) struct ShinyChoice {
 #[derive(Clone, Debug, Default)]
 pub struct ShinyMemory {
     shinies: Vec<KnownShiny>,
-    tried: BTreeMap<u64, f32>,
+    tried: BTreeMap<u64, f64>,
     pub(crate) best: Option<ShinyChoice>,
 }
 
@@ -89,7 +89,7 @@ impl Brain {
         mem.shinies.clear();
         mem.shinies.extend_from_slice(shinies);
         let now = self.now;
-        mem.tried.retain(|id, t| now - *t < RETRY_SECS && shinies.iter().any(|s| s.id == *id));
+        mem.tried.retain(|id, t| ((now - *t) as f32) < RETRY_SECS && shinies.iter().any(|s| s.id == *id));
     }
 
     /// The shiny he is going for, if any.

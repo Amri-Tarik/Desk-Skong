@@ -225,7 +225,7 @@ pub enum SwitchReason {
 /// Record of one behaviour switch (for tests and the overlay).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Switch {
-    pub at: f32,
+    pub at: f64,
     pub from: BehaviourKind,
     pub to: BehaviourKind,
     pub reason: SwitchReason,
@@ -258,21 +258,21 @@ pub struct Brain {
     senses: Senses,
     active: Active,
     /// Brain clock (sum of dt).
-    now: f32,
+    now: f64,
     since_switch: f32,
     think_in: f32,
     utilities: Vec<(BehaviourKind, f32)>,
     best_poi: Option<ScoredPoi>,
     best_spot: Option<SpotChoice>,
-    battle_ready_at: f32,
+    battle_ready_at: f64,
     /// The user asked him to fight the cursor (round after round).
     fight_mode: bool,
-    nap_ready_at: f32,
+    nap_ready_at: f64,
     /// Something scary happened here; flee from it.
     flee_from: Option<Vec2>,
     /// A huge fall knocked the knight flat.
     knocked_out: bool,
-    recent_clicks: Vec<f32>,
+    recent_clicks: Vec<f64>,
     last_switch: Option<Switch>,
     last_motion: Motion,
     exertion: f32,
@@ -281,30 +281,30 @@ pub struct Brain {
     visitors: greet::VisitorMemory,
     stakes: StakesMind,
     /// Behaviours that just failed, and when they may be picked again.
-    cooldown: BTreeMap<BehaviourKind, f32>,
+    cooldown: BTreeMap<BehaviourKind, f64>,
     /// Oscillation guard: times the travel direction flipped, current direction, the
     /// last navigation goals, and the end of the current calm-down.
-    reversals: Vec<f32>,
+    reversals: Vec<f64>,
     travel_dir: f32,
     /// Goal at the last counted travel reversal (see `guard_oscillation`).
     reversal_goal: Option<NavGoal>,
     recent_goals: Vec<NavGoal>,
-    calm_until: f32,
+    calm_until: f64,
     /// Seconds bored (above `BoredomConfig::bored`) in a row.
     bored_for: f32,
     /// Earliest time for the next requested world event.
-    next_event_at: f32,
+    next_event_at: f64,
     /// A requested cursor chase invites a battle until then.
-    chase_until: f32,
+    chase_until: f64,
     /// Asked to pester the cursor until then (a bored-knight world event).
-    pester_until: f32,
+    pester_until: f64,
     /// No pestering again before this time.
-    pester_ready_at: f32,
+    pester_ready_at: f64,
     /// Highest tier with an eligible behaviour at the last evaluation.
     top_tier: Tier,
     oscillations: u32,
     /// Last time he fought (the cursor, the Shade) or swung his nail in earnest.
-    last_fight_at: f32,
+    last_fight_at: f64,
     /// The gauntlet ceremony (serial, stage) already done (see `ai::gauntlet`).
     gauntlet_done: Option<(u32, crate::enemy::GauntletStage)>,
     /// Emote bubbles: cooldowns and need latches (see [`expression`]).
@@ -345,15 +345,15 @@ impl Brain {
             travel_dir: 0.0,
             reversal_goal: None,
             recent_goals: Vec::new(),
-            calm_until: f32::NEG_INFINITY,
+            calm_until: f64::NEG_INFINITY,
             bored_for: 0.0,
             next_event_at: 0.0,
-            chase_until: f32::NEG_INFINITY,
-            pester_until: f32::NEG_INFINITY,
+            chase_until: f64::NEG_INFINITY,
+            pester_until: f64::NEG_INFINITY,
             pester_ready_at: 0.0,
             top_tier: Tier::Ambient,
             oscillations: 0,
-            last_fight_at: f32::NEG_INFINITY,
+            last_fight_at: f64::NEG_INFINITY,
             gauntlet_done: None,
             expr: Default::default(),
             cfg,
@@ -367,7 +367,7 @@ impl Brain {
     /// Seconds since he last fought (cursor battles and pestering, the Shade, spells and
     /// nail arts; training drills don't count). Infinite if never.
     pub fn since_fight(&self) -> f32 {
-        self.now - self.last_fight_at
+        (self.now - self.last_fight_at) as f32
     }
 
     pub fn mind(&self) -> &Mind {
@@ -461,7 +461,7 @@ impl Brain {
     /// One tick. Call every frame (or at a fixed rate) before physics.
     pub fn tick(&mut self, p: &Percepts, nav: &mut dyn Navigator) -> Intent {
         let dt = p.dt.max(0.0);
-        self.now += dt;
+        self.now += dt as f64;
         self.since_switch += dt;
         self.think_in -= dt;
         self.senses.update(p, self.now, &self.cfg);
@@ -495,6 +495,9 @@ impl Brain {
         self.mind.update(dt, Exertion { asleep, seated, exertion: self.exertion, with_user }, self.senses.user_away, &self.cfg);
 
         if self.senses.held {
+            // Bumps while the user holds him don't count (nor pile up for the release: a
+            // backlog would land all at once, a sudden death against Grimm).
+            self.stakes.fight.hits = 0;
             nav.stop();
             out.behaviour = Some(self.active.kind());
             out.reason = "held by the user".into();
@@ -524,7 +527,7 @@ impl Brain {
                 // Don't re-pick what just failed (e.g. the same unreachable seat) at once.
                 let kind = self.active.kind();
                 log::debug!("brain: {} failed; cooling down for {FAIL_COOLDOWN} s", kind.label());
-                self.cooldown.insert(kind, self.now + FAIL_COOLDOWN);
+                self.cooldown.insert(kind, self.now + FAIL_COOLDOWN as f64);
             }
             self.think(p, nav, &mut out, true);
         }
@@ -600,15 +603,15 @@ impl Brain {
             self.mind.excite(0.3);
         }
         out.request = Some(ev);
-        self.next_event_at = self.now + b.event_gap;
+        self.next_event_at = self.now + b.event_gap as f64;
         self.bored_for = 0.0;
     }
 
     /// Pestering ended (done, or something else took over): the invitation is used up and
     /// he leaves the cursor alone for a while.
     fn pester_over(&mut self) {
-        self.pester_until = f32::NEG_INFINITY;
-        self.pester_ready_at = self.pester_ready_at.max(self.now + 120.0 / self.cfg.bother_level.max(0.05));
+        self.pester_until = f64::NEG_INFINITY;
+        self.pester_ready_at = self.pester_ready_at.max(self.now + (120.0 / self.cfg.bother_level.max(0.05)) as f64);
     }
 
     /// Sleeping: the seated "nap" act, or deep sleep ("bow_down") during a nap.
@@ -768,7 +771,7 @@ impl Brain {
                 self.travel_dir = dir;
             }
         }
-        self.reversals.retain(|t| self.now - *t <= OSC_WINDOW);
+        self.reversals.retain(|t| (self.now - *t) as f32 <= OSC_WINDOW);
         if self.reversals.len() < OSC_REVERSALS {
             return;
         }
@@ -784,11 +787,11 @@ impl Brain {
                 NavGoal::Point(g) => PoiTarget::Spot(g),
                 NavGoal::OnWindow(id) => PoiTarget::Window(id),
             };
-            self.interest.block(target, self.now + behaviours::FAILED_TARGET_SECS);
+            self.interest.block(target, self.now + behaviours::FAILED_TARGET_SECS as f64);
         }
         self.reversals.clear();
         self.travel_dir = 0.0;
-        self.calm_until = self.now + CALM_SECS;
+        self.calm_until = self.now + CALM_SECS as f64;
         self.oscillations += 1;
         self.switch_to(BehaviourKind::Idle, SwitchReason::Calming, p, nav, out);
     }
@@ -933,7 +936,7 @@ impl Brain {
             let after = if b.outcome() == Some(Outcome::GaveUp) { base * 0.5 } else { base };
             // Fight mode: a short breather (pick up the spilled Geo), then the next round.
             let after = if self.fight_mode { 6.0 } else { after };
-            self.battle_ready_at = self.now + after;
+            self.battle_ready_at = self.now + after as f64;
         }
     }
 

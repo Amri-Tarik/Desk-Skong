@@ -80,10 +80,10 @@ pub struct GeoSources {
     /// Seconds of presence until the next shower.
     shower_in: f32,
     /// Times (on our clock) of recent shatters.
-    shatters: Vec<f32>,
+    shatters: Vec<f64>,
     /// When each window last paid out (on our clock).
-    paid: HashMap<WindowId, f32>,
-    clock: f32,
+    paid: HashMap<WindowId, f64>,
+    clock: f64,
     rng: Xorshift,
 }
 
@@ -111,7 +111,7 @@ impl GeoSources {
     /// Advance the clock. `present` = the user is around; `quiet` = a fullscreen app or
     /// fast typing (the timer pauses). Returns a shower when one is due.
     pub fn tick(&mut self, dt: f32, present: bool, quiet: bool, loose: u32, bounds: RectF) -> Option<GeoDrop> {
-        self.clock += dt;
+        self.clock += dt as f64;
         if !present || quiet {
             return None;
         }
@@ -157,14 +157,14 @@ impl GeoSources {
     fn shatter(&mut self, id: WindowId, rect: RectI, loose: u32) -> Option<GeoDrop> {
         let c = self.cfg;
         let clock = self.clock;
-        self.paid.retain(|_, t| clock - *t < c.repay_after);
+        self.paid.retain(|_, t| ((clock - *t) as f32) < c.repay_after);
         if self.paid.contains_key(&id) {
             return None;
         }
         if rect.width() < c.min_window_side || rect.height() < c.min_window_side || loose >= c.max_loose {
             return None;
         }
-        self.shatters.retain(|t| self.clock - t < c.shatter_window);
+        self.shatters.retain(|t| ((self.clock - t) as f32) < c.shatter_window);
         if self.shatters.len() >= c.max_shatters {
             return None;
         }

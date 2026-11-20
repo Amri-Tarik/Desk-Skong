@@ -170,11 +170,11 @@ fn rock_art(data: &Path, vanilla: &Path, px_per_unit: f32) -> anyhow::Result<Vec
 }
 
 /// Which rock shape a find uses, and the frame to show at `clock` (`None` = idle).
-fn rock_frame(id: FindId, rocks: &[RockArt], clock: f32) -> (usize, Option<usize>) {
+fn rock_frame(id: FindId, rocks: &[RockArt], clock: f64) -> (usize, Option<usize>) {
     let variant = (id % rocks.len().max(1) as u64) as usize;
     let Some(rock) = rocks.get(variant) else { return (0, None) };
     let period = GLEAM_EVERY + (id % 5) as f32 * 0.7;
-    let t = (clock + (id % 97) as f32 * 0.37) % period;
+    let t = ((clock + (id % 97) as f64 * 0.37) % period as f64) as f32;
     let f = (t * rock.gleam_fps) as usize;
     (variant, (f < rock.gleam.len()).then_some(f))
 }
@@ -207,12 +207,12 @@ struct Prop {
     shown: Shown,
     win: SpriteWindow,
     /// Clock time its reveal started (None: it was always there).
-    revealed: Option<f32>,
+    revealed: Option<f64>,
     /// Clock time it last resolved on its window.
-    seen_at: f32,
+    seen_at: f64,
     /// Seconds of hit shake left.
     shake: f32,
-    drawn_at: f32,
+    drawn_at: f64,
     dirty: bool,
     /// Deposit frame last drawn (art region, rock shape, gleam frame).
     frame: (usize, usize, Option<usize>),
@@ -238,17 +238,17 @@ pub struct Discoveries {
     props: Vec<Prop>,
     shown: Vec<Shown>,
     /// Recently revealed finds with their reveal time.
-    reveals: Vec<(FindId, f32)>,
-    clock: f32,
+    reveals: Vec<(FindId, f64)>,
+    clock: f64,
     ages: LedgeAges,
     /// Terrain generation and clock of the last [`LedgeAges::observe`].
-    observed: (u64, f32),
+    observed: (u64, f64),
     /// The window the knight stood on last update (arrivals place pending finds).
     knight_on: Option<WindowId>,
     /// Monitors running a fullscreen game: nothing shows there.
     game_monitors: Vec<RectI>,
     /// Clock of the last check for broken deposits due to turn up elsewhere.
-    relocate_checked: f32,
+    relocate_checked: f64,
     pub capturable: bool,
     /// Regions ([`REGIONS`] index) of the Geo rocks broken since the pet last looked.
     pub mined: Vec<usize>,
@@ -334,7 +334,7 @@ impl Discoveries {
             reveals: Vec::new(),
             clock: 0.0,
             ages: LedgeAges::default(),
-            observed: (u64::MAX, f32::NEG_INFINITY),
+            observed: (u64::MAX, f64::NEG_INFINITY),
             knight_on: None,
             game_monitors: Vec::new(),
             relocate_checked: 0.0,
@@ -372,14 +372,14 @@ impl Discoveries {
     /// `occ`), create / move / animate the prop windows, and place pending finds when the
     /// knight comes onto their window.
     pub fn update(&mut self, dt: f32, (desk, terrain): (&DesktopSnapshot, &Terrain), benches: &Benches, occ: &mut Occupancy, fx: &mut Fx, (knight, knight_win): (&Character, &SpriteWindow)) {
-        self.clock += dt;
+        self.clock += dt as f64;
         let clock = self.clock;
-        if self.observed.1 == f32::NEG_INFINITY {
+        if self.observed.1 == f64::NEG_INFINITY {
             // What is on screen at start-up was there before we looked: settled already
             // (finds don't vanish for 15 s on every launch). Not "lasting" for new finds.
             self.ages.observe_aged(terrain, clock, skong_core::lasting::SETTLED_SECS);
             self.observed = (terrain.generation, clock);
-        } else if terrain.generation != self.observed.0 || clock - self.observed.1 >= OBSERVE_EVERY {
+        } else if terrain.generation != self.observed.0 || (clock - self.observed.1) as f32 >= OBSERVE_EVERY {
             self.ages.observe(terrain, clock);
             self.observed = (terrain.generation, clock);
         }
@@ -418,7 +418,7 @@ impl Discoveries {
         // Content ledges flicker (re-detection): a find keeps its last spot a moment while
         // its window is open.
         for p in &self.props {
-            if !raw.iter().any(|s| s.id == p.shown.id) && desk.window(p.shown.window).is_some() && clock - p.seen_at < HIDE_GRACE {
+            if !raw.iter().any(|s| s.id == p.shown.id) && desk.window(p.shown.window).is_some() && ((clock - p.seen_at) as f32) < HIDE_GRACE {
                 raw.push(p.shown);
             }
         }
@@ -461,17 +461,17 @@ impl Discoveries {
                     if s.kind == FindKind::Deposit {
                         log::debug!("discoveries: deposit #{} is a {} rock", s.id, REGIONS[rocks_for(&self.rocks, region).0].name);
                     }
-                    self.props.push(Prop { shown: *s, win, revealed, shake: 0.0, seen_at: clock, drawn_at: f32::NEG_INFINITY, dirty: true, frame: (0, 0, None), region });
+                    self.props.push(Prop { shown: *s, win, revealed, shake: 0.0, seen_at: clock, drawn_at: f64::NEG_INFINITY, dirty: true, frame: (0, 0, None), region });
                     created = true;
                 }
             }
         }
         self.shown = shown;
-        self.reveals.retain(|r| clock - r.1 < FRESH_SECS);
+        self.reveals.retain(|r| ((clock - r.1) as f32) < FRESH_SECS);
 
         for p in &mut self.props {
             p.shake = (p.shake - dt).max(0.0);
-            let revealing = p.revealed.is_some_and(|t| clock - t <= REVEAL_SECS + 0.1);
+            let revealing = p.revealed.is_some_and(|t| (clock - t) as f32 <= REVEAL_SECS + 0.1);
             // Geo rocks gleam now and then: redraw when the frame changes.
             if p.shown.kind == FindKind::Deposit && deposit_frame(p, &self.rocks, clock) != p.frame {
                 p.dirty = true;
@@ -499,7 +499,7 @@ impl Discoveries {
 
     /// How long each surface has lasted, and the clock it is measured on (shinies use the
     /// same rule).
-    pub fn ages(&self) -> (&LedgeAges, f32) {
+    pub fn ages(&self) -> (&LedgeAges, f64) {
         (&self.ages, self.clock)
     }
 
@@ -677,14 +677,14 @@ impl Discoveries {
 // --- drawing ------------------------------------------------------------------------
 
 /// The deposit frame `p` shows at `clock`: (art region, rock shape, gleam frame).
-fn deposit_frame(p: &Prop, rocks: &[Vec<RockArt>], clock: f32) -> (usize, usize, Option<usize>) {
+fn deposit_frame(p: &Prop, rocks: &[Vec<RockArt>], clock: f64) -> (usize, usize, Option<usize>) {
     let (region, rocks) = rocks_for(rocks, p.region);
     let (shape, gleam) = rock_frame(p.shown.id, rocks, clock);
     (region, shape, gleam)
 }
 
-fn draw(p: &mut Prop, deposit: &Image, all_rocks: &[Vec<RockArt>], benches: &Benches, s: f32, clock: f32) -> anyhow::Result<()> {
-    let alpha = p.revealed.map_or(1.0, |t| ((clock - t) / REVEAL_SECS).clamp(0.0, 1.0));
+fn draw(p: &mut Prop, deposit: &Image, all_rocks: &[Vec<RockArt>], benches: &Benches, s: f32, clock: f64) -> anyhow::Result<()> {
+    let alpha = p.revealed.map_or(1.0, |t| ((clock - t) as f32 / REVEAL_SECS).clamp(0.0, 1.0));
     let pos = p.shown.pos;
     let rocks = rocks_for(all_rocks, p.region).1;
     match p.shown.kind {
@@ -882,7 +882,7 @@ mod tests {
     fn gleams_play_at_the_clip_speed() {
         let rocks = vec![rock(60, 50)];
         // Somewhere in every period the gleam runs through all 4 frames, then rests.
-        let frames: Vec<Option<usize>> = (0..2000).map(|i| rock_frame(1, &rocks, i as f32 / 100.0).1).collect();
+        let frames: Vec<Option<usize>> = (0..2000).map(|i| rock_frame(1, &rocks, i as f64 / 100.0).1).collect();
         assert!(frames.contains(&Some(3)));
         assert!(frames.iter().filter(|f| f.is_some()).count() < frames.len() / 5);
     }

@@ -76,7 +76,7 @@ const TALK_PLANS: usize = 5;
 pub(crate) struct VisitorMemory {
     seen: BTreeSet<u32>,
     /// Visitors the knight couldn't reach: ignored until the given brain time.
-    snubbed: BTreeMap<u32, f32>,
+    snubbed: BTreeMap<u32, f64>,
     /// Someone new arrived since the last tick (wakes a napping knight).
     pub knock: bool,
 }
@@ -92,7 +92,7 @@ impl VisitorMemory {
         new
     }
 
-    pub fn snub(&mut self, id: u32, until: f32) {
+    pub fn snub(&mut self, id: u32, until: f64) {
         // Forget long-expired snubs.
         self.snubbed.retain(|_, t| *t > until - 600.0);
         self.snubbed.insert(id, until);
@@ -105,7 +105,7 @@ impl VisitorMemory {
 
     /// The visitor worth greeting now: not yet greeted, not leaving, not given up on;
     /// the one already talking first, else the nearest.
-    pub fn target<'v>(&self, visitors: &'v [Visitor], knight: Vec2, now: f32) -> Option<&'v Visitor> {
+    pub fn target<'v>(&self, visitors: &'v [Visitor], knight: Vec2, now: f64) -> Option<&'v Visitor> {
         visitors
             .iter()
             .filter(|v| !v.greeted && v.state != VisitorState::Leaving && !self.snubbed.get(&v.id).is_some_and(|t| *t > now))

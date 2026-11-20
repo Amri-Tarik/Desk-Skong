@@ -61,7 +61,7 @@ pub struct HighlightMemory {
     seen: Option<Seen>,
     next_id: u32,
     /// No new curiosity before this brain time.
-    ready_at: f32,
+    ready_at: f64,
     pub(crate) best: Option<HighlightChoice>,
 }
 
@@ -97,15 +97,15 @@ impl HighlightMemory {
     }
 
     /// Done with selection `id`: looked at it; leave selections alone for a while.
-    pub(crate) fn looked(&mut self, id: u32, now: f32) {
+    pub(crate) fn looked(&mut self, id: u32, now: f64) {
         if let Some(s) = self.seen.as_mut().filter(|s| s.id == id) {
             s.looked = true;
         }
-        self.ready_at = now + COOLDOWN_SECS;
+        self.ready_at = now + COOLDOWN_SECS as f64;
     }
 
     /// The selection, if it is news worth a look (`going`: he is already on his way to it).
-    fn news(&self, now: f32, going: Option<u32>) -> Option<Seen> {
+    fn news(&self, now: f64, going: Option<u32>) -> Option<Seen> {
         let s = self.seen.filter(|s| !s.looked)?;
         if Some(s.id) == going {
             return Some(s);
@@ -299,7 +299,7 @@ mod tests {
             m.observe(Some(r2), 0.1);
         }
         assert!(m.news(10.0, None).is_none());
-        assert!(m.news(1.0 + COOLDOWN_SECS, None).is_some());
+        assert!(m.news(1.0 + COOLDOWN_SECS as f64, None).is_some());
     }
 
     #[test]

@@ -93,9 +93,9 @@ pub struct GateWish {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct GateMind {
     /// No new gate before this brain time.
-    pub ready_at: f32,
+    pub ready_at: f64,
     pub wish: Option<GateWish>,
-    scanned_at: f32,
+    scanned_at: f64,
     /// Warped to this prize; the brain tidies up what lives outside the behaviour.
     pub landed: Option<Prize>,
     /// Warps so far.
@@ -104,7 +104,7 @@ pub(crate) struct GateMind {
 
 impl Default for GateMind {
     fn default() -> Self {
-        Self { ready_at: 0.0, wish: None, scanned_at: f32::NEG_INFINITY, landed: None, warps: 0 }
+        Self { ready_at: 0.0, wish: None, scanned_at: f64::NEG_INFINITY, landed: None, warps: 0 }
     }
 }
 
@@ -238,7 +238,7 @@ impl Brain {
             self.stakes.gate.wish = None;
             return;
         }
-        if self.now - self.stakes.gate.scanned_at < cfg.scan_every {
+        if ((self.now - self.stakes.gate.scanned_at) as f32) < cfg.scan_every {
             return;
         }
         self.stakes.gate.scanned_at = self.now;
@@ -308,7 +308,7 @@ impl DreamGate {
     pub fn start(ctx: &mut Ctx, wish: GateWish) -> Self {
         ctx.nav.stop();
         let gate = &mut ctx.stakes.gate;
-        gate.ready_at = ctx.now + ctx.cfg.dream_gate.cooldown;
+        gate.ready_at = ctx.now + ctx.cfg.dream_gate.cooldown as f64;
         gate.wish = None;
         log::info!("brain: no way to the {} at ({:.0},{:.0}); dream gate to ({:.0},{:.0})", wish.prize.label(), wish.target.x, wish.target.y, wish.at.x, wish.at.y);
         ctx.face_toward(wish.target.x);

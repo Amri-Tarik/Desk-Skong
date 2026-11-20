@@ -165,7 +165,7 @@ pub struct Site<'a> {
     pub terrain: &'a Terrain,
     pub ages: &'a LedgeAges,
     /// Clock of `ages`.
-    pub now: f32,
+    pub now: f64,
     /// Ledges younger than this (s) carry nothing ([`LASTING_SECS`]; 0 for debug reveals).
     pub min_age: f32,
     pub occupancy: &'a Occupancy,
@@ -603,7 +603,7 @@ mod tests {
     fn aged(t: &Terrain, secs: f32) -> LedgeAges {
         let mut a = LedgeAges::default();
         let mut now = 0.0;
-        while now <= secs {
+        while now <= secs as f64 {
             a.observe(t, now);
             now += 1.0;
         }
@@ -614,7 +614,7 @@ mod tests {
         terrain: Terrain,
         ages: LedgeAges,
         occ: Occupancy,
-        now: f32,
+        now: f64,
         min_age: f32,
     }
 

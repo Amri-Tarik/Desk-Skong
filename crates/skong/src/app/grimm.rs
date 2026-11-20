@@ -104,8 +104,11 @@ impl Pet {
                 events.push(e);
             }
         }
-        self.enemy_hits += step.hits;
-        if let Some(by) = step.hit_by {
+        // Held or steered by the user: his blows don't count (no backlog for afterwards).
+        if self.hittable() {
+            self.enemy_hits += step.hits;
+        }
+        if let Some(by) = step.hit_by.filter(|_| self.hittable()) {
             log::info!("grimm: {by:?} caught the knight");
         }
         if let Some((at, geo)) = step.reward {

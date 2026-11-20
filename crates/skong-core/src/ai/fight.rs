@@ -106,14 +106,25 @@ pub(crate) struct FightMind {
     /// Bumps from foes not yet taken into account.
     pub hits: u32,
     /// No fighting enemies before this time (he backed off).
-    pub ready_at: f32,
+    pub ready_at: f64,
     /// Foes he gave up on (unreachable), until the given time.
-    pub snubbed: BTreeMap<(FoeKind, u32), f32>,
+    pub snubbed: BTreeMap<(FoeKind, u32), f64>,
+    /// The masks of the fight under way (or cut short by something urgent: fleeing, the
+    /// Shade). A fight picked up again in the same encounter carries on with them; it is
+    /// forgotten when the fight ends or its foes are gone.
+    pub masks: Option<FightMasks>,
+}
+
+/// Masks left in a fight against the boss or against enemies.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct FightMasks {
+    pub boss: bool,
+    pub left: u32,
 }
 
 /// Spar first, then the boss, then the nearest enemy (not given up on, alive), then a
 /// lantern to strike. Flames are never targets.
-fn pick<'f>(foes: &'f [Foe], snubbed: &BTreeMap<(FoeKind, u32), f32>, knight: Vec2, now: f32) -> Option<&'f Foe> {
+fn pick<'f>(foes: &'f [Foe], snubbed: &BTreeMap<(FoeKind, u32), f64>, knight: Vec2, now: f64) -> Option<&'f Foe> {
     let rank = |k: FoeKind| match k {
         FoeKind::Sparring => 0,
         FoeKind::Boss => 1,
@@ -141,6 +152,12 @@ impl Brain {
             self.mind.excite(0.3);
         }
         self.stakes.fight.hits += hits;
+        // The encounter is over once its foes are gone: a later fight starts afresh.
+        if let Some(m) = self.stakes.fight.masks
+            && !foes.iter().any(|f| f.kind == if m.boss { FoeKind::Boss } else { FoeKind::Enemy })
+        {
+            self.stakes.fight.masks = None;
+        }
         self.senses.foes = foes;
     }
 
@@ -216,6 +233,8 @@ pub(crate) struct Fight {
     boss: bool,
     /// Answered the boss's bow.
     bowed: bool,
+    /// Masks left from this encounter's fight that something urgent cut short.
+    carried: Option<FightMasks>,
 }
 
 /// Where to stand under a foe (the ledge below its feet).
@@ -292,9 +311,14 @@ impl Fight {
             kit: Kit::new(ctx.now),
             boss: false,
             bowed: false,
+            carried: ctx.stakes.fight.masks.take(),
         };
         ctx.stakes.fight.hits = 0;
         f.aim(ctx, &foe);
+        // Back to a fight something urgent cut short: the masks it left him with.
+        if let Some(m) = f.carried.filter(|m| !m.boss && !f.boss && foe.kind == FoeKind::Enemy) {
+            f.masks = m.left.clamp(1, f.masks);
+        }
         // A spar opens with a proper challenge.
         if foe.kind == FoeKind::Sparring && ctx.grounded() && matches!(f.phase, Phase::Engage) {
             ctx.face_toward(foe.pos.x);
@@ -313,7 +337,9 @@ impl Fight {
         if foe.kind == FoeKind::Boss && !self.boss {
             // The real thing: his masks count against the boss now, and they are his life.
             self.boss = true;
-            self.masks = ctx.cfg.fight.boss_masks.max(1);
+            let full = ctx.cfg.fight.boss_masks.max(1);
+            // The same show, picked up again after something urgent: no fresh masks.
+            self.masks = self.carried.filter(|m| m.boss).map_or(full, |m| m.left.clamp(1, full));
             ctx.mind.excite(0.4);
             log::info!("brain: the troupe master! {} masks", self.masks);
         }
@@ -329,7 +355,7 @@ impl Fight {
 
     fn snub(ctx: &mut Ctx, target: (FoeKind, u32), secs: f32) {
         ctx.stakes.fight.snubbed.retain(|_, t| *t > ctx.now);
-        ctx.stakes.fight.snubbed.insert(target, ctx.now + secs);
+        ctx.stakes.fight.snubbed.insert(target, ctx.now + secs as f64);
     }
 
     /// The current target gone (beaten or left): the next one, or done.
@@ -399,6 +425,14 @@ impl Fight {
     }
 
     pub fn tick(&mut self, ctx: &mut Ctx) -> Status {
+        let status = self.step(ctx);
+        // Note the masks while it runs (an urgent call may cut it short; see `FightMind`).
+        let counted = self.boss || self.target.0 == FoeKind::Enemy;
+        ctx.stakes.fight.masks = (status == Status::Running && counted).then_some(FightMasks { boss: self.boss, left: self.masks });
+        status
+    }
+
+    fn step(&mut self, ctx: &mut Ctx) -> Status {
         let dt = ctx.dt();
         self.elapsed += dt;
         self.attack_cd -= dt;
@@ -430,7 +464,7 @@ impl Fight {
             ctx.mind.startle(0.15);
             if self.masks == 0 {
                 ctx.nav.stop();
-                ctx.stakes.fight.ready_at = ctx.now + cfg.retry;
+                ctx.stakes.fight.ready_at = ctx.now + cfg.retry as f64;
                 if self.boss {
                     log::info!("brain: out of masks against the troupe master");
                     ctx.stakes.pending_death = Some((DeathKind::Fight, false));
@@ -463,7 +497,7 @@ impl Fight {
         let boss = foe.kind == FoeKind::Boss;
         if self.elapsed > cfg.max_secs && !boss {
             ctx.nav.stop();
-            ctx.stakes.fight.ready_at = ctx.now + cfg.retry;
+            ctx.stakes.fight.ready_at = ctx.now + cfg.retry as f64;
             return Status::Done;
         }
         if matches!(self.phase, Phase::Approach(_) | Phase::Engage)

@@ -31,15 +31,15 @@ pub(crate) struct Companion {
     travel: Option<Travel>,
     /// Where the current travel goes.
     goal: Vec2,
-    goal_set_at: f32,
+    goal_set_at: f64,
     /// Seconds the cursor has been out of comfort range.
     drift: f32,
     /// Don't follow again before this time (after a failed trip).
-    rest_until: f32,
+    rest_until: f64,
     beat: Beat,
-    last_stare: f32,
-    last_pace: f32,
-    last_gaze: f32,
+    last_stare: f64,
+    last_pace: f64,
+    last_gaze: f64,
     doing: Doing,
     /// Last act's reason.
     why: &'static str,
@@ -51,13 +51,13 @@ impl Companion {
         Self {
             travel: None,
             goal: ctx.p.knight.pos,
-            goal_set_at: f32::NEG_INFINITY,
+            goal_set_at: f64::NEG_INFINITY,
             drift: 0.0,
             rest_until: 0.0,
             beat: Beat::new(gap),
-            last_stare: f32::NEG_INFINITY,
-            last_pace: f32::NEG_INFINITY,
-            last_gaze: f32::NEG_INFINITY,
+            last_stare: f64::NEG_INFINITY,
+            last_pace: f64::NEG_INFINITY,
+            last_gaze: f64::NEG_INFINITY,
             doing: Doing::Attending,
             why: "",
         }
@@ -205,7 +205,7 @@ impl Companion {
     /// stroll to the cursor's other side (if a stroll really gets there).
     fn pace(&mut self, ctx: &mut Ctx) -> bool {
         let Some(c) = ctx.senses.cursor else { return false };
-        if ctx.now - self.last_pace < PACE_GAP {
+        if ((ctx.now - self.last_pace) as f32) < PACE_GAP {
             return false;
         }
         self.last_pace = ctx.now;
@@ -241,7 +241,7 @@ impl Companion {
         if c.offset.y > 140.0 && c.offset.x.abs() < 500.0 {
             return (ActWait::named(ctx, "look_down"), "cursor below");
         }
-        if c.still_for > 3.0 && c.dist() < 400.0 && ctx.now - self.last_stare >= cfg.stare_cooldown {
+        if c.still_for > 3.0 && c.dist() < 400.0 && (ctx.now - self.last_stare) as f32 >= cfg.stare_cooldown {
             self.last_stare = ctx.now;
             return (ActWait::named(ctx, "stare_at_user"), "cursor resting near me");
         }

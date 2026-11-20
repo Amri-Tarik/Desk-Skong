@@ -53,6 +53,8 @@ pub struct KnightState {
     pub hurt: f32,
     /// He backed off from a fight (knocked about) and leaves enemies alone for now.
     pub backed_off: bool,
+    /// His Shade waits to be reclaimed (no gauntlet starts meanwhile).
+    pub shade: bool,
 }
 
 pub struct Enemies {
@@ -328,6 +330,7 @@ impl Enemies {
             knight_fighting: ks.fighting,
             knight_down: ks.down,
             knight_hurt: ks.backed_off || ks.hurt > g.cfg.hurt,
+            shade: ks.shade,
             knight_at: w.knight.pos,
             ready: w.graph.is_some(),
         };
