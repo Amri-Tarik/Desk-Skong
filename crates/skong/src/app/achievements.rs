@@ -8,8 +8,9 @@
 //! at the end of every tick. Other modules only expose what happened (`Visitors::take_news`,
 //! `Enemies::killed`, `Discoveries::mined`, `Stakes::shattered`).
 //!
-//! An unlock is announced quietly: a small sparkle above his head, a line in the tray
-//! tooltip, a log line, and the panel's Achievements tab (sent only on change). Progress is
+//! An unlock is announced with a small sparkle above his head, the "area title" banner
+//! near the top of his monitor (`banner.rs`; queued, never over a fullscreen game or app),
+//! a line in the tray tooltip, a log line, and the panel's journal (sent only on change). Progress is
 //! saved to `%APPDATA%\Desk-Skong\achievements.json`.
 //!
 //! **The sandbox** also lives here: once the user enables it ([`Pet::enable_sandbox`]),
@@ -18,6 +19,7 @@
 use std::path::{Path, PathBuf};
 
 use skong_core::achievements::{self, AchievementEvent as E, Tracker, Totals};
+use skong_core::banner::BannerText;
 use skong_core::ai::{BehaviourKind, FoeKind, Intent, Poke, StakeEvent};
 use skong_core::controller::{BehindPhase, MoveEvent, MoveState};
 use skong_core::geom::Vec2;
@@ -210,18 +212,35 @@ impl Pet {
     /// One event into the tracker; unlocks are announced quietly.
     pub(super) fn achieve(&mut self, ev: E) {
         let Some(t) = self.achievements.tracker.as_mut() else { return };
-        let fresh: Vec<String> = t.on(&ev, now_unix()).into_iter().map(|d| d.title.clone()).collect();
+        let fresh: Vec<(String, String)> = t.on(&ev, now_unix()).into_iter().map(|d| (d.title.clone(), d.description.clone())).collect();
         if fresh.is_empty() {
             return;
         }
         let (n, total) = (t.unlocked_count(), t.total());
-        for title in &fresh {
+        for (title, description) in &fresh {
             log::info!("achievement unlocked: {title} ({n} / {total})");
+            self.banner.push(BannerText::achievement(title, description));
         }
         self.emotes.show(Emote::Spark);
-        self.achievements.tip = fresh.last().map(|t| (t.clone(), TIP_SECS));
+        self.achievements.tip = fresh.last().map(|t| (t.0.clone(), TIP_SECS));
         self.achievements.changed = true;
         self.achievements.since_save = SAVE_GAP; // an unlock is saved right away
+    }
+
+    /// Test tab: queue the banner for the latest unlock (or a sample when none is found
+    /// yet). Says where it will show.
+    pub(super) fn preview_banner(&mut self) {
+        let latest = self.achievements.tracker.as_ref().and_then(|t| t.defs().iter().filter_map(|d| t.unlocked_at(&d.id).map(|at| (at, d))).max_by_key(|(at, _)| *at).map(|(_, d)| BannerText::achievement(&d.title, &d.description)));
+        let text = latest.unwrap_or_else(|| BannerText::achievement("A Knight on the Desk", "A preview of how an unlocked achievement is announced."));
+        let title = text.title.clone();
+        self.banner.push(text);
+        let desk = self.watcher.snapshot();
+        let blocked = skong_core::banner::blocked_monitors(desk, &self.games.game_monitors);
+        if skong_core::banner::pick_monitor(desk, self.ch.pos, &blocked).is_some() {
+            self.note(true, format!("banner preview: \"{title}\" (after any already queued)"));
+        } else {
+            self.note(false, format!("banner preview: \"{title}\" waits — a fullscreen game or app covers every monitor"));
+        }
     }
 
     /// Index of the monitor under `p` (feet); `usize::MAX` off every monitor.

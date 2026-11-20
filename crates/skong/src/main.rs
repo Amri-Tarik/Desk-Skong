@@ -12,6 +12,7 @@ mod control;
 mod logring;
 mod overlay;
 mod benches;
+mod banner;
 mod bubble;
 mod npcs;
 mod enemies;

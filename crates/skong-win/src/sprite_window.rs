@@ -30,6 +30,8 @@ pub struct SpriteWindow {
     cap: (u32, u32),
     /// Last presented geometry, to skip redundant updates.
     shown: Option<(i32, i32, u32, u32)>,
+    /// Whole-window opacity applied on top of the per-pixel alpha (255: as drawn).
+    opacity: u8,
 }
 
 /// Mouse activity on a sprite window (screen coordinates).
@@ -129,7 +131,7 @@ impl SpriteWindow {
             }
             live_windows().lock().map(|mut l| l.push(hwnd.0 as isize)).ok();
             let dc = CreateCompatibleDC(None);
-            let mut win = Self { hwnd, dc, bitmap: HBITMAP::default(), old_bitmap: HGDIOBJ::default(), bits: std::ptr::null_mut(), cap: (0, 0), shown: None };
+            let mut win = Self { hwnd, dc, bitmap: HBITMAP::default(), old_bitmap: HGDIOBJ::default(), bits: std::ptr::null_mut(), cap: (0, 0), shown: None, opacity: 255 };
             win.ensure_capacity(256, 256)?;
             let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
             Ok(win)
@@ -217,8 +219,20 @@ impl SpriteWindow {
         self.update_layered(Some((x, y)), None)
     }
 
+    /// Fade the whole window (0..=255) without re-uploading pixels (after a `present`).
+    pub fn set_opacity(&mut self, opacity: u8) -> Result<()> {
+        if opacity == self.opacity {
+            return Ok(());
+        }
+        self.opacity = opacity;
+        if self.shown.is_none() {
+            return Ok(());
+        }
+        self.update_layered(None, None)
+    }
+
     fn update_layered(&mut self, pos: Option<(i32, i32)>, size: Option<(u32, u32)>) -> Result<()> {
-        let blend = BLENDFUNCTION { BlendOp: AC_SRC_OVER as u8, BlendFlags: 0, SourceConstantAlpha: 255, AlphaFormat: AC_SRC_ALPHA as u8 };
+        let blend = BLENDFUNCTION { BlendOp: AC_SRC_OVER as u8, BlendFlags: 0, SourceConstantAlpha: self.opacity, AlphaFormat: AC_SRC_ALPHA as u8 };
         let pt = pos.map(|(x, y)| POINT { x, y });
         let sz = size.map(|(w, h)| SIZE { cx: w as i32, cy: h as i32 });
         let src = POINT { x: 0, y: 0 };

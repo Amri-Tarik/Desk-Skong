@@ -16,7 +16,7 @@ default scale 0.6).
 | `skong-win` | Win32: windows, capture, input, tray, overlay. |
 | `skong` | The pet binary (`skong.exe`). |
 | `skong-ipc` | Panel ⇄ pet protocol types (`Command`, `PanelMsg`, `PetMsg`, `Status`). |
-| `skong-panel` | Control panel binary (`skong-panel.exe`, eframe/egui); also the first-run art setup window (`--setup`). |
+| `skong-panel` | Control panel binary (`skong-panel.exe`, eframe/egui); also the first-run art setup window (`--setup`). Its look lives in `ui/style.rs` (Hallownest at dusk: near-black blue-grey, bone-white text, muted silver lines, square frames with corner ticks, drawn ornamental dividers, Cinzel headings, Crimson Pro body at 17 px / subtext 15 px, a muted ember only for the sandbox warning). `geo.rs` rasterizes the wallet's Geo icon at runtime from the player's extracted art (the pet's own `Geo`/`coin0000` sprite; a drawn pale stone without it). |
 | `skong-extract` | Reads the atlases and prop sprites from the player's Hollow Knight install (Unity serialized files, BC7/DXT/RGBA decoding) into `%APPDATA%\Desk-Skong\skins\Vanilla`; finds the install. See [DEVELOPING.md](DEVELOPING.md). |
 
 ### `skong-core` modules
@@ -44,13 +44,15 @@ default scale 0.6).
 | `stakes` | Shade simulation, Geo coins/physics/wallet, spellbook (soul, spells, nail arts), sources (battles, shattered windows, showers). |
 | `enemy` | Enemies (`data/enemies.json`): arrival planning (walk in from a monitor edge, drop onto a settled ledge, fly in), the sim (ride windows, patrol / hover, notice, chase, wind-up + lunge, recoil + flash, death clip, corpse fade), contact bumps; seen by the brain as `Foe`s (`ai::fight`, the `Fight` behaviour). Zote's spar lives in `npc::spar` + the visitor actor; Hornet's race and duel in `npc::challenge` / `npc::race` / `npc::duel` (app side: `npcs/challenge.rs`). `enemy::gauntlet`: the gauntlet director (triggers, start rules, waves, reward, aborts; pure, driven by `enemies.rs`), seen by the brain as a `GauntletCue` (`ai::gauntlet`, the `Gauntlet` ceremony behaviour). `enemy::grimm`: the secret boss (`data/grimm.json`): `GrimmDirector` (the scarlet lantern once enough achievements are unlocked — the user clicks it, it waits ~30 min —, his rare friendly visit `Cameo`, debug summons, start rules, aborts, endings) and `Grimm` (teleports, dive / ground dash, slashes + uppercut, firebats, flame pillars, spikes, the balloon at each phase; every spot relative to the knight's ledge, flames ignore windows). Seen by the brain as a `SceneCue` (the flame, the cameo), `FoeKind::Boss` (fought at 0.98, lethal: `fight.boss_masks`) and `FoeKind::Hazard` (his flames: `Fight::evade` dodges, jumps, steps off pillars, keeps clear of the balloon). |
 | `achievements` | Hidden achievements (`data/achievements.json`): the `Tracker` consumes a small `AchievementEvent` stream and holds every criterion (counts, "every region", "never touched the floor"); progress saves as `AchievementSave`. |
+| `banner` | The achievement banner's pure side: the queue and timing (`Banners`: fade in 0.6 s, hold 4 s, fade out 1 s, 0.5 s between queued ones, ≤ 12 waiting), the "never over a fullscreen game or app" rule (`blocked_monitors`: a game guard monitor, or one whose frontmost window is fullscreen; a blocked banner vanishes at once and replays later unless it was fading out), `pick_monitor` (the knight's, else the nearest free one, else wait), `origin` (centred, 7 % below the work area's top), description wrapping, and the drawn mist + ornamental divider. |
+| `fonts` | The two bundled fonts (SIL OFL, `crates/skong-core/fonts/`, licence in `OFL.txt`, shipped as `FONTS-OFL.txt`): Cinzel (engraved capitals, standing in for the game's Trajan) and Crimson Pro (body), embedded with `include_bytes!`; `family_name` reads a TTF's name table. Not game art. |
 | `canvas`, `geom`, `desktop` | Premultiplied BGRA images, rects/vectors, desktop snapshot types. |
 
 ### `skong-win` modules
 
 | Module | What it does |
 |---|---|
-| `sprite_window` | Small topmost per-pixel-alpha layered window (`UpdateLayeredWindow`), capture-excluded (`WDA_EXCLUDEFROMCAPTURE`), flip without allocation, mouse events with capture (grab/throw). One per knight / bench / effect / prop. Layered windows hit-test per pixel (fully transparent pixels pass clicks through); `set_click_through` (`WS_EX_TRANSPARENT`) makes the whole window pass them. Click-through: effects, bubbles, emotes, enemies, Grimm, coins, shinies, lumaflies. Taking the mouse: the knight, the scarlet flame, and the draggable props (dummy, visitors, finds, benches). |
+| `sprite_window` | Small topmost per-pixel-alpha layered window (`UpdateLayeredWindow`), capture-excluded (`WDA_EXCLUDEFROMCAPTURE`), flip without allocation, mouse events with capture (grab/throw). One per knight / bench / effect / prop. Layered windows hit-test per pixel (fully transparent pixels pass clicks through); `set_click_through` (`WS_EX_TRANSPARENT`) makes the whole window pass them. `set_opacity` fades the whole window (`SourceConstantAlpha`) without re-uploading pixels. Click-through: effects, bubbles, emotes, the achievement banner, enemies, Grimm, coins, shinies, lumaflies. Taking the mouse: the knight, the scarlet flame, and the draggable props (dummy, visitors, finds, benches). |
 | `runloop` | High-resolution waitable timer at 120 Hz + `MsgWaitForMultipleObjectsEx` message pump (never spins), global hotkeys. |
 | `desktop` | `DesktopWatcher`: event-driven (`SetWinEventHook`) window/monitor enumeration → `DesktopSnapshot`; per-monitor-v2 DPI. |
 | `capture` | DXGI Desktop Duplication, one thread per output, blocks until the screen changes, reads back only dirty rects, ≤30 Hz, self-exclusion, rate limiting of animated regions; feeds vision + activity (`ContentFeed`). |
@@ -60,6 +62,7 @@ default scale 0.6).
 | `click_capture` | Only while the Test tab places something: low-level mouse + keyboard hooks on their own thread take the next left click anywhere (swallowed, down and up), right-click / Esc cancel; clicks on the control panel pass through. Never moves the cursor. Unhooked on drop; never installed by tests. |
 | `games` | Fullscreen-game detection (Windows GameConfigStore registry, game-library paths, exclusive fullscreen). |
 | `monitor` | Cursor position, primary work area, single-instance mutex, local time. |
+| `text` | GDI text into per-pixel-alpha images (`TextPainter`: speech bubbles, emotes, the place hint, the banner); `register_font` makes an embedded font selectable by name in this process only (`AddFontMemResourceEx`). |
 | `selection` | On by default (tray / panel toggle): where highlighted text is (rectangle only, never the text). Background MTA thread: WinEvent `EVENT_OBJECT_TEXTSELECTIONCHANGED` / foreground hooks → debounced UI Automation query (focused element's TextPattern selection bounds). |
 
 ### `skong` (the pet) — one tick (120 Hz)
@@ -78,7 +81,7 @@ per monitor, pipe server threads for panels. The tick only does non-blocking han
 
 Key app files: `app.rs` (Pet + tick + commands + tray), `app/panel.rs` (status/IPC glue),
 `app/stakes.rs`, `app/discover.rs` (discoveries + shinies), `pastimes.rs` + `app/pastime.rs` (the training dummy and lumaflies), `app/achievements.rs` (the one place
-events become achievement events; announce, save, panel copy), `enemies.rs` + `app/enemy.rs` (enemies, strikes, spar glue), `grimm.rs` + `app/grimm.rs` (the secret boss: art loaded on a background thread when a show draws near, his windows, lines in speech bubbles; world glue), `benches.rs`, `shinies.rs`, `fx.rs` (pooled effect windows),
+events become achievement events; announce, save, panel copy), `banner.rs` (the achievement "area title" banner: its window and GDI text with the bundled fonts; logic in `skong_core::banner`; ticked every frame, also while paused — hidden then, the queue held), `enemies.rs` + `app/enemy.rs` (enemies, strikes, spar glue), `grimm.rs` + `app/grimm.rs` (the secret boss: art loaded on a background thread when a show draws near, his windows, lines in speech bubbles; world glue), `benches.rs`, `shinies.rs`, `fx.rs` (pooled effect windows),
 `app/test.rs` + `placehint.rs` (the panel's Test tab: forced visitors / scenes / enemies / pastimes, placing where the user clicks, the feedback notes in `Status::test`),
 `app/drag.rs` (the user's hand on props and visitors: press / drag / let go on their windows via `grab.rs`'s `Grab`, the fall, the consequences),
 `gameguard.rs`, `navbuild.rs`, `grab.rs`, `control.rs` (pipe server), `logring.rs`

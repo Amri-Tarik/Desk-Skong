@@ -5,11 +5,31 @@ use anyhow::{Context, Result, bail};
 use skong_core::canvas::{Image, over, premul};
 use windows::Win32::Foundation::{COLORREF, SIZE};
 use windows::Win32::Graphics::Gdi::{
-    ANTIALIASED_QUALITY, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CLIP_DEFAULT_PRECIS, CreateCompatibleDC, CreateDIBSection, CreateFontW, DEFAULT_CHARSET,
+    ANTIALIASED_QUALITY, AddFontMemResourceEx, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CLIP_DEFAULT_PRECIS, CreateCompatibleDC, CreateDIBSection, CreateFontW, DEFAULT_CHARSET,
     DIB_RGB_COLORS, DeleteDC, DeleteObject, FF_ROMAN, FW_NORMAL, GetTextExtentPoint32W, GetTextFaceW, GetTextMetricsW, HBITMAP, HDC, HFONT, HGDIOBJ,
     OUT_TT_PRECIS, SelectObject, SetBkMode, SetTextColor, TEXTMETRICW, TRANSPARENT, TextOutW, VARIABLE_PITCH,
 };
 use windows::core::PCWSTR;
+
+/// Make an embedded TrueType font (e.g. `skong_core::fonts::HEADING`) selectable by its
+/// family name in this process only (`AddFontMemResourceEx`: private, not installed, gone
+/// when the process exits). Registering the same bytes again is a no-op.
+pub fn register_font(font: &'static [u8]) -> Result<()> {
+    static DONE: std::sync::Mutex<Vec<usize>> = std::sync::Mutex::new(Vec::new());
+    let mut done = DONE.lock().map_err(|_| anyhow::anyhow!("font registry poisoned"))?;
+    if done.contains(&(font.as_ptr() as usize)) {
+        return Ok(());
+    }
+    let mut count = 0u32;
+    // SAFETY: GDI copies the font data and writes the face count through the (mutable)
+    // pointer; both are valid for the call.
+    let h = unsafe { AddFontMemResourceEx(font.as_ptr().cast(), font.len() as u32, None, (&raw mut count).cast_const()) };
+    if h.is_invalid() || count == 0 {
+        bail!("AddFontMemResourceEx rejected the font ({} bytes)", font.len());
+    }
+    done.push(font.as_ptr() as usize);
+    Ok(())
+}
 
 /// One font, ready to measure and draw lines.
 pub struct TextPainter {
@@ -206,6 +226,26 @@ impl Drop for TextPainter {
             }
             let _ = DeleteObject(self.font.into());
             let _ = DeleteDC(self.dc);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use skong_core::fonts;
+
+    #[test]
+    fn the_bundled_fonts_load_into_gdi_by_name() {
+        for (font, face) in [(fonts::HEADING, fonts::HEADING_FACE), (fonts::BODY, fonts::BODY_FACE)] {
+            register_font(font).unwrap();
+            register_font(font).unwrap(); // twice is fine
+            let mut p = TextPainter::new(&[face], 40, false).unwrap();
+            assert_eq!(p.face, face, "selected the private font, not a fallback");
+            assert!(p.measure("Hallownest") > 100.0);
+            let mut img = Image::new(300, 60);
+            p.draw(&mut img, 0, 0, "Hallownest", [255, 255, 255], 1.0).unwrap();
+            assert!(img.px.iter().any(|&px| px >> 24 > 200), "{face} drew something");
         }
     }
 }

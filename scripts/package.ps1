@@ -5,7 +5,8 @@
 
 .DESCRIPTION
     The zip holds skong.exe, skong-panel.exe, the data\ folder (metadata JSON only), the
-    readme and the licence file. No game art and no game text, ever: the players' own
+    readme, the licence file and FONTS-OFL.txt (the licence of the two fonts embedded in the
+    exes, Cinzel and Crimson Pro, SIL OFL 1.1). No game art and no game text, ever: the players' own
     Hollow Knight install provides the art on first run.
 
     Every file going into the zip is checked; the script fails if anything looks like game
@@ -48,7 +49,7 @@ $Forbidden = @(
     '.txt', '.bytes', '.csv', '.zip', '.7z'
 )
 # Files the zip may hold, by path inside the package folder.
-$AllowedTop = @('skong.exe', 'skong-panel.exe', 'README.md', 'LICENSE.txt')
+$AllowedTop = @('skong.exe', 'skong-panel.exe', 'README.md', 'LICENSE.txt', 'FONTS-OFL.txt')
 
 function Test-PackageContent {
     <#
@@ -109,7 +110,7 @@ if ($SelfTest) {
         return $d
     }
     $json = [System.Text.Encoding]::UTF8.GetBytes('{"fps": 12}')
-    $base = @{ 'skong.exe' = @(77, 90); 'skong-panel.exe' = @(77, 90); 'README.md' = @(35); 'LICENSE.txt' = @(84); 'data/hk/animations/Knight.json' = $json }
+    $base = @{ 'skong.exe' = @(77, 90); 'skong-panel.exe' = @(77, 90); 'README.md' = @(35); 'LICENSE.txt' = @(84); 'FONTS-OFL.txt' = @(83); 'data/hk/animations/Knight.json' = $json }
     $cases = @(
         @{ name = 'clean'; extra = @{}; ok = $true },
         @{ name = 'png'; extra = @{ 'data/hk/Knight.png' = @(0x89, 0x50, 0x4E, 0x47, 13, 10, 26, 10) }; ok = $false },
@@ -174,6 +175,8 @@ try {
         Copy-Item (Join-Path $Root $f) $dest
     }
     Copy-Item (Join-Path $Root 'readme.md') (Join-Path $stage 'README.md')
+    # The embedded fonts' licence (OFL 1.1 asks for it to travel with the fonts).
+    Copy-Item (Join-Path $Root 'crates\skong-core\fonts\OFL.txt') (Join-Path $stage 'FONTS-OFL.txt')
     $licence = @('LICENSE', 'LICENSE.md', 'LICENSE.txt', 'LICENCE') | ForEach-Object { Join-Path $Root $_ } | Where-Object { Test-Path $_ } | Select-Object -First 1
     if ($licence) {
         Copy-Item $licence (Join-Path $stage 'LICENSE.txt')
@@ -227,7 +230,7 @@ try {
         }.GetNewClosure()
         $problems = Test-PackageContent -Files @($entries.Keys) -ReadFile $read
         if ($problems.Count -gt 0) { throw "zip check failed:`n  " + ($problems -join "`n  ") }
-        foreach ($must in @('skong.exe', 'skong-panel.exe', 'README.md', 'LICENSE.txt', 'data/achievements.json')) {
+        foreach ($must in @('skong.exe', 'skong-panel.exe', 'README.md', 'LICENSE.txt', 'FONTS-OFL.txt', 'data/achievements.json')) {
             if (-not $entries.ContainsKey($must)) { throw "zip is missing $must" }
         }
     } finally {

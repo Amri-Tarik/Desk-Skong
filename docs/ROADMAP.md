@@ -204,8 +204,17 @@ Checked in tests only (unless noted). Note anything that looks off. The full man
 checklist, with how to trigger each from the panel's Sandbox tab, is [TESTING.md](TESTING.md):
 
 - [ ] The panel as the app: X quits, Hide to tray + tray click back (and to the front when
-      behind other windows), the new Home page look, the Geo coin, the sandbox gate
-      ([TESTING.md](TESTING.md), "The window")
+      behind other windows), the sandbox gate ([TESTING.md](TESTING.md), "The window")
+- [ ] The Hollow Knight restyle of the panel and the setup window (`ui/style.rs`): type
+      sizes (body 17, hints 15) and contrast, Cinzel / Crimson Pro rendering in egui, the
+      frames, corner ticks, drawn dividers and tabs, the default size and the narrow
+      (stacked) layout, the real Geo sprite in the wallet (and the drawn stand-in without
+      art), "Time with the knight" ([TESTING.md](TESTING.md), "The window" → The look)
+- [ ] The achievement banner (`banner.rs`, `skong_core::banner`): placement near the top
+      centre, the fades, queueing, readability over light / dark wallpapers and at high DPI,
+      click-through and never taking focus, screen-share visibility, waiting for (or
+      avoiding) a monitor with a fullscreen game / app ([TESTING.md](TESTING.md), "Knight" →
+      Preview achievement banner)
 
 - [ ] Dragging props and visitors (`skong_core::drag`, `app/drag.rs`; TESTING.md "Dragging
       props & visitors"): only opaque pixels catch the mouse (soft / semi-transparent

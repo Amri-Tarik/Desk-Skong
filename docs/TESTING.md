@@ -36,10 +36,19 @@ benches, walk / hurry to the cursor).
 - [ ] **Kill `skong-panel.exe`** (Task Manager) → the knight carries on; a tray click opens a
       new window.
 - [ ] **Run `skong.exe` again** while it runs → no second knight; the window comes up.
-- [ ] **Home**: achievements count, progress, Geo wallet (coin + number) by the header; the
-      settings (skin, size, mischief, the switches, benches) act at once.
+- [ ] **Home**: the Journal (count, progress line, Geo wallet with the game's own Geo coin
+      sprite + number, "Time with the knight  12h 34m") and The Knight (skin, size,
+      mischief, the switches, benches) act at once.
+- [ ] **The look** · *look for*: body text ~17 px and hints ~15 px, all easy to read (hints
+      pale grey-white, not dim); Cinzel headings and tabs, Crimson Pro body; near-black
+      blue-grey ground, square frames with thin pale borders and corner ticks, the drawn
+      diamond dividers; no gold / green / saturated colours (only the sandbox warning is a
+      muted ember). The default window fits everything; narrowed below ~900 px the two
+      Home frames stack and nothing is cut off. Without extracted art (e.g. a dev build
+      with no `skins/`) the Geo icon is a drawn pale stone, not a gold coin. The setup window
+      (`skong-panel --setup`, or Re-extract game art…) has the same look.
 - [ ] **Advanced** (bottom right) → the Diagnostics tab (status + logs) appears.
-- [ ] **Locked sandbox**: the 🔒 Sandbox tab explains the cost; Enable stays greyed until
+- [ ] **Locked sandbox**: the "Sandbox (locked)" tab explains the cost; Enable stays greyed until
       the box is ticked; Ctrl+Alt+K / A / R / D and panel letters K A R D do nothing (a log
       line / footer says why); the tray menu has no Sandbox submenu.
 
@@ -250,6 +259,17 @@ other monitor instead. A plain click does nothing.
       with nothing to climb → he plants a gate there and warps · *look for* the gate's
       size, glow and warp timing. *Shortcut Through Sleep*. On its own: for an unreachable
       visitor / Geo / deposit / shiny, at most every 90 s.
+- [ ] **Preview achievement banner** → near the top centre of the knight's monitor:
+      "Achievement" small, your latest achievement's title large in Cinzel, the diamond
+      divider, the description (at most two lines) over a soft dark mist · *look for*: fades
+      in ~0.6 s, holds ~4 s, fades out ~1 s; click several times → they play one after
+      another; readable on light and dark wallpapers and at 100 % / 150 % scaling; clicks
+      pass through it and it never takes focus (keep typing in another app while it shows);
+      hidden from screenshots / OBS unless "Visible in screen shares" is on; with a
+      fullscreen game or video on the knight's monitor it shows on another monitor, or
+      waits until the fullscreen app is gone (and vanishes at once if one starts mid-way,
+      then replays); Pause hides it and it replays after. On its own: every real unlock
+      shows one (the sparkle above his head and the tray tip stay too).
 
 ## Everyday behaviour (no button)
 

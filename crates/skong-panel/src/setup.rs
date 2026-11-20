@@ -8,7 +8,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use eframe::egui::{self, Color32, RichText};
+use eframe::egui::{self, RichText};
+
+use crate::ui::palette as pal;
+use crate::ui::style;
 
 pub struct Options {
     /// Desk-Skong's metadata (`data/hk`).
@@ -51,13 +54,14 @@ pub fn run(opt: Options) -> i32 {
     let ok = Arc::new(AtomicBool::new(false));
     let ok2 = ok.clone();
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_title("Desk-Skong: set up the art").with_inner_size([560.0, 340.0]).with_resizable(false),
+        viewport: egui::ViewportBuilder::default().with_title("Desk-Skong: set up the art").with_inner_size([700.0, 480.0]).with_min_inner_size([560.0, 420.0]),
         ..Default::default()
     };
     let r = eframe::run_native(
         "Desk-Skong setup",
         options,
         Box::new(move |cc| {
+            crate::ui::style::apply(&cc.egui_ctx);
             let found = opt.game.as_deref().and_then(skong_extract::install::data_dir).or_else(skong_extract::install::find);
             let mut s = Setup { opt, stage: Stage::Ask(None), ok: ok2 };
             if let Some(game) = found {
@@ -137,17 +141,19 @@ impl eframe::App for Setup {
         }
 
         let mut action: Option<Action> = None;
-        egui::CentralPanel::default().show(ui, |ui| {
-            ui.add_space(6.0);
-            ui.label(RichText::new(NEEDS).heading());
+        egui::CentralPanel::default().frame(egui::Frame::central_panel(ui.style()).inner_margin(24)).show(ui, |ui| {
+            ui.vertical_centered(|ui| ui.label(RichText::new("Desk-Skong").font(style::heading(26.0)).color(pal::SOUL)));
+            style::ornament(ui, 140.0);
+            ui.label(RichText::new(NEEDS).font(style::heading(18.0)).color(pal::TEXT));
             ui.label(EXPLAIN);
             ui.add_space(4.0);
-            ui.label(RichText::new(LEGAL).small().weak());
-            ui.separator();
+            style::hint(ui, LEGAL);
+            ui.add_space(6.0);
+            style::ornament(ui, 220.0);
             match &self.stage {
                 Stage::Ask(problem) => {
                     match problem {
-                        Some(p) => ui.label(RichText::new(p).color(Color32::from_rgb(230, 160, 60))),
+                        Some(p) => ui.label(RichText::new(p).color(pal::EMBER)),
                         None => ui.label("Hollow Knight wasn't found in your Steam libraries or the usual GOG, Epic and Xbox folders."),
                     };
                     ui.add_space(6.0);
@@ -163,12 +169,13 @@ impl eframe::App for Setup {
                 Stage::Working { game, work } => {
                     let (fraction, label) = work.lock().map(|w| (w.fraction, w.label.clone())).unwrap_or_default();
                     ui.label(format!("Found Hollow Knight: {}", game.parent().unwrap_or(game).display()));
-                    ui.add(egui::ProgressBar::new(fraction).show_percentage());
-                    ui.label(RichText::new(label).weak());
+                    ui.add_space(4.0);
+                    style::progress(ui, fraction, ui.available_width().min(520.0));
+                    style::hint(ui, format!("{label}  ({:.0} %)", fraction * 100.0));
                 }
                 Stage::Done(msg) => {
-                    ui.label(RichText::new(msg).color(Color32::from_rgb(90, 200, 110)));
-                    ui.label(RichText::new(format!("Saved in {}", self.opt.out.display())).small().weak());
+                    ui.label(RichText::new(msg).color(pal::SOUL));
+                    style::hint(ui, format!("Saved in {}", self.opt.out.display()));
                     if self.opt.again {
                         ui.label("The new art is used from the next time it's loaded; restart Desk-Skong to see all of it.");
                     }
@@ -177,8 +184,8 @@ impl eframe::App for Setup {
                     }
                 }
                 Stage::Failed { error, .. } => {
-                    ui.label(RichText::new("Couldn't read the art from the game.").color(Color32::from_rgb(230, 110, 90)).strong());
-                    ui.label(RichText::new(error).small());
+                    ui.label(RichText::new("Couldn't read the art from the game.").font(style::heading(17.0)).color(pal::EMBER));
+                    ui.add(egui::Label::new(RichText::new(error).small().color(pal::SUB)).wrap());
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
                         if ui.button("Try again").clicked() {

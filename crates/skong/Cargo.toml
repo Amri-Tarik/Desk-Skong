@@ -13,3 +13,6 @@ skong-core = { path = "../skong-core" }
 skong-ipc = { path = "../skong-ipc" }
 skong-extract = { path = "../skong-extract" }
 skong-win = { path = "../skong-win" }
+
+[dev-dependencies]
+png = "0.18.1"

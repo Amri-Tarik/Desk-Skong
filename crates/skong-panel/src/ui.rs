@@ -48,77 +48,36 @@ pub const TRAY_HINT: &str = "Desk-Skong keeps running in the tray — click the 
 /// How long a "refused" line stays in the footer.
 const REFUSED_SECS: u64 = 8;
 
-/// The palette: Hallownest at night — ink blues, pale soul-white, a little gold.
-pub mod palette {
-    use eframe::egui::Color32;
-    pub const BG: Color32 = Color32::from_rgb(11, 12, 17);
-    pub const PANEL: Color32 = Color32::from_rgb(16, 18, 25);
-    pub const CARD: Color32 = Color32::from_rgb(22, 25, 34);
-    pub const CARD_EDGE: Color32 = Color32::from_rgb(42, 47, 61);
-    pub const TEXT: Color32 = Color32::from_rgb(214, 217, 225);
-    pub const WEAK: Color32 = Color32::from_rgb(128, 135, 152);
-    pub const SOUL: Color32 = Color32::from_rgb(200, 215, 238);
-    pub const GOLD: Color32 = Color32::from_rgb(230, 200, 120);
-    pub const AMBER: Color32 = Color32::from_rgb(232, 162, 82);
-    pub const RED: Color32 = Color32::from_rgb(222, 98, 92);
-    pub const GREEN: Color32 = Color32::from_rgb(112, 190, 130);
-}
-use palette as pal;
+pub mod style;
+pub use style::palette;
+use style::palette as pal;
+pub use style::{frame, hint, title};
+
+/// Default and smallest window sizes (points): room for the larger type; below
+/// `home::TWO_COLUMNS` the Home page stacks its two frames.
+const DEFAULT_SIZE: [f32; 2] = [1180.0, 820.0];
+const MIN_SIZE: [f32; 2] = [640.0, 520.0];
 
 pub fn run(pipe: String) -> anyhow::Result<()> {
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_title("Desk-Skong").with_inner_size([1040.0, 700.0]).with_min_inner_size([560.0, 420.0]),
+        viewport: egui::ViewportBuilder::default().with_title("Desk-Skong").with_inner_size(DEFAULT_SIZE).with_min_inner_size(MIN_SIZE),
         ..Default::default()
     };
     eframe::run_native(
         "Desk-Skong",
         options,
         Box::new(move |cc| {
-            theme(&cc.egui_ctx);
+            style::apply(&cc.egui_ctx);
+            let geo = crate::geo::load().map(|img| {
+                let pixels = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &crate::geo::rgba_premultiplied(&img));
+                cc.egui_ctx.load_texture("geo", pixels, egui::TextureOptions::LINEAR)
+            });
             let ctx = cc.egui_ctx.clone();
             let link = Link::start(pipe, move || ctx.request_repaint());
-            Ok(Box::new(Panel::new(link)))
+            Ok(Box::new(Panel::new(link, geo)))
         }),
     )
     .map_err(|e| anyhow::anyhow!("{e}"))
-}
-
-/// Dark, muted, a soft frame around everything.
-fn theme(ctx: &egui::Context) {
-    ctx.set_theme(egui::ThemePreference::Dark);
-    let mut v = egui::Visuals::dark();
-    v.panel_fill = pal::PANEL;
-    v.window_fill = pal::CARD;
-    v.extreme_bg_color = pal::BG;
-    v.faint_bg_color = Color32::from_rgb(20, 23, 31);
-    v.hyperlink_color = pal::SOUL;
-    v.selection.bg_fill = Color32::from_rgb(58, 70, 96);
-    v.selection.stroke.color = pal::SOUL;
-    v.widgets.noninteractive.bg_fill = pal::CARD;
-    v.widgets.noninteractive.bg_stroke.color = pal::CARD_EDGE;
-    v.widgets.noninteractive.fg_stroke.color = pal::TEXT;
-    for (w, bg) in [(&mut v.widgets.inactive, (32, 36, 47)), (&mut v.widgets.hovered, (45, 51, 66)), (&mut v.widgets.active, (60, 68, 88)), (&mut v.widgets.open, (38, 43, 56))] {
-        w.bg_fill = Color32::from_rgb(bg.0, bg.1, bg.2);
-        w.weak_bg_fill = w.bg_fill;
-    }
-    v.widgets.inactive.fg_stroke.color = pal::TEXT;
-    v.widgets.hovered.fg_stroke.color = Color32::WHITE;
-    v.widgets.active.fg_stroke.color = Color32::WHITE;
-    ctx.set_visuals_of(egui::Theme::Dark, v);
-    ctx.style_mut_of(egui::Theme::Dark, |s| {
-        s.spacing.item_spacing = egui::vec2(8.0, 6.0);
-        s.spacing.button_padding = egui::vec2(8.0, 4.0);
-    });
-}
-
-/// A rounded card around a section.
-pub fn card<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    egui::Frame::new().fill(pal::CARD).stroke(egui::Stroke::new(1.0, pal::CARD_EDGE)).corner_radius(6.0).inner_margin(14.0).show(ui, add).inner
-}
-
-/// A section title in small caps style.
-pub fn title(ui: &mut egui::Ui, text: &str) {
-    ui.label(RichText::new(text.to_uppercase()).size(13.0).strong().extra_letter_spacing(1.5).color(pal::SOUL));
 }
 
 struct Panel {
@@ -157,6 +116,8 @@ struct Panel {
     launched_pet: Option<Instant>,
     /// Bring the window back to its normal level next frame (after a raise).
     unpin: bool,
+    /// The Geo coin from the player's extracted art (`None`: a drawn stand-in).
+    geo: Option<egui::TextureHandle>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -167,8 +128,9 @@ enum Tab {
 }
 
 impl Panel {
-    fn new(link: Link) -> Self {
+    fn new(link: Link, geo: Option<egui::TextureHandle>) -> Self {
         Self {
+            geo,
             tab: Tab::Home,
             advanced: false,
             reset_armed: false,
@@ -270,50 +232,52 @@ impl Panel {
 
     /// Top bar: name, connection, the sandbox banner.
     fn top_bar(&mut self, ui: &mut egui::Ui, connected: bool, hello: Option<&skong_ipc::Hello>, sandbox: bool) {
-        ui.add_space(6.0);
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("DESK-SKONG").size(18.0).strong().extra_letter_spacing(3.0).color(pal::SOUL));
-            ui.add_space(12.0);
-            match (hello, connected) {
-                (Some(h), true) => ui.label(RichText::new(format!("● the knight is here  ·  v{}", h.version)).color(pal::GREEN).small()),
-                _ if self.was_connected => ui.label(RichText::new("● Desk-Skong stopped").color(pal::AMBER).small()),
-                _ => ui.label(RichText::new("● waiting for the knight…").color(pal::WEAK).small()),
+        ui.add_space(10.0);
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new("Desk-Skong").font(style::heading(28.0)).color(pal::SOUL));
+            ui.add_space(14.0);
+            let (text, color, filled) = match (hello, connected) {
+                (Some(h), true) => (format!("the knight is here  ·  v{}", h.version), pal::SUB, true),
+                _ if self.was_connected => ("Desk-Skong stopped".to_string(), pal::EMBER, false),
+                _ => ("waiting for the knight…".to_string(), pal::SUB, false),
             };
+            style::marker(ui, filled, color);
+            ui.label(RichText::new(text).small().color(color));
             if self.sent_keys.0 {
-                ui.label(RichText::new("· driving with the keyboard").small().strong());
+                ui.label(RichText::new("·  driving with the keyboard").small().color(pal::TEXT));
             }
         });
         if sandbox && connected {
-            ui.add_space(4.0);
-            egui::Frame::new().fill(Color32::from_rgb(58, 40, 22)).corner_radius(4.0).inner_margin(egui::vec2(10.0, 5.0)).show(ui, |ui| {
+            ui.add_space(6.0);
+            egui::Frame::new().fill(pal::EMBER_BG).stroke(egui::Stroke::new(1.0, pal::EMBER.gamma_multiply(0.6))).inner_margin(egui::Margin::symmetric(14, 7)).show(ui, |ui| {
                 ui.set_width(ui.available_width());
-                ui.label(RichText::new("Sandbox on — achievements paused until restart").strong().color(pal::AMBER));
+                ui.label(RichText::new("Sandbox on — achievements paused until restart").color(pal::EMBER));
             });
         }
-        ui.add_space(4.0);
+        ui.add_space(8.0);
     }
 
     /// Not connected: why, and a way to start the pet again.
     fn offline(&mut self, ui: &mut egui::Ui) {
         let waited = self.started.elapsed() > Duration::from_secs(3);
         if !self.was_connected && !waited {
-            ui.weak("waiting for the knight…");
+            hint(ui, "waiting for the knight…");
             return;
         }
-        card(ui, |ui| {
+        frame(ui, |ui| {
             ui.set_width(ui.available_width());
             if self.was_connected {
-                ui.label(RichText::new("Desk-Skong stopped.").strong().color(pal::AMBER));
+                title(ui, "Desk-Skong stopped");
                 ui.label("The knight isn't running any more (it may have crashed: the log file has the details).");
             } else {
-                ui.label(RichText::new("Desk-Skong isn't running.").strong().color(pal::AMBER));
+                title(ui, "Desk-Skong isn't running");
                 ui.label("This window is its control panel; start the knight to use it.");
             }
-            ui.add_space(6.0);
+            ui.add_space(8.0);
             let exe = pet_exe();
             let recently = self.launched_pet.is_some_and(|t| t.elapsed() < Duration::from_secs(10));
             ui.horizontal(|ui| {
-                if ui.add_enabled(exe.is_some() && !recently, egui::Button::new("Start Desk-Skong")).clicked()
+                if ui.add_enabled(exe.is_some() && !recently, style::wide_button("Start Desk-Skong", 190.0)).clicked()
                     && let Some(exe) = &exe
                 {
                     match std::process::Command::new(exe).spawn() {
@@ -321,46 +285,44 @@ impl Panel {
                         Err(e) => eprintln!("could not start {}: {e}", exe.display()),
                     }
                 }
-                ui.weak(if recently { "starting…" } else { "or close this window." });
+                hint(ui, if recently { "starting…" } else { "or close this window." });
             });
         });
     }
 
     /// Bottom bar: Hide to tray, the hint, Advanced, the latest refusal.
     fn footer(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, connected: bool, refused: Option<&str>) {
-        ui.add_space(6.0);
+        ui.add_space(4.0);
+        style::ornament(ui, 260.0);
         if let (Some(why), Some(at)) = (refused, self.refused_at)
             && at.elapsed() < Duration::from_secs(REFUSED_SECS)
         {
-            ui.label(RichText::new(format!("✖ {why}")).small().color(pal::AMBER));
+            ui.add(egui::Label::new(RichText::new(format!("Refused: {why}")).small().color(pal::EMBER)).wrap());
         }
         ui.horizontal(|ui| {
-            let hide = egui::Button::new(RichText::new("Hide to tray").strong()).min_size(egui::vec2(130.0, 30.0));
+            let hide = style::wide_button("Hide to tray", 160.0);
             if ui.add_enabled(connected, hide).on_hover_text("close this window; the knight stays. Click the tray icon to bring it back.").on_disabled_hover_text("the knight isn't running: there's no tray to hide in").clicked() {
                 self.hide_to_tray(ctx);
             }
-            ui.add(egui::Label::new(RichText::new(TRAY_HINT).small().color(pal::WEAK)).wrap());
-        });
-        ui.add_space(2.0);
-        ui.horizontal(|ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.checkbox(&mut self.advanced, RichText::new("Advanced").small()).on_hover_text("show the Diagnostics tab (live status, logs)").changed() && !self.advanced && self.tab == Tab::Diagnostics {
+                if ui.checkbox(&mut self.advanced, RichText::new("Advanced").small().color(pal::SUB)).on_hover_text("show the Diagnostics tab (live status, logs)").changed() && !self.advanced && self.tab == Tab::Diagnostics {
                     self.tab = Tab::Home;
                 }
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| hint(ui, TRAY_HINT));
             });
         });
-        ui.add_space(4.0);
+        ui.add_space(8.0);
     }
 
     fn status(ui: &mut egui::Ui, st: Option<&Status>) {
         let Some(s) = st else {
-            ui.weak("no status yet");
+            hint(ui, "no status yet");
             return;
         };
         let k = &s.knight;
-        egui::Grid::new("status").num_columns(2).spacing([8.0, 2.0]).striped(true).show(ui, |ui| {
+        egui::Grid::new("status").num_columns(2).spacing([10.0, 4.0]).striped(true).show(ui, |ui| {
             let mut row = |a: &str, b: String| {
-                ui.label(a);
+                ui.label(RichText::new(a).color(pal::SUB));
                 ui.monospace(b);
                 ui.end_row();
             };
@@ -387,15 +349,15 @@ impl Panel {
             }
         });
         if let Some(b) = &s.brain {
-            ui.add_space(4.0);
-            ui.label("Brain");
-            ui.add(egui::Label::new(RichText::new(b).monospace().small()).wrap());
+            ui.add_space(6.0);
+            style::subtitle(ui, "Brain");
+            ui.add(egui::Label::new(RichText::new(b).monospace()).wrap());
         }
     }
 
     /// Diagnostics: live status on the left, the pet's logs on the right.
     fn diagnostics(&mut self, ui: &mut egui::Ui, status: Option<&Status>, connected: bool) {
-        egui::Panel::left("diag_status").resizable(true).default_size(340.0).show(ui, |ui| {
+        egui::Panel::left("diag_status").resizable(true).default_size(400.0).show(ui, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 title(ui, "Status");
                 Self::status(ui, status.filter(|_| connected));
@@ -405,16 +367,16 @@ impl Panel {
     }
 
     fn logs(&mut self, ui: &mut egui::Ui, connected: bool) {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label("Show");
-            egui::ComboBox::from_id_salt("min").selected_text(self.log_min.name()).width(70.0).show_ui(ui, |ui| {
+            egui::ComboBox::from_id_salt("min").selected_text(self.log_min.name()).width(90.0).show_ui(ui, |ui| {
                 for l in LogLevel::ALL {
                     ui.selectable_value(&mut self.log_min, l, l.name());
                 }
             });
             ui.label("capture");
             let before = self.capture_level;
-            egui::ComboBox::from_id_salt("capture").selected_text(self.capture_level.name()).width(70.0).show_ui(ui, |ui| {
+            egui::ComboBox::from_id_salt("capture").selected_text(self.capture_level.name()).width(90.0).show_ui(ui, |ui| {
                 for l in LogLevel::ALL {
                     ui.selectable_value(&mut self.capture_level, l, l.name());
                 }
@@ -485,21 +447,25 @@ impl eframe::App for Panel {
         egui::Panel::top("bar").show(ui, |ui| self.top_bar(ui, connected, hello.as_ref(), sandbox));
         egui::Panel::bottom("footer").show(ui, |ui| self.footer(ui, &ctx, connected, refused.as_deref()));
         egui::CentralPanel::default().show(ui, |ui| {
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 let count = achievements.as_ref().map_or_else(String::new, |a| format!("  {} / {}", a.unlocked(), a.total()));
-                ui.selectable_value(&mut self.tab, Tab::Home, RichText::new(format!("Home{count}")).size(15.0));
+                if style::tab(ui, self.tab == Tab::Home, &format!("Home{count}")).clicked() {
+                    self.tab = Tab::Home;
+                }
                 let placing = status.as_ref().and_then(|s| s.test.as_ref()).is_some_and(|t| t.placing.is_some());
                 let label = match (sandbox, placing) {
-                    (false, _) => "🔒 Sandbox",
+                    (false, _) => "Sandbox (locked)",
                     (true, false) => "Sandbox",
-                    (true, true) => "Sandbox  📍",
+                    (true, true) => "Sandbox  · placing",
                 };
-                ui.selectable_value(&mut self.tab, Tab::Sandbox, RichText::new(label).size(15.0)).on_hover_text("make him do things on request, choose where they appear, debug tools (pauses achievements until restart)");
-                if self.advanced {
-                    ui.selectable_value(&mut self.tab, Tab::Diagnostics, RichText::new("Diagnostics").size(15.0));
+                if style::tab(ui, self.tab == Tab::Sandbox, label).on_hover_text("make him do things on request, choose where they appear, debug tools (pauses achievements until restart)").clicked() {
+                    self.tab = Tab::Sandbox;
+                }
+                if self.advanced && style::tab(ui, self.tab == Tab::Diagnostics, "Diagnostics").clicked() {
+                    self.tab = Tab::Diagnostics;
                 }
             });
-            ui.add_space(4.0);
+            ui.add_space(6.0);
             if !connected {
                 self.offline(ui);
                 return;
@@ -528,11 +494,11 @@ fn format_line(l: &LogLine) -> String {
 
 fn level_color(l: LogLevel) -> Color32 {
     match l {
-        LogLevel::Error => Color32::from_rgb(240, 90, 90),
-        LogLevel::Warn => Color32::from_rgb(235, 180, 70),
-        LogLevel::Info => Color32::from_rgb(210, 210, 210),
-        LogLevel::Debug => Color32::from_rgb(130, 170, 220),
-        LogLevel::Trace => Color32::from_rgb(140, 140, 140),
+        LogLevel::Error => pal::ROSE,
+        LogLevel::Warn => pal::EMBER,
+        LogLevel::Info => pal::TEXT,
+        LogLevel::Debug => Color32::from_rgb(170, 190, 216),
+        LogLevel::Trace => Color32::from_rgb(160, 166, 178),
     }
 }
 

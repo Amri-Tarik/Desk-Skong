@@ -6,6 +6,7 @@
 //! `skong-panel --setup --data DIR --out DIR [--game PATH] [--again]`
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod geo;
 mod link;
 mod selftest;
 mod setup;
