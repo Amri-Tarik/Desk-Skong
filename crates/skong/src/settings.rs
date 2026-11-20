@@ -35,6 +35,9 @@ pub struct Settings {
     /// "Write a log file (for bug reports)" (off by default): the log also goes to
     /// `%APPDATA%\Desk-Skong\logs\skong-<date>.log` ([`crate::logring`]).
     pub log_file: bool,
+    /// The Hollow Knight data folder (`…\hollow_knight_Data`) the art was last read from,
+    /// tried first by "Re-extract game art". Taken from the extracted art's record on start.
+    pub game_dir: Option<String>,
     /// Settings format (see [`Settings::migrate`]); files from before it read as 0.
     #[serde(default)]
     pub version: u32,
@@ -49,7 +52,7 @@ const VERSION: u32 = 1;
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { skin: None, scale: 0.6, bother: 0.5, share_visible: false, text_curiosity: true, lantern: true, open_panel: true, stakes: Default::default(), log_file: false, version: VERSION, extra: Default::default() }
+        Self { skin: None, scale: 0.6, bother: 0.5, share_visible: false, text_curiosity: true, lantern: true, open_panel: true, stakes: Default::default(), log_file: false, game_dir: None, version: VERSION, extra: Default::default() }
     }
 }
 

@@ -11,4 +11,5 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 skong-core = { path = "../skong-core" }
 skong-ipc = { path = "../skong-ipc" }
+skong-extract = { path = "../skong-extract" }
 skong-win = { path = "../skong-win" }

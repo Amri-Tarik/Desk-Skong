@@ -75,9 +75,44 @@ layer without the pet.
 
 ---
 
-## Exporting the art (developers)
+## Game art: the Rust extractor (players) and the .NET exporter (metadata)
 
-1. **Tools:** Rust stable (MSVC), .NET 9 SDK (for the exporter), a legal copy of Hollow Knight.
+**Players** never run a tool: when no Vanilla art is found, `skong.exe` starts
+`skong-panel.exe --setup` and waits for it. That window finds the install
+(`skong_extract::install`: Steam registry keys → `libraryfolders.vdf` → every library's
+`steamapps/common/<installdir>`, then GOG, Epic manifests, `X:\XboxGames`), or asks for
+`hollow_knight.exe`; then `skong_extract::extract` writes the atlases and prop sprites into
+`%APPDATA%\Desk-Skong\skins\Vanilla` (through `Vanilla.partial`, swapped in at the end,
+with an `extracted.json` record: game folder, Unity version, files). Skins are looked up in
+the dev `skins/` folder (or `--skins`) first, then there. Developers can run the same
+window by hand: `skong-panel --setup --data data/hk --out <somewhere>\Vanilla`.
+
+**`crates/skong-extract`** (no dependencies beyond `png`, `serde` and `windows` for the registry; ~2500 lines with tests):
+
+- `serialized`: Unity serialized files, formats 17–22 (the game is Unity 6000.0.61f1,
+  format 22, **no type trees**); reads only the metadata, objects on demand.
+- `texture`: `Texture2D` header (the gap before `m_Width` is picked by plausibility; the
+  `m_StreamData` tail is read from the end), pixels inline or from `.resS`; `decode` /
+  `bc7`: RGBA32, ARGB32, BGRA32, RGB24, Alpha8, DXT1, DXT5, BC7 (the game's atlases are
+  BC7, DXT5 and RGBA32; crunched formats are refused with a clear error).
+- `catalog`: a tk2d collection is found by its GameObject's name (`name` in
+  `data/hk/collections/*.json`) on a `tk2dSpriteCollectionData` MonoBehaviour; its atlas is
+  the `PPtr<Texture2D>` array in the MonoBehaviour's bytes whose texture has the expected
+  name and size (from the same JSON), so the script layout never needs decoding. Props are
+  Unity `Sprite`s by name (benches and discovery art listed in `data/props.json`), cropped
+  from their texture or their `SpriteAtlas` render data.
+- What gets extracted follows the committed metadata: **a new collection in `data/hk`
+  (or a new prop in `props.json`) is picked up with no code change.**
+
+Checks: `cargo test -p skong-extract` (synthetic files); with the game installed,
+`cargo test -p skong-extract --release -- --ignored --nocapture` extracts into a temp folder
+and compares every image with `skins/Vanilla` (`SKONG_HK`, `SKONG_REF` override the paths).
+At the time of writing: 44 images (38 atlases, 6 props), pixel-identical, ~3 s cold.
+
+**The .NET exporter is dev-only**: it regenerates the metadata in `data/hk` (it decodes the
+game's scripts to read tk2d geometry and clips) and can still write a dev `skins/Vanilla`:
+
+1. **Tools:** .NET 9 SDK, a legal copy of Hollow Knight.
 2. **Export the vanilla art** (metadata is already in `data/hk`; this writes atlases into the
    git-ignored `skins/Vanilla`, which is also the fallback for anything a skin lacks):
    ```text

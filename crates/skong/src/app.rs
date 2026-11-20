@@ -95,6 +95,7 @@ const ID_TEXT: u32 = 16;
 const ID_LANTERN: u32 = 17;
 const ID_LOG_FILE: u32 = 18;
 const ID_LOG_FOLDER: u32 = 19;
+const ID_REEXTRACT: u32 = 23;
 const ID_QUIT: u32 = 9;
 const ID_SKIN0: u32 = 1000;
 const ID_SCALE0: u32 = 2000;
@@ -289,10 +290,17 @@ pub fn run(args: &Args) -> Result<()> {
     if let Some(s) = args.scale {
         settings.scale = s;
     }
+    // Remember where the game is (the setup window records it with the art it extracts).
+    if let Some(game) = crate::art::recorded_game().map(|g| g.display().to_string())
+        && settings.game_dir.as_ref() != Some(&game)
+    {
+        settings.game_dir = Some(game);
+        settings.save();
+    }
 
-    let skins = Skin::discover(&args.skins);
+    let skins = Skin::discover_all(&args.skins);
     if skins.is_empty() {
-        bail!("no skins (folders containing Knight.png) under {}", args.skins.display());
+        bail!("no skins (folders containing Knight.png) under {}", args.skins.iter().map(|r| r.display().to_string()).collect::<Vec<_>>().join(", "));
     }
     let skin = settings.skin.as_deref().and_then(|n| skins.iter().position(|s| s.name.eq_ignore_ascii_case(n))).unwrap_or(0);
     let meta = SpriteBank::load_metadata(&args.data)?;
@@ -1275,6 +1283,10 @@ impl Pet {
                 self.settings.save();
             }
             Command::OpenLogFolder => crate::logfile::open_folder(),
+            Command::ReextractArt => {
+                let game = self.settings.game_dir.as_ref().map(std::path::PathBuf::from).or_else(crate::art::recorded_game);
+                crate::art::reextract(&self.data.args_data, game.as_deref());
+            }
             Command::Test(t) => self.apply_test(t),
             Command::TogglePause => {
                 self.paused = !self.paused;
@@ -1379,6 +1391,7 @@ impl Pet {
             MenuItem::Separator,
             MenuItem::check(ID_LOG_FILE, "Write a log file (for bug reports)", self.settings.log_file),
             MenuItem::action(ID_LOG_FOLDER, "Open log folder"),
+            MenuItem::action(ID_REEXTRACT, "Re-extract game art…"),
         ];
         // "Make him do X" and debug tools: only once the sandbox is on (enabled from the
         // panel, where the consent is spelled out).
@@ -1412,6 +1425,7 @@ impl Pet {
             ID_LANTERN => Command::ToggleLantern,
             ID_LOG_FILE => Command::ToggleLogFile,
             ID_LOG_FOLDER => Command::OpenLogFolder,
+            ID_REEXTRACT => Command::ReextractArt,
             ID_PAUSE => Command::TogglePause,
             ID_ACT => Command::RandomAct,
             ID_RESPAWN => Command::RespawnAtCursor,

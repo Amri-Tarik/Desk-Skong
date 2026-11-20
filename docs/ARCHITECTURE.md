@@ -16,7 +16,8 @@ default scale 0.6).
 | `skong-win` | Win32: windows, capture, input, tray, overlay. |
 | `skong` | The pet binary (`skong.exe`). |
 | `skong-ipc` | Panel ⇄ pet protocol types (`Command`, `PanelMsg`, `PetMsg`, `Status`). |
-| `skong-panel` | Control panel binary (`skong-panel.exe`, eframe/egui). |
+| `skong-panel` | Control panel binary (`skong-panel.exe`, eframe/egui); also the first-run art setup window (`--setup`). |
+| `skong-extract` | Reads the atlases and prop sprites from the player's Hollow Knight install (Unity serialized files, BC7/DXT/RGBA decoding) into `%APPDATA%\Desk-Skong\skins\Vanilla`; finds the install. See [DEVELOPING.md](DEVELOPING.md). |
 
 ### `skong-core` modules
 

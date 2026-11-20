@@ -129,15 +129,19 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
 
 ## 5. Public release (GitHub), last: ship a more complete pet first
 
-- [ ] **Legit install required, art extracted locally.** No game art or text ever ships.
+- [x] **Legit install required, art extracted locally.** No game art or text ever ships.
+      > note: `skong-panel --setup` (Steam libraries, GOG, Epic, Xbox, or "Locate
+      > hollow_knight.exe…") → `%APPDATA%\Desk-Skong\skins\Vanilla`; re-run from the tray /
+      > Home ("Re-extract game art…").
       - On first run, look for Hollow Knight at the default Steam location (all Steam
         libraries); otherwise ask the user to pick the game's exe or folder.
       - Extract the sprites into the user's data folder.
       - The README and first-run screen say plainly that a legitimate Hollow Knight install is
         required.
-- [ ] **Extractor in Rust.** The .NET exporter becomes a dev-only tool, only needed for
+- [x] **Extractor in Rust.** The .NET exporter becomes a dev-only tool, only needed for
       regenerating metadata. Players get a single exe. The tk2d metadata JSON already in
       `data/hk` stays; only the atlas reading and cropping move into Rust.
+      > note: `crates/skong-extract`; pixel-identical to the exporter's 44 images.
 - [x] **Panel = the app.**
       - Closing the panel quits the pet; there's no separate exit button (tray *Quit* and
         Ctrl+Alt+Q stay); a quitting pet closes the panel too.

@@ -28,9 +28,9 @@ const HK_WAKE: i32 = 10;
 
 pub fn run(args: &Args) -> Result<()> {
 
-    let skins = Skin::discover(&args.skins);
+    let skins = Skin::discover_all(&args.skins);
     if skins.is_empty() {
-        bail!("no skins (folders containing Knight.png) under {}", args.skins.display());
+        bail!("no skins (folders containing Knight.png) under {}", args.skins.iter().map(|r| r.display().to_string()).collect::<Vec<_>>().join(", "));
     }
     let mut skin_idx = args
         .skin
