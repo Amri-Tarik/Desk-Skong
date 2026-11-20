@@ -66,6 +66,8 @@ pub(crate) struct StepJson {
     turn: Option<String>,
     #[serde(default = "yes")]
     interruptible: bool,
+    #[serde(default)]
+    mirror: bool,
 }
 
 fn one() -> f32 {
@@ -108,6 +110,7 @@ impl StepJson {
             until: s.until,
             gait,
             interruptible: s.interruptible,
+            mirror: s.mirror,
             turn,
             life: life.map(|(i, _)| i),
             bias: s.bias,
@@ -134,6 +137,10 @@ pub struct Step {
     pub until: Option<String>,
     pub gait: Option<Gait>,
     pub interruptible: bool,
+    /// The clip is drawn facing the other way from the knight's usual art (the game's
+    /// "Challenge" turns his back to the viewer and faces right): flip it when drawn, so
+    /// the pose faces where he faces.
+    pub mirror: bool,
     /// Clip played when a walking step turns around (e.g. "Map Turn"), then the step clip resumes.
     pub turn: Option<ClipId>,
     /// Index of the life this step runs (see [`ActLibrary::life`]).
@@ -589,6 +596,24 @@ mod tests {
         let clips = ClipLibrary::load(&data.join("hk/animations/Knight.json"), &bank).expect("clips");
         let acts = ActLibrary::load(&data.join("acts.json"), &clips).expect("acts.json must reference real clips");
         (clips, acts)
+    }
+
+    #[test]
+    fn the_challenge_pose_is_drawn_mirrored_everywhere_it_plays() {
+        // The game's Challenge clips face right (his back to the viewer), unlike the rest of
+        // his art: every step playing them must be mirrored, or he poses away from whoever
+        // he faces. Other steps never are.
+        let (clips, acts) = libs();
+        let challenge = [clips.id("Challenge Start").expect("clip"), clips.id("Challenge End").expect("clip")];
+        let mut seen = 0;
+        for act in &acts.acts {
+            for s in &act.steps {
+                let is_challenge = challenge.contains(&s.clip);
+                seen += usize::from(is_challenge);
+                assert_eq!(s.mirror, is_challenge, "{}: step {:?}", act.name, clips.get(s.clip).name);
+            }
+        }
+        assert!(seen >= 4, "the challenge and victory acts");
     }
 
     fn run(clips: &ClipLibrary, acts: &ActLibrary, name: &str, max_s: f32) -> (Vec<String>, f32) {

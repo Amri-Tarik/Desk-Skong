@@ -772,7 +772,9 @@ impl Pet {
 
     /// Present only when the frame changed; otherwise just move the window.
     fn draw(&mut self) -> Result<()> {
-        let flip = self.ch.facing == Side::Right; // HK sprites face left
+        // HK sprites face left; a few act clips are drawn the other way round (`mirror`).
+        let mirrored = self.act.as_ref().is_some_and(|p| self.data.acts.get(p.act()).steps.get(p.step_index()).is_some_and(|s| s.mirror));
+        let flip = (self.ch.facing == Side::Right) != mirrored;
         let Some(key) = self.anim.current(&self.data.lib) else { return Ok(()) };
         let Some(frame) = self.look.bank.frame(key) else { return Ok(()) };
         let origin = self.knight_origin();
