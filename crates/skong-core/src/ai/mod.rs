@@ -832,6 +832,7 @@ impl Brain {
         self.score_highlight(p, nav);
         self.scan_dream_gate(p, nav);
         self.score_pastimes(p, nav);
+        self.probe_shade(p, nav);
         if finished {
             // A finished battle's cooldown counts now, or it would be picked right again
             // (fight mode's breather between rounds).
@@ -902,28 +903,25 @@ impl Brain {
             // Asked to fight: the cursor battle is an engagement, not a pastime.
             BehaviourKind::Battle if self.fight_mode => Tier::Engagement,
             // A geo deposit is Geo: an engagement like loot (other found places, benches, are
-            // pastimes). Exhausted, it waits like far loot does.
+            // pastimes). Loose coins come before deposits: a walk to one gives way to them
+            // (a rock being mined is finished first).
             BehaviourKind::Visit => {
-                let place = match &self.active {
-                    Active::Visit(v) => Some(v.place),
-                    _ => self.interest.places.best.map(|c| c.place),
+                let (place, mining) = match &self.active {
+                    Active::Visit(v) => (Some(v.place), v.mining()),
+                    _ => (self.interest.places.best.map(|c| c.place), false),
                 };
-                if place.is_some_and(|pl| pl.kind == PlaceKind::Deposit) && !critical && !self.asleep(p) { Tier::Engagement } else { Tier::Ambient }
+                let deposit = place.is_some_and(|pl| pl.kind == PlaceKind::Deposit);
+                if deposit && !self.asleep(p) && (mining || !self.loose_geo_wanted(p)) { Tier::Engagement } else { Tier::Ambient }
             }
-            // Resting is a pastime unless he's exhausted / badly hurt.
+            // Resting is a pastime unless he's exhausted / badly hurt — and even then Geo
+            // (an engagement) comes first: he rests once it's collected.
             BehaviourKind::Rest | BehaviourKind::Nap if !critical => Tier::Ambient,
             BehaviourKind::Recover if self.mind.emotions.hurt < t.critical_hurt => Tier::Ambient,
-            // An exhausted (or sleeping) knight lets far prizes wait; a coin next to him still
-            // beats sitting. A Shade hunt the user asked for stays an engagement.
-            BehaviourKind::Loot if critical || self.asleep(p) => {
-                let k = p.knight.pos;
-                let near = self.stakes.sense.coins.iter().any(|c| c.distance(k) <= t.tired_loot_reach);
-                if near && !self.asleep(p) { Tier::Engagement } else { Tier::Ambient }
-            }
+            // Only sleep pushes Geo down (worn out or sore, he still gathers it first: coins
+            // fade). A Shade hunt the user asked for stays an engagement.
+            BehaviourKind::Loot | BehaviourKind::Shiny if self.asleep(p) => Tier::Ambient,
             // The Shade comes first, always: it may even interrupt fights and visitors.
             BehaviourKind::ShadeHunt => Tier::Urgent,
-            // A shiny can wait for an exhausted knight.
-            BehaviourKind::Shiny if critical => Tier::Ambient,
             _ => kind.tier(),
         }
     }
@@ -971,9 +969,12 @@ impl Brain {
             // Called away mid-scene (the Shade, a fullscreen app...): say goodbye.
             out.part = Some(c.id);
         }
-        if let Active::DreamGate(g) = &self.active
-            && g.open()
-        {
+        let gate_open = match &self.active {
+            Active::DreamGate(g) => g.open(),
+            Active::ShadeHunt(h) => h.gate_open(),
+            _ => false,
+        };
+        if gate_open {
             // Called away before the warp: the planted gate fades.
             out.gate = Some(crate::dreamgate::GateEvent::Close);
         }

@@ -22,6 +22,7 @@ mod greet;
 mod grimm;
 mod highlight;
 mod pastime;
+mod priorities;
 mod shiny;
 mod train;
 mod slug;

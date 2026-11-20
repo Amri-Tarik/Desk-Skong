@@ -4,7 +4,9 @@
 //!
 //! Kept special: only for engagement-tier prizes, only when nothing of the kind is within
 //! walking reach (those come first), only onto a settled ledge with room for him, and at
-//! most once per [`DreamGateConfig::cooldown`].
+//! most once per [`DreamGateConfig::cooldown`]. The Shade is the exception: the hunt plays
+//! a [`DreamGate`] itself, cooldown or not, whenever no route gets him under it
+//! (`ShadeHunt::way`).
 //!
 //! The scan ([`Brain::scan_dream_gate`]) runs with the other scorings and leaves a
 //! [`GateWish`]; the [`DreamGate`] behaviour plays it out: plant (`dreamgate_set`, the app
@@ -16,7 +18,6 @@ use serde::Deserialize;
 use crate::dreamgate::{GateEvent, gate_spot};
 use crate::geom::Vec2;
 use crate::nav::{NavGoal, TravelStyle};
-use crate::props::ledge_below;
 
 use super::behaviours::{ActWait, Active, Ctx, SEAT_TOL, Status, on_point};
 use super::greet::{VisitorState, stand_point};
@@ -156,19 +157,6 @@ fn visitors(ctx: &Ctx) -> Vec<Candidate> {
     v
 }
 
-/// The Shade, when he'd be up for the fight (not too hurt, startled or tired).
-fn shade(ctx: &Ctx) -> Vec<Candidate> {
-    let e = ctx.mind.emotions;
-    let up_for_it = ctx.stakes.force_hunt || (e.hurt < 0.25 && e.startle < 0.3 && ctx.mind.needs.energy > 0.35);
-    match ctx.stakes.sense.shade {
-        Some(sh) if up_for_it => {
-            let under = ledge_below(ctx.p.terrain, sh.pos).map_or(sh.pos, |(y, _)| Vec2::new(sh.pos.x, y));
-            vec![Candidate { prize: Prize::Shade, target: sh.pos, stand: under, tol: 150.0 }]
-        }
-        _ => vec![],
-    }
-}
-
 /// Loose Geo, cheapest first (like Loot).
 fn coins(ctx: &Ctx) -> Vec<Candidate> {
     let k = ctx.p.knight.pos;
@@ -211,10 +199,11 @@ fn shinies(ctx: &Ctx) -> Vec<Candidate> {
 }
 
 /// The most precious prize no route reaches. Kinds are tried in order of value; a kind
-/// with anything reachable ends the search (walk to that first, the gate can wait).
+/// with anything reachable ends the search (walk to that first, the gate can wait). The
+/// Shade isn't one: the hunt takes its own gate (`ShadeHunt::way`), cooldown or not.
 fn find_wish(ctx: &mut Ctx) -> Option<GateWish> {
     let min = ctx.cfg.dream_gate.min_distance;
-    let kinds: [fn(&Ctx) -> Vec<Candidate>; 5] = [visitors, shade, coins, deposits, shinies];
+    let kinds: [fn(&Ctx) -> Vec<Candidate>; 4] = [visitors, coins, deposits, shinies];
     let mut plans = MAX_PLANS;
     for kind in kinds {
         let mut wish = None;
@@ -425,7 +414,10 @@ impl DreamGate {
         ctx.interest.unblock(PoiTarget::Spot(w.target));
         match w.prize {
             Prize::Shade => ctx.stakes.shade_ready_at = ctx.now,
-            Prize::Coin => ctx.stakes.loot_ready_at = ctx.now,
+            Prize::Coin => {
+                ctx.interest.unskip_coin(w.target);
+                ctx.stakes.loot_ready_at = ctx.now;
+            }
             Prize::Shiny(id) => ctx.interest.shinies.forget_try(id),
             Prize::Deposit(_) | Prize::Visitor(_) => {}
         }

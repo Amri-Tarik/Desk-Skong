@@ -124,6 +124,10 @@ pub struct InterestMap {
     processes: BTreeMap<String, f32>,
     /// Unreachable targets, skipped until the given time.
     blocked: BTreeMap<PoiKey, f32>,
+    /// Coins he gave up on for now (no route, kept for a Dream Gate), by where they rest,
+    /// until the given time. Kept apart from `blocked`: a seat, a cursor spot or a fight
+    /// goal that failed nearby (same 64 px cell) must never hide fresh Geo.
+    skipped_coins: Vec<(Vec2, f32)>,
     /// Things found in windows (see [`super::places`]).
     pub(crate) places: PlaceMemory,
     /// How long each window ledge has been on screen (seats must have settled).
@@ -171,6 +175,7 @@ impl InterestMap {
             self.raise(PoiKind::ActiveWindow, PoiTarget::Window(id), 0.6);
         }
         self.blocked.retain(|_, until| *until > now);
+        self.skipped_coins.retain(|(_, until)| *until > now);
     }
 
     fn raise(&mut self, kind: PoiKind, target: PoiTarget, novelty: f32) {
@@ -252,4 +257,23 @@ impl InterestMap {
     pub(crate) fn unblock(&mut self, target: PoiTarget) {
         self.blocked.remove(&target.key());
     }
+
+    /// Is the coin resting at `at` skipped for now (only coins Loot gave up on count)?
+    pub fn coin_skipped(&self, at: Vec2) -> bool {
+        self.skipped_coins.iter().any(|(c, _)| c.distance(at) < COIN_SAME)
+    }
+
+    /// Leave the coin at `at` alone until `until` (no route to it).
+    pub(crate) fn skip_coin(&mut self, at: Vec2, until: f32) {
+        self.skipped_coins.retain(|(c, _)| c.distance(at) >= COIN_SAME);
+        self.skipped_coins.push((at, until));
+    }
+
+    /// The coin at `at` is fair game again (he got there by a Dream Gate).
+    pub(crate) fn unskip_coin(&mut self, at: Vec2) {
+        self.skipped_coins.retain(|(c, _)| c.distance(at) >= COIN_SAME);
+    }
 }
+
+/// Resting coins this close (px) are the same coin for skipping.
+const COIN_SAME: f32 = 12.0;

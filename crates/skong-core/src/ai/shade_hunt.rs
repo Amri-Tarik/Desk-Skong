@@ -1,19 +1,26 @@
-//! Going after the Shade (travel there, fight it, reclaim the Geo, focus to heal) and
-//! picking up loose Geo.
+//! Going after the Shade (travel there — by Dream Gate when no route does —, fight it,
+//! reclaim the Geo, focus to heal) and picking up loose Geo.
+//!
+//! The Shade comes first, always: a hunt is never shelved for minutes. Stuck, a failed
+//! route, the Shade out of slash reach: he re-plans and goes again. No route at all: a
+//! Dream Gate by it, or another look in a few seconds. Only dying ends a hunt for longer
+//! (a breather, so he doesn't throw himself at it in a loop).
 use crate::controller::{Gait, MoveInput, Side};
 use crate::geom::Vec2;
 use crate::nav::{NavGoal, TravelStyle};
 use crate::props::ledge_below;
 use crate::stakes::{DeathKind, Spell};
 
-use super::behaviours::{ActWait, Ctx, Status, Travel, TravelStep};
-use super::interest::PoiTarget;
+use super::behaviours::{ActWait, Ctx, Status, Travel, TravelStep, on_point};
+use super::dream_gate::{DreamGate, GateWish, Prize};
 use super::stakes::{ShadeSense, StakeEvent, body_centre, try_spell};
 use super::{Attack, AttackDir, Motion};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum HuntPhase {
     Travel(Travel),
+    /// No route under it: a Dream Gate there.
+    Gate(DreamGate),
     Fight,
     /// An act between exchanges: recoil / thorns / a spell.
     Act(Option<ActWait>),
@@ -23,12 +30,22 @@ pub(crate) enum HuntPhase {
     Focus(Option<ActWait>),
 }
 
+/// How he gets to the Shade.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Way {
+    Walk,
+    Gate(GateWish),
+}
+
+/// Re-plans in a row (stuck, a failed route, out of reach) without landing a blow before
+/// he steps back and looks for a way again in a few seconds.
+const MAX_REPLANS: u32 = 4;
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ShadeHunt {
     pub phase: HuntPhase,
     /// Hits he can still take.
     pub masks: u32,
-    elapsed: f32,
     attack_cd: f32,
     dash_cd: f32,
     jump_hold: f32,
@@ -38,8 +55,12 @@ pub(crate) struct ShadeHunt {
     geo: u32,
     /// Seconds the Shade has stayed out of slash reach while fighting.
     out_of_reach: f32,
-    /// The route to the Shade was checked (`Navigator::reaches`).
+    /// The way to the Shade was checked for this trip.
     checked: bool,
+    /// Took a Dream Gate on this hunt already (one per hunt).
+    gated: bool,
+    /// Re-plans since the last blow that landed.
+    replans: u32,
 }
 
 impl ShadeHunt {
@@ -47,12 +68,10 @@ impl ShadeHunt {
         ctx.stakes.force_hunt = false;
         let shade = ctx.stakes.sense.shade.unwrap_or_default();
         let goal = Self::ground_under(ctx, shade.pos);
-        let style = if ctx.mind.needs.energy > 0.3 { TravelStyle::Normal } else { TravelStyle::Stroll };
         ctx.mind.excite(0.2);
         Self {
-            phase: HuntPhase::Travel(Travel::to(ctx, goal, style)),
+            phase: HuntPhase::Travel(Travel::to(ctx, goal, Self::style(ctx))),
             masks: ctx.cfg.stakes.masks.max(1),
-            elapsed: 0.0,
             attack_cd: 0.0,
             dash_cd: 0.0,
             jump_hold: 0.0,
@@ -61,7 +80,13 @@ impl ShadeHunt {
             geo: shade.geo,
             out_of_reach: 0.0,
             checked: false,
+            gated: false,
+            replans: 0,
         }
+    }
+
+    fn style(ctx: &Ctx) -> TravelStyle {
+        if ctx.mind.needs.energy > 0.3 { TravelStyle::Normal } else { TravelStyle::Stroll }
     }
 
     /// The point on the ledge right under the Shade (where he can stand and fight).
@@ -69,21 +94,68 @@ impl ShadeHunt {
         ledge_below(ctx.p.terrain, at).map_or(at, |(y, _)| Vec2::new(at.x, y))
     }
 
+    /// A way to the Shade: a route under it, else a Dream Gate spot by it (the Shade
+    /// ignores the gate's cooldown: it comes first). `None`: no way for now.
+    pub(crate) fn way(ctx: &mut Ctx) -> Option<Way> {
+        let sh = ctx.stakes.sense.shade?;
+        let under = Self::ground_under(ctx, sh.pos);
+        if on_point(ctx.p.knight, under, 150.0) || ctx.nav.reaches(ctx.p.knight, under, TravelStyle::Hurry, 150.0) {
+            return Some(Way::Walk);
+        }
+        let cfg = ctx.cfg.dream_gate;
+        if !cfg.enabled || under.distance(ctx.p.knight.pos) < cfg.min_distance {
+            return None;
+        }
+        super::dream_gate::spot(ctx, under).map(|at| Way::Gate(GateWish { prize: Prize::Shade, target: sh.pos, at }))
+    }
+
+    /// A planted gate still open (to be closed if something else takes over).
+    pub fn gate_open(&self) -> bool {
+        matches!(&self.phase, HuntPhase::Gate(g) if g.open())
+    }
+
+    /// Go under it again (stuck, a failed route, out of reach): a fresh trip, the way
+    /// checked anew. Too many in a row: step back and look again in a few seconds.
+    fn replan(&mut self, ctx: &mut Ctx, why: &str) -> Status {
+        self.replans += 1;
+        if self.replans > MAX_REPLANS {
+            return self.no_way(ctx, why);
+        }
+        log::debug!("brain: shade hunt: {why}; re-planning ({}/{MAX_REPLANS})", self.replans);
+        ctx.nav.stop();
+        let at = ctx.stakes.sense.shade.map_or(self.goal_at, |s| s.pos);
+        let goal = Self::ground_under(ctx, at);
+        self.goal_at = goal;
+        self.checked = false;
+        self.out_of_reach = 0.0;
+        self.phase = HuntPhase::Travel(Travel::to(ctx, goal, Self::style(ctx)));
+        Status::Running
+    }
+
+    /// No way to it right now: look again in a few seconds (never minutes).
+    fn no_way(&mut self, ctx: &mut Ctx, why: &str) -> Status {
+        log::debug!("brain: shade hunt: {why}; trying again in {:.0} s", ctx.cfg.stakes.shade_retry);
+        ctx.nav.stop();
+        ctx.stakes.shade_ready_at = ctx.now + ctx.cfg.stakes.shade_retry;
+        ctx.stakes.shade_way = false;
+        ctx.stakes.shade_probe_at = ctx.now + ctx.cfg.stakes.shade_retry;
+        Status::Done
+    }
+
     pub fn tick(&mut self, ctx: &mut Ctx) -> Status {
-        self.elapsed += ctx.dt();
         self.attack_cd -= ctx.dt();
         self.dash_cd -= ctx.dt();
         let cfg = ctx.cfg.stakes;
 
         // The Shade's blows.
         let hits = std::mem::take(&mut ctx.stakes.sense.shade_hits);
-        if hits > 0 && !matches!(self.phase, HuntPhase::Reclaim(_) | HuntPhase::Focus(_)) {
+        if hits > 0 && !matches!(self.phase, HuntPhase::Reclaim(_) | HuntPhase::Focus(_) | HuntPhase::Gate(_)) {
             self.masks = self.masks.saturating_sub(hits);
             ctx.mind.hurt(0.12 * hits as f32);
             ctx.mind.startle(0.2);
             if self.masks == 0 {
                 ctx.stakes.pending_death = Some((DeathKind::Fight, true));
-                ctx.stakes.shade_ready_at = ctx.now + cfg.shade_retry;
+                ctx.stakes.shade_ready_at = ctx.now + cfg.shade_breather;
                 return Status::Done;
             }
             ctx.nav.stop();
@@ -120,40 +192,41 @@ impl ShadeHunt {
                 }
                 Status::Running
             }
+            (HuntPhase::Gate(g), _) => match g.tick(ctx) {
+                Status::Running => Status::Running,
+                // Through the gate, by the Shade: on with the hunt from here.
+                Status::Done => self.replan(ctx, "through the dream gate"),
+                Status::Failed if shade.is_none() => Status::Done,
+                Status::Failed => self.no_way(ctx, "the dream gate didn't work out"),
+            },
             (_, None) => {
                 // Gone: beaten (if we were fighting) or reclaimed elsewhere.
                 ctx.nav.stop();
-                ctx.stakes.shade_ready_at = ctx.now + cfg.shade_retry;
                 if matches!(self.phase, HuntPhase::Travel(_)) {
                     return Status::Done;
                 }
                 self.phase = HuntPhase::Reclaim(ActWait::named(ctx, "reclaim_shade"));
                 Status::Running
             }
-            (_, Some(_)) if self.elapsed > cfg.shade_fight_secs || ctx.senses.stuck => {
-                ctx.nav.stop();
-                ctx.stakes.shade_ready_at = ctx.now + cfg.shade_retry;
-                ctx.mind.annoy(0.2);
-                Status::Done
-            }
             (HuntPhase::Travel(t), Some(sh)) => {
                 self.geo = sh.geo;
-                if !self.checked {
-                    self.checked = true;
-                    let under = Self::ground_under(ctx, sh.pos);
-                    if !ctx.nav.reaches(ctx.p.knight, under, TravelStyle::Hurry, 150.0) {
-                        // No way to get under it: don't even try (no frantic chase).
-                        ctx.interest.block(PoiTarget::Spot(under), ctx.now + 2.0 * cfg.shade_retry);
-                        ctx.stakes.shade_ready_at = ctx.now + 2.0 * cfg.shade_retry;
-                        log::debug!("brain: the shade can't be reached; leaving it for now");
-                        return Status::Done;
-                    }
-                }
                 let near = sh.pos.distance(body_centre(ctx)) < 260.0 * ctx.stakes.sense.scale.max(0.1);
                 if near {
                     ctx.nav.stop();
                     self.phase = HuntPhase::Fight;
                     return Status::Running;
+                }
+                if !self.checked {
+                    self.checked = true;
+                    match Self::way(ctx) {
+                        Some(Way::Walk) => {}
+                        Some(Way::Gate(wish)) if !self.gated => {
+                            self.gated = true;
+                            self.phase = HuntPhase::Gate(DreamGate::start(ctx, wish));
+                            return Status::Running;
+                        }
+                        _ => return self.no_way(ctx, "no way to the shade"),
+                    }
                 }
                 let goal = Self::ground_under(ctx, sh.pos);
                 if goal.distance(self.goal_at) > 120.0 {
@@ -170,10 +243,7 @@ impl ShadeHunt {
                         self.phase = HuntPhase::Fight;
                         Status::Running
                     }
-                    TravelStep::Failed => {
-                        ctx.stakes.shade_ready_at = ctx.now + cfg.shade_retry;
-                        Status::Done
-                    }
+                    TravelStep::Failed => self.replan(ctx, "the route failed"),
                 }
             }
             (HuntPhase::Act(act), Some(_)) => {
@@ -182,16 +252,11 @@ impl ShadeHunt {
                 }
                 Status::Running
             }
+            (HuntPhase::Fight, Some(_)) if ctx.senses.stuck => self.replan(ctx, "stuck"),
             (HuntPhase::Fight, Some(_)) if self.out_of_reach > cfg.unreachable_secs => {
-                // Can't get at it: no frantic chase. Calm down and leave it for a while.
-                ctx.nav.stop();
-                let under = Self::ground_under(ctx, shade.map_or(ctx.p.knight.pos, |s| s.pos));
-                ctx.interest.block(PoiTarget::Spot(under), ctx.now + 2.0 * cfg.shade_retry);
-                ctx.stakes.shade_ready_at = ctx.now + 2.0 * cfg.shade_retry;
-                ctx.mind.emotions.excitement *= 0.3;
-                ctx.mind.annoy(0.15);
-                log::debug!("brain: the shade is out of reach; leaving it for now");
-                Status::Done
+                // No frantic chase: calm down a little and go under it again.
+                ctx.mind.emotions.excitement *= 0.5;
+                self.replan(ctx, "the shade is out of reach")
             }
             (HuntPhase::Fight, Some(sh)) => {
                 self.fight(ctx, sh);
@@ -208,6 +273,7 @@ impl ShadeHunt {
             && spell.reaches(sh.pos - from, ctx.stakes.sense.scale.max(0.1))
             && spell.damage() > 0
         {
+            self.replans = 0;
             ctx.out.stakes.push(StakeEvent::StrikeShade { damage: spell.damage(), from });
         }
     }
@@ -274,6 +340,7 @@ impl ShadeHunt {
             ctx.out.attack = Some(Attack { dir, side, hit });
             self.attack_cd = b.attack_cooldown;
             if hit {
+                self.replans = 0;
                 ctx.out.stakes.push(StakeEvent::StrikeShade { damage: 1, from: centre });
                 ctx.stakes.spells.gain(1);
             }
@@ -285,6 +352,7 @@ impl ShadeHunt {
     pub fn reason(&self) -> String {
         match self.phase {
             HuntPhase::Travel(_) => format!("shade: going to reclaim {} geo", self.geo),
+            HuntPhase::Gate(g) => format!("shade: {}", g.reason()),
             HuntPhase::Fight | HuntPhase::Act(_) => format!("shade: fighting ({} masks)", self.masks),
             HuntPhase::Reclaim(_) => "shade: reclaimed!".into(),
             HuntPhase::Focus(_) => "shade: focusing to heal".into(),
@@ -327,7 +395,7 @@ fn quickest_coin(ctx: &mut Ctx, style: TravelStyle) -> Option<(Vec2, Option<f32>
     let k = ctx.p.knight.pos;
     let range = ctx.cfg.stakes.loot_range;
     let interest = &*ctx.interest;
-    let mut near: Vec<Vec2> = ctx.stakes.sense.coins.iter().copied().filter(|c| c.distance(k) < range && !interest.is_blocked(PoiTarget::Spot(*c))).collect();
+    let mut near: Vec<Vec2> = ctx.stakes.sense.coins.iter().copied().filter(|c| c.distance(k) < range && !interest.coin_skipped(*c)).collect();
     near.sort_by(|a, b| effort(k, *a).total_cmp(&effort(k, *b)));
     near.truncate(ROUTE_CANDIDATES);
     let knight = ctx.p.knight;
@@ -454,10 +522,10 @@ impl Loot {
     fn leave(ctx: &mut Ctx, coin: Vec2) {
         if super::dream_gate::may_take(ctx, coin) {
             log::debug!("loot: no way to the coin at ({:.0},{:.0}); keeping it for a dream gate", coin.x, coin.y);
-            ctx.interest.block(PoiTarget::Spot(coin), ctx.now + 30.0);
+            ctx.interest.skip_coin(coin, ctx.now + 30.0);
             return;
         }
-        ctx.interest.block(PoiTarget::Spot(coin), ctx.now + 120.0);
+        ctx.interest.skip_coin(coin, ctx.now + 120.0);
         ctx.out.stakes.push(StakeEvent::AbandonCoin { at: coin });
     }
 

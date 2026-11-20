@@ -425,6 +425,11 @@ impl Visit {
         }
     }
 
+    /// Swinging at a deposit (finished before anything of its tier takes over).
+    pub fn mining(&self) -> bool {
+        matches!(self.phase, Phase::Strike { .. })
+    }
+
     pub fn reason(&self) -> String {
         let what = self.place.kind.label();
         match self.phase {

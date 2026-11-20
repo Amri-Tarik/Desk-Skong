@@ -359,24 +359,30 @@ fn he_walks_over_loose_geo() {
 }
 
 #[test]
-fn an_unreachable_shade_is_left_alone_calmly() {
+fn a_shade_out_of_reach_is_retried_within_seconds_but_not_frantically() {
     let mut sim = Sim::new();
     sim.knight.pos.x = 900.0;
     // High up over the floor, never coming down: nothing to slash at.
     sim.fixed_shade = Some(ShadeSense { pos: Vec2::new(1000.0, FLOOR - 600.0), vulnerable: true, fighting: false, geo: 40 });
     sim.brain.hunt_shade();
     assert!(sim.run_until(3.0, |s| s.brain.behaviour() == BehaviourKind::ShadeHunt));
-    assert!(sim.run_until(15.0, |s| s.brain.behaviour() != BehaviourKind::ShadeHunt), "gives up instead of chasing forever");
+    // Out of reach: he goes under it again a few times, then steps back for a moment.
+    assert!(sim.run_until(40.0, |s| s.brain.behaviour() != BehaviourKind::ShadeHunt), "steps back after re-planning a few times");
+    // Never shelved for minutes (it used to be 6 min), never re-started every tick.
     let mut restarts = 0;
     let mut was = false;
-    for _ in 0..(120.0 / DT) as usize {
+    let mut first_back = None;
+    for i in 0..(120.0 / DT) as usize {
         sim.step();
         let now = sim.brain.behaviour() == BehaviourKind::ShadeHunt;
-        restarts += u32::from(now && !was);
+        if now && !was {
+            restarts += 1;
+            first_back.get_or_insert(i as f32 * DT);
+        }
         was = now;
     }
-    assert_eq!(restarts, 0, "no frantic re-planning");
-    assert!(sim.brain.mind().emotions.excitement < 0.5);
+    assert!(first_back.is_some_and(|t| t < 10.0), "back at it within seconds: {first_back:?}");
+    assert!((2..=8).contains(&restarts), "keeps at it, calmly: {restarts} restarts in 2 min");
 }
 
 #[test]
@@ -429,16 +435,74 @@ fn a_big_haul_ends_with_a_happy_act() {
     assert!(sim.run_until(40.0, |s| s.started.iter().any(|a| a == "collect_happy")), "{:?}", sim.started);
 }
 
+/// Has he set off for (a point under) `x`?
+fn heading_for(s: &Sim, x: f32) -> bool {
+    s.nav.goal.is_some_and(|g| matches!(g, NavGoal::Point(p) if (p.x - x).abs() < 40.0))
+}
+
 #[test]
-fn a_shade_with_no_route_under_it_is_not_chased() {
+fn a_shade_with_no_way_there_is_looked_for_again_within_seconds() {
+    // No route and no Dream Gate (disabled here): no frantic chase, but no shelving it for
+    // minutes either — the moment a way opens (a window moved), he goes.
     let mut sim = Sim::new();
+    let mut cfg = sim.brain.config().clone();
+    cfg.dream_gate.enabled = false;
+    sim.brain = Brain::new(cfg, sim.catalog.clone(), 7);
     sim.knight.pos.x = 300.0;
     sim.shade = Some(Shade::new(Vec2::new(1300.0, FLOOR - 70.0), 40, false, 3));
     // Routes stop far from the Shade: he can't get there.
     sim.nav.ends_at = Some(Vec2::new(320.0, FLOOR));
     sim.brain.hunt_shade();
-    // It drops the idea at once (never travels there) and doesn't come back to it soon.
-    assert!(!sim.run_until(60.0, |s| s.brain.behaviour() == BehaviourKind::ShadeHunt || s.nav.goal.is_some_and(|g| matches!(g, NavGoal::Point(p) if (p.x - 1300.0).abs() < 2.0))));
+    let (mut restarts, mut was) = (0, false);
+    for _ in 0..(10.0 / DT) as usize {
+        sim.step();
+        assert!(!heading_for(&sim, 1300.0), "never sets off with no way there");
+        let now = sim.brain.behaviour() == BehaviourKind::ShadeHunt;
+        restarts += u32::from(now && !was);
+        was = now;
+    }
+    assert!(restarts <= 1, "no re-trying every tick: {restarts}");
+    sim.nav.ends_at = None;
+    assert!(sim.run_until(8.0, |s| s.brain.behaviour() == BehaviourKind::ShadeHunt && heading_for(s, 1300.0)), "goes as soon as there's a way: {:?} {:?} {:?}", sim.brain.behaviour(), sim.nav.goal, sim.brain.utilities());
+}
+
+#[test]
+fn he_goes_after_his_shade_seconds_after_respawning() {
+    // It used to wait 90 s after every respawn.
+    let mut sim = Sim::new();
+    sim.knight.pos.x = 300.0;
+    sim.brain.kill(DeathKind::Fall);
+    assert!(sim.run_until(10.0, |s| s.respawned_at().is_some()));
+    sim.fixed_shade = Some(ShadeSense { pos: Vec2::new(1500.0, FLOOR - 40.0), vulnerable: true, fighting: false, geo: 120 });
+    assert!(sim.run_until(15.0, |s| s.brain.behaviour() == BehaviourKind::ShadeHunt), "hunts within seconds: {:?}", sim.brain.behaviour());
+}
+
+#[test]
+fn after_the_shade_kills_him_he_takes_a_breather_then_goes_again() {
+    let mut sim = Sim::new();
+    sim.knight.pos.x = 1200.0;
+    sim.shade = Some(Shade::new(Vec2::new(1300.0, FLOOR - 70.0), 10, false, 3));
+    sim.brain.hunt_shade();
+    assert!(sim.run_until(3.0, |s| s.brain.behaviour() == BehaviourKind::ShadeHunt));
+    sim.hits_from_shade = 5;
+    assert!(sim.run_until(15.0, |s| s.respawned_at().is_some()));
+    assert!(sim.run_until(10.0, |s| s.brain.behaviour() != BehaviourKind::Dead));
+    assert!(!sim.run_until(8.0, |s| s.brain.behaviour() == BehaviourKind::ShadeHunt), "not straight back into it");
+    assert!(sim.run_until(30.0, |s| s.brain.behaviour() == BehaviourKind::ShadeHunt), "then after it again");
+}
+
+#[test]
+fn a_failed_route_to_the_shade_is_re_planned_not_given_up() {
+    let mut sim = Sim::new();
+    sim.knight.pos.x = 300.0;
+    sim.fixed_shade = Some(ShadeSense { pos: Vec2::new(1500.0, FLOOR - 40.0), vulnerable: true, fighting: false, geo: 60 });
+    assert!(sim.run_until(2.0, |s| s.brain.behaviour() == BehaviourKind::ShadeHunt && s.nav.status == NavStatus::Moving));
+    // The route breaks down on the way (stuck, a window moved).
+    sim.nav.status = NavStatus::Failed;
+    sim.nav.goal = None;
+    sim.step();
+    assert_eq!(sim.brain.behaviour(), BehaviourKind::ShadeHunt, "still on it");
+    assert!(sim.run_until(1.0, |s| heading_for(s, 1500.0)), "a fresh route under it");
 }
 
 // --- Priority tiers -------------------------------------------------------------------
@@ -455,14 +519,31 @@ fn loose_geo_preempts_ambient_behaviour_at_once() {
 }
 
 #[test]
-fn an_exhausted_knight_leaves_far_geo_for_later() {
+fn a_worn_out_sore_knight_gathers_far_geo_before_resting() {
+    // Live: after a rough fight Geo counted as a pastime (unless a coin lay at his feet)
+    // and recovering outranked it; he sat while the coins faded. Only sleep puts Geo off.
     let mut sim = Sim::new();
     sim.brain.mind_mut().needs.energy = 0.05;
+    sim.brain.mind_mut().emotions.hurt = 0.8;
     sim.coins = vec![Vec2::new(1850.0, FLOOR)];
-    sim.run_until(3.0, |_| false);
-    assert_ne!(sim.brain.behaviour(), BehaviourKind::Loot, "a far coin waits while he's exhausted");
+    assert!(sim.run_until(1.0, |s| s.brain.behaviour() == BehaviourKind::Loot), "geo first: {:?}", sim.brain.behaviour());
+    assert!(sim.run_until(10.0, |s| s.coins.is_empty()), "collected");
+    assert!(sim.run_until(3.0, |s| matches!(s.brain.behaviour(), BehaviourKind::Recover | BehaviourKind::Rest | BehaviourKind::Nap)), "then he sees to himself");
 }
 
+#[test]
+fn geo_where_something_else_failed_is_still_gathered() {
+    // Live: a Crawlid's Geo lay ignored (loot utility 0) while he sat. Coins were filtered
+    // by the shared "unreachable target" map, keyed on a 64 px grid: a seat, a cursor spot,
+    // a fight approach or a stuck goal that failed nearby hid fresh coins for 20–60 s.
+    let mut sim = Sim::new();
+    sim.run_until(1.0, |_| false);
+    let coin = Vec2::new(1300.0, FLOOR);
+    sim.brain.interest.block(PoiTarget::Spot(coin + Vec2::new(20.0, 0.0)), sim.brain.now + 60.0);
+    sim.coins = vec![coin];
+    assert!(sim.run_until(1.0, |s| s.brain.behaviour() == BehaviourKind::Loot), "loot: {:?}", sim.brain.utilities());
+    assert!(sim.run_until(10.0, |s| s.coins.is_empty()));
+}
 #[test]
 fn an_exhausted_knight_still_grabs_a_coin_at_his_feet() {
     let mut sim = Sim::new();
@@ -567,7 +648,7 @@ fn coins_he_may_not_go_for_dont_restart_loot_every_tick() {
     // started, found nothing and finished — every tick.
     let mut sim = Sim::new();
     sim.coins = vec![Vec2::new(1300.0, FLOOR)];
-    sim.brain.interest.block(PoiTarget::Spot(Vec2::new(1300.0, FLOOR)), sim.brain.now + 100.0);
+    sim.brain.interest.skip_coin(Vec2::new(1300.0, FLOOR), sim.brain.now + 100.0);
     let mut switches = 0;
     let mut last = sim.brain.behaviour();
     for _ in 0..(3.0 / DT) as usize {

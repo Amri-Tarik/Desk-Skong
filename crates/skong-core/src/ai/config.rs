@@ -236,9 +236,6 @@ pub struct TierConfig {
     pub critical_energy: f32,
     /// Hurt above this is a critical need: Recover rises to the Needs tier.
     pub critical_hurt: f32,
-    /// While a need is critical, loot only stays an engagement within this distance (px):
-    /// a coin next to him beats sitting, a far one can wait for the nap.
-    pub tired_loot_reach: f32,
     /// A behaviour only competes in the Engagement / Needs tier when its utility reaches this;
     /// below it, it competes as Ambient. Keeps a merely *possible* cursor battle (low
     /// baseline) from outranking everything, while an invited one still preempts.
@@ -248,7 +245,7 @@ pub struct TierConfig {
 
 impl Default for TierConfig {
     fn default() -> Self {
-        Self { eligible: 0.05, critical_energy: 0.2, critical_hurt: 0.6, tired_loot_reach: 300.0, engagement_min: 0.35, needs_min: 0.3 }
+        Self { eligible: 0.05, critical_energy: 0.2, critical_hurt: 0.6, engagement_min: 0.35, needs_min: 0.3 }
     }
 }
 

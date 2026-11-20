@@ -177,3 +177,23 @@ fn disabled_means_no_dream_gates() {
     assert!(sim.intents.iter().flat_map(|i| &i.stakes).any(|e| *e == StakeEvent::AbandonCoin { at: coin }), "the old give-up");
 }
 
+
+#[test]
+fn a_shade_with_no_route_under_it_is_reached_by_dream_gate() {
+    // Live: he respawned far from his Shade (often on the other monitor), found no route
+    // and shelved it for 6–12 minutes. The Shade comes first: no route → a Dream Gate by
+    // it (whatever the gate's cooldown), then the fight.
+    let mut sim = with_window(calm(BrainConfig::default()));
+    sim.run(1.0);
+    sim.brain.stakes.gate.ready_at = sim.brain.now + 600.0; // a gate was just used for something else
+    let under = Vec2::new(500.0, 400.0);
+    unreachable(&mut sim, under);
+    let shade = ShadeSense { pos: Vec2::new(500.0, 330.0), vulnerable: true, fighting: false, geo: 60 };
+    sim.brain.sense_stakes(StakesSense { shade: Some(shade), ..Default::default() });
+    assert!(sim.run_until(2.0, BehaviourKind::ShadeHunt), "{}", sim.last_reason());
+    assert!(sim.run_while(8.0, |s| s.knight.pos != under), "warped under the shade: {} at {:?}", sim.last_reason(), sim.knight.pos);
+    assert_eq!(gates(&sim), vec![GateEvent::Set { at: under }], "one gate, under the shade");
+    assert!(the_order(&sim.started, &["dreamgate_set", "dreamgate_warp", "dreamgate_in"]), "acts {:?}", sim.started);
+    assert!(sim.run_while(4.0, |s| !s.last_reason().contains("shade: fighting")), "then the fight: {}", sim.last_reason());
+    assert_eq!(sim.brain.behaviour(), BehaviourKind::ShadeHunt, "one hunt throughout");
+}

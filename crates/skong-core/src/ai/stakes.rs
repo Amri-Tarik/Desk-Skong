@@ -100,15 +100,18 @@ pub struct StakesConfig {
     pub death_margin: u32,
     /// Seconds between the death act and the respawn.
     pub dead_secs: f32,
-    /// Seconds after a respawn before he dares go after the Shade.
+    /// Seconds after a respawn before he goes after the Shade (he gets his bearings).
     pub shade_delay: f32,
-    /// Seconds before trying again after giving up on the Shade.
+    /// Seconds before trying again when there's no way to the Shade (no route, no Dream
+    /// Gate spot): never minutes — it comes first.
     pub shade_retry: f32,
+    /// Seconds after the Shade killed him before he goes for it again (counted from the
+    /// death; no throwing himself at it in a tight loop).
+    pub shade_breather: f32,
     /// Hits the knight can take from the Shade before dying again.
     pub masks: u32,
-    /// Give up a Shade fight after this long (s).
-    pub shade_fight_secs: f32,
-    /// Give up (calmly) when the target stays out of slash reach this long (s).
+    /// Re-plan (go under it again) when the Shade stays out of slash reach this long (s);
+    /// cursor battles give up after it.
     pub unreachable_secs: f32,
     /// Walk over to resting Geo within this distance (px).
     pub loot_range: f32,
@@ -127,10 +130,10 @@ impl Default for StakesConfig {
             lethal: Lethality::Badly,
             death_margin: 2,
             dead_secs: 1.5,
-            shade_delay: 90.0,
-            shade_retry: 180.0,
+            shade_delay: 4.0,
+            shade_retry: 5.0,
+            shade_breather: 25.0,
             masks: 5,
-            shade_fight_secs: 60.0,
             unreachable_secs: 4.0,
             loot_range: 8000.0,
             victory_geo: [8, 30],
@@ -149,6 +152,11 @@ pub(crate) struct StakesMind {
     /// A death to play out (set by a lethal loss, the Shade or the app).
     pub pending_death: Option<(DeathKind, bool)>,
     pub shade_ready_at: f32,
+    /// There's a way to the Shade (a route, or a Dream Gate spot by it) as far as he knows.
+    /// Cleared when a hunt finds none; [`Brain::probe_shade`] looks again every few seconds.
+    pub shade_way: bool,
+    /// Next look for a way to the Shade (brain time).
+    pub shade_probe_at: f32,
     pub loot_ready_at: f32,
     /// Debug: go after the Shade right away.
     pub force_hunt: bool,
@@ -167,6 +175,8 @@ impl StakesMind {
             spells: SpellBook::new(&cfg.spells),
             pending_death: None,
             shade_ready_at: 0.0,
+            shade_way: true,
+            shade_probe_at: 0.0,
             loot_ready_at: 0.0,
             force_hunt: false,
             dying: false,
@@ -210,31 +220,61 @@ impl Brain {
         let m = &self.mind;
         let e = m.emotions;
         let s = &self.senses;
-        let cfg = &self.cfg.stakes;
         // Nothing interrupts dying (`dying` is cleared when the respawn is over).
         let dead = if st.pending_death.is_some() || (st.dying && matches!(self.active, Active::Dead(_))) { 2.0 } else { 0.0 };
 
         // The Shade is priority number one, whatever he's doing (lore: his Geo, his soul).
-        // Only a fullscreen app holds it back, and a short breather after it beat him (so
-        // he doesn't throw himself at it in a loop).
+        // Only a fullscreen app holds it back, a few seconds after a respawn, a breather
+        // after it beat him (so he doesn't throw himself at it in a loop), and no way there
+        // at all (no route, no Dream Gate spot: looked for again every few seconds).
         let hunt = match st.sense.shade {
             Some(_) if st.force_hunt => 1.6,
-            Some(_) if self.now >= st.shade_ready_at && !s.fullscreen => 1.5,
+            Some(_) if self.now >= st.shade_ready_at && st.shade_way && !s.fullscreen => 1.5,
             _ => 0.0,
         };
 
-        let k = p.knight.pos;
-        // Only coins he may go for (not skipped for now: unreachable, kept for a Dream Gate),
-        // or Loot starts, finds nothing and finishes every tick.
-        let near_coin = st.sense.coins.iter().any(|c| c.distance(k) < cfg.loot_range && !self.interest.is_blocked(super::interest::PoiTarget::Spot(*c)));
         let pile = if st.sense.coins.len() >= 8 { 0.1 } else { 0.0 };
         let cheering = matches!(&self.active, Active::Loot(l) if l.cheering());
         // Strict: loose Geo is always wanted (mid-jump included — a jump used to zero it and
         // let something else take over mid-gathering), just below fights and visitors.
-        let loot = if near_coin && self.now >= st.loot_ready_at && !s.fullscreen { (0.6 + 0.2 * e.excitement + pile).min(0.85) } else if cheering { 0.7 } else { 0.0 };
+        let loot = if self.loose_geo_wanted(p) { (0.6 + 0.2 * e.excitement + pile).min(0.85) } else if cheering { 0.7 } else { 0.0 };
         [(BehaviourKind::Dead, dead), (BehaviourKind::ShadeHunt, hunt), (BehaviourKind::Loot, loot)]
     }
+
+    /// No known way to the Shade: look again (a route, or a Dream Gate spot by it) every
+    /// [`SHADE_PROBE_SECS`] (call with the other scorings, before the utilities).
+    pub(super) fn probe_shade(&mut self, p: &Percepts, nav: &mut dyn super::Navigator) {
+        let st = &mut self.stakes;
+        if st.sense.shade.is_none() {
+            st.shade_way = true;
+            return;
+        }
+        if st.shade_way || self.now < st.shade_probe_at || !p.knight.is_grounded() || matches!(self.active, Active::ShadeHunt(_)) {
+            return;
+        }
+        st.shade_probe_at = self.now + SHADE_PROBE_SECS;
+        let mut scratch = super::Intent::default();
+        let mut ctx = self.ctx(p, nav, &mut scratch);
+        let way = super::shade_hunt::ShadeHunt::way(&mut ctx).is_some();
+        if way {
+            log::debug!("brain: found a way to the shade again");
+        }
+        self.stakes.shade_way = way;
+    }
+
+    /// Loose Geo he'd go for now: a resting coin in range that he hasn't given up on for now
+    /// (unreachable, kept for a Dream Gate — or Loot would start, find nothing and finish
+    /// every tick), not right after a fruitless gathering, nothing fullscreen.
+    pub(super) fn loose_geo_wanted(&self, p: &Percepts) -> bool {
+        let st = &self.stakes;
+        let k = p.knight.pos;
+        let range = self.cfg.stakes.loot_range;
+        self.now >= st.loot_ready_at && !self.senses.fullscreen && st.sense.coins.iter().any(|c| c.distance(k) < range && !self.interest.coin_skipped(*c))
+    }
 }
+
+/// How often a way to an out-of-the-way Shade is looked for (s).
+const SHADE_PROBE_SECS: f32 = 2.0;
 
 /// Did this loss kill the knight? Queues the death if so.
 pub(crate) fn lethal_loss(ctx: &mut Ctx, score: BattleScore) -> bool {
