@@ -53,7 +53,6 @@ fn one_shot_achievements_unlock_once_with_their_time() {
         (E::GauntletCleared, GAUNTLET),
         (E::SlugForm, UNN_FORM),
         (E::TextHighlighted, HIGHLIGHTED_TEXT),
-        (E::HidFromGame, GAME_RETREAT),
         (E::WindowShattered, SHATTERED_WINDOW),
         (E::PokedWhileNapping, NAP_POKE),
         (E::SuperHardLanding, SUPER_HARD_LANDING),
@@ -188,26 +187,31 @@ fn a_fatal_fall_then_the_shade_won_back() {
 }
 
 #[test]
-fn crystal_dashes_off_walls_and_across_monitors() {
+fn crystal_dashes_off_walls() {
     let mut t = tracker();
-    let same = [E::SuperdashLaunched { monitor: 0, from_wall: false }, E::SuperdashFlying { monitor: 0 }, E::SuperdashOver];
-    assert!(feed(&mut t, &same).is_empty());
-    assert!(feed(&mut t, &[E::SuperdashFlying { monitor: 1 }]).is_empty(), "no dash in flight");
+    let plain = [E::SuperdashLaunched { monitor: 0, from_wall: false }, E::SuperdashFlying { monitor: 0 }, E::SuperdashOver];
+    assert!(feed(&mut t, &plain).is_empty());
+    // Crossing monitors is no achievement (everyone can reach 100 %).
+    assert!(feed(&mut t, &[E::SuperdashLaunched { monitor: 0, from_wall: false }, E::SuperdashFlying { monitor: 1 }]).is_empty());
     assert_eq!(feed(&mut t, &[E::SuperdashLaunched { monitor: 1, from_wall: true }]), [WALL_CRYSTAL_DASH]);
-    assert_eq!(feed(&mut t, &[E::SuperdashFlying { monitor: 1 }, E::SuperdashFlying { monitor: 0 }]), [DASH_ACROSS_MONITORS]);
 }
 
 #[test]
-fn throws_air_mail_and_midair_catches() {
+fn throws_and_midair_catches() {
     let mut t = tracker();
     assert_eq!(feed(&mut t, &[E::Thrown { monitor: 0 }]), [THROW]);
-    assert!(feed(&mut t, &[E::Landed { monitor: 0, floor: true }]).is_empty(), "same monitor");
+    assert!(feed(&mut t, &[E::Landed { monitor: 1, floor: true }]).is_empty(), "another monitor is nothing special");
     assert!(feed(&mut t, &[E::Grabbed]).is_empty(), "landed: a plain pick-up");
-    assert_eq!(feed(&mut t, &[E::Thrown { monitor: 0 }, E::Landed { monitor: 1, floor: false }]), [AIR_MAIL]);
     assert_eq!(feed(&mut t, &[E::Thrown { monitor: 1 }, E::Grabbed]), [MIDAIR_CATCH]);
-    // The catch ended that flight: the next landing is no air mail.
+}
+
+#[test]
+fn no_achievement_needs_special_hardware_or_apps() {
+    for gone in ["dash_across_monitors", "air_mail", "game_retreat"] {
+        assert!(!ALL.contains(&gone), "{gone}");
+    }
     let mut t = tracker();
-    assert!(!feed(&mut t, &[E::Thrown { monitor: 0 }, E::Grabbed, E::Landed { monitor: 1, floor: true }]).contains(&AIR_MAIL.to_string()));
+    assert!(feed(&mut t, &[E::HidFromGame]).is_empty());
 }
 
 #[test]
