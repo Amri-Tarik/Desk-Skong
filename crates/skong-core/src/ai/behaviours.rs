@@ -310,23 +310,14 @@ impl Ctx<'_, '_> {
         ActWait::named(self, name)
     }
 
-    /// Sitting down again is fine: tired, or the last seat was a while ago.
-    /// A little wander with a prop, when nothing better is going on: the lantern where it's
-    /// dark (a dark-themed window, night), or a look at his map (more often when curious).
-    /// Spaced out so it stays a treat. In a serene moment, rarely, the Unn slug's crawl.
+    /// In a serene moment, rarely, the Unn slug's crawl (spaced out so it stays a treat).
+    /// The map and the lantern are carried items, not acts (`ai::carry`): no patrol.
     pub fn wander_act(&mut self) -> Option<ActWait> {
         let since = |ctx: &Self, name: &str| ctx.act_id(name).map_or(0.0, |id| ctx.rep.since_used(id, ctx.now));
         let s = self.cfg.serene;
         let calm_nature = 1.5 - self.mind.personality.vigour; // placid knights slug more
         if self.serene() && since(self, SLUG_ACT) >= s.cooldown_secs && self.rng.chance(s.chance * calm_nature) {
             return ActWait::named(self, SLUG_ACT);
-        }
-        if self.senses.dark && since(self, "lantern_patrol") >= 60.0 && self.rng.chance(0.35) {
-            return ActWait::named(self, "lantern_patrol");
-        }
-        let curious = self.mind.personality.curiosity;
-        if since(self, "map_stroll") >= 120.0 && self.rng.chance(0.2 + 0.2 * curious) {
-            return ActWait::named(self, "map_stroll");
         }
         None
     }
@@ -351,6 +342,7 @@ impl Ctx<'_, '_> {
             && k.support.is_some_and(|l| l.x1 - l.x0 >= s.min_ledge_widths * k.size.x)
     }
 
+    /// Sitting down again is fine: tired, or the last seat was a while ago.
     pub fn may_sit(&self) -> bool {
         self.mind.tiredness() > 0.5 || self.rep.since_seated(self.now) >= self.cfg.boredom.seat_cooldown
     }
@@ -615,8 +607,8 @@ pub(crate) fn find_seat(ctx: &mut Ctx, near: Vec2, range: f32) -> Option<(Vec2, 
 
 // --- Idle ---------------------------------------------------------------------------
 
-/// Nobody around and nothing to look at: sit if possible, else the odd fidget (or a
-/// lantern walk at night).
+/// Nobody around and nothing to look at: sit if possible, else the odd fidget (the map or
+/// the lantern may be in his hands meanwhile: `ai::carry`).
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Idle {
     beat: Beat,
@@ -653,8 +645,6 @@ impl Idle {
 
     pub fn reason(&self, ctx: &Ctx) -> String {
         match self.beat.doing_name(ctx) {
-            Some("lantern_patrol") => "idle: dark, lantern walk".into(),
-            Some("map_stroll") => "idle: checking his map".into(),
             Some(SLUG_ACT) => "idle: feeling serene (slug crawl)".into(),
             Some(n) => format!("idle: {n}"),
             None => "idle: nothing going on".into(),
@@ -733,7 +723,8 @@ impl Explore {
             PoiKind::NewWindow if small => ("found a small new thing", "pick_up_trinket"),
             PoiKind::NewWindow | PoiKind::Unvisited if dream => ("dream-nailing a window", "dream_nail"),
             PoiKind::NewWindow | PoiKind::Unvisited if ctx.senses.can_sit() => ("mapping a new window", "read_map"),
-            PoiKind::NewWindow | PoiKind::Unvisited => ("mapping a new window", "map_stroll"),
+            // Nowhere to sit: the map comes out and he carries on with it (`ai::carry`).
+            PoiKind::NewWindow | PoiKind::Unvisited => ("mapping a new window", super::carry::TAKE_OUT_MAP),
             PoiKind::ActiveWindow => {
                 // Squatting on the title bar of whatever the user is working on.
                 ctx.mind.adjust(|n| &mut n.mischief, -0.35);
@@ -1225,7 +1216,7 @@ pub(crate) fn exit_act_for(act: &ActInfo) -> Option<&'static str> {
         "look_up" => Some("look_up_end"),
         "look_down" => Some("look_down_end"),
         "gaze_into_screen" | "stargaze" => Some("turn_from_screen"),
-        "map_stroll" | "company_maps_stand" => Some("put_map_away"),
+        super::carry::TAKE_OUT_MAP | "company_maps_stand" => Some(super::carry::PUT_MAP_AWAY),
         _ if act.requires == crate::acts::Requirement::Seat => Some("get_up"),
         _ => None,
     }

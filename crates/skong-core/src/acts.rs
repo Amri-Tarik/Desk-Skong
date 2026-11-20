@@ -715,7 +715,7 @@ mod tests {
     #[test]
     fn walking_step_plays_its_turn_clip_then_resumes() {
         let (clips, acts) = libs();
-        let id = acts.id("map_stroll").expect("act");
+        let id = acts.id("slug_crawl").expect("act");
         let mut anim = Animator::new(clips.id("Idle").expect("Idle"));
         let mut p = ActPlayer::start(&acts, &clips, &mut anim, id, 3);
         let mut ev = Vec::new();
@@ -726,21 +726,19 @@ mod tests {
             p.update(&acts, &clips, &mut anim, dt, &ev);
         }
         p.turned(&acts, &clips, &mut anim);
-        assert_eq!(clips.get(anim.clip()).name, "Map Turn");
-        let mut seen = vec![];
-        for _ in 0..30 {
+        assert_eq!(clips.get(anim.clip()).name, "Slug Turn");
+        // (`Slug Turn` loops its last section, so it carries on crawling in it.)
+        for _ in 0..60 {
             ev.clear();
             anim.update(&clips, dt, &mut ev);
             p.update(&acts, &clips, &mut anim, dt, &ev);
-            seen.push(clips.get(anim.clip()).name.clone());
         }
-        assert_eq!(seen.last().map(String::as_str), Some("Map Walk"), "{seen:?}");
-        assert!(p.gait(&acts).is_some());
+        assert!(p.gait(&acts).is_some(), "still crawling after the turn");
         // Steps without a turn clip ignore it.
-        let lantern = acts.id("lantern_patrol").expect("act");
-        let mut p = ActPlayer::start(&acts, &clips, &mut anim, lantern, 3);
+        let dash = acts.id("dash_slash").expect("act");
+        let mut p = ActPlayer::start(&acts, &clips, &mut anim, dash, 3);
         p.turned(&acts, &clips, &mut anim);
-        assert_eq!(clips.get(anim.clip()).name, "Lantern Idle");
+        assert_eq!(clips.get(anim.clip()).name, "NA Dash Slash");
     }
 
     #[test]
@@ -818,22 +816,30 @@ mod tests {
     }
 
     #[test]
-    fn map_stroll_requests_walking() {
+    fn the_map_comes_out_and_goes_away_in_place() {
+        // The map is a carried item now (`ai::carry`): its acts only open and fold it, never
+        // walk (no back-and-forth patrol).
         let (clips, acts) = libs();
-        let id = acts.id("map_stroll").expect("act");
-        let mut anim = Animator::new(clips.id("Idle").expect("Idle"));
-        let mut p = ActPlayer::start(&acts, &clips, &mut anim, id, 3);
-        let mut ev = Vec::new();
-        let mut walked = false;
-        for _ in 0..120 * 20 {
-            ev.clear();
-            anim.update(&clips, 1.0 / 120.0, &mut ev);
-            if let ActStatus::Running { gait: Some(Gait::Walk) } = p.update(&acts, &clips, &mut anim, 1.0 / 120.0, &ev) {
-                walked = true;
-                assert_eq!(clips.get(anim.clip()).name, "Map Walk");
+        assert!(acts.id("map_stroll").is_none() && acts.id("lantern_patrol").is_none());
+        for (name, clip) in [("take_out_map", "Map Open"), ("put_map_away", "Map Away")] {
+            let id = acts.id(name).expect("act");
+            let mut anim = Animator::new(clips.id("Idle").expect("Idle"));
+            let mut p = ActPlayer::start(&acts, &clips, &mut anim, id, 3);
+            assert_eq!(clips.get(anim.clip()).name, clip);
+            let mut ev = Vec::new();
+            let mut t = 0.0;
+            loop {
+                ev.clear();
+                anim.update(&clips, 1.0 / 120.0, &mut ev);
+                let s = p.update(&acts, &clips, &mut anim, 1.0 / 120.0, &ev);
+                if s == ActStatus::Done {
+                    break;
+                }
+                assert!(p.gait(&acts).is_none(), "{name} stands still");
+                t += 1.0 / 120.0;
+                assert!(t < 2.0, "{name} is short");
             }
         }
-        assert!(walked);
     }
 
     #[test]

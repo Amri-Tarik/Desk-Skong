@@ -13,6 +13,7 @@ use crate::desktop::{DesktopSnapshot, Monitor, WindowId, WindowInfo};
 use crate::geom::RectI;
 use crate::terrain::{LedgeKind, Terrain, TerrainOptions};
 
+mod carry;
 mod company;
 mod dream_gate;
 mod expression;
@@ -100,8 +101,9 @@ fn act_secs(name: &str) -> f32 {
         "take_in_view" => 30.0,
         "rest" => 12.0,
         "lean_back" => 10.0,
-        "read_map" | "map_stroll" => 7.0,
-        "bow_down" | "lantern_patrol" => 6.0,
+        "read_map" => 7.0,
+        "bow_down" => 6.0,
+        "take_out_map" | "put_map_away" => 0.5,
         "gaze_into_screen" | "hurt_idle" | "windswept" => 4.5,
         "look_up" | "look_down" | "pick_up_trinket" => 3.0,
         "stare_at_user" | "focus" => 2.5,
@@ -660,8 +662,15 @@ fn night_brings_out_the_lantern() {
     let mut sim = calm(BrainConfig::default());
     sim.dark = true;
     sim.park_cursor(Vec2::new(100.0, -20.0));
-    sim.run(120.0);
-    assert!(sim.started.iter().any(|a| a == "lantern_patrol"), "acts: {:?}", sim.started);
+    sim.run(10.0);
+    assert_eq!(sim.intents.last().and_then(|i| i.carry), Some(Carry::Lantern), "{}", sim.last_reason());
+    assert!(sim.last_reason().contains("lantern out"), "{}", sim.last_reason());
+    // It stays out while it's dark (no patrol act), and goes once it's light again.
+    sim.run(60.0);
+    assert!(sim.intents[sim.intents.len() - 600..].iter().all(|i| i.carry == Some(Carry::Lantern) || i.behaviour != Some(BehaviourKind::Companion)));
+    sim.dark = false;
+    sim.run(5.0);
+    assert_ne!(sim.intents.last().and_then(|i| i.carry), Some(Carry::Lantern));
 }
 
 // --- Exploring windows ------------------------------------------------------------------
@@ -936,7 +945,7 @@ fn riding_a_moving_window_is_fun() {
 
 /// Acts the knight may start with nobody doing anything special.
 const QUIET_ACTS: [&str; 17] = [
-    "dream_nail", "gaze_into_screen", "look_up", "look_down", "stare_at_user", "rest", "lean_back", "read_map", "map_stroll", "pick_up_trinket", "get_up", "look_up_end", "look_down_end", "turn_from_screen", "put_map_away",
+    "dream_nail", "gaze_into_screen", "look_up", "look_down", "stare_at_user", "rest", "lean_back", "read_map", "take_out_map", "pick_up_trinket", "get_up", "look_up_end", "look_down_end", "turn_from_screen", "put_map_away",
     // Quiet pastimes (`ai::pastime`).
     "take_in_view", "stargaze",
 ];
@@ -1074,8 +1083,8 @@ fn config_deserializes_partially() {
 fn every_named_act_exists_and_only_fidgets_are_random() {
     let cat = catalog();
     for name in [
-        "nap", "rest", "lean_back", "read_map", "map_stroll", "challenge", "startled", "windswept", "look_up", "look_down", "gaze_into_screen",
-        "stare_at_user", "pick_up_trinket", "lantern_patrol", "focus", "hurt_idle", "recoil", "stunned", "bow_down", "victory",
+        "nap", "rest", "lean_back", "read_map", "take_out_map", "put_map_away", "challenge", "startled", "windswept", "look_up", "look_down", "gaze_into_screen",
+        "stare_at_user", "pick_up_trinket", "focus", "hurt_idle", "recoil", "stunned", "bow_down", "victory",
     ] {
         assert!(cat.id(name).is_some(), "missing act '{name}'");
     }
@@ -1485,10 +1494,10 @@ fn a_winding_route_to_one_deposit_is_not_dithering() {
 
 #[test]
 fn idling_he_now_and_then_checks_his_map() {
-    // The user missed it: with nothing going on he pulls out his map for a stroll.
+    // The user missed it: with nothing going on he pulls out his map now and then.
     let mut sim = calm(BrainConfig::default());
     sim.run(300.0);
-    let maps = sim.started.iter().filter(|a| *a == "map_stroll").count();
+    let maps = sim.started.iter().filter(|a| *a == "take_out_map").count();
     assert!(maps >= 1, "acts: {:?}", sim.started);
     assert!(maps <= 3, "a treat, not a habit: {maps}");
 }

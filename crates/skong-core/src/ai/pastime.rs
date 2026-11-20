@@ -13,9 +13,13 @@
 //! * **Stargazing** (night only): on a high ledge with open sky above, looking up a long while.
 //!
 //! All Ambient: the Shade, fights, visitors, Geo, shinies and deposits always come first (a
-//! higher tier preempts at once). The drive is boredom plus restlessness from a long stretch
-//! of plain company; each pastime has a cooldown so they stay treats, and doing one settles
-//! boredom so he goes back to keeping company afterwards.
+//! higher tier preempts at once), and never while the user types hard or a fullscreen app is
+//! up. A dummy or a lumafly that's there, reachable and off its cooldown beats plain company
+//! (and idling) at once, with a utility well above companion's; the quiet ones (the view, the
+//! stars) are driven by boredom plus restlessness from a long stretch of plain company. Each
+//! pastime has a cooldown so they stay treats, and doing one settles boredom so he goes back
+//! to keeping company afterwards. Once started a pastime keeps its starting utility until
+//! done (no dithering back to company).
 use std::collections::BTreeMap;
 
 use crate::controller::{MoveInput, Side};
@@ -161,8 +165,16 @@ const SCAN_EVERY: f32 = 3.0;
 const VIEW_HEIGHT: f32 = 0.4;
 /// Stargazing: open sky above the ledge this far (px at scale 1).
 const OPEN_SKY: f32 = 220.0;
-/// Pastimes come up after this long of plain company / idling (s), or when bored stiff.
+/// The quiet pastimes (view, stars) come up after this long of plain company / idling (s),
+/// or when bored stiff. The dummy and lumaflies don't wait.
 const MIN_COMPANY: f32 = 25.0;
+/// Utility floor and cap of the lively pastimes (dummy, lumafly): above plain company (at
+/// most ≈ 0.62) plus the hysteresis margin (0.12) even after the travel cost, and below the
+/// scarlet flame the user summoned (`ai::scene`, 0.8) and the fun the user starts (battle,
+/// pester invites) at full tilt. Whichever of dummy / flame starts first is finished first
+/// (the hysteresis margin keeps the other from cutting in), so neither starves the other.
+const LIVELY_MIN: f32 = 0.78;
+const LIVELY_MAX: f32 = 0.79;
 /// Night hours (local): from .. to.
 const NIGHT: (f32, f32) = (21.0, 5.0);
 
@@ -223,11 +235,9 @@ impl Brain {
         if kind == BehaviourKind::Pastime {
             return; // committed: the choice is the running one
         }
-        // Only once he's been keeping company a while, or is bored stiff.
-        if mem.company < MIN_COMPANY && self.mind.needs.boredom < self.cfg.boredom.bored {
-            mem.best = None;
-            return;
-        }
+        // The quiet ones (the view, the stars) only once he's been keeping company a while,
+        // or is bored stiff. A dummy or a lumafly right there is reason enough on its own.
+        let restless_enough = mem.company >= MIN_COMPANY || self.mind.needs.boredom >= self.cfg.boredom.bored;
         let k = p.knight;
         let ppu = k.params.px_per_unit;
         let style = self.mind.travel_style();
@@ -270,7 +280,10 @@ impl Brain {
         }
 
         // The view and the stars: re-scanned every few seconds.
-        if self.interest.pastimes.scanned_at.is_none_or(|t| (now - t) as f32 >= SCAN_EVERY) {
+        if !restless_enough {
+            self.interest.pastimes.view = None;
+            self.interest.pastimes.stars = None;
+        } else if self.interest.pastimes.scanned_at.is_none_or(|t| (now - t) as f32 >= SCAN_EVERY) {
             self.interest.pastimes.scanned_at = Some(now);
             let view = if ready(&self.interest.pastimes, PastimeKind::View) { self.find_view(p, nav) } else { None };
             let stars = if night(p) && ready(&self.interest.pastimes, PastimeKind::Stargaze) { self.find_sky(p, nav) } else { None };
@@ -298,7 +311,14 @@ impl Brain {
                 PastimeKind::Stargaze => (0.12, true),
             };
             let again = if Some(o.kind) == last { 0.05 } else { 0.0 };
-            o.value = if ok { (base + bonus - again - 0.01 * o.eta).clamp(0.0, 0.8) } else { 0.0 };
+            o.value = match o.kind {
+                // A dummy or a lumafly is more fun than plain company, right away: well
+                // above companion's utility (≈ 0.42–0.62) plus the switching margin, still
+                // far below every engagement (a higher tier preempts it anyway).
+                PastimeKind::Dummy | PastimeKind::Lumafly if ok => ((base + bonus).max(LIVELY_MIN) - (0.01 * o.eta).min(0.03)).min(LIVELY_MAX),
+                _ if ok => (base + bonus - again - 0.01 * o.eta).clamp(0.0, 0.8),
+                _ => 0.0,
+            };
         }
         options.retain(|o| o.value > 0.0);
         let best = options.into_iter().max_by(|a, b| a.value.total_cmp(&b.value));
@@ -902,7 +922,11 @@ impl Pastime {
             (PastimeKind::Stargaze, _) => format!("night: up to {} to look at the stars", self.place),
             _ => self.kind.label().into(),
         };
-        format!("pastime: {what} (restless after a long while of company)")
+        let why = match self.kind {
+            PastimeKind::Dummy | PastimeKind::Lumafly => "more fun than standing around",
+            PastimeKind::View | PastimeKind::Stargaze => "restless after a long while of company",
+        };
+        format!("pastime: {what} ({why})")
     }
 }
 
