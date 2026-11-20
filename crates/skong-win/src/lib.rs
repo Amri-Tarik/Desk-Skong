@@ -1,6 +1,7 @@
 //! Win32 platform layer: overlay window, desktop observation, input, timing.
 
 pub mod capture;
+pub mod click_capture;
 pub mod debug_overlay;
 pub mod desktop;
 pub mod games;

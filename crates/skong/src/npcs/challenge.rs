@@ -27,7 +27,7 @@ pub(super) struct Challenges {
     /// Why challenges are off right now (set by the pet every tick), if they are.
     hold: Option<&'static str>,
     /// Debug: the next Hornet visit challenges, this way.
-    forced: Option<ChallengeKind>,
+    pub(super) forced: Option<ChallengeKind>,
 }
 
 impl Visitors {
@@ -55,6 +55,9 @@ impl Visitors {
         let forced = self.challenges.forced.take();
         if let Some(why) = self.challenges.hold {
             log::info!("visitor: no challenge now ({why})");
+            if forced.is_some() {
+                self.notes.push((false, format!("{}: no challenge now ({why}); just a talk", self.set.defs[def].display)));
+            }
             return;
         }
         if forced.is_none() && !self.rng.chance(c.chance) {
@@ -67,11 +70,18 @@ impl Visitors {
                 Some(plan) => plan,
                 None => {
                     log::info!("visitor: no good finish for a race here; a duel instead");
+                    if forced.is_some() {
+                        self.notes.push((false, "no good finish for a race here (a settled ledge he can reach, with headroom, on her monitor); a duel instead".into()));
+                    }
                     ChallengePlan::Duel
                 }
             },
         };
         log::info!("visitor: {} will challenge the knight: {plan:?}", self.set.defs[def].display);
+        if forced.is_some() {
+            let what = if matches!(plan, ChallengePlan::Duel) { "a duel" } else { "a race" };
+            self.notes.push((true, format!("{}: {what} after the talk", self.set.defs[def].display)));
+        }
         self.live[i].npc.plan_challenge(plan, &self.set);
     }
 

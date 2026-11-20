@@ -426,6 +426,19 @@ impl Pet {
         }
     }
 
+    /// Test panel: a Geo shower through a portal right above `feet` (a spot the user picked).
+    /// Returns its Geo, or `None` without visitors (their portals).
+    pub(super) fn open_shower_at(&mut self, feet: Vec2) -> Option<u32> {
+        let v = self.visitors.as_ref()?;
+        let st = &mut self.stakes;
+        st.geo.scale = self.settings.scale;
+        let d = st.sources.shower(self.terrain.bounds);
+        let rect = v.shower_portal_at(feet, d.rect.width(), &mut self.fx);
+        log::info!("a geo shower: {} geo through a portal at ({:.0},{:.0}) (test panel)", d.amount, feet.x, feet.y);
+        st.showers.push((SHOWER_OPENING, GeoDrop { rect, ..d }));
+        Some(d.amount)
+    }
+
     /// Panel / debug triggers.
     pub(super) fn apply_stakes(&mut self, c: StakesCommand) {
         match c {

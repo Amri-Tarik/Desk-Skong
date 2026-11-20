@@ -24,6 +24,7 @@ mod keyboard;
 mod movefx;
 mod settings;
 mod navbuild;
+mod placehint;
 
 pub struct Args {
     pub data: PathBuf,

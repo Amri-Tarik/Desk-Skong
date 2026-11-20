@@ -277,6 +277,13 @@ impl Brain {
         }
     }
 
+    /// Test panel: no cooldown, look again now (the next prize no route reaches gets a
+    /// gate at once; the rest of the rules still apply).
+    pub fn ready_dream_gate(&mut self) {
+        self.stakes.gate.ready_at = self.now;
+        self.stakes.gate.scanned_at = f64::NEG_INFINITY;
+    }
+
     /// Warps so far.
     pub fn dream_gates(&self) -> u32 {
         self.stakes.gate.warps

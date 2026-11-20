@@ -261,3 +261,18 @@ fn arrivals_walk_in_from_an_edge_drop_onto_window_ledges_or_fly_in() {
     assert!(plan_arrival(crawlid, &[sliver], knight, &[monitor()], PPU, &mut rng, &mut yes).is_none());
     assert!(plan_arrival(crawlid, &[], knight, &[monitor()], PPU, &mut rng, &mut yes).is_none());
 }
+
+#[test]
+fn placed_from_the_test_panel_they_drop_in_right_there() {
+    let s = set();
+    let spot = Vec2::new(640.0, 700.0);
+    for name in ["crawlid", "husk"] {
+        let Some(id) = s.id(name) else { continue };
+        let p = placed_arrival(&s.defs[id], spot, Some(7), PPU);
+        assert_eq!((p.at, p.owner, p.entry), (spot, Some(7), EntryKind::Drop), "{name}");
+    }
+    let fly = &s.defs[s.id("vengefly").unwrap()];
+    let p = placed_arrival(fly, spot, Some(7), PPU);
+    assert_eq!(p.entry, EntryKind::Drop);
+    assert!((p.at.y - (700.0 - fly.hover * PPU)).abs() < 0.5 && p.at.x == 640.0, "hovers over the spot: {p:?}");
+}

@@ -150,6 +150,11 @@ impl Troupe {
         self.director.request(if lantern { Summon::Lantern } else { Summon::Direct });
     }
 
+    /// What a summon (or a clicked flame) is waiting for, if it waits.
+    pub fn held_by(&self) -> Option<&'static str> {
+        self.director.held_by()
+    }
+
     /// The flame or the show is on (or about to be): nothing else should start.
     pub fn active(&self) -> bool {
         self.director.active()

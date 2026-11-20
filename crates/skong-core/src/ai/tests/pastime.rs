@@ -300,6 +300,39 @@ fn no_stargazing_by_day() {
     assert!(!sim.started.iter().any(|a| a == "stargaze"));
 }
 
+#[test]
+fn forced_from_the_test_panel_the_view_and_the_stars_start_at_once_by_day_too() {
+    // The view: no waiting for restlessness, but the edge still has to have settled.
+    let mut sim = in_company();
+    sim.open(window(1, RectI::new(700, 250, 1500, 900), "browser.exe"));
+    sim.run(20.0);
+    sim.brain.force_pastime(PastimeKind::View);
+    assert!(sim.run_until(3.0, BehaviourKind::Pastime), "{}", sim.last_reason());
+    assert!(sim.last_reason().contains("view"), "{}", sim.last_reason());
+    sim.run(0.5);
+    assert_eq!(sim.brain.take_test_notes(), ["taking in the view: started"]);
+    // The stars at two in the afternoon.
+    let mut sim = in_company();
+    sim.open(window(1, RectI::new(700, 300, 1500, 900), "browser.exe"));
+    sim.hour = Some(14.0);
+    sim.run(20.0);
+    sim.brain.force_pastime(PastimeKind::Stargaze);
+    assert!(sim.run_while(60.0, |s| s.act.as_ref().is_none_or(|a| s.act_name(a.act.id) != "stargaze")), "{}", sim.last_reason());
+}
+
+#[test]
+fn forced_without_a_spot_the_panel_hears_why() {
+    // Only a low window: no view to take in.
+    let mut sim = in_company();
+    sim.open(window(1, RectI::new(700, 800, 1500, 1000), "low.exe"));
+    sim.run(20.0);
+    sim.brain.force_pastime(PastimeKind::View);
+    sim.run(1.0);
+    let notes = sim.brain.take_test_notes();
+    assert!(notes.len() == 1 && notes[0].starts_with("can't start taking in the view: no settled window edge high"), "{notes:?}");
+    assert_ne!(sim.brain.behaviour(), BehaviourKind::Pastime);
+}
+
 /// What a long run did.
 #[derive(Default)]
 struct Day {

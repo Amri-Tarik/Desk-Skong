@@ -37,6 +37,7 @@ default scale 0.6).
 | `particles` | The game's Unity particle bits recreated procedurally (run / land / jump / dash / wall dust, crystal dash shards, Geo sparkles): seeded bursts and streams with velocity, gravity, drag and fade, drawn into their bounding box (one small click-through window per burst in `fx.rs`, ≤ 8 bursts, 60 fps). |
 | `shiny` | Shinies: short-lived glints on lasting ledges / the floor (shared occupancy, never on game monitors, reachable), spawn timer and rewards, the procedural twinkle (`glint`). Not persisted. |
 | `pastime` | Pastime props: the training dummy (`Yard`: placed like shinies on settled ledges, never on a game monitor; stays minutes, fades; blows land after a delay and pick its `Light/Heavy Hit L/R` clip; a drawn stand-in) and lumaflies (`Sky`: drift from title bar to title bar on his monitor, bob, dart off when swiped, sometimes caught; the procedural `glow`). The brain side is `ai::pastime` (the `Pastime` behaviour: dummy drills, the lumafly chase, the view from a high window edge, stargazing at night; Ambient. A dummy or lumafly there beats plain company at once (0.75–0.79, below the summoned flame's 0.8); the view and the stars are driven by boredom and time in plain company). |
+| `placement` | The Test tab's "📍 Place…": `snap_below` takes a clicked point to the nearest ledge at or below it (a few px of slack above), on the click's monitor, never a game's, kept off the ledge's ends. Forced visitor scenes and their "can't …" reasons live in `npc::forced`. |
 | `dreamgate` | Dream Gate fallback travel: gate spots (settled ledge, headroom) and the app-side `GateRuntime` (gate glow, the jump as the warp act ends). The brain side (`ai::dream_gate`) picks an unreachable engagement prize, with a cooldown. |
 | `stakes` | Shade simulation, Geo coins/physics/wallet, spellbook (soul, spells, nail arts), sources (battles, shattered windows, showers). |
 | `enemy` | Enemies (`data/enemies.json`): arrival planning (walk in from a monitor edge, drop onto a settled ledge, fly in), the sim (ride windows, patrol / hover, notice, chase, wind-up + lunge, recoil + flash, death clip, corpse fade), contact bumps; seen by the brain as `Foe`s (`ai::fight`, the `Fight` behaviour). Zote's spar lives in `npc::spar` + the visitor actor; Hornet's race and duel in `npc::challenge` / `npc::race` / `npc::duel` (app side: `npcs/challenge.rs`). `enemy::gauntlet`: the gauntlet director (triggers, start rules, waves, reward, aborts; pure, driven by `enemies.rs`), seen by the brain as a `GauntletCue` (`ai::gauntlet`, the `Gauntlet` ceremony behaviour). `enemy::grimm`: the secret boss (`data/grimm.json`): `GrimmDirector` (the scarlet lantern once enough achievements are unlocked — the user clicks it, it waits ~30 min —, his rare friendly visit `Cameo`, debug summons, start rules, aborts, endings) and `Grimm` (teleports, dive / ground dash, slashes + uppercut, firebats, flame pillars, spikes, the balloon at each phase; every spot relative to the knight's ledge, flames ignore windows). Seen by the brain as a `SceneCue` (the flame, the cameo), `FoeKind::Boss` (fought at 0.98, lethal: `fight.boss_masks`) and `FoeKind::Hazard` (his flames: `Fight::evade` dodges, jumps, steps off pillars, keeps clear of the balloon). |
@@ -54,6 +55,7 @@ default scale 0.6).
 | `tray` | Notify icon (the knight's own idle frame) + data-driven popup menu. |
 | `debug_overlay` | Full-desktop click-through overlay drawing terrain, nav surfaces/edges, route, legend; redraws only on change. |
 | `input` | Idle time, typing *rate* via Raw Input (counts only), mouse buttons. |
+| `click_capture` | Only while the Test tab places something: low-level mouse + keyboard hooks on their own thread take the next left click anywhere (swallowed, down and up), right-click / Esc cancel; clicks on the control panel pass through. Never moves the cursor. Unhooked on drop; never installed by tests. |
 | `games` | Fullscreen-game detection (Windows GameConfigStore registry, game-library paths, exclusive fullscreen). |
 | `monitor` | Cursor position, primary work area, single-instance mutex, local time. |
 | `selection` | On by default (tray / panel toggle): where highlighted text is (rectangle only, never the text). Background MTA thread: WinEvent `EVENT_OBJECT_TEXTSELECTIONCHANGED` / foreground hooks → debounced UI Automation query (focused element's TextPattern selection bounds). |
@@ -75,6 +77,7 @@ per monitor, pipe server threads for panels. The tick only does non-blocking han
 Key app files: `app.rs` (Pet + tick + commands + tray), `app/panel.rs` (status/IPC glue),
 `app/stakes.rs`, `app/discover.rs` (discoveries + shinies), `pastimes.rs` + `app/pastime.rs` (the training dummy and lumaflies), `app/achievements.rs` (the one place
 events become achievement events; announce, save, panel copy), `enemies.rs` + `app/enemy.rs` (enemies, strikes, spar glue), `grimm.rs` + `app/grimm.rs` (the secret boss: art loaded on a background thread when a show draws near, his windows, lines in speech bubbles; world glue), `benches.rs`, `shinies.rs`, `fx.rs` (pooled effect windows),
+`app/test.rs` + `placehint.rs` (the panel's Test tab: forced visitors / scenes / enemies / pastimes, placing where the user clicks, the feedback notes in `Status::test`),
 `gameguard.rs`, `navbuild.rs`, `grab.rs`, `control.rs` (pipe server), `logring.rs`
 (logger + ring buffer for panels), `settings.rs`, `keyboard.rs`, `browser.rs` (`--browse`).
 
@@ -101,6 +104,8 @@ under `skins/`, `%APPDATA%\Desk-Skong\{settings,world,achievements}.json`.
 `--browse` (clip/act/skin browser), `--sit-test`, `--fx-test`, `--goto-test`, `--move-test`.
 Examples: `skong-core`: `contact_sheet`, `fx_sheet`, `particles_bench`, `nav_bench`, `vision_bench`, `vision_png`;
 `skong-win`: `terrain_debug`, `capture_probe`. `skong-panel --self-test` inspects a running pet.
+The panel's **Test** tab triggers each interaction on demand; the manual checklist is
+[TESTING.md](TESTING.md).
 
 ## Performance (release, 2560×1440 + 1920×1080)
 

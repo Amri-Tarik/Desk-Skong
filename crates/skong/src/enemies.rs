@@ -12,7 +12,8 @@ use skong_core::ai::Foe;
 use skong_core::ai::rng::Rng;
 use skong_core::assets::{Frame, Skin, SpriteBank, SpriteKey};
 use skong_core::canvas::Image;
-use skong_core::enemy::{Enemy, EnemyEnv, EnemySet, EntryKind, GauntletCue, GauntletDirector, GauntletEvent, GauntletWorld, plan_arrival};
+use skong_core::desktop::WindowId;
+use skong_core::enemy::{Enemy, EnemyEnv, EnemyPlacement, EnemySet, EntryKind, GauntletCue, GauntletDirector, GauntletEvent, GauntletWorld, placed_arrival, plan_arrival};
 use skong_core::geom::{RectF, Vec2};
 use skong_core::nav::{NavGoal, TravelStyle};
 use skong_core::npc::{VisitConditions, VisitScheduler};
@@ -21,6 +22,9 @@ use skong_win::sprite_window::SpriteWindow;
 
 use crate::bubble::faded;
 use crate::npcs::World;
+
+/// A picked spot: a feet point on a ledge of a window (`None`: the floor).
+type Spot = (Vec2, Option<WindowId>);
 
 struct LiveEnemy {
     enemy: Enemy,
@@ -81,6 +85,10 @@ pub struct Enemies {
     gauntlet: Option<GauntletDirector>,
     /// Enemies beaten since the pet last looked: (id, definition name).
     pub killed: Vec<(u32, String)>,
+    /// Test panel: one of this kind asked for, maybe at a picked spot.
+    wanted: Option<(usize, Option<Spot>)>,
+    /// What came of the test panel's requests (ok, line).
+    pub notes: Vec<(bool, String)>,
 }
 
 impl Enemies {
@@ -125,6 +133,8 @@ impl Enemies {
             hidden: false,
             gauntlet,
             killed: Vec::new(),
+            wanted: None,
+            notes: Vec::new(),
         };
         e.rescale(vanilla, scale)?;
         Ok(e)
@@ -256,6 +266,7 @@ impl Enemies {
 
         // 0. A gauntlet (under way or waiting to start) holds back every other arrival.
         let gauntlet = self.tick_gauntlet(dt, w, visitor_present, ks, &mut news);
+        self.admit_wanted(w, visitor_present, gauntlet);
         if gauntlet && !self.forced {
             // The bored knight's wish for an enemy is more than granted.
             self.invited = false;
@@ -387,6 +398,61 @@ impl Enemies {
             log::info!("enemy: no good spot for a {} right now", d.display);
             return None;
         };
+        self.admit(w, def, at)
+    }
+
+    /// Test panel: an enemy of kind `def` now (`at`: dropping in right there, a spot the
+    /// user picked; else wherever arrivals go). Only a fullscreen app, a visitor or the
+    /// troupe, or a gauntlet holds it back (the panel hears why).
+    pub fn send_kind(&mut self, def: usize, at: Option<Spot>) -> Result<(), String> {
+        let d = self.set.defs.get(def).ok_or_else(|| format!("no enemy kind #{def}"))?;
+        log::info!("enemies: a {} asked for (test panel)", d.display);
+        self.wanted = Some((def, at));
+        Ok(())
+    }
+
+    /// Display names, indexed like [`Self::send_kind`].
+    pub fn displays(&self) -> Vec<String> {
+        self.set.defs.iter().map(|d| d.display.clone()).collect()
+    }
+
+    /// The test panel's enemy, at the first moment the nav graph is there.
+    fn admit_wanted(&mut self, w: &World, visitor_present: bool, gauntlet: bool) {
+        let Some((def, at)) = self.wanted.take() else { return };
+        let name = self.set.defs[def].display.clone();
+        let why = if w.fullscreen {
+            Some("a fullscreen app is up")
+        } else if visitor_present {
+            Some("a visitor or the troupe is here")
+        } else if gauntlet {
+            Some("a gauntlet is under way")
+        } else if w.graph.is_none() {
+            self.wanted = Some((def, at)); // wait for the nav graph
+            return;
+        } else {
+            None
+        };
+        if let Some(why) = why {
+            self.notes.push((false, format!("no {name} now: {why}")));
+            return;
+        }
+        let placed = match at {
+            Some((p, owner)) => {
+                let a = placed_arrival(&self.set.defs[def], p, owner, self.ppu);
+                self.admit(w, def, a)
+            }
+            None => self.spawn_def(w, def),
+        };
+        match placed {
+            Some((_, p, _)) => self.notes.push((true, format!("a {name} comes in at ({:.0},{:.0})", p.x, p.y))),
+            None => self.notes.push((false, format!("no good spot for a {name} right now (settled, reachable, on his monitor)"))),
+        }
+    }
+
+    /// Let an enemy of `def` in at `at`.
+    fn admit(&mut self, w: &World, def: usize, at: EnemyPlacement) -> Option<(u32, Vec2, bool)> {
+        let ppu = self.ppu;
+        let d = &self.set.defs[def];
         let win = match SpriteWindow::new() {
             Ok(win) => win,
             Err(e) => {

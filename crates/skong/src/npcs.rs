@@ -23,6 +23,7 @@ use skong_core::nav::{NavGoal, NavGraph, TravelStyle};
 use skong_core::occupancy::{ClaimKey, ClaimKind, Occupancy};
 use skong_core::npc::{Arrival, Lesson, Npc, NpcEnv, NpcEvent, NpcPhase, NpcSet, Placement, TalkContext, VisitConditions, VisitScheduler, plan_placement};
 use skong_core::npc::company::{CompanyNeeds, beside_deposit, high_up, seat_beside};
+use skong_core::npc::forced::{self, CompanyWorld, ForcedScene, SeatCheck};
 use skong_core::portal::{Footing, Portal, PortalPhase, PortalSpot, PortalStyle, SpotOptions, arrival_footings, has_headroom, pick_spot};
 use skong_core::terrain::Terrain;
 use skong_win::sprite_window::SpriteWindow;
@@ -146,6 +147,12 @@ pub struct Visitors {
     pending_deposit: Option<Vec2>,
     /// Hornet's challenges (see `npcs/challenge.rs`).
     challenges: challenge::Challenges,
+    /// Test panel: the scene after the invited visitor's talk (rolls skipped, hard
+    /// conditions kept), and where they arrive (a spot the user clicked).
+    forced_scene: Option<ForcedScene>,
+    invite_at: Option<Placement>,
+    /// What came of the test panel's requests (ok, line), for the pet to pass on.
+    pub notes: Vec<(bool, String)>,
 }
 
 const SLASH_CLIP: &str = "DN Slash";
@@ -189,6 +196,9 @@ impl Visitors {
             news: Vec::new(),
             pending_deposit: None,
             challenges: Default::default(),
+            forced_scene: None,
+            invite_at: None,
+            notes: Vec::new(),
         };
         v.rescale(vanilla, scale)?;
         Ok(v)
@@ -236,6 +246,39 @@ impl Visitors {
         self.invited = Some(name);
     }
 
+    /// Test panel: visitor `name` now (at `at`, if given: a spot the user clicked), and
+    /// `scene` after the talk (`None`: as the rolls say). Errors when they have no such scene.
+    pub fn invite_scene(&mut self, name: &str, scene: Option<ForcedScene>, at: Option<Placement>) -> Result<(), String> {
+        let def = self.set.id(name).ok_or_else(|| format!("no visitor called {name}"))?;
+        if let Some(s) = scene {
+            forced::supports(&self.set.defs[def], s)?;
+        }
+        self.challenges.forced = match scene {
+            Some(ForcedScene::Race) => Some(skong_core::npc::ChallengeKind::Race),
+            Some(ForcedScene::Duel) => Some(skong_core::npc::ChallengeKind::Duel),
+            _ => None,
+        };
+        self.forced_scene = scene;
+        self.invite_at = at;
+        self.invite(Some(name.to_string()));
+        Ok(())
+    }
+
+    /// Every visitor with the scenes they have besides the talk (for the test panel).
+    pub fn roster(&self) -> Vec<(String, String, Vec<ForcedScene>)> {
+        let scenes = [ForcedScene::Lesson, ForcedScene::Spar, ForcedScene::Company, ForcedScene::Race, ForcedScene::Duel];
+        self.set
+            .defs
+            .iter()
+            .map(|d| (d.name.clone(), d.display.clone(), scenes.into_iter().filter(|s| forced::supports(d, *s).is_ok()).collect()))
+            .collect()
+    }
+
+    fn note(&mut self, ok: bool, text: String) {
+        log::info!("test: {text}");
+        self.notes.push((ok, text));
+    }
+
     /// For the brain.
     pub fn percepts(&self) -> Vec<Visitor> {
         self.live.iter().filter(|l| l.npc.phase() != NpcPhase::Gone).map(|l| l.npc.percept(&self.set, self.ppu)).collect()
@@ -264,7 +307,10 @@ impl Visitors {
         let ctx = TalkContext::from_desktop(w.desk, Some(w.hour));
         let def = self.live[i].npc.def;
         let Some(lines) = ctx.pick(&self.set.defs[def].conversations, &mut self.rng) else { return };
-        if let Some(l) = &self.set.defs[def].lesson
+        let forced = self.forced_scene.take();
+        if let Some(scene) = forced {
+            self.plan_forced(i, scene, &ctx, w);
+        } else if let Some(l) = &self.set.defs[def].lesson
             && let Some(lesson) = Lesson::plan(l, &ctx, &mut self.rng)
         {
             self.live[i].npc.set_lesson(lesson);
@@ -321,20 +367,55 @@ impl Visitors {
     /// Does a calm scene of this kind fit where visitor `i` and the knight are? Never with a
     /// fullscreen app up or the user typing hard; settled window edges only for seats.
     fn company_fits(&self, i: usize, needs: CompanyNeeds, w: &World) -> bool {
+        self.company_blocker(i, needs, w).is_none()
+    }
+
+    /// Why a calm scene of this kind can't run with visitor `i` now (`None`: it can).
+    fn company_blocker(&self, i: usize, needs: CompanyNeeds, w: &World) -> Option<String> {
         let npc = &self.live[i].npc;
-        if w.fullscreen || w.keys_per_sec >= self.set.visits.busy_keys_per_sec {
-            return false;
-        }
         let ppu = self.ppu;
-        match needs {
-            CompanyNeeds::Any => true,
-            // The deposit she arrived beside is still there.
-            CompanyNeeds::Deposit => self.live[i].deposit.is_some_and(|d| w.deposits.iter().any(|(c, _)| c.distance(d) < 2.0 * ppu)),
-            CompanyNeeds::Seat | CompanyNeeds::View => {
-                let Some(l) = seat_beside(w.terrain, npc.pos, w.knight.pos.x, ppu) else { return false };
-                let settled = (w.settled)(&Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner });
-                settled && (needs == CompanyNeeds::Seat || high_up(l.y, self.area_at(npc.pos, w.desk)))
+        // The deposit she arrived beside is still there.
+        let deposit = self.live[i].deposit.is_some_and(|d| w.deposits.iter().any(|(c, _)| c.distance(d) < 2.0 * ppu));
+        let seat = match seat_beside(w.terrain, npc.pos, w.knight.pos.x, ppu) {
+            None => SeatCheck::None,
+            Some(l) if !(w.settled)(&Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner }) => SeatCheck::Unsettled,
+            Some(l) if high_up(l.y, self.area_at(npc.pos, w.desk)) => SeatCheck::High,
+            Some(_) => SeatCheck::Low,
+        };
+        let cw = CompanyWorld { fullscreen: w.fullscreen, typing: w.keys_per_sec >= self.set.visits.busy_keys_per_sec, deposit, seat };
+        forced::company_blocker(&self.set.defs[npc.def].display, needs, cw)
+    }
+
+    /// Test panel: the scene after visitor `i`'s talk, rolls skipped (hard conditions kept;
+    /// when one fails, the panel hears why and it's just a talk).
+    fn plan_forced(&mut self, i: usize, scene: ForcedScene, ctx: &TalkContext, w: &World) {
+        let def = self.live[i].npc.def;
+        let who = self.set.defs[def].display.clone();
+        match scene {
+            ForcedScene::TalkOnly => self.note(true, format!("{who}: just a talk, as asked")),
+            ForcedScene::Lesson => match self.set.defs[def].lesson.as_ref().and_then(|l| Lesson::plan(l, ctx, &mut self.rng)) {
+                Some(lesson) => {
+                    self.live[i].npc.set_lesson(lesson);
+                    self.note(true, format!("{who}: a lesson after the talk"));
+                }
+                None => self.note(false, format!("{who} has no lesson to give right now")),
+            },
+            ForcedScene::Spar => {
+                self.live[i].npc.plan_spar(&self.set);
+                self.note(true, format!("{who}: a spar after the talk"));
             }
+            ForcedScene::Company => {
+                let Some(needs) = self.set.defs[def].company.as_ref().map(|c| c.needs) else { return };
+                match self.company_blocker(i, needs, w) {
+                    None => {
+                        let face = self.live[i].deposit.map(|d| d.x);
+                        self.live[i].npc.plan_company(&self.set, face);
+                        self.note(true, format!("{who}: the calm scene after the talk"));
+                    }
+                    Some(why) => self.note(false, format!("{why}; just a talk")),
+                }
+            }
+            ForcedScene::Race | ForcedScene::Duel => self.plan_challenge(i, w),
         }
     }
 
@@ -420,6 +501,10 @@ impl Visitors {
         {
             if !self.present() {
                 self.spawn(name.as_deref(), w, fx);
+            } else if self.forced_scene.is_some() || self.invite_at.is_some() || name.is_some() {
+                self.forced_scene = None;
+                self.invite_at = None;
+                self.note(false, "a visitor is already here: wait until they leave".into());
             }
             self.sched.schedule_next(&mut self.rng);
         } else if due {
@@ -510,6 +595,14 @@ impl Visitors {
         Some(rect)
     }
 
+    /// Test panel: a Geo shower's portal right above `feet` (a spot the user picked); returns
+    /// the strip the coins tumble out of.
+    pub fn shower_portal_at(&self, feet: Vec2, width: f32, fx: &mut Fx) -> RectF {
+        let rect = shower_rect(feet, width, self.ppu);
+        portal_fx(fx, self.set.portal_style, Vec2::new(feet.x, rect.bottom));
+        rect
+    }
+
     /// Claim every live visitor's footprint so props, finds and coins keep clear of them.
     pub fn claim(&self, occ: &mut Occupancy) {
         occ.release_kind(ClaimKind::Npc);
@@ -560,16 +653,43 @@ impl Visitors {
             }
         };
         let ppu = self.ppu;
+        let display = self.set.defs[def].display.clone();
+        // Test panel: arriving where the user clicked (through a portal, whatever their way).
+        if let Some(at) = self.invite_at.take() {
+            self.last_def = Some(def);
+            self.pending_deposit = None;
+            self.note(true, format!("{display} arrives at ({:.0},{:.0})", at.feet.x, at.feet.y));
+            let lift = if self.set.defs[def].arrive == Arrival::Drop { 2.5 * ppu } else { 0.0 };
+            let base = at.feet - Vec2::new(0.0, lift);
+            portal_fx(fx, self.set.portal_style, base);
+            self.portals.push(OpenPortal { portal: Portal::open(PortalSpot { at: base, owner: at.owner }, self.set.portal_style), guest: Some((def, at)) });
+            return;
+        }
+        let forced_needs = self.set.defs[def].company.as_ref().map(|c| c.needs).filter(|_| self.forced_scene == Some(ForcedScene::Company));
+        // A forced view needs a high, settled window edge: arrive on one.
+        let high = |f: &Footing| {
+            let work = self.work_at(Vec2::new(0.5 * (f.x0 + f.x1), f.y), w.desk).to_f();
+            f.owner.is_some() && high_up(f.y, work)
+        };
         // Settled ledges only, low enough that the visitor's sprite stays on its monitor.
         let ok = |f: &Footing| (w.settled)(f) && has_headroom(f, &w.desk.monitors, ARRIVAL_HEADROOM * ppu);
-        let footings: Vec<Footing> = match w.graph {
+        let mut footings: Vec<Footing> = match w.graph {
             Some(g) => g.surfaces().iter().map(|s| Footing { x0: s.x0, x1: s.x1, y: s.y, owner: s.owner }).filter(|f| ok(f)).collect(),
             None => w.terrain.ledges.iter().map(|l| Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner }).filter(|f| ok(f)).collect(),
         };
+        let mut ledges: Vec<Footing> = w.terrain.ledges.iter().map(|l| Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner }).filter(|f| ok(f)).collect();
+        if forced_needs == Some(CompanyNeeds::View) {
+            let (hf, hl): (Vec<Footing>, Vec<Footing>) = (footings.iter().copied().filter(|f| high(f)).collect(), ledges.iter().copied().filter(|f| high(f)).collect());
+            if hf.is_empty() && hl.is_empty() {
+                self.forced_scene = Some(ForcedScene::TalkOnly);
+                self.note(false, format!("{display} can't take in the view: no settled window edge in the upper half of a monitor; just a talk"));
+            } else {
+                (footings, ledges) = (hf, hl);
+            }
+        }
         let knight = w.knight;
         let mut reachable = |p: Vec2| w.occupancy.is_free(footprint(p, ppu), None) && w.graph.is_none_or(|g| g.plan(knight, NavGoal::Point(p), TravelStyle::Hurry).is_some());
         let arrive = self.set.defs[def].arrive;
-        let ledges: Vec<Footing> = w.terrain.ledges.iter().map(|l| Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner }).filter(|f| ok(f)).collect();
         // Nav surfaces first (reachable by construction), raw ledges as a fallback.
         let monitors: Vec<_> = w.desk.monitors.iter().filter(|m| !w.game_monitors.contains(&m.rect)).cloned().collect();
         // A miner turns up beside a Geo deposit when there is one (her calm scene needs it).
@@ -586,10 +706,21 @@ impl Visitors {
                 .or_else(|| plan_placement(arrive, &ledges, knight.pos, &monitors, &mut self.rng, &mut reachable)),
         };
         self.pending_deposit = deposit.map(|d| d.1);
+        if forced_needs == Some(CompanyNeeds::Deposit) && deposit.is_none() {
+            self.forced_scene = Some(ForcedScene::TalkOnly);
+            let why = if w.deposits.is_empty() { "no Geo deposit on screen (reveal one first)" } else { "no reachable room beside a Geo deposit" };
+            self.note(false, format!("{display} can't sing by a Geo deposit: {why}; just a talk"));
+        }
         let Some(at) = at else {
             log::info!("visitor: no good spot for {} right now", self.set.defs[def].display);
+            if self.forced_scene.take().is_some() {
+                self.note(false, format!("no good spot for {display} right now (settled, reachable, with headroom)"));
+            }
             return;
         };
+        if self.forced_scene.is_some() {
+            self.note(true, format!("{display} arrives at ({:.0},{:.0})", at.feet.x, at.feet.y));
+        }
         self.last_def = Some(def);
         log::info!("visitor: {} arrives ({arrive:?}) at ({:.0},{:.0})", self.set.defs[def].display, at.feet.x, at.feet.y);
         match arrive {

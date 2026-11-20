@@ -90,6 +90,8 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
       - [ ] swapping charms on a bench;
       - [x] stargazing at night (21:00–05:00, the highest open ledge, Look At King);
       - [ ] the lantern raised on dark-themed windows (exists; tune how often it happens).
+            > note: now a setting, "Lantern on dark backgrounds" (tray + panel, on by
+            > default, saved): off, the lantern never comes out; the map is unaffected.
 
 ## 3. Visitor scenes
 
@@ -148,6 +150,10 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
       behind "Enable sandbox: achievements are disabled for the rest of this session".
       This covers enemies, visitors, gauntlet, Grimm, flame, showers and the Dream Gate.
 - [ ] **Sandbox placement:** click on the screen to choose where things spawn.
+      > note: the panel's **Test** tab (the sandbox's precursor, no gate yet) has it: 📍 next
+      > to the dummy, flame, deposit, shiny, bench, each enemy, Geo shower, visitors and a
+      > Dream Gate target; plus forced visitor scenes, each enemy kind, the view, the stars,
+      > the slug, the emote cycle. Checklist: [TESTING.md](TESTING.md).
 - [ ] **Release basics:**
       - a portable zip (an installer later, if needed) and GitHub releases with notes;
       - a "fan project, not affiliated with Team Cherry" notice;
@@ -177,7 +183,8 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
 
 ## Needs a look on screen
 
-Checked in tests only (unless noted). Note anything that looks off:
+Checked in tests only (unless noted). Note anything that looks off. The full manual
+checklist, with how to trigger each from the panel's Test tab, is [TESTING.md](TESTING.md):
 
 - [ ] Step-behind crossings (TurnToBG / TurnFromBG at drawn lines)
 - [ ] Pester tricks and their persistence (45–90 s)
