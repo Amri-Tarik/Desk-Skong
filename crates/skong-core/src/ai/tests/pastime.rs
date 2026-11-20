@@ -509,3 +509,29 @@ fn a_dummy_he_set_out_for_and_couldnt_reach_is_skipped_and_reported() {
     sim.run(5.0);
     assert!(sim.brain.dummy_unreachable().is_some_and(|(id, _)| id == 1), "{:?}", sim.brain.dummy_unreachable());
 }
+
+#[test]
+fn he_trails_a_drifting_lumafly_along_his_ledge_without_turning_back_and_forth() {
+    // Live: routes re-planned to the spot under a drifting fly started behind him or dashed
+    // past it: forward, back, a dash, turning on the spot several times a second.
+    let mut sim = in_company();
+    sim.physics = true;
+    sim.brain.mind_mut().needs.boredom = 0.8;
+    // High over his ledge (out of jump reach), drifting right.
+    sim.flies = vec![KnownLumafly { id: 3, pos: Vec2::new(1150.0, FLOOR - 700.0), leaving: false }];
+    assert!(sim.run_until(60.0, BehaviourKind::Pastime), "{}", sim.last_reason());
+    let start = sim.knight.pos.x;
+    let (mut flips, mut facing) = (0, sim.knight.facing);
+    for _ in 0..(6.0 / DT) as usize {
+        sim.flies[0].pos.x += 90.0 * DT;
+        sim.step();
+        if sim.knight.facing != facing {
+            flips += 1;
+            facing = sim.knight.facing;
+        }
+    }
+    assert_eq!(sim.brain.behaviour(), BehaviourKind::Pastime, "{}", sim.last_reason());
+    assert!(sim.knight.pos.x - start > 300.0, "follows it: {start} -> {}", sim.knight.pos.x);
+    assert!((sim.flies[0].pos.x - sim.knight.pos.x).abs() < 120.0, "stays under it: fly {} knight {}", sim.flies[0].pos.x, sim.knight.pos.x);
+    assert!(flips <= 2, "no turning back and forth: {flips} turns");
+}
