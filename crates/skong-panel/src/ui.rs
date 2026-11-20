@@ -263,6 +263,16 @@ impl Panel {
             if ui.checkbox(&mut lantern, "Lantern on dark backgrounds").on_hover_text("He holds up his lantern while standing over dark-mode windows or a dark wallpaper").changed() {
                 self.cmd(Command::ToggleLantern);
             }
+            ui.horizontal(|ui| {
+                let mut log_file = s.log_file;
+                let tip = format!("Keeps the log in {} (last 5 files) to attach to a bug report. Crash reports are written there either way. Nothing is sent anywhere.", if s.log_dir.is_empty() { "the logs folder" } else { &s.log_dir });
+                if ui.checkbox(&mut log_file, "Write a log file (for bug reports)").on_hover_text(tip).changed() {
+                    self.cmd(Command::ToggleLogFile);
+                }
+                if ui.small_button("Open folder").on_hover_text("log and crash files").clicked() {
+                    self.cmd(Command::OpenLogFolder);
+                }
+            });
             toggle(ui, s.paused, "Pause  [P]", Command::TogglePause);
             toggle(ui, s.vision, "Vision (content terrain)", Command::ToggleVision);
             toggle(ui, s.overlay, "Debug overlay  [D]", Command::ToggleDebugOverlay);

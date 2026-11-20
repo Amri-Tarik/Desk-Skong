@@ -1,9 +1,13 @@
 //! Desk-Skong: a Hollow Knight desktop pet that lives on your windows.
+// Release builds open no console window (players start it from Explorer); its log goes to
+// the panel, and to a file if the user turns that on ([`logfile`]). Debug builds keep it.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 
 mod app;
+mod logfile;
 mod control;
 mod logring;
 mod overlay;
@@ -105,6 +109,21 @@ fn parse_args() -> Result<Args> {
 
 fn main() -> Result<()> {
     logring::init();
+    logfile::install(settings::app_dir().map(|d| d.join("logs")));
+    logfile::set_enabled(settings::Settings::log_file_wanted());
+    let result = run();
+    if let Err(e) = &result {
+        // Without a console nobody would see this: keep it like a crash.
+        log::error!("Desk-Skong stopped: {e:#}");
+        if let Some(d) = logfile::dir() {
+            let unix = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+            logfile::write_crash(d, unix, &format!("Desk-Skong {} stopped with an error:\n{e:?}\n", env!("CARGO_PKG_VERSION")));
+        }
+    }
+    result
+}
+
+fn run() -> Result<()> {
     skong_win::desktop::enable_per_monitor_dpi();
     let args = parse_args()?;
     // Only one pet at a time: two instances fight over global hotkeys and screen capture.

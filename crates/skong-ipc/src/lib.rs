@@ -42,6 +42,10 @@ pub enum Command {
     /// Holds up his lantern while standing over dark-mode windows or a dark wallpaper; on by
     /// default.
     ToggleLantern,
+    /// "Write a log file (for bug reports)" in `%APPDATA%\Desk-Skong\logs`; off by default.
+    ToggleLogFile,
+    /// Open the logs folder (log and crash files) in Explorer.
+    OpenLogFolder,
     PlaceBenchAtCursor(usize),
     PlaceBenchNearKnight(usize),
     ClearBenches,
@@ -221,6 +225,10 @@ pub struct Status {
     pub text_curiosity: bool,
     /// Lantern on dark backgrounds (on by default; absent from older pets: off).
     pub lantern: bool,
+    /// Writing a log file for bug reports (off by default).
+    pub log_file: bool,
+    /// Where log and crash files go (`%APPDATA%\Desk-Skong\logs`; empty if unknown).
+    pub log_dir: String,
     pub vision: bool,
     pub overlay: bool,
     pub overlay_layers: OverlayLayers,
@@ -407,6 +415,8 @@ mod tests {
     fn test_tab_commands_and_feedback_round_trip() {
         let mut cmds = vec![
             Command::ToggleLantern,
+            Command::ToggleLogFile,
+            Command::OpenLogFolder,
             Command::Test(TestCommand::Enemy { kind: 2 }),
             Command::Test(TestCommand::View),
             Command::Test(TestCommand::Stargaze),
@@ -433,7 +443,7 @@ mod tests {
             round_trip(PanelMsg::Command(c));
         }
         assert_eq!(encode(&PanelMsg::Command(Command::Test(TestCommand::Visit { who: 1, scene: Scene::Race }))), "{\"Command\":{\"Test\":{\"Visit\":{\"who\":1,\"scene\":\"Race\"}}}}\n");
-        let mut s = Status { lantern: true, ..Default::default() };
+        let mut s = Status { lantern: true, log_file: true, log_dir: r"C:\Users\u\AppData\Roaming\Desk-Skong\logs".into(), ..Default::default() };
         s.test = Some(TestInfo { placing: Some("training dummy".into()), placing_secs: 12.5, emote_test: true, notes: vec![TestNote { seq: 4, t: 9.5, ok: false, text: "Myla can't sing:\n\"no deposit\"".into() }] });
         round_trip(PetMsg::Status(Box::new(s)));
         round_trip(PetMsg::Hello(Hello {
@@ -443,7 +453,7 @@ mod tests {
         }));
         // An older pet's status / hello: no Test tab data, no lantern flag.
         let old: Status = decode("{\"paused\":false}").unwrap();
-        assert!(old.test.is_none() && !old.lantern);
+        assert!(old.test.is_none() && !old.lantern && !old.log_file && old.log_dir.is_empty());
         let h: Hello = decode("{\"version\":\"0.1\"}").unwrap();
         assert!(h.visitors.is_empty() && h.enemies.is_empty());
     }

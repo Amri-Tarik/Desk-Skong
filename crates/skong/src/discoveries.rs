@@ -309,13 +309,8 @@ impl Discoveries {
         let names = read_json::<PropsFile>(props_json).map(|p| p.discoveries).unwrap_or_default();
         let deposit_src = vanilla.and_then(|v| load_sprite(&v.join("props"), &names.deposit_rock));
         let path = world_path();
-        let world = match path.as_deref().map(std::fs::read_to_string) {
-            Some(Ok(s)) => World::from_json(&s).unwrap_or_else(|e| {
-                log::warn!("ignoring malformed world.json: {e}");
-                World::new(now_unix() ^ 0x5eed)
-            }),
-            _ => World::new(now_unix() ^ 0x5eed),
-        };
+        let fresh = || World::new(now_unix() ^ 0x5eed);
+        let world = path.as_deref().map_or_else(fresh, |p| load_world(p, fresh));
         let found: usize = world.rooms.values().map(|r| r.finds.len()).sum();
         log::info!("discoveries: {} rooms known, {found} things found", world.rooms.len());
         let mut d = Discoveries {
@@ -683,11 +678,20 @@ impl Discoveries {
 
     fn save(&self) {
         let Some(p) = &self.path else { return };
-        let r = p.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| std::fs::write(p, self.world.to_json()));
-        if let Err(e) = r {
+        if let Err(e) = save_world(p, &self.world) {
             log::warn!("could not save {}: {e}", p.display());
         }
     }
+}
+
+/// The world in `path`; missing → `fresh()`, malformed → kept as `world.json.bak`, `fresh()`.
+fn load_world(path: &Path, fresh: impl FnOnce() -> World) -> World {
+    skong_core::persist::load_or_fresh(path, World::from_json, fresh)
+}
+
+/// Save atomically (temp file, synced, renamed): a crash mid-save keeps the old world whole.
+fn save_world(path: &Path, world: &World) -> std::io::Result<()> {
+    skong_core::persist::write_atomic(path, world.to_json().as_bytes())
 }
 
 // --- drawing ------------------------------------------------------------------------
@@ -821,6 +825,22 @@ mod tests {
 
     fn rock(w: u32, h: u32) -> RockArt {
         RockArt { idle: (Image::new(w, h), [w as f32 * 0.5, h as f32]), gleam: vec![(Image::new(w, h), [0.0, 0.0]); 4], gleam_fps: 15.0 }
+    }
+
+    #[test]
+    fn the_world_save_is_atomic_and_a_malformed_one_is_kept() {
+        let dir = std::env::temp_dir().join(format!("skong-world-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("world.json");
+        let world = World::new(42);
+        save_world(&path, &world).expect("save");
+        save_world(&path, &world).expect("save again");
+        assert_eq!(load_world(&path, || World::new(1)), world);
+        assert_eq!(std::fs::read_dir(&dir).expect("dir").count(), 1, "no temporary file left");
+        std::fs::write(&path, "{\"seed\": 4").expect("truncate");
+        assert_eq!(load_world(&path, || World::new(1)).seed, 1, "malformed: fresh");
+        assert_eq!(std::fs::read_to_string(dir.join("world.json.bak")).expect("kept"), "{\"seed\": 4");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

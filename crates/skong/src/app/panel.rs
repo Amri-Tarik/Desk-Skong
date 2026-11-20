@@ -70,6 +70,8 @@ impl Pet {
             share_visible: self.settings.share_visible,
             text_curiosity: self.settings.text_curiosity,
             lantern: self.settings.lantern,
+            log_file: self.settings.log_file,
+            log_dir: crate::logfile::dir().map(|d| d.display().to_string()).unwrap_or_default(),
             vision: self.content.is_enabled(),
             overlay: self.overlay.is_on(),
             overlay_layers: self.overlay.layers,
