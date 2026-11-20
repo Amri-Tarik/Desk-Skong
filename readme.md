@@ -25,7 +25,11 @@ with.
   or your windows, and when a fullscreen game starts he steps off that screen.
 
 <!-- TODO(screenshot): 2–3 stills side by side: a visitor conversation, a fight, the control panel. -->
-<!-- ![A visitor](docs/media/visitor.png) ![A fight](docs/media/fight.png) ![The panel](docs/media/panel.png) -->
+<!-- ![A fight](docs/media/fight.gif) ![A visitor](docs/media/visitor.gif) ![The panel](docs/media/panel.png) -->
+<!-- Placeholders for hero.gif, fight.gif and visitor.gif render locally into git-ignored
+     docs/media/ (see docs/DEVELOPING.md, "README GIFs"). They are game art, so they
+     can't be committed. -->
+
 
 ---
 
@@ -136,14 +140,9 @@ and support its creators.
 
 ## Licence
 
-<!-- TODO(owner): choose a licence for the Desk-Skong code and add a LICENSE file at the
-     repository root (the release zip picks it up as LICENSE.txt). The workspace
-     Cargo.toml currently says `license = "MIT"`, but there's no LICENSE file: confirm or
-     change that. Whatever is chosen covers the code only, never Team Cherry's game. -->
-
-**TODO:** the licence for the Desk-Skong code hasn't been chosen yet. Until it is, all
-rights are reserved. Hollow Knight's art, sound and text are not part of this project
-and are never distributed with it.
+The Desk-Skong code is released under the **MIT License** (see [`LICENSE`](LICENSE)).
+It covers the code only: Hollow Knight's art, sound and text belong to Team Cherry, are
+not part of this project and are never distributed with it.
 
 The panel and the achievement banner use two freely licensed fonts, built into the
 programs: [Cinzel](https://github.com/NDISCOVER/Cinzel) and
