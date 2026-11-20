@@ -24,7 +24,7 @@ fn every_definition_has_a_criterion_and_original_text() {
     let ids: BTreeSet<&str> = d.iter().map(|d| d.id.as_str()).collect();
     let known: BTreeSet<&str> = ALL.iter().copied().collect();
     assert_eq!(ids, known, "data/achievements.json and ids::ALL must match");
-    assert!((28..=36).contains(&d.len()), "about 30 achievements: {}", d.len());
+    assert!((28..=48).contains(&d.len()), "a few dozen achievements: {}", d.len());
     for a in &d {
         assert!(!a.title.trim().is_empty() && !a.description.trim().is_empty(), "{}", a.id);
         // Hints stay vague: a short category, never the how.
@@ -80,6 +80,14 @@ fn zote_must_lose_the_spar() {
     let mut t = tracker();
     assert!(feed(&mut t, &[E::SparWon { who: "someone".into() }]).is_empty());
     assert_eq!(feed(&mut t, &[E::SparWon { who: "zote".into() }]), [ZOTE_SPAR]);
+}
+
+#[test]
+fn each_calm_scene_has_its_own_achievement() {
+    let mut t = tracker();
+    assert!(feed(&mut t, &[E::CompanyKept { who: "zote".into() }]).is_empty());
+    let kept = |who: &str| E::CompanyKept { who: who.into() };
+    assert_eq!(feed(&mut t, &[kept("cornifer"), kept("quirrel"), kept("myla"), kept("myla")]), [CORNIFER_MAPS, QUIRREL_VIEW, MYLA_SONG]);
 }
 
 #[test]

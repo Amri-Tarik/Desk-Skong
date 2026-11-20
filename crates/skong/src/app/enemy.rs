@@ -87,6 +87,8 @@ impl Pet {
             occupancy: &self.occupancy,
             since_fight: self.brain.since_fight(),
             settled,
+            // Only visitors' arrivals and calm scenes look at deposits.
+            deposits: &[],
         }
     }
 

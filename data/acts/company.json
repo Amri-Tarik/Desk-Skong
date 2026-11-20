@@ -1,0 +1,62 @@
+{
+  "$comment": "The knight's part in a visitor's calm scene (npcs.json `company`, the brain's Company behaviour). Weight 0: started by name only. Each holds its pose until the visitor parts (the brain sends the 'parted' signal; `hold` is only a safety timeout), then wraps up: the map closes, he gets off the seat.",
+  "acts": [
+    {
+      "name": "company_maps",
+      "tags": ["seat", "calm", "curious"],
+      "requires": "seat",
+      "weight": 0.0,
+      "steps": [
+        { "clip": "Sit" },
+        { "clip": "Sit Map Open" },
+        { "clip": "Sit Map Read", "hold": [120.0, 120.0], "until": "parted" },
+        { "clip": "Sit Map Close" },
+        { "clip": "Get Off" }
+      ]
+    },
+    {
+      "name": "company_maps_stand",
+      "tags": ["calm", "curious"],
+      "requires": "grounded",
+      "weight": 0.0,
+      "steps": [
+        { "clip": "Map Open" },
+        { "clip": "Map Idle", "hold": [120.0, 120.0], "until": "parted" },
+        { "clip": "Map Away" }
+      ]
+    },
+    {
+      "name": "company_view",
+      "tags": ["seat", "calm"],
+      "requires": "seat",
+      "weight": 0.0,
+      "steps": [
+        { "clip": "Sit" },
+        { "clip": "Sit Lean" },
+        { "clip": "Sit Lean Idle", "hold": [120.0, 120.0], "until": "parted" },
+        { "clip": "Sit Lean End" },
+        { "clip": "Get Off" }
+      ]
+    },
+    {
+      "name": "company_listen",
+      "tags": ["seat", "calm"],
+      "requires": "seat",
+      "weight": 0.0,
+      "steps": [
+        { "clip": "Sit" },
+        { "clip": "Sit Breathe", "hold": [120.0, 120.0], "until": "parted" },
+        { "clip": "Get Off" }
+      ]
+    },
+    {
+      "name": "company_listen_stand",
+      "tags": ["calm"],
+      "requires": "grounded",
+      "weight": 0.0,
+      "steps": [
+        { "clip": "Idle", "hold": [120.0, 120.0], "until": "parted" }
+      ]
+    }
+  ]
+}

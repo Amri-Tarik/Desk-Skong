@@ -1,5 +1,5 @@
 {
-  "$comment": "NPC visitors. Clips come from the exported vanilla libraries in data/hk/animations (NPC art is always vanilla: skins/Vanilla). `faces`: left|right (side-view art, mirrored to face the knight) or front (never mirrored; use talk/talk_right for direction). `arrive`: walk (in from the knight's monitor edge along the bottom), perch (sitting on a window edge), portal (steps out of a dream portal anywhere on the desktop), drop (falls out of a portal). `leave`: walk|fade|portal. `origin_above_feet` (game units) overrides the feet line measured from the idle frame (perched visitors: the seat line). `stand_off`: where the knight stands to talk (game units from the visitor). Lines are plain strings or {say, react}; `react` names knight acts from acts.json, `a|b` = first one that can start. Placeholders: {title} (a visible window title), {app} (a running app), {daypart}. `portal_style`: dust (small dust puffs + quick fade-in, default) or dream (dream-gate glow + ripple). `dream_thoughts`: what a visitor thinks when the knight dream-nails them after their talk (sometimes, never mid-conversation). `dream`: the knight's dream-nail thoughts per window (match = lowercase substrings of process name or title; an empty match is the generic pool). `clips.leave`: a clip played once before leaving (a bow). `weight`: relative chance to be the next visitor (default 1). `after_fight` (s): only visits that soon after the knight fought (cursor battles, pestering, the Shade, spells; invitations by name ignore it). `demos`: named clip sequences the visitor can perform (a clip name, or {clip, secs} for looping clips). `lesson` (teachers, e.g. Sly): after the conversation a training session follows: `open_demo` once, then `count` drills from `drills` (the first always, the rest at random in listed order); each drill is announced (`say`, one picked), shown (`demo`), practised by the knight (`drill`: slash, up_slash, down_slash, dash, jump, or a knight act name such as great_slash), then answered from `praise` or `critique`; `closing` ends it, `abandon` is said when it is cut short; `stance` is the clip held while teaching, `practice_secs` how long the teacher waits for a drill. Feedback and closing lines may carry a `react` like conversation lines. `extra_libraries`: more clip libraries merged into the visitor's, clip names prefixed ({library, prefix}). `spar` (fighters, e.g. Zote): with probability `chance` the conversation ends in a challenge (one `challenge` line, `taunt` clip), then a short spar: on guard (`stance`, `pause` s), wind-up (`antic`), a charge along his ledge (`attack`, `charge_speed` units/s for `charge_secs`; catching the knight bumps him), `recover`; blows stagger him (`hit`); after `hits` blows he goes down (`fall`), gets up (`get_up`), says a `lose` line and leaves. `abandon` is said when it fizzles out (after `max_secs`, or the knight wandered off). `size`: his body [w, h] in game units. Spar lines are plain text (no placeholders). All lines are original writing.",
+  "$comment": "NPC visitors. Clips come from the exported vanilla libraries in data/hk/animations (NPC art is always vanilla: skins/Vanilla). `faces`: left|right (side-view art, mirrored to face the knight) or front (never mirrored; use talk/talk_right for direction). `arrive`: walk (in from the knight's monitor edge along the bottom), perch (sitting on a window edge), portal (steps out of a dream portal anywhere on the desktop), drop (falls out of a portal). `leave`: walk|fade|portal. `origin_above_feet` (game units) overrides the feet line measured from the idle frame (perched visitors: the seat line). `stand_off`: where the knight stands to talk (game units from the visitor). Lines are plain strings or {say, react}; `react` names knight acts from acts.json, `a|b` = first one that can start. Placeholders: {title} (a visible window title), {app} (a running app), {daypart}. `portal_style`: dust (small dust puffs + quick fade-in, default) or dream (dream-gate glow + ripple). `dream_thoughts`: what a visitor thinks when the knight dream-nails them after their talk (sometimes, never mid-conversation). `dream`: the knight's dream-nail thoughts per window (match = lowercase substrings of process name or title; an empty match is the generic pool). `clips.leave`: a clip played once before leaving (a bow). `weight`: relative chance to be the next visitor (default 1). `after_fight` (s): only visits that soon after the knight fought (cursor battles, pestering, the Shade, spells; invitations by name ignore it). `demos`: named clip sequences the visitor can perform (a clip name, or {clip, secs} for looping clips). `lesson` (teachers, e.g. Sly): after the conversation a training session follows: `open_demo` once, then `count` drills from `drills` (the first always, the rest at random in listed order); each drill is announced (`say`, one picked), shown (`demo`), practised by the knight (`drill`: slash, up_slash, down_slash, dash, jump, or a knight act name such as great_slash), then answered from `praise` or `critique`; `closing` ends it, `abandon` is said when it is cut short; `stance` is the clip held while teaching, `practice_secs` how long the teacher waits for a drill. Feedback and closing lines may carry a `react` like conversation lines. `extra_libraries`: more clip libraries merged into the visitor's, clip names prefixed ({library, prefix}). `spar` (fighters, e.g. Zote): with probability `chance` the conversation ends in a challenge (one `challenge` line, `taunt` clip), then a short spar: on guard (`stance`, `pause` s), wind-up (`antic`), a charge along his ledge (`attack`, `charge_speed` units/s for `charge_secs`; catching the knight bumps him), `recover`; blows stagger him (`hit`); after `hits` blows he goes down (`fall`), gets up (`get_up`), says a `lose` line and leaves. `abandon` is said when it fizzles out (after `max_secs`, or the knight wandered off). `size`: his body [w, h] in game units. Spar lines are plain text (no placeholders). `company` (calm scenes): with probability `chance`, when the spot fits (`needs`: any; seat = a settled window edge the knight can sit on beside them; view = such a seat in the upper half of the monitor; deposit = a Geo deposit they arrived beside, which also places them there), the conversation ends in an invitation (one `invite` line), then they sit together: the visitor holds `clip` (default idle) and says one of `lines` every `every` s, the knight plays `knight` (acts from data/acts/company.json, `a|b` = first that can start) for `secs` (counted while he is beside them); a `parting` line, `clip_end` once, and they leave as usual. `abandon` is said when the knight is called away (the Shade, enemies, typing, a fullscreen app). Company lines are plain text. All lines are original writing.",
   "portal_style": "dust",
   "visits": {
     "enabled": true,
@@ -25,6 +25,34 @@
       "idle_every": [9, 18],
       "greet_react": "look_up",
       "dream_thoughts": ["...wonder if the little one will keep the map. They never keep the map.", "Hmm hm hmm... one more ledge and I am finished. One more...", "Did I leave the quill by the {app} window? Oh dear."],
+      "company": {
+        "chance": 0.5,
+        "needs": "any",
+        "knight": "company_maps|company_maps_stand",
+        "invite": [
+          "Out with your map, then! Let's see whose is the less wrong.",
+          "Sit with me a moment? Two maps are better than one smudge.",
+          "Ah, you carry a map too! Come, come, let's compare."
+        ],
+        "secs": [35, 55],
+        "lines": [
+          "Hm-hm-hmm... this window wasn't here this morning.",
+          "Hmm hm hmmm... your ledge goes much further than mine.",
+          "La-la, hm-hm... a bench, you've drawn? Clever, clever.",
+          "Hmmm... no, no, your north is right. Mine wandered off.",
+          "Hm-hm, hmmm... a little more ink, just about there..."
+        ],
+        "every": [7, 12],
+        "parting": [
+          "There! Both maps a little truer. Off you go, explorer.",
+          "Well! I think we each learnt something. Mostly about smudges.",
+          "Hm-hm... I'll be off. Keep that map dry, little one."
+        ],
+        "abandon": [
+          "Oh! Off already? Keep the map, keep the map!",
+          "Called away, are we? Another time, then. Hm-hm."
+        ]
+      },
       "conversations": [
         [
           { "say": "Oh! A fellow explorer, all the way up here!", "react": "look_up" },
@@ -57,6 +85,36 @@
       "excitement": 0.95,
       "greet_react": "look_up",
       "dream_thoughts": ["...so much I still want to see. So little I remember.", "That little one is braver than they look.", "Just a moment longer, then I move on."],
+      "company": {
+        "chance": 0.55,
+        "needs": "view",
+        "knight": "company_view",
+        "clip": "Bench Look",
+        "clip_end": "Bench Look End",
+        "invite": [
+          "Sit a while, if you like. A view is better shared.",
+          "There's room up here for two. Take a moment.",
+          "Stay, just for a little. See how far it all goes from here."
+        ],
+        "secs": [40, 60],
+        "lines": [
+          "...",
+          "All those little lights, every one of them busy.",
+          "Listen. Even the windows have a quiet hum to them.",
+          "I could sit here until I forget why I came. That happens to me.",
+          "Strange. I feel I've sat like this before, somewhere far below."
+        ],
+        "every": [10, 16],
+        "parting": [
+          "Thank you for the company. I think I'll walk on now.",
+          "That was nice. Let's both remember it, if we can.",
+          "Time I was moving. Take care up here, little one."
+        ],
+        "abandon": [
+          "Ah, you're needed. Go on, I'll keep the view for you.",
+          "Off you go, then. The view will wait."
+        ]
+      },
       "conversations": [
         [
           "Ah, we meet again, little wanderer.",
@@ -74,6 +132,67 @@
           "Hmm. Perhaps some things are best left a mystery."
         ]
       ]
+    },
+    {
+      "name": "myla",
+      "display": "Myla",
+      "library": "Miner",
+      "faces": "right",
+      "clips": { "idle": "Idle", "talk": "Talk", "talk_end": "Talk End" },
+      "arrive": "portal",
+      "leave": "fade",
+      "weight": 0.9,
+      "stay": [150, 260],
+      "stand_off": 1.8,
+      "excitement": 0.85,
+      "idle_lines": ["Tap, tap, the stone says hello... la-la-la...", "Dig a little, sing a little, dig a little more~", "Shiny, shiny, deep inside... hm-hm-hm...", "Down where the lamps all glow, la-di-da..."],
+      "idle_every": [8, 16],
+      "dream_thoughts": ["...one more swing, and one more song, and one more...", "The little one listened! Hardly anybody listens.", "Is the stone humming back? I think it's humming back."],
+      "conversations": [
+        [
+          "Oh! Hello! Did you hear me singing? I'm not very good.",
+          "There's Geo in this {app} rock, I can tell. It sparkles at me.",
+          "You can dig some too. There's plenty, if you knock nicely."
+        ],
+        [
+          "Hi hi! Mind your head, the pick swings wide.",
+          "I followed the shine all the way up here. Isn't it pretty?",
+          { "say": "Want to hear my digging song? It's short. Mostly.", "react": "look_up" }
+        ],
+        [
+          "Hello, little friend! Come to dig too?",
+          "I don't know whose window this is, but the stone in it is lovely.",
+          "Every rock has a little song inside. You just have to knock."
+        ]
+      ],
+      "company": {
+        "chance": 0.7,
+        "needs": "deposit",
+        "knight": "company_listen|company_listen_stand",
+        "invite": [
+          "Stay and listen? I sing better with someone near.",
+          "Sit, sit! I'll dig and sing, and you can count the swings.",
+          "Here goes my mining song. Don't laugh. Well, a little."
+        ],
+        "secs": [35, 50],
+        "lines": [
+          "Tap the stone and the stone taps back~",
+          "Deep and dark, but my lamp is bright~",
+          "Swing, and chip, and the Geo shines~",
+          "Ooh, the rock is cold but the song is warm~",
+          "La-la-la, one more swing, la-la~"
+        ],
+        "every": [6, 10],
+        "parting": [
+          "That's the whole song! There's more, but I forget it.",
+          "Thank you for listening! The rock's all yours now.",
+          "All sung out. Go on, the shiny bits are yours."
+        ],
+        "abandon": [
+          "Oh, you're off? I'll finish it for the rock, then.",
+          "Bye bye! I'll keep singing anyway."
+        ]
+      }
     },
     {
       "name": "zote",

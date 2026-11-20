@@ -38,6 +38,7 @@ impl Pet {
             || self.troupe.as_ref().is_some_and(|t| t.active());
         let (discoveries, terrain) = (&self.discoveries, &self.terrain);
         let settled = |f: &skong_core::portal::Footing| discoveries.settled(terrain, f.owner, f.y, f.x0, f.x1);
+        let deposits: Vec<_> = discoveries.places().into_iter().filter(|p| p.kind == skong_core::ai::PlaceKind::Deposit).map(|p| (p.center, p.at)).collect();
         let world = World {
             terrain: &self.terrain,
             desk: self.watcher.snapshot(),
@@ -53,8 +54,14 @@ impl Pet {
             occupancy: &self.occupancy,
             since_fight: self.brain.since_fight(),
             settled: &settled,
+            deposits: &deposits,
         };
         f(v, &world, &mut self.fx);
+    }
+
+    /// The brain was called away from a visitor's calm scene.
+    pub(super) fn part_from_visitor(&mut self, id: u32) {
+        self.with_visitors(|v, w, _| v.part(id, w));
     }
 
     /// The brain's side of a lesson (drill done / stop) for the teaching visitor.

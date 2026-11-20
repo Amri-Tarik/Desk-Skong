@@ -106,10 +106,12 @@ pub enum BehaviourKind {
     Fight,
     /// A gauntlet's ceremonies: ready himself at the announcement, cheer at the end.
     Gauntlet,
+    /// A visitor's calm scene after the talk: sit with them a while (maps, the view, a song).
+    Company,
 }
 
 impl BehaviourKind {
-    pub const ALL: [BehaviourKind; 24] = [
+    pub const ALL: [BehaviourKind; 25] = [
         BehaviourKind::Idle,
         BehaviourKind::Companion,
         BehaviourKind::Watch,
@@ -134,6 +136,7 @@ impl BehaviourKind {
         BehaviourKind::DreamGate,
         BehaviourKind::Fight,
         BehaviourKind::Gauntlet,
+        BehaviourKind::Company,
     ];
 
     pub fn label(self) -> &'static str {
@@ -162,6 +165,7 @@ impl BehaviourKind {
             BehaviourKind::DreamGate => "dream gate",
             BehaviourKind::Fight => "fight",
             BehaviourKind::Gauntlet => "gauntlet",
+            BehaviourKind::Company => "company",
         }
     }
 
@@ -180,6 +184,8 @@ impl BehaviourKind {
             BehaviourKind::DreamGate => Tier::Engagement,
             // The gauntlet's announcement and closing cheer, between its fights.
             BehaviourKind::Gauntlet => Tier::Engagement,
+            // A visitor's calm scene ranks with visitors, above Geo.
+            BehaviourKind::Company => Tier::Engagement,
             BehaviourKind::Nap | BehaviourKind::Rest | BehaviourKind::Recover => Tier::Needs,
             // The cursor is a boredom killer (battles, pestering): an ambient pastime, never
             // allowed to interrupt Geo or visitors, and dropped the moment those show up.
@@ -207,6 +213,7 @@ impl BehaviourKind {
                 | BehaviourKind::DreamGate
                 | BehaviourKind::Fight
                 | BehaviourKind::Gauntlet
+                | BehaviourKind::Company
         )
     }
 }
@@ -1086,6 +1093,7 @@ pub(crate) enum Active {
     DreamGate(super::dream_gate::DreamGate),
     Fight(Box<super::fight::Fight>),
     Gauntlet(super::gauntlet::Ceremony),
+    Company(Box<super::company::Company>),
 }
 
 impl Active {
@@ -1115,6 +1123,7 @@ impl Active {
             Active::DreamGate(_) => BehaviourKind::DreamGate,
             Active::Fight(_) => BehaviourKind::Fight,
             Active::Gauntlet(_) => BehaviourKind::Gauntlet,
+            Active::Company(_) => BehaviourKind::Company,
         }
     }
 
@@ -1144,6 +1153,7 @@ impl Active {
             Active::DreamGate(b) => b.tick(ctx),
             Active::Fight(b) => b.tick(ctx),
             Active::Gauntlet(b) => b.tick(ctx),
+            Active::Company(b) => b.tick(ctx),
         }
     }
 
@@ -1174,6 +1184,7 @@ impl Active {
             Active::DreamGate(b) => b.reason(),
             Active::Fight(b) => b.reason(),
             Active::Gauntlet(b) => b.reason(),
+            Active::Company(b) => b.reason(ctx),
         }
     }
 }
@@ -1191,7 +1202,7 @@ pub(crate) fn exit_act_for(act: &ActInfo) -> Option<&'static str> {
         "look_up" => Some("look_up_end"),
         "look_down" => Some("look_down_end"),
         "gaze_into_screen" => Some("turn_from_screen"),
-        "map_stroll" => Some("put_map_away"),
+        "map_stroll" | "company_maps_stand" => Some("put_map_away"),
         _ if act.requires == crate::acts::Requirement::Seat => Some("get_up"),
         _ => None,
     }

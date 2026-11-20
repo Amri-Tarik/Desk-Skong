@@ -13,6 +13,7 @@ use crate::desktop::{DesktopSnapshot, Monitor, WindowId, WindowInfo};
 use crate::geom::RectI;
 use crate::terrain::{LedgeKind, Terrain, TerrainOptions};
 
+mod company;
 mod dream_gate;
 mod expression;
 mod fight;
@@ -90,6 +91,8 @@ impl Navigator for FakeNav {
 fn act_secs(name: &str) -> f32 {
     match name {
         "nap" => 600.0,
+        // Held until the visitor parts (the "parted" signal), see `Sim::step`.
+        "company_maps" | "company_maps_stand" | "company_view" | "company_listen" | "company_listen_stand" => 120.0,
         "slug_crawl" => 20.0,
         "rest" => 12.0,
         "lean_back" => 10.0,
@@ -322,6 +325,14 @@ impl Sim {
         {
             a.left = 1.0;
             a.act.interruptible = false; // "Wake" step
+        }
+        // A calm scene's act wraps up (map closed, off the seat) once the visitor parts.
+        if intent.signal == Some(PARTED)
+            && let Some(a) = &mut self.act
+            && self.catalog.get(a.act.id).is_some_and(|i| i.name.starts_with("company_"))
+            && a.left > 1.0
+        {
+            a.left = 1.0;
         }
         if let Some(id) = intent.act
             && self.act.is_none()

@@ -331,7 +331,8 @@ impl Pet {
                 N::SparOver { who, lost: true } => E::SparWon { who },
                 N::Dreamed { who: Some(who) } => E::VisitorDreamed { who },
                 N::Dreamed { who: None } => E::WindowDreamed,
-                N::LessonOver { .. } | N::SparOver { .. } => continue,
+                N::Company { who, finished: true } => E::CompanyKept { who },
+                N::LessonOver { .. } | N::SparOver { .. } | N::Company { .. } => continue,
             });
         }
         for (foe, kind) in self.enemies.as_mut().map(|e| std::mem::take(&mut e.killed)).unwrap_or_default() {

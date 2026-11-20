@@ -32,6 +32,7 @@ mod activity;
 mod battle;
 mod behaviours;
 mod combat;
+mod company;
 mod companion;
 mod config;
 mod greet;
@@ -72,6 +73,7 @@ pub use expression::{Expression, GeoHaul};
 pub use fight::{FightConfig, Foe, FoeKind, FoeStrike};
 pub use greet::{STAND_OFF_UNITS, Visitor, VisitorState};
 pub use train::{LessonCue, LessonReport, LessonSignal, LessonStage};
+pub use company::{CompanyCue, CompanyStage, PARTED};
 pub use interest::{InterestMap, Poi, PoiKey, PoiKind, PoiTarget, ScoredPoi};
 pub use navigator::{GraphNavigator, NavStatus, Navigator, Reach};
 pub use needs::{Emotions, MOOD_TAGS, Mind, Needs};
@@ -170,6 +172,8 @@ pub struct Intent {
     pub dream_visitor: Option<u32>,
     /// Lesson traffic for a teaching visitor (drill done, or stop the lesson).
     pub lesson: Option<LessonReport>,
+    /// End the calm scene with this visitor (the knight is called away).
+    pub part: Option<u32>,
     /// "reason | mood + needs | top-3 utilities", for an overlay.
     pub debug: String,
     /// Discovery traffic for the app (explored a new window, used / struck a found place).
@@ -957,6 +961,13 @@ impl Brain {
             // Called away mid-lesson: let the teacher know.
             out.lesson = Some(LessonReport { visitor: t.id, signal: LessonSignal::Stop });
         }
+        if let Active::Company(c) = &self.active
+            && !c.ended
+            && company::host(&self.senses.visitors).is_some_and(|v| v.id == c.id)
+        {
+            // Called away mid-scene (the Shade, a fullscreen app...): say goodbye.
+            out.part = Some(c.id);
+        }
         if let Active::DreamGate(g) = &self.active
             && g.open()
         {
@@ -964,6 +975,7 @@ impl Brain {
             out.gate = Some(crate::dreamgate::GateEvent::Close);
         }
         let teacher = train::teacher(&self.senses.visitors).cloned();
+        let host = company::host(&self.senses.visitors).cloned();
         let visitor = self.visitors.target(&self.senses.visitors, p.knight.pos, self.now).cloned();
         nav.stop();
         if reason == SwitchReason::Preempted {
@@ -1019,6 +1031,10 @@ impl Brain {
             BehaviourKind::Recover => Active::Recover(Recover::start(&mut ctx)),
             BehaviourKind::Greet => match &visitor {
                 Some(v) => Active::Greet(Box::new(greet::Greet::start(&mut ctx, v))),
+                None => Active::Idle(Idle::start(&mut ctx)),
+            },
+            BehaviourKind::Company => match &host {
+                Some(v) => Active::Company(Box::new(company::Company::start(&mut ctx, v))),
                 None => Active::Idle(Idle::start(&mut ctx)),
             },
             BehaviourKind::Train => match &teacher {
@@ -1285,6 +1301,12 @@ impl Brain {
         let visit = if visit > 0.0 { (visit + 0.25 * bored).min(1.1) } else { 0.0 };
         // Enemies about: the cursor is no fun now (fight mode included).
         let fight = self.fight_utility(p);
+        // A calm scene with a visitor: like a lesson, but enemies, typing or a fullscreen
+        // app end it (the Shade, urgent, always cuts in).
+        let company = match company::host(&s.visitors) {
+            Some(_) if !s.user_busy && !s.fullscreen && fight == 0.0 => 0.98,
+            _ => 0.0,
+        };
         let (battle, pester) = if fight > 0.0 { (0.0, 0.0) } else { (battle, pester) };
 
         let mut u = vec![
@@ -1303,6 +1325,7 @@ impl Brain {
             (BehaviourKind::Recover, recover),
             (BehaviourKind::Greet, greet),
             (BehaviourKind::Train, train),
+            (BehaviourKind::Company, company),
             (BehaviourKind::Visit, visit),
             (BehaviourKind::Shiny, self.shiny_utility(p)),
             (BehaviourKind::Highlight, self.highlight_utility(p)),

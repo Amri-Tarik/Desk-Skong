@@ -65,8 +65,9 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
 
 ## 3. Visitor scenes
 
-- [ ] **Cornifer:** they sit down together and both open their maps for a while, reviewing
-      them (he hums).
+- [x] **Cornifer:** they sit down together and both open their maps for a while, reviewing
+      them (he hums). Standing with the map where there's no seat (the desktop floor).
+      Calm scenes are `company` in `npcs.json` (`npc::company`, the brain's `Company`).
 - [ ] **Grimm, friendly:** appears with a flourish, bows, taunts, teleports a couple of
       times and leaves. Sometimes he leaves the scarlet flame behind as a hint at the
       secret.
@@ -74,9 +75,12 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
       - Race: she throws her needle and silk to mark the finish, and they race across the
         windows.
       - Duel: a short spar; she wins and leaves.
-- [ ] **Quirrel** sits on a ledge beside the knight, admiring the view.
-- [ ] **Myla** sings while mining next to a Geo deposit.
-- [ ] **New achievements** for each scene.
+- [x] **Quirrel** sits on a ledge beside the knight, admiring the view (window edges in the
+      upper half of a monitor only).
+- [x] **Myla** sings while mining next to a Geo deposit (new visitor, art exported from the
+      `Miner` library; she arrives beside a deposit when there is one, else visits plainly).
+- [ ] **New achievements** for each scene. Done for the calm scenes ("Comparing Notes",
+      "Room for Two", "Work Song"); Grimm and Hornet still to come.
 
 ## 4. Achievements: everyone can reach 100 %
 
@@ -167,6 +171,13 @@ Checked in tests only (unless noted). Note anything that looks off:
       - the short fade in / out (four steps) and the sweat drop sliding down;
       - how often they show over a real day (the brain tests allow at most ~1 a minute);
       - the "z" when he settles for a nap vs. the "zzz" once asleep.
+- [ ] Calm scenes (`--visit cornifer|quirrel|myla`; a scene follows the talk 50–70 % of the time):
+      - Cornifer: the knight seated beside him with the map open (the gap between them, his
+        hum bubbles over the drawing idle); the standing map on the floor;
+      - Quirrel: both on a high window edge (Bench Look facing, Sit Lean pose), Bench Look End;
+      - Myla: her size and feet line (new art), facing the rock while mining, standing beside
+        a deposit without overlapping it or the knight's mining spot; the song bubbles' pace;
+      - the abandon line when typing / an enemy / the Shade cuts a scene short.
 
 ## Recently done
 
