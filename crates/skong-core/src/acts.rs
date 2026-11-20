@@ -615,6 +615,29 @@ mod tests {
     }
 
     #[test]
+    fn staring_at_the_user_holds_one_frame() {
+        // It used to loop the walk-toward-the-camera frames ("Exit"): he seemed to walk at
+        // you in place. Now he turns to face you and holds that one pose.
+        let (clips, acts) = libs();
+        let id = acts.id("stare_at_user").expect("act");
+        let mut anim = Animator::new(clips.id("Idle").expect("Idle"));
+        let mut p = ActPlayer::start(&acts, &clips, &mut anim, id, 42);
+        let mut ev = Vec::new();
+        let dt = 1.0 / 120.0;
+        let mut held = Vec::new();
+        for i in 0..(1.4 / dt) as usize {
+            ev.clear();
+            anim.update(&clips, dt, &mut ev);
+            assert_ne!(p.update(&acts, &clips, &mut anim, dt, &ev), ActStatus::Done);
+            if i as f32 * dt > 0.5 {
+                held.push((anim.clip(), anim.frame_index()));
+            }
+        }
+        held.dedup();
+        assert_eq!(held.len(), 1, "one frame held while staring: {held:?}");
+    }
+
+    #[test]
     fn every_act_terminates() {
         let (clips, acts) = libs();
         for (_, a) in acts.iter() {

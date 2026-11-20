@@ -56,7 +56,7 @@ default scale 0.6).
 | `input` | Idle time, typing *rate* via Raw Input (counts only), mouse buttons. |
 | `games` | Fullscreen-game detection (Windows GameConfigStore registry, game-library paths, exclusive fullscreen). |
 | `monitor` | Cursor position, primary work area, single-instance mutex, local time. |
-| `selection` | Opt-in: where highlighted text is (rectangle only, never the text). Background MTA thread: WinEvent `EVENT_OBJECT_TEXTSELECTIONCHANGED` / foreground hooks → debounced UI Automation query (focused element's TextPattern selection bounds). |
+| `selection` | On by default (tray / panel toggle): where highlighted text is (rectangle only, never the text). Background MTA thread: WinEvent `EVENT_OBJECT_TEXTSELECTIONCHANGED` / foreground hooks → debounced UI Automation query (focused element's TextPattern selection bounds). |
 
 ### `skong` (the pet) — one tick (120 Hz)
 

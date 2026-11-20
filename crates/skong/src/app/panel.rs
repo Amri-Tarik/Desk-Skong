@@ -64,7 +64,6 @@ impl Pet {
         Status {
             paused: self.paused,
             manual: self.manual,
-            click_through: self.settings.click_through,
             fight_mode: self.brain.fight_mode(),
             share_visible: self.settings.share_visible,
             text_curiosity: self.settings.text_curiosity,

@@ -1,6 +1,6 @@
 //! The live pet: desktop → terrain → controller → locomotion/acts → sprite window,
 //! controlled from a tray menu and global hotkeys (Ctrl+Alt+…): K manual control,
-//! A random act, W wake, R respawn at cursor, S next skin, B bench at cursor, C click-through,
+//! A random act, W wake, R respawn at cursor, S next skin, B bench at cursor,
 //! P pause, D debug overlay, Q quit. Control panels connect over a named pipe (`control`).
 use std::time::Instant;
 
@@ -62,7 +62,6 @@ const HOTKEYS: &[(i32, vk::VIRTUAL_KEY, Command)] = &[
     (3, vk::VK_W, Command::Wake),
     (4, vk::VK_R, Command::RespawnAtCursor),
     (5, vk::VK_S, Command::NextSkin),
-    (6, vk::VK_C, Command::ToggleClickThrough),
     (7, vk::VK_P, Command::TogglePause),
     (8, vk::VK_Q, Command::Quit),
     (9, vk::VK_B, Command::PlaceBenchAtCursor(0)),
@@ -76,7 +75,6 @@ const MENU_HOTKEY: i32 = 13;
 
 // Tray menu ids.
 const ID_MANUAL: u32 = 1;
-const ID_CLICK: u32 = 2;
 const ID_PAUSE: u32 = 3;
 const ID_ACT: u32 = 4;
 const ID_RESPAWN: u32 = 5;
@@ -238,7 +236,7 @@ struct Pet {
     last_input: MoveInput,
     /// Screen activity for the brain, mirrored from the vision feed.
     activity: Activity,
-    /// Where highlighted text is (opt-in `text_curiosity`; `None` while off).
+    /// Where highlighted text is (`text_curiosity`, on by default; `None` while off).
     selection: Option<SelectionWatcher>,
     /// Last brain debug line (behaviour, mood, top utilities).
     brain_debug: String,
@@ -322,7 +320,7 @@ pub fn run(args: &Args) -> Result<()> {
             log::warn!("--capturable: the knight is now visible to content capture and may stand on himself");
         }
     }
-    win.set_click_through(settings.click_through);
+    // Never click-through: he can always be picked up (his transparent pixels pass clicks).
     let tray = Tray::new("Desk-Skong", &tray_icon(&data, &look))?;
     let benches = Benches::load(&args.data.join("../props.json"), data.vanilla().map(|s| s.dir.as_path()), settings.scale)?;
     let emotes = Emotes::new(&args.data, data.vanilla(), 64.0 * settings.scale, args.capturable)?;
@@ -433,7 +431,7 @@ pub fn run(args: &Args) -> Result<()> {
     if let Err(e) = rl.register_hotkey(MENU_HOTKEY, vk::VK_M) {
         log::warn!("{e:#}");
     }
-    log::info!("tray menu ready; hotkeys Ctrl+Alt + M menu, K manual, A act, W wake, R respawn at cursor, G walk / H hurry to cursor, S skin, C click-through, P pause, D debug overlay, Q quit");
+    log::info!("tray menu ready; hotkeys Ctrl+Alt + M menu, K manual, A act, W wake, R respawn at cursor, G walk / H hurry to cursor, S skin, P pause, D debug overlay, Q quit");
 
     let mut last_housekeeping = Instant::now();
     let mut goto_test_at = args.goto_test.then(Instant::now);
@@ -1210,11 +1208,6 @@ impl Pet {
                 self.settings.bother = b;
                 self.settings.save();
             }
-            Command::ToggleClickThrough => {
-                self.settings.click_through = !self.settings.click_through;
-                self.win.set_click_through(self.settings.click_through);
-                self.settings.save();
-            }
             Command::ToggleFightMode => {
                 let on = !self.brain.fight_mode();
                 self.brain.set_fight_mode(on);
@@ -1328,7 +1321,6 @@ impl Pet {
             MenuItem::action(ID_DREAM, "Dream-nail a window"),
             MenuItem::action(ID_RESPAWN, "Come here (respawn at cursor)"),
             MenuItem::check(ID_MANUAL, "Manual control", self.manual),
-            MenuItem::check(ID_CLICK, "Click-through", self.settings.click_through),
             MenuItem::check(ID_SHARE, "Visible in screen shares", self.settings.share_visible),
             MenuItem::check(ID_TEXT, "Curious about highlighted text", self.settings.text_curiosity),
             MenuItem::check(ID_PAUSE, "Pause", self.paused),
@@ -1344,7 +1336,6 @@ impl Pet {
     fn menu_command(&self, id: u32) -> Option<Command> {
         Some(match id {
             ID_MANUAL => Command::ToggleManual,
-            ID_CLICK => Command::ToggleClickThrough,
             ID_SHARE => Command::ToggleShareVisible,
             ID_FIGHT => Command::ToggleFightMode,
             ID_TEXT => Command::ToggleTextCuriosity,

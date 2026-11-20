@@ -5,7 +5,7 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
 
 ## 1. Fixes and unwanted behaviour (first)
 
-- [ ] **The Shade really comes first.** Its priority is right (Urgent), but timers hold it
+- [x] **The Shade really comes first.** Its priority is right (Urgent), but timers hold it
       back:
       - after a respawn he waits 90 s (`shade_delay`) before going after it;
       - every failed attempt (unreachable, route failed, stuck, the 60 s fight limit)
@@ -17,7 +17,11 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
       - never shelved for minutes: if there's no route, take the Dream Gate to it, or retry
         within seconds;
       - only dying ends an attempt.
-- [ ] **Geo left behind after a kill.** Two suspects:
+
+      > done: 4 s after a respawn; no route → the hunt plants its own Dream Gate (whatever
+      > the gate's cooldown), else another look every 2–5 s; stuck / failed route / out of
+      > reach → re-plan; no time limit; a 25 s breather after the Shade kills him.
+- [x] **Geo left behind after a kill.** Two suspects:
       1. **Worn out:** after a rough fight, Geo counts as a pastime unless a coin is right
          next to him, and recovering from hurt outranks it. He rests while the coins fade
          (they last 4 min).
@@ -27,7 +31,13 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
 
       Fix: only sleep may push Geo down, and rest waits until the coins are collected.
       Reproduce both in a simulation first.
-- [ ] **Stutter with several monsters** (walks, stops, walks, very fast, so he crawls
+
+      > done: both fixed, plus the live case (loot utility 0 with coins lying there): coins
+      > were filtered by the shared "unreachable target" map (64 px cells), so a failed
+      > seat / cursor spot / fight goal nearby hid fresh Geo for 20–60 s. Coins now have
+      > their own skip list. Only sleep puts Geo down; a walk to a deposit gives way to
+      > loose coins (a rock being mined is finished first).
+- [x] **Stutter with several monsters** (walks, stops, walks, very fast, so he crawls
       along). The target is sticky, so it's not target swapping. Suspects:
       - another monster in the way bumps him each step;
       - combat-kit moves (jump at a foe, dodge) cutting the walk short as their cooldowns
@@ -35,10 +45,21 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
 
       Reproduce with 2–3 foes in a simulation. Fix: a foe in the way becomes the target,
       and each decision is held for a minimum time.
-- [ ] **Staring at the user** uses the walk-towards animation: hold a single frame instead.
-- [ ] **Picking him up is always enabled.** No toggle. He's a gremlin you drag out of the
+
+      > done (needs eyes on screen): the sim showed fight ↔ loot / recover ping-pong — a
+      > bump took soreness past 0.6, the running fight lost its tier, Geo cut in, then the
+      > fight took over again as he healed. Soreness now only blocks *starting* a fight.
+      > An enemy right in front of him, between him and his target, becomes the target.
+      > The exact in-app walk/stop rhythm wasn't reproduced (the sim has no path follower).
+- [x] **Staring at the user** uses the walk-towards animation: hold a single frame instead.
+- [x] **Picking him up is always enabled.** No toggle. He's a gremlin you drag out of the
       way, and he does **not** dodge your typing on his own.
-- [ ] **Highlighted-text curiosity on by default**, with a toggle to turn it off.
+
+      > done: the click-through toggle (tray, panel, Ctrl+Alt+C) was what blocked grabs; gone.
+- [x] **Highlighted-text curiosity on by default**, with a toggle to turn it off.
+- [x] **Talk to visitors from close enough.** A talk needs no contact: when he can't get
+      right beside a visitor (a busy window), he talks from a reachable spot within range
+      (6 units across, 5 up or down), same level first. Gives up only with no such spot.
 
 ## 2. Expression and variety
 

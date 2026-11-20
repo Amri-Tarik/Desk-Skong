@@ -466,3 +466,39 @@ fn hurt_after_a_fight_he_focuses_to_heal() {
     a.run(4.0);
     assert!(a.sim.brain.mind().emotions.hurt < hurt, "feels better");
 }
+
+
+#[test]
+fn a_fight_under_way_keeps_its_place_when_he_gets_sore() {
+    // Live: a stutter with several foes. A bump took him past the soreness line; the fight
+    // lost its tier and Geo (or Recover) cut in, then the fight took over again as he
+    // healed — fight, loot, fight, loot, every second or so. The fight ends itself.
+    let mut a = Arena::physical(calm(BrainConfig::default()));
+    a.run(0.5);
+    a.coins = vec![Vec2::new(200.0, FLOOR), Vec2::new(240.0, FLOOR)];
+    a.add("husk", 1500.0);
+    a.add("crawlid", 1700.0);
+    assert!(a.run_until(2.0, BehaviourKind::Fight), "{}", a.sim.last_reason());
+    a.sim.brain.mind_mut().emotions.hurt = 0.7;
+    let mut kinds = Vec::new();
+    a.run_while(6.0, |a| {
+        kinds.push(a.sim.brain.behaviour());
+        a.enemies.iter().any(|e| e.alive())
+    });
+    assert!(kinds.iter().all(|k| *k == BehaviourKind::Fight), "sore, he fights on: {} {:?} killed {:?}", a.sim.last_reason(), a.sim.switches, a.killed);
+}
+
+#[test]
+fn a_foe_in_the_way_becomes_the_target() {
+    // Walking past one foe to reach another got him bumped and stopped at every step.
+    let mut a = Arena::new(calm(BrainConfig::default()));
+    a.run(0.5);
+    a.fixed.push(dummy(FoeKind::Enemy, 1600.0));
+    assert!(a.run_until(1.0, BehaviourKind::Fight), "{}", a.sim.last_reason());
+    assert!(a.sim.last_reason().contains("#9 ") || a.sim.last_reason().ends_with("#9"), "{}", a.sim.last_reason());
+    // Another one now right in front of him, between him and it.
+    let k = a.sim.knight.pos.x;
+    a.fixed.push(Foe { id: 78, ..dummy(FoeKind::Enemy, k + 150.0) });
+    a.run(0.2);
+    assert!(a.sim.last_reason().contains("#78"), "the one in the way first: {}", a.sim.last_reason());
+}

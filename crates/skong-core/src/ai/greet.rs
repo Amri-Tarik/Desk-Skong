@@ -64,6 +64,12 @@ pub const DREAM_NAIL_CHANCE: f32 = 0.25;
 const START_PATIENCE: f32 = 6.0;
 /// Horizontal distance kept from the visitor's feet point, in game units.
 pub const STAND_OFF_UNITS: f32 = 1.7;
+/// A talk (or a dream nail) needs no contact: when no route gets him right beside the
+/// visitor, anywhere he can stand this close (game units, feet to feet) will do.
+pub const TALK_DX_UNITS: f32 = 6.0;
+pub const TALK_DY_UNITS: f32 = 5.0;
+/// Talk spots whose routes are planned per look at most.
+const TALK_PLANS: usize = 5;
 
 /// What the brain remembers about visitors between ticks.
 #[derive(Clone, Debug, Default)]
@@ -128,6 +134,8 @@ pub(crate) struct Greet {
     pub failed: bool,
     /// The after-conversation dream nail was considered (at most once per visit).
     dream_decided: bool,
+    /// No route beside them: heading for this spot within talking range instead.
+    talk_spot: Option<Vec2>,
 }
 
 impl Greet {
@@ -136,12 +144,39 @@ impl Greet {
         ctx.mind.adjust(|n| &mut n.boredom, -0.2);
         ctx.mind.adjust(|n| &mut n.loneliness, -0.3);
         let goal = stand_point(ctx, v);
-        let phase = if beside(ctx, v, goal) {
-            Phase::Arrive { waited: 0.0, act: None, hello_done: false }
-        } else {
-            Phase::Approach(Travel::to(ctx, goal, TravelStyle::Hurry))
-        };
-        Self { id: v.id, name: v.name.clone(), phase, failed: false, dream_decided: false }
+        let mut g = Self { id: v.id, name: v.name.clone(), phase: Phase::Arrive { waited: 0.0, act: None, hello_done: false }, failed: false, dream_decided: false, talk_spot: None };
+        if beside(ctx, v, goal) {
+            return g;
+        }
+        let k = ctx.p.knight;
+        if ctx.nav.reaches(k, goal, TravelStyle::Hurry, 40.0) {
+            g.phase = Phase::Approach(Travel::to(ctx, goal, TravelStyle::Hurry));
+        } else if !g.talk_from_afar(ctx, v) {
+            // Nowhere within talking range either: try the walk anyway (the planner may
+            // know better once he moves); a failure gives them up for a while.
+            g.phase = Phase::Approach(Travel::to(ctx, goal, TravelStyle::Hurry));
+        }
+        g
+    }
+
+    /// No route right beside them: talk from where he stands if that's in range, else head
+    /// for the best reachable spot in range. `false`: no such spot.
+    fn talk_from_afar(&mut self, ctx: &mut Ctx, v: &Visitor) -> bool {
+        if in_talk_range(ctx, v) {
+            log::debug!("brain: can't get beside {}; talking from here", self.name);
+            ctx.nav.stop();
+            self.phase = Phase::Arrive { waited: 0.0, act: None, hello_done: false };
+            return true;
+        }
+        match talk_spot(ctx, v) {
+            Some(spot) => {
+                log::debug!("brain: can't get beside {}; talking from ({:.0},{:.0})", self.name, spot.x, spot.y);
+                self.talk_spot = Some(spot);
+                self.phase = Phase::Approach(Travel::to(ctx, spot, TravelStyle::Hurry));
+                true
+            }
+            None => false,
+        }
     }
 
     /// They got to talk (the conversation started and he didn't give up).
@@ -166,23 +201,40 @@ impl Greet {
         match &mut self.phase {
             Phase::Approach(t) => {
                 let goal = stand_point(ctx, &v);
-                if beside(ctx, &v, goal) {
+                let there = match self.talk_spot {
+                    // Heading for a talk spot: there, or anywhere in range on the way down.
+                    Some(_) => ctx.grounded() && in_talk_range(ctx, &v) && ctx.p.knight.vel.y.abs() < 1.0,
+                    None => beside(ctx, &v, goal),
+                };
+                if there {
                     ctx.nav.stop();
                     self.phase = Phase::Arrive { waited: 0.0, act: None, hello_done: false };
                     return Status::Running;
                 }
+                let goal = self.talk_spot.unwrap_or(goal);
                 if let NavGoal::Point(p) = t.goal
                     && p.distance(goal) > 48.0
                 {
                     t.retarget(NavGoal::Point(goal));
                 }
-                match t.tick(ctx) {
+                let mut step = t.tick(ctx);
+                if step == TravelStep::Arrived && !in_talk_range(ctx, &v) {
+                    // The route ended somewhere else (under their window, say).
+                    ctx.nav.stop();
+                    step = TravelStep::Failed;
+                }
+                match step {
                     TravelStep::Moving => Status::Running,
                     TravelStep::Arrived => {
                         self.phase = Phase::Arrive { waited: 0.0, act: None, hello_done: false };
                         Status::Running
                     }
                     TravelStep::Failed => {
+                        // Couldn't get beside them (live: Elderbug in a busy window, given up
+                        // right after he got fairly close): a talk needs no contact.
+                        if self.talk_spot.is_none() && self.talk_from_afar(ctx, &v) {
+                            return Status::Running;
+                        }
                         self.failed = true;
                         Status::Done
                     }
@@ -300,6 +352,44 @@ pub(crate) fn stand_point(ctx: &Ctx, v: &Visitor) -> Vec2 {
         None => v.pos.x + side * off,
     };
     Vec2::new(x, v.pos.y)
+}
+
+/// Standing within talking range of the visitor (any ledge; no line of sight needed).
+pub(crate) fn in_talk_range(ctx: &Ctx, v: &Visitor) -> bool {
+    let k = ctx.p.knight;
+    let ppu = k.params.px_per_unit;
+    k.is_grounded() && (k.pos.x - v.pos.x).abs() <= TALK_DX_UNITS * ppu && (k.pos.y - v.pos.y).abs() <= TALK_DY_UNITS * ppu
+}
+
+/// The best spot within talking range that a route gets him onto: on a ledge near the
+/// visitor's, the same level first, then the smallest height gap, then the nearest to them.
+fn talk_spot(ctx: &mut Ctx, v: &Visitor) -> Option<Vec2> {
+    let k = ctx.p.knight;
+    let ppu = k.params.px_per_unit;
+    let (dx_max, dy_max) = (TALK_DX_UNITS * ppu, TALK_DY_UNITS * ppu);
+    let off = stand_off(ctx, v);
+    let half_w = 0.5 * k.size.x + 4.0;
+    let mut spots: Vec<Vec2> = ctx
+        .p
+        .terrain
+        .ledges
+        .iter()
+        .filter(|l| (l.y - v.pos.y).abs() <= dy_max && l.x1 - l.x0 >= 2.0 * half_w)
+        .filter_map(|l| {
+            // As close to beside them as the ledge allows (not right under / over them).
+            let (lo, hi) = (l.x0 + half_w, l.x1 - half_w);
+            let side = if k.pos.x >= v.pos.x { 1.0 } else { -1.0 };
+            let want = [v.pos.x + side * off, v.pos.x - side * off];
+            let x = want.iter().map(|w| w.clamp(lo, hi)).min_by(|a, b| (a - want[0]).abs().total_cmp(&(b - want[0]).abs()))?;
+            ((x - v.pos.x).abs() <= dx_max).then_some(Vec2::new(x, l.y))
+        })
+        .collect();
+    let level = |p: &Vec2| ((p.y - v.pos.y).abs() > 4.0, (p.y - v.pos.y).abs(), (p.x - v.pos.x).abs());
+    spots.sort_by(|a, b| {
+        let (la, lb) = (level(a), level(b));
+        la.0.cmp(&lb.0).then(la.1.total_cmp(&lb.1)).then(la.2.total_cmp(&lb.2))
+    });
+    spots.into_iter().take(TALK_PLANS).find(|s| ctx.nav.reaches(k, *s, TravelStyle::Hurry, 40.0))
 }
 
 fn stand_off(ctx: &Ctx, v: &Visitor) -> f32 {

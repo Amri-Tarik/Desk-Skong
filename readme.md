@@ -44,12 +44,12 @@ target\release\skong.exe [--skin NAME] [--scale F] [--no-vision] [--data DIR] [-
 ```
 
 The knight lives in the notification area: right-click the tray icon for skins, size,
-mischief, benches, manual control, click-through, pause, vision, the debug overlay and
+mischief, benches, manual control, pause, vision, the debug overlay and
 **Open control panel**. Only one pet runs at a time. Logs go to stderr (`RUST_LOG=debug`
 for more).
 
 **Global hotkeys** (Ctrl+Alt + …): `K` manual control · `A` do something · `W` wake ·
-`R` respawn at cursor · `G` walk to the cursor · `H` hurry to the cursor (path-finding with the full move kit) · `S` next skin · `B` bench at cursor · `C` click-through ·
+`R` respawn at cursor · `G` walk to the cursor · `H` hurry to the cursor (path-finding with the full move kit) · `S` next skin · `B` bench at cursor ·
 `P` pause · `D` debug overlay · `Q` quit. Manual control: arrows move, Up jumps, LShift
 dashes, hold LCtrl for a superdash, Z walks, X sprints.
 

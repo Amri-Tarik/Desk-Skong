@@ -168,7 +168,12 @@ impl Brain {
             // A scarlet flame on his desktop: curious, he goes and strikes it.
             return 0.9;
         }
-        if self.now < self.stakes.fight.ready_at || self.mind.emotions.hurt > 0.6 {
+        // Too sore (or backing off) to *start* one. A fight under way ends itself (out of
+        // masks, too long, nobody left): it used to lose its tier the moment a bump took him
+        // past the soreness line, so Geo or Recover cut in, then the fight took over again
+        // as he healed — walk, stop, turn, walk, at the foes.
+        let running = matches!(self.active, super::behaviours::Active::Fight(_));
+        if self.now < self.stakes.fight.ready_at || (!running && self.mind.emotions.hurt > 0.6) {
             return 0.0;
         }
         let cfg = &self.cfg.fight;
@@ -242,6 +247,28 @@ fn within_reach(ctx: &Ctx, f: &Foe) -> bool {
     }
     let under = ground_under(ctx, f);
     k.support.is_some_and(|s| k.is_grounded() && (under.y - s.y).abs() < 4.0 && s.x0 <= under.x && under.x <= s.x1)
+}
+
+/// An enemy right in front of him, on his level, between him and his target (an enemy
+/// too): it gets in the way, so it's fought first.
+fn in_the_way(ctx: &Ctx, target: &Foe) -> Option<Foe> {
+    if target.kind != FoeKind::Enemy {
+        return None;
+    }
+    let c = body_centre(ctx);
+    let ppu = ctx.p.knight.params.px_per_unit;
+    let to_target = target.pos.x - c.x;
+    let snubbed = &ctx.stakes.fight.snubbed;
+    ctx.senses
+        .foes
+        .iter()
+        .filter(|f| f.kind == FoeKind::Enemy && f.id != target.id && !snubbed.get(&(f.kind, f.id)).is_some_and(|t| *t > ctx.now))
+        .filter(|f| {
+            let dx = f.pos.x - c.x;
+            dx * to_target > 0.0 && dx.abs() + ppu < to_target.abs() && dx.abs() < 4.0 * ppu && (f.pos.y - c.y).abs() < f.half.y + 1.5 * ppu
+        })
+        .min_by(|a, b| (a.pos.x - c.x).abs().total_cmp(&(b.pos.x - c.x).abs()))
+        .copied()
 }
 
 impl Fight {
@@ -438,6 +465,16 @@ impl Fight {
             ctx.nav.stop();
             ctx.stakes.fight.ready_at = ctx.now + cfg.retry;
             return Status::Done;
+        }
+        if matches!(self.phase, Phase::Approach(_) | Phase::Engage)
+            && let Some(f) = in_the_way(ctx, &foe)
+        {
+            // Another one stands between him and his target: that one first (walking past it
+            // got him bumped and stopped at every step).
+            log::debug!("brain: {:?} {} is in the way; that one first", f.kind, f.id);
+            ctx.nav.stop();
+            self.aim(ctx, &f);
+            return Status::Running;
         }
         match &mut self.phase {
             Phase::Act(act) => {

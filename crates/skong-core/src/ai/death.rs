@@ -78,13 +78,16 @@ impl Dead {
         Status::Running
     }
 
-    /// Back on his feet: sore, a little sad, not up for the Shade just yet.
+    /// Back on his feet: sore, a little sad; a few seconds to get his bearings, then the
+    /// Shade (a breather set when the Shade itself killed him still holds).
     fn finish(&mut self, ctx: &mut Ctx) -> Status {
         ctx.mind.hurt(0.45);
         ctx.mind.adjust(|n| &mut n.loneliness, 0.25);
         ctx.mind.adjust(|n| &mut n.energy, -0.15);
         ctx.mind.adjust(|n| &mut n.mischief, -0.6);
-        ctx.stakes.shade_ready_at = ctx.now + ctx.cfg.stakes.shade_delay;
+        ctx.stakes.shade_ready_at = ctx.stakes.shade_ready_at.max(ctx.now + ctx.cfg.stakes.shade_delay);
+        // Somewhere new: look for a way to it afresh.
+        ctx.stakes.shade_way = true;
         ctx.stakes.dying = false;
         Status::Done
     }
