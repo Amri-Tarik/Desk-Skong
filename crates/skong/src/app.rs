@@ -40,6 +40,7 @@ use skong_core::ai::BehaviourKind;
 use crate::benches::{Benches, SEAT_BELOW_ORIGIN};
 use crate::discoveries::Discoveries;
 use crate::shinies::ShinyProps;
+use crate::pastimes::PastimeProps;
 use crate::navbuild::NavBuilder;
 use crate::control::ControlServer;
 use crate::overlay::PetOverlay;
@@ -51,6 +52,7 @@ mod dreamgate;
 mod enemy;
 mod grimm;
 mod panel;
+mod pastime;
 mod visit;
 mod stakes;
 
@@ -197,6 +199,8 @@ struct Pet {
     discoveries: Discoveries,
     /// Shinies on the ground for the knight to pick up.
     shinies: ShinyProps,
+    /// The training dummy and lumaflies (pastimes).
+    pastimes: PastimeProps,
     /// Who stands where: props, NPCs, ... (nothing is placed inside something else).
     occupancy: skong_core::occupancy::Occupancy,
     fx: Fx,
@@ -324,6 +328,7 @@ pub fn run(args: &Args) -> Result<()> {
     let emotes = Emotes::new(&args.data, data.vanilla(), 64.0 * settings.scale, args.capturable)?;
     let discoveries = Discoveries::load(&args.data, &args.data.join("../props.json"), data.vanilla().map(|s| s.dir.as_path()), settings.scale);
     let shinies = ShinyProps::load(&args.data.join("../props.json"), settings.scale, seed() as u64);
+    let pastimes = PastimeProps::load(&args.data, data.vanilla(), settings.scale, seed() as u64);
 
     let mut brain = Brain::new(BrainConfig::default(), ActCatalog::from_library(&data.acts), seed());
     brain.set_bother_level(settings.bother);
@@ -352,6 +357,7 @@ pub fn run(args: &Args) -> Result<()> {
         haul: Default::default(),
         discoveries,
         shinies,
+        pastimes,
         occupancy: Default::default(),
         fx,
         games: GameGuard::new(),
@@ -408,6 +414,7 @@ pub fn run(args: &Args) -> Result<()> {
     pet.benches.capturable = args.capturable;
     pet.discoveries.capturable = args.capturable;
     pet.shinies.capturable = args.capturable;
+    pet.pastimes.capturable = args.capturable;
     pet.apply_share_visible();
     pet.apply_text_curiosity();
     if args.panel.unwrap_or(pet.settings.open_panel) {
@@ -469,6 +476,7 @@ pub fn run(args: &Args) -> Result<()> {
             pet.raise_troupe();
             pet.discoveries.raise_all();
             pet.shinies.raise_all();
+            pet.pastimes.raise_all();
             pet.win.raise();
             pet.emotes.raise();
             log::debug!(
@@ -500,6 +508,7 @@ impl Pet {
             self.keep_check = 0.5;
             let mut keep: Vec<Vec2> = self.discoveries.places().iter().flat_map(|p| [p.at, p.center]).collect();
             keep.extend(self.shinies.percepts().iter().map(|s| s.pos));
+            keep.extend(self.pastimes.dummy_foot());
             keep.extend(self.stakes.resting_coins());
             if self.navb.set_keep(keep) {
                 self.navb.request(&self.terrain, &self.ch, true);
@@ -524,6 +533,7 @@ impl Pet {
             self.stakes.hide_on(&self.games.game_monitors);
             self.discoveries.hide_on(&self.games.game_monitors);
             self.shinies.hide_on(&self.games.game_monitors);
+            self.pastimes.hide_on(&self.games.game_monitors);
         }
         if self.content.poll(self.watcher.snapshot(), desk_changed) || desk_changed || games_changed {
             let mut new = self.content.terrain(self.watcher.snapshot(), &self.topts);
@@ -992,6 +1002,7 @@ impl Pet {
         if let Some(ev) = intent.discovery {
             self.on_discovery(ev);
         }
+        self.pastime_intent();
         if let Some(ev) = intent.request {
             self.on_world_request(ev);
         }
@@ -1189,6 +1200,7 @@ impl Pet {
                 self.benches.rescale(s);
                 self.discoveries.rescale(s);
                 self.shinies.rescale(s);
+                self.pastimes.rescale(&self.data.args_data, self.data.vanilla(), s);
                 self.emotes.rescale(&self.data.args_data, self.data.vanilla(), 64.0 * s);
                 self.navb.reset(&self.terrain, &self.ch);
                 self.settings.save();

@@ -45,6 +45,7 @@ mod gauntlet;
 mod interest;
 mod navigator;
 mod needs;
+mod pastime;
 mod percept;
 mod pester;
 mod places;
@@ -77,6 +78,7 @@ pub use company::{CompanyCue, CompanyStage, PARTED};
 pub use interest::{InterestMap, Poi, PoiKey, PoiKind, PoiTarget, ScoredPoi};
 pub use navigator::{GraphNavigator, NavStatus, Navigator, Reach};
 pub use needs::{Emotions, MOOD_TAGS, Mind, Needs};
+pub use pastime::{KnownDummy, KnownLumafly, PastimeEvent, PastimeKind};
 pub use percept::{ClosedWindow, Cursor, CursorSense, DesktopChanges, Percepts, Poke, RunningAct, STUCK_SECS, Senses, UserActivity};
 pub use places::{DiscoveryEvent, KnownPlace, PlaceId, PlaceKind, PlaceMemory};
 pub use shiny::{KnownShiny, ShinyMemory};
@@ -545,7 +547,7 @@ impl Brain {
         };
         let kind = self.active.kind();
         let fighting = matches!(kind, BehaviourKind::Battle | BehaviourKind::Pester | BehaviourKind::ShadeHunt | BehaviourKind::Fight)
-            || (kind != BehaviourKind::Train && (out.attack.is_some() || out.stakes.iter().any(|e| matches!(e, StakeEvent::Cast { .. }))));
+            || (!matches!(kind, BehaviourKind::Train | BehaviourKind::Pastime) && (out.attack.is_some() || out.stakes.iter().any(|e| matches!(e, StakeEvent::Cast { .. }))));
         if fighting {
             self.last_fight_at = self.now;
         }
@@ -829,6 +831,7 @@ impl Brain {
         self.score_shinies(p, nav);
         self.score_highlight(p, nav);
         self.scan_dream_gate(p, nav);
+        self.score_pastimes(p, nav);
         if finished {
             // A finished battle's cooldown counts now, or it would be picked right again
             // (fight mode's breather between rounds).
@@ -1005,6 +1008,7 @@ impl Brain {
         let flee_from = if kind == BehaviourKind::Flee { self.flee_from.take().unwrap_or(p.knight.pos) } else { p.knight.pos };
         let death = if kind == BehaviourKind::Dead { self.stakes.pending_death.take() } else { None };
         let cue = self.senses.gauntlet;
+        let pastime = if kind == BehaviourKind::Pastime { self.interest.pastimes.best.take() } else { None };
         if kind == BehaviourKind::Gauntlet {
             self.gauntlet_done = cue.map(|c| (c.serial, c.stage));
         }
@@ -1066,6 +1070,10 @@ impl Brain {
             BehaviourKind::Fight => Active::Fight(Box::new(fight::Fight::start(&mut ctx))),
             BehaviourKind::Gauntlet => match cue {
                 Some(c) => Active::Gauntlet(gauntlet::Ceremony::start(&mut ctx, c)),
+                None => Active::Idle(Idle::start(&mut ctx)),
+            },
+            BehaviourKind::Pastime => match pastime {
+                Some(c) => Active::Pastime(Box::new(pastime::Pastime::start(&mut ctx, c))),
                 None => Active::Idle(Idle::start(&mut ctx)),
             },
         };
@@ -1332,6 +1340,7 @@ impl Brain {
             (BehaviourKind::DreamGate, self.dream_gate_utility()),
             (BehaviourKind::Fight, fight),
             (BehaviourKind::Gauntlet, self.gauntlet_utility(p)),
+            (BehaviourKind::Pastime, self.pastime_utility(p)),
         ];
         u.extend(self.stakes_utilities(p));
         let calm = self.now < self.calm_until;

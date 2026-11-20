@@ -21,6 +21,7 @@ mod gauntlet;
 mod greet;
 mod grimm;
 mod highlight;
+mod pastime;
 mod shiny;
 mod train;
 mod slug;
@@ -93,7 +94,8 @@ fn act_secs(name: &str) -> f32 {
         "nap" => 600.0,
         // Held until the visitor parts (the "parted" signal), see `Sim::step`.
         "company_maps" | "company_maps_stand" | "company_view" | "company_listen" | "company_listen_stand" => 120.0,
-        "slug_crawl" => 20.0,
+        "slug_crawl" | "stargaze" => 20.0,
+        "take_in_view" => 30.0,
         "rest" => 12.0,
         "lean_back" => 10.0,
         "read_map" | "map_stroll" => 7.0,
@@ -150,6 +152,12 @@ struct Sim {
     picked: Vec<u64>,
     /// The app's side of the Dream Gate.
     gate: crate::dreamgate::GateRuntime,
+    /// Local hour (`None`: unknown, as in most tests).
+    hour: Option<f32>,
+    /// Pastime props, and what the brain asked of them (swipes close by catch the fly).
+    dummy: Option<KnownDummy>,
+    flies: Vec<KnownLumafly>,
+    pastime_events: Vec<PastimeEvent>,
 }
 
 fn window(id: WindowId, rect: RectI, process: &str) -> WindowInfo {
@@ -217,6 +225,10 @@ impl Sim {
             shinies: vec![],
             picked: vec![],
             gate: Default::default(),
+            hour: None,
+            dummy: None,
+            flies: vec![],
+            pastime_events: vec![],
         }
     }
 
@@ -296,12 +308,21 @@ impl Sim {
             move_events: &self.events,
             activity: &self.activity,
             last_input: self.last_input,
-            local_hour: None,
+            local_hour: self.hour,
             dark: self.dark,
             selection: self.selection,
         };
         self.brain.set_shinies(&self.shinies);
+        self.brain.set_pastimes(self.dummy, &self.flies);
         let intent = self.brain.tick(&p, &mut self.nav);
+        for ev in self.brain.take_pastime_events() {
+            if let PastimeEvent::Swipe { fly, from } = ev
+                && let Some(f) = self.flies.iter_mut().find(|f| f.id == fly && f.pos.distance(from) < 70.0)
+            {
+                f.leaving = true;
+            }
+            self.pastime_events.push(ev);
+        }
         self.last_motion = intent.motion;
         self.pokes.clear();
         self.events.clear();
@@ -909,7 +930,11 @@ fn riding_a_moving_window_is_fun() {
 // --- Balance & stability ----------------------------------------------------------------
 
 /// Acts the knight may start with nobody doing anything special.
-const QUIET_ACTS: [&str; 15] = ["dream_nail", "gaze_into_screen", "look_up", "look_down", "stare_at_user", "rest", "lean_back", "read_map", "map_stroll", "pick_up_trinket", "get_up", "look_up_end", "look_down_end", "turn_from_screen", "put_map_away"];
+const QUIET_ACTS: [&str; 17] = [
+    "dream_nail", "gaze_into_screen", "look_up", "look_down", "stare_at_user", "rest", "lean_back", "read_map", "map_stroll", "pick_up_trinket", "get_up", "look_up_end", "look_down_end", "turn_from_screen", "put_map_away",
+    // Quiet pastimes (`ai::pastime`).
+    "take_in_view", "stargaze",
+];
 
 #[test]
 fn quiet_five_minutes_are_mostly_purposeful() {

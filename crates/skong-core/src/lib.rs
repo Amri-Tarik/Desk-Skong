@@ -26,6 +26,7 @@ pub mod nav;
 pub mod npc;
 pub mod occupancy;
 pub mod particles;
+pub mod pastime;
 pub mod portal;
 pub mod props;
 pub mod shiny;

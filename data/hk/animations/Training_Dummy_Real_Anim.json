@@ -1,0 +1,150 @@
+{
+  "name": "Training Dummy Real Anim",
+  "clips": [
+    {
+      "name": "Idle",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Single",
+      "frames": [
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 6,
+          "sprite": "training_dummy0000"
+        }
+      ]
+    },
+    {
+      "name": "Heavy Hit R",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 0,
+          "sprite": "training_dummy0001"
+        },
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 2,
+          "sprite": "training_dummy0002"
+        },
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 3,
+          "sprite": "training_dummy0003"
+        },
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 4,
+          "sprite": "training_dummy0004"
+        },
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 5,
+          "sprite": "training_dummy0005"
+        },
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 1,
+          "sprite": "training_dummy0006"
+        }
+      ]
+    },
+    {
+      "name": "Light Hit R",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 3,
+          "sprite": "training_dummy0003"
+        },
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 4,
+          "sprite": "training_dummy0004"
+        },
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 5,
+          "sprite": "training_dummy0005"
+        },
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 1,
+          "sprite": "training_dummy0006"
+        }
+      ]
+    },
+    {
+      "name": "Heavy Hit L",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 2,
+          "sprite": "training_dummy0002"
+        },
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 0,
+          "sprite": "training_dummy0001"
+        },
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 3,
+          "sprite": "training_dummy0003"
+        },
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 4,
+          "sprite": "training_dummy0004"
+        },
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 5,
+          "sprite": "training_dummy0005"
+        },
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 1,
+          "sprite": "training_dummy0006"
+        }
+      ]
+    },
+    {
+      "name": "Light Hit L",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 4,
+          "sprite": "training_dummy0004"
+        },
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 3,
+          "sprite": "training_dummy0003"
+        },
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 5,
+          "sprite": "training_dummy0005"
+        },
+        {
+          "collection": "Training Dummy Anim",
+          "sprite_id": 1,
+          "sprite": "training_dummy0006"
+        }
+      ]
+    }
+  ]
+}

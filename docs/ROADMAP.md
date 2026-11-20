@@ -55,13 +55,20 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
       > `emotes.rs`. Also a sweat drop when badly hurt and the sparkle for a big Geo haul
       > (40+ Geo within 12 s). Spotting Geo keeps the Geo-coin thought cloud rather than a
       > "!".
-- [ ] **Less time in companion mode.** More things to do on his own:
-      - the training dummy (`Training Dummy Real Anim`, sharedassets321);
-      - chasing a lumafly across windows;
-      - sitting on a window edge taking in the view;
-      - swapping charms on a bench;
-      - stargazing at night;
-      - the lantern raised on dark-themed windows (exists; tune how often it happens).
+- [ ] **Less time in companion mode.** More things to do on his own (`ai::pastime`, Ambient:
+      the Shade, fights, visitors, Geo, shinies and deposits always come first). They come up
+      after ~25 s of plain company (or when bored stiff), each with a cooldown. In a 30-min
+      simulated desk session plain company went from ~91 % to ~67–72 %.
+      - [x] the training dummy (`Training Dummy Real Anim`, exported into the vanilla skin;
+            a drawn stand-in without it): stands on a settled ledge every 4–10 min for
+            7–13 min; he practises combos, up slashes, pogos, great / cyclone / dash slash,
+            fireballs; it swings per blow;
+      - [x] chasing a lumafly across windows (a drawn glow): he follows it along the ledges
+            under it, jumps at it, sometimes catches it and watches it float off;
+      - [x] sitting on the end of a high window edge taking in the view;
+      - [ ] swapping charms on a bench;
+      - [x] stargazing at night (21:00–05:00, the highest open ledge, Look At King);
+      - [ ] the lantern raised on dark-themed windows (exists; tune how often it happens).
 
 ## 3. Visitor scenes
 
@@ -159,6 +166,16 @@ Checked in tests only (unless noted). Note anything that looks off:
       - wraiths at a Vengefly.
 - [ ] Gauntlet: wave pacing, drop-in dust puffs, the reward burst; how often he finishes one
 - [ ] Dream Gate: gate size, glow, warp timing
+- [ ] Pastimes (tray → Discoveries (debug) → "Put up a training dummy" / "Let a lumafly
+      drift by"):
+      - the dummy's size beside the knight (`DUMMY_ART_SCALE` 0.34), its foot on the ledge,
+        and whether the hit clips swing *away* from the blow (L / R mapping is a guess);
+      - the drills against it: slash / pogo reach, the dash slash not carrying him off the
+        ledge, hit markers lining up with the figure;
+      - the lumafly glow (size, colour, bob), how catchable it feels, the catch flare;
+      - the view: which end of the window edge he picks and which way he faces;
+      - stargazing: Look At King held for 16–28 s on a high ledge;
+      - how often they happen versus keeping company.
 - [ ] The Troupe Master:
       - his size, feet line and facing;
       - teleport flashes and the lantern's flicker;

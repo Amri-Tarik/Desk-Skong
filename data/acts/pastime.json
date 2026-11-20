@@ -1,0 +1,30 @@
+{
+  "$comment": "Pastimes (ai::pastime): started by name for a reason, never picked at random. take_in_view: perched on the end of a high window edge, looking out and down over the desktop (seated life biased to glances and looks down, no map, rarely a doze). stargaze: at night, on a high open ledge, turned to the screen and looking up (the game's Look At King pose) for a long while.",
+  "acts": [
+    {
+      "name": "take_in_view",
+      "tags": ["seat", "calm"],
+      "requires": "seat",
+      "weight": 0.0,
+      "cooldown": 120,
+      "steps": [
+        { "clip": "Sit" },
+        { "life": "seated", "bias": { "glance": 4.0, "look_down": 5.0, "map": 0.0, "lean": 0.5, "doze": 0.3 }, "hold": [ 22.0, 38.0 ] },
+        { "clip": "Get Off" }
+      ]
+    },
+    {
+      "name": "stargaze",
+      "tags": ["calm"],
+      "requires": "grounded",
+      "weight": 0.0,
+      "cooldown": 120,
+      "steps": [
+        { "clip": "TurnToBG" },
+        { "clip": "Look At King" },
+        { "clip": "Look At King Idle", "hold": [ 16.0, 28.0 ] },
+        { "clip": "TurnFromBG" }
+      ]
+    }
+  ]
+}
