@@ -73,11 +73,14 @@ pub(crate) struct Carrying {
     light_for: f32,
     /// Putting the map away since this time (waiting for its clip to start).
     stowing: Option<f64>,
+    /// The user's "Lantern on dark backgrounds" setting (on by default): off, the lantern
+    /// never comes out (the map is unaffected).
+    pub lantern_allowed: bool,
 }
 
 impl Default for Carrying {
     fn default() -> Self {
-        Self { item: None, until: 0.0, map_ready_at: MAP_FIRST, next_roll: 0.0, lantern_ready_at: 0.0, dark_for: 0.0, light_for: 0.0, stowing: None }
+        Self { item: None, until: 0.0, map_ready_at: MAP_FIRST, next_roll: 0.0, lantern_ready_at: 0.0, dark_for: 0.0, light_for: 0.0, stowing: None, lantern_allowed: true }
     }
 }
 
@@ -153,7 +156,7 @@ impl Brain {
                 }
             }
             Some(Carry::Lantern) => {
-                if c.light_for >= LANTERN_LINGER || !friendly || urgent {
+                if c.light_for >= LANTERN_LINGER || !friendly || urgent || !c.lantern_allowed {
                     c.item = None;
                     if !friendly || urgent {
                         c.lantern_ready_at = now + LANTERN_GAP;
@@ -162,7 +165,7 @@ impl Brain {
             }
             None => {
                 let calm = friendly && !urgent && grounded && playing.is_none() && out.act.is_none();
-                if calm && s.dark && c.dark_for >= LANTERN_DELAY && now >= c.lantern_ready_at {
+                if calm && c.lantern_allowed && s.dark && c.dark_for >= LANTERN_DELAY && now >= c.lantern_ready_at {
                     c.item = Some(Carry::Lantern);
                 } else if calm && !s.dark && matches!(out.motion, Motion::Hold) && now >= c.map_ready_at && now >= c.next_roll {
                     c.next_roll = now + MAP_ROLL;

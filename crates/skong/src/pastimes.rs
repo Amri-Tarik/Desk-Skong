@@ -209,6 +209,20 @@ impl PastimeProps {
         }
     }
 
+    /// Test panel: the dummy right at `at` on window `owner`'s ledge (`None`: the floor),
+    /// replacing one standing elsewhere.
+    pub fn place_dummy_at(&mut self, terrain: &Terrain, at: Vec2, owner: Option<skong_core::desktop::WindowId>) -> bool {
+        let Some(spot) = shiny::spot_at(terrain, at, owner) else { return false };
+        let id = self.yard.add(spot, &self.drules);
+        log::info!("a training dummy placed at ({:.0},{:.0}) (#{id})", at.x, at.y);
+        true
+    }
+
+    /// The dummy's half width (px), for placement.
+    pub fn dummy_half_width(&self) -> f32 {
+        0.5 * self.dummy_size().0
+    }
+
     /// A lumafly now (debug), on `area`.
     pub fn spawn_lumafly(&mut self, area: RectF, bars: &[(f32, f32, f32)], knight: Vec2) {
         self.sky.clear();

@@ -683,6 +683,11 @@ impl GrimmDirector {
         self.lantern.as_ref()
     }
 
+    /// What a summon (or a clicked flame) is waiting for, if it waits.
+    pub fn held_by(&self) -> Option<&'static str> {
+        self.held_by
+    }
+
     /// The brain's foes: Grimm and his flames (the scarlet flame is the user's to click).
     pub fn foes(&self, set: &GrimmSet, ppu: f32) -> Vec<Foe> {
         let mut v: Vec<Foe> = Vec::new();

@@ -32,6 +32,8 @@ impl Pet {
             scales: SCALES.iter().map(|(n, v)| (n.to_string(), *v)).collect(),
             bother_levels: BOTHER.iter().map(|(n, v)| (n.to_string(), *v)).collect(),
             log_level: None,
+            visitors: self.test_visitors(),
+            enemies: self.enemies.as_ref().map(|e| e.displays()).unwrap_or_default(),
         }
     }
 
@@ -67,6 +69,7 @@ impl Pet {
             fight_mode: self.brain.fight_mode(),
             share_visible: self.settings.share_visible,
             text_curiosity: self.settings.text_curiosity,
+            lantern: self.settings.lantern,
             vision: self.content.is_enabled(),
             overlay: self.overlay.is_on(),
             overlay_layers: self.overlay.layers,
@@ -100,6 +103,7 @@ impl Pet {
             brain: (!self.brain_debug.is_empty()).then(|| self.brain_debug.clone()),
             nav: self.nav_info(),
             stakes: Some(self.stakes.info(self.brain.soul())),
+            test: Some(self.test_info()),
             ..Status::default() // process usage, panel count: filled by ControlServer::publish
         }
     }

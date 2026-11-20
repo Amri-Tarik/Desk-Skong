@@ -379,3 +379,13 @@ pub fn plan_arrival(
     }
     None
 }
+
+/// Test panel: an enemy of `def` dropping in right at `feet` (a point on a ledge the user
+/// picked): walkers fall onto it, flyers drop to their hovering height above it.
+pub fn placed_arrival(def: &EnemyDef, feet: Vec2, owner: Option<WindowId>, ppu: f32) -> EnemyPlacement {
+    let at = match def.moves {
+        Moves::Fly => Vec2::new(feet.x, feet.y - def.hover * ppu),
+        Moves::Ground => feet,
+    };
+    EnemyPlacement { at, owner: if def.moves == Moves::Fly { None } else { owner }, entry: EntryKind::Drop }
+}

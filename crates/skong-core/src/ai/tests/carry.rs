@@ -121,6 +121,23 @@ fn no_patrol_on_a_small_ledge() {
 }
 
 #[test]
+fn with_the_lantern_setting_off_it_never_comes_out() {
+    let mut sim = in_company();
+    assert!(sim.brain.lantern(), "on by default");
+    sim.brain.set_lantern(false);
+    sim.dark = true;
+    sim.run(30.0);
+    assert!(sim.intents.iter().all(|i| i.carry != Some(Carry::Lantern)), "{}", sim.last_reason());
+    // Turned back on: out again in the dark; turned off while out: put away.
+    sim.brain.set_lantern(true);
+    sim.run(4.0);
+    assert_eq!(carry(&sim), Some(Carry::Lantern), "{}", sim.last_reason());
+    sim.brain.set_lantern(false);
+    sim.run(0.5);
+    assert_eq!(carry(&sim), None);
+}
+
+#[test]
 fn the_lantern_stays_out_while_he_follows_you_in_the_dark() {
     let mut sim = in_company();
     sim.dark = true;

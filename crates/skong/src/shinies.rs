@@ -140,6 +140,19 @@ impl ShinyProps {
         }
     }
 
+    /// Test panel: a shiny right at `at` on window `owner`'s ledge (`None`: the floor).
+    pub fn place_at(&mut self, terrain: &Terrain, at: Vec2, owner: Option<skong_core::desktop::WindowId>) -> bool {
+        let Some(spot) = shiny::spot_at(terrain, at, owner) else { return false };
+        let id = self.shinies.add(spot);
+        log::info!("a shiny placed at ({:.0},{:.0}) (#{id})", at.x, at.y);
+        true
+    }
+
+    /// Its footprint's half width (px), for placement.
+    pub fn half_width(&self) -> f32 {
+        0.5 * self.footprint().w
+    }
+
     /// Resolve, settle against the other props, and draw. `true` when a new window was
     /// created (raise the knight above it).
     pub fn update(&mut self, desk: &DesktopSnapshot, terrain: &Terrain, occ: &mut Occupancy, settled: &dyn Fn(&skong_core::terrain::Ledge) -> bool) -> bool {

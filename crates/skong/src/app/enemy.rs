@@ -143,9 +143,9 @@ impl Pet {
     /// The tray / panel: start a gauntlet.
     pub(super) fn start_gauntlet(&mut self) {
         match self.enemies.as_mut().map(|e| e.start_gauntlet()) {
-            Some(true) => log::info!("gauntlet: requested (starts at the next good moment)"),
-            Some(false) => log::warn!("gauntlet: unavailable (see the enemies.json `gauntlet` section)"),
-            None => log::warn!("enemies: not loaded"),
+            Some(true) => self.note(true, "gauntlet requested (starts at the next good moment: no fight, visitor, fullscreen app or fast typing)"),
+            Some(false) => self.note(false, "gauntlet: unavailable (see the enemies.json `gauntlet` section)"),
+            None => self.note(false, "enemies: not loaded"),
         }
     }
 

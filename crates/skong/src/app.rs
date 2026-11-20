@@ -55,6 +55,7 @@ mod panel;
 mod pastime;
 mod visit;
 mod stakes;
+mod test;
 
 const HOTKEYS: &[(i32, vk::VIRTUAL_KEY, Command)] = &[
     (1, vk::VK_K, Command::ToggleManual),
@@ -90,6 +91,7 @@ const ID_SHARE: u32 = 14;
 const ID_FIGHT: u32 = 15;
 const ID_SHOWER: u32 = 20;
 const ID_TEXT: u32 = 16;
+const ID_LANTERN: u32 = 17;
 const ID_QUIT: u32 = 9;
 const ID_SKIN0: u32 = 1000;
 const ID_SCALE0: u32 = 2000;
@@ -270,6 +272,8 @@ struct Pet {
     troupe: Option<crate::grimm::Troupe>,
     /// Hidden achievements (all event mapping lives in `app/achievements.rs`).
     achievements: achievements::Achievements,
+    /// The control panel's Test tab: placing, feedback (`app/test.rs`).
+    test: test::TestDesk,
 }
 
 pub fn run(args: &Args) -> Result<()> {
@@ -332,6 +336,7 @@ pub fn run(args: &Args) -> Result<()> {
 
     let mut brain = Brain::new(BrainConfig::default(), ActCatalog::from_library(&data.acts), seed());
     brain.set_bother_level(settings.bother);
+    brain.set_lantern(settings.lantern);
     let navb = NavBuilder::new();
     navb.reset(&terrain, &ch);
 
@@ -399,6 +404,7 @@ pub fn run(args: &Args) -> Result<()> {
         enemy_hits: 0,
         troupe: None,
         achievements: achievements::Achievements::load(&args.data),
+        test: test::TestDesk::new(),
     };
     pet.visitors = pet.load_visitors(args.capturable);
     pet.enemies = pet.load_enemies(args.capturable);
@@ -466,6 +472,7 @@ pub fn run(args: &Args) -> Result<()> {
                 return Ok(Flow::Quit);
             }
         }
+        pet.test_tick(tick.dt);
         if !pet.paused {
             pet.tick(tick.dt)?;
         }
@@ -1234,6 +1241,13 @@ impl Pet {
                 self.settings.save();
                 log::info!("curious about highlighted text: {}", self.settings.text_curiosity);
             }
+            Command::ToggleLantern => {
+                self.settings.lantern = !self.settings.lantern;
+                self.brain.set_lantern(self.settings.lantern);
+                self.settings.save();
+                log::info!("lantern on dark backgrounds: {}", self.settings.lantern);
+            }
+            Command::Test(t) => self.apply_test(t),
             Command::TogglePause => {
                 self.paused = !self.paused;
                 self.win.set_visible(!self.paused);
@@ -1264,7 +1278,10 @@ impl Pet {
             Command::HornetChallenge { race } => self.hornet_challenge(race),
             Command::Discover(_) | Command::ForgetDiscoveries => return self.apply_discovery(c),
             Command::Quit => return Ok(Flow::Quit),
-            Command::Stakes(c) => self.apply_stakes(c),
+            Command::Stakes(c) => {
+                self.note_stakes(c);
+                self.apply_stakes(c);
+            }
             Command::ResetAchievements => self.reset_achievements(),
             Command::SetManual(_) | Command::ToggleVision | Command::ToggleDebugOverlay | Command::SetOverlayLayers(_) | Command::OpenPanel => return self.apply_panel(c),
         }
@@ -1334,6 +1351,7 @@ impl Pet {
             MenuItem::check(ID_MANUAL, "Manual control", self.manual),
             MenuItem::check(ID_SHARE, "Visible in screen shares", self.settings.share_visible),
             MenuItem::check(ID_TEXT, "Curious about highlighted text", self.settings.text_curiosity),
+            MenuItem::check(ID_LANTERN, "Lantern on dark backgrounds", self.settings.lantern),
             MenuItem::check(ID_PAUSE, "Pause", self.paused),
             MenuItem::Separator,
             MenuItem::check(ID_VISION, "Vision (content terrain)", self.content.is_enabled()),
@@ -1350,6 +1368,7 @@ impl Pet {
             ID_SHARE => Command::ToggleShareVisible,
             ID_FIGHT => Command::ToggleFightMode,
             ID_TEXT => Command::ToggleTextCuriosity,
+            ID_LANTERN => Command::ToggleLantern,
             ID_PAUSE => Command::TogglePause,
             ID_ACT => Command::RandomAct,
             ID_RESPAWN => Command::RespawnAtCursor,

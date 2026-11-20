@@ -128,6 +128,12 @@ pub struct PastimeMemory {
     last_kind: Option<PastimeKind>,
     /// The value the running pastime started with (it keeps it until done).
     running_value: f32,
+    /// Test panel: take up this quiet pastime (the view, the stars) as soon as a spot is
+    /// found, skipping the restlessness, the cooldown and (stars) the hour; with the brain
+    /// time it was asked at.
+    forced: Option<(PastimeKind, f64)>,
+    /// What came of a forced pastime, for the panel (see [`Brain::take_test_notes`]).
+    notes: Vec<String>,
 }
 
 impl PastimeMemory {
@@ -175,6 +181,8 @@ const MIN_COMPANY: f32 = 25.0;
 /// (the hysteresis margin keeps the other from cutting in), so neither starves the other.
 const LIVELY_MIN: f32 = 0.78;
 const LIVELY_MAX: f32 = 0.79;
+/// A forced pastime (test panel) that hasn't started after this long is dropped (s).
+const FORCED_PATIENCE: f64 = 20.0;
 /// Night hours (local): from .. to.
 const NIGHT: (f32, f32) = (21.0, 5.0);
 
@@ -211,6 +219,21 @@ impl Brain {
         std::mem::take(&mut self.interest.pastimes.events)
     }
 
+    /// Test panel: take in the view / stargaze now (the restlessness, the cooldown and the
+    /// night hours are skipped; a settled, reachable spot is still needed). Lively pastimes
+    /// come with their props (the app puts up a dummy / sends a lumafly instead).
+    pub fn force_pastime(&mut self, kind: PastimeKind) {
+        let mem = &mut self.interest.pastimes;
+        mem.ready_at.remove(&kind);
+        mem.scanned_at = None;
+        mem.forced = Some((kind, self.now));
+    }
+
+    /// What came of the test panel's requests since the last call (one line each).
+    pub fn take_test_notes(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.interest.pastimes.notes)
+    }
+
     /// The pastime under way, if any.
     pub fn pastime(&self) -> Option<PastimeKind> {
         match &self.active {
@@ -223,7 +246,20 @@ impl Brain {
     pub(crate) fn score_pastimes(&mut self, p: &Percepts, nav: &mut dyn Navigator) {
         let now = self.now;
         let kind = self.active.kind();
+        let running = match &self.active {
+            Active::Pastime(b) => Some(b.kind),
+            _ => None,
+        };
         let mem = &mut self.interest.pastimes;
+        if let Some((fk, asked)) = mem.forced {
+            if running == Some(fk) {
+                mem.notes.push(format!("{}: started", fk.label()));
+                mem.forced = None;
+            } else if now - asked > FORCED_PATIENCE {
+                mem.notes.push(format!("{}: didn't start within {FORCED_PATIENCE:.0} s (busy with {kind:?})", fk.label()));
+                mem.forced = None;
+            }
+        }
         let dt = (now - mem.last_now).max(0.0) as f32;
         mem.last_now = now;
         mem.company = match kind {
@@ -321,6 +357,22 @@ impl Brain {
             };
         }
         options.retain(|o| o.value > 0.0);
+        // Test panel: the view / the stars now, if there is a spot for them.
+        if let Some((fk @ (PastimeKind::View | PastimeKind::Stargaze), _)) = self.interest.pastimes.forced {
+            let found = if fk == PastimeKind::View { self.find_view(p, nav) } else { self.find_sky(p, nav) };
+            match found {
+                Some(c) => options.push(PastimeChoice { value: LIVELY_MAX, ..c }),
+                None => {
+                    let why = match fk {
+                        PastimeKind::View => "no settled window edge high on his monitor (upper 60 %, 120 px wide, room for his legs) that he can reach",
+                        _ => "no settled ledge with open sky above it that he can reach on his monitor",
+                    };
+                    let mem = &mut self.interest.pastimes;
+                    mem.notes.push(format!("can't start {}: {why}", fk.label()));
+                    mem.forced = None;
+                }
+            }
+        }
         let best = options.into_iter().max_by(|a, b| a.value.total_cmp(&b.value));
         self.interest.pastimes.best = best;
     }

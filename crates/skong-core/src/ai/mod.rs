@@ -417,6 +417,16 @@ impl Brain {
         self.fight_mode
     }
 
+    /// "Lantern on dark backgrounds" (on by default): off, the lantern never comes out
+    /// (and one out now is put away); the map is unaffected.
+    pub fn set_lantern(&mut self, on: bool) {
+        self.carry.lantern_allowed = on;
+    }
+
+    pub fn lantern(&self) -> bool {
+        self.carry.lantern_allowed
+    }
+
     pub fn senses(&self) -> &Senses {
         &self.senses
     }

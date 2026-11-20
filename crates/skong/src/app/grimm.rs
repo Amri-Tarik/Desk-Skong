@@ -36,9 +36,9 @@ impl Pet {
         match self.troupe.as_mut() {
             Some(t) => {
                 t.request(lantern);
-                log::info!("grimm: {} requested (at the next good moment)", if lantern { "the lantern" } else { "the troupe master" });
+                self.note(true, format!("{} requested (at the next good moment)", if lantern { "a scarlet flame near him" } else { "the troupe master" }));
             }
-            None => log::warn!("grimm: not loaded (see data/grimm.json)"),
+            None => self.note(false, "grimm: not loaded (see data/grimm.json)"),
         }
     }
 
@@ -59,9 +59,9 @@ impl Pet {
         match self.troupe.as_mut() {
             Some(t) => {
                 t.request_cameo();
-                log::info!("grimm: a friendly visit requested (at the next good moment)");
+                self.note(true, "Grimm's friendly visit requested (at the next good moment)");
             }
-            None => log::warn!("grimm: not loaded (see data/grimm.json)"),
+            None => self.note(false, "grimm: not loaded (see data/grimm.json)"),
         }
     }
 
@@ -128,7 +128,8 @@ impl Pet {
         };
         let mut events = step.events.clone();
         if step.place_lantern {
-            let at = self.lantern_spot(ppu);
+            // The test panel's picked spot, else a good one near him.
+            let at = self.test.lantern_at.take().or_else(|| self.lantern_spot(ppu));
             if at.is_none() {
                 log::info!("grimm: no good spot for the lantern right now");
             }

@@ -272,6 +272,18 @@ impl Shinies {
     }
 }
 
+/// The spot for something standing at `at` on a ledge of window `owner` (`None`: the floor),
+/// relative to its window so it rides along (test-panel placement).
+pub fn spot_at(terrain: &Terrain, at: Vec2, owner: Option<WindowId>) -> Option<Spot> {
+    match owner {
+        Some(id) => {
+            let rect = terrain.window_rect(id)?;
+            Some(Spot::Window { id, anchor: Anchor { fx: (at.x - rect.left) / rect.width().max(1.0), dy: at.y - rect.top } })
+        }
+        None => Some(Spot::Ground { pos: at }),
+    }
+}
+
 /// Seed tag for shinies' own rolls ("shin").
 const SEED_TAG: u64 = 0x7368_696e;
 

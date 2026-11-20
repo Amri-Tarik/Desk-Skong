@@ -1,5 +1,7 @@
-//! The panel window (egui). Left: controls mirroring the tray + live status. Right: logs, and
-//! the Achievements tab (hidden ones show as "???" with a vague hint; only the count shows).
+//! The panel window (egui). Left: controls mirroring the tray + live status. Right: logs,
+//! the Achievements tab (hidden ones show as "???" with a vague hint; only the count shows),
+//! and the Test tab (`ui/test_tab.rs`: make him do one specific thing, place things where
+//! you click).
 //!
 //! While the window is focused (and no text field has focus): arrows / Up jump / Shift dash /
 //! Ctrl superdash / Z walk / X sprint drive the knight while the pet is in manual mode (a toggle,
@@ -10,6 +12,8 @@ use eframe::egui::{self, Color32, Key, RichText, TextWrapMode};
 use skong_ipc::{AchievementsInfo, SPELLS, StakesCommand, Command, LogLevel, LogLine, ManualKeys, OverlayLayers, PanelMsg, Status};
 
 use crate::link::Link;
+
+mod test_tab;
 
 /// Shortcuts available as plain letters while the panel is focused.
 const LETTERS: &[(Key, Command, &str)] = &[
@@ -57,12 +61,16 @@ struct Panel {
     tab: Tab,
     /// "Reset achievements" armed (a second click resets).
     reset_armed: bool,
+    /// Test tab: the visitor picked, the bench style to place.
+    visit_who: usize,
+    bench_style: usize,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Tab {
     Logs,
     Achievements,
+    Test,
 }
 
 /// Unlocks this recent are marked new (s).
@@ -73,6 +81,8 @@ impl Panel {
         Self {
             tab: Tab::Logs,
             reset_armed: false,
+            visit_who: 0,
+            bench_style: 0,
             link,
             skin_filter: String::new(),
             log_text: String::new(),
@@ -249,6 +259,10 @@ impl Panel {
             toggle(ui, s.fight_mode, "Fight the cursor", Command::ToggleFightMode);
             toggle(ui, s.share_visible, "Visible in screen shares", Command::ToggleShareVisible);
             toggle(ui, s.text_curiosity, "Curious about highlighted text", Command::ToggleTextCuriosity);
+            let mut lantern = s.lantern;
+            if ui.checkbox(&mut lantern, "Lantern on dark backgrounds").on_hover_text("He holds up his lantern while standing over dark-mode windows or a dark wallpaper").changed() {
+                self.cmd(Command::ToggleLantern);
+            }
             toggle(ui, s.paused, "Pause  [P]", Command::TogglePause);
             toggle(ui, s.vision, "Vision (content terrain)", Command::ToggleVision);
             toggle(ui, s.overlay, "Debug overlay  [D]", Command::ToggleDebugOverlay);
@@ -495,11 +509,14 @@ impl eframe::App for Panel {
                 ui.selectable_value(&mut self.tab, Tab::Logs, "Logs");
                 let count = achievements.as_ref().map_or_else(String::new, |a| format!("  {} / {}", a.unlocked(), a.total()));
                 ui.selectable_value(&mut self.tab, Tab::Achievements, format!("Achievements{count}"));
+                let placing = status.as_ref().and_then(|s| s.test.as_ref()).is_some_and(|t| t.placing.is_some());
+                ui.selectable_value(&mut self.tab, Tab::Test, if placing { "Test  📍" } else { "Test" }).on_hover_text("make him do one specific thing now (visitors, enemies, Grimm, props...)");
             });
             ui.separator();
             match self.tab {
                 Tab::Logs => self.logs(ui, connected),
                 Tab::Achievements => self.achievements(ui, achievements.as_ref(), connected),
+                Tab::Test => ui.add_enabled_ui(connected, |ui| test_tab::show(self, ui, status.as_ref(), hello.as_ref())).inner,
             }
         });
 

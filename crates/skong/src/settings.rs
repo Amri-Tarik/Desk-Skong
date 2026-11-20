@@ -20,6 +20,9 @@ pub struct Settings {
     /// off): UI Automation tells the pet *where* a text selection is (a rectangle; the text
     /// itself is never read or stored).
     pub text_curiosity: bool,
+    /// "Lantern on dark backgrounds" (on by default): he holds up his lantern while
+    /// standing over dark-mode windows or a dark wallpaper. Off: it never comes out.
+    pub lantern: bool,
     /// Launch the control panel together with the pet.
     pub open_panel: bool,
     /// Wallet and the Shade waiting where the knight last died.
@@ -34,7 +37,7 @@ const VERSION: u32 = 1;
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { skin: None, scale: 0.6, bother: 0.5, share_visible: false, text_curiosity: true, open_panel: true, stakes: Default::default(), version: VERSION }
+        Self { skin: None, scale: 0.6, bother: 0.5, share_visible: false, text_curiosity: true, lantern: true, open_panel: true, stakes: Default::default(), version: VERSION }
     }
 }
 
@@ -100,5 +103,16 @@ mod tests {
         let off = Settings { text_curiosity: false, ..Settings::default() };
         let again = Settings::parse(&serde_json::to_string(&off).unwrap()).expect("new file");
         assert!(!again.text_curiosity);
+    }
+
+    #[test]
+    fn the_lantern_is_on_by_default_and_the_choice_sticks() {
+        assert!(Settings::default().lantern);
+        // Files from before the setting: on.
+        assert!(Settings::parse(r#"{"scale":0.6,"version":1}"#).expect("old file").lantern);
+        let off = Settings { lantern: false, ..Settings::default() };
+        let again = Settings::parse(&serde_json::to_string(&off).unwrap()).expect("round trip");
+        assert!(!again.lantern);
+        assert_eq!(again, off);
     }
 }

@@ -25,6 +25,7 @@ pub mod company;
 pub mod challenge;
 pub mod dream;
 pub mod duel;
+pub mod forced;
 pub mod lesson;
 pub mod race;
 pub mod spar;

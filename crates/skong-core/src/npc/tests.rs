@@ -399,3 +399,29 @@ fn a_spar_the_knight_walks_away_from_fizzles_out() {
     assert!(ev.iter().any(|e| matches!(e, NpcEvent::Say { text, .. } if abandon.contains(text))));
     assert!(npc.foe(&s, 64.0).is_none());
 }
+
+#[test]
+fn every_scene_the_test_panel_forces_exists_in_the_data() {
+    use super::forced::{ForcedScene, supports};
+    let s = set();
+    let def = |n: &str| &s.defs[s.id(n).unwrap_or_else(|| panic!("{n}"))];
+    for (who, scene) in [
+        ("sly", ForcedScene::Lesson),
+        ("zote", ForcedScene::Spar),
+        ("cornifer", ForcedScene::Company),
+        ("quirrel", ForcedScene::Company),
+        ("myla", ForcedScene::Company),
+        ("hornet", ForcedScene::Race),
+        ("hornet", ForcedScene::Duel),
+    ] {
+        assert_eq!(supports(def(who), scene), Ok(()), "{who}");
+    }
+    for d in &s.defs {
+        assert_eq!(supports(d, ForcedScene::TalkOnly), Ok(()));
+    }
+    assert_eq!(supports(def("elderbug"), ForcedScene::Spar), Err("Elderbug has no spar scene".into()));
+    // The calm scenes' hard conditions, as the data sets them.
+    assert_eq!(def("myla").company.as_ref().map(|c| c.needs), Some(CompanyNeeds::Deposit));
+    assert_eq!(def("quirrel").company.as_ref().map(|c| c.needs), Some(CompanyNeeds::View));
+    assert_eq!(def("cornifer").company.as_ref().map(|c| c.needs), Some(CompanyNeeds::Any));
+}

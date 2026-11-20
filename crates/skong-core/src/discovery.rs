@@ -424,6 +424,27 @@ impl World {
         Some(fid)
     }
 
+    /// Test panel: put a `kind` find into window `id`'s room right at `at` (a feet point on
+    /// one of its ledges, picked by the user), if its rect is free there.
+    pub fn force_at(&mut self, kind: FindKind, id: WindowId, at: Vec2, desk: &DesktopSnapshot, site: &Site) -> Result<FindId, &'static str> {
+        let key = desk.window(id).filter(|w| !w.fullscreen).and_then(app_key).ok_or("not a window things can be found in")?;
+        let rect = site.terrain.window_rect(id).ok_or("that window is gone")?;
+        if !site.terrain.ledges.iter().any(|l| l.owner == Some(id) && (l.y - at.y).abs() <= LEDGE_SLACK && l.x0 <= at.x && at.x <= l.x1) {
+            return Err("no ledge of that window there");
+        }
+        let r = (site.footprint)(kind).rect(at);
+        let taken = self.taken(&key, id, site);
+        if !site.occupancy.is_free(r, None) || taken.iter().any(|t| t.overlaps(&r)) {
+            return Err("something already stands there");
+        }
+        let fid = self.add(&key, kind);
+        if let Some(f) = self.find_mut(fid) {
+            f.anchor = Some(Anchor { fx: (at.x - rect.left) / rect.width().max(1.0), dy: at.y - rect.top });
+        }
+        self.hosts.insert(key, id);
+        Ok(fid)
+    }
+
     fn place_pending(&mut self, key: &str, id: WindowId, site: &Site) -> Vec<FindId> {
         let seed = self.seed;
         let mut taken = self.taken(key, id, site);

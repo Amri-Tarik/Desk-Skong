@@ -126,16 +126,23 @@ impl Pet {
     pub(super) fn apply_discovery(&mut self, c: Command) -> Result<Flow> {
         match c {
             Command::Discover(SHINY) => {
-                if !self.spawn_shiny(true) {
-                    log::warn!("shiny: no free, reachable spot on the knight's monitor");
+                if self.spawn_shiny(true) {
+                    self.note(true, "a shiny turned up near him");
+                } else {
+                    self.note(false, "shiny: no free, reachable spot on the knight's monitor");
                 }
             }
             Command::Discover(DUMMY) => {
-                if !self.spawn_dummy(true) {
-                    log::warn!("training dummy: no free, reachable spot on the knight's monitor");
+                if self.spawn_dummy(true) {
+                    self.note(true, "a training dummy stands near him");
+                } else {
+                    self.note(false, "training dummy: no free, reachable spot on the knight's monitor");
                 }
             }
-            Command::Discover(LUMAFLY) => self.send_lumafly(),
+            Command::Discover(LUMAFLY) => {
+                self.send_lumafly();
+                self.note(true, "a lumafly drifts in over his monitor's windows");
+            }
             Command::Discover(kind) => {
                 let desk = self.watcher.snapshot();
                 let under_cursor = || {
@@ -144,7 +151,7 @@ impl Pet {
                 };
                 match self.ch.support.and_then(|s| s.owner).or_else(under_cursor) {
                     Some(id) => self.discoveries.force(kind, id, (desk, &self.terrain), &self.benches, &self.occupancy),
-                    None => log::warn!("discover: stand the knight on a window (or point at one) first"),
+                    None => self.note(false, "discover: stand the knight on a window (or point at one) first"),
                 }
             }
             Command::ForgetDiscoveries => {

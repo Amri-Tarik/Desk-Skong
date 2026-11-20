@@ -657,6 +657,22 @@ impl Discoveries {
         }
     }
 
+    /// Test panel: a Geo deposit right at `at` on window `id`'s ledge. Returns the region
+    /// its rocks come from (it follows the window's app).
+    pub fn force_deposit_at(&mut self, id: WindowId, at: Vec2, (desk, terrain): (&DesktopSnapshot, &Terrain), benches: &Benches, occ: &Occupancy) -> Result<&'static str, &'static str> {
+        let (scale, deposit) = (self.scale, self.deposit_box);
+        let fp = |k: FindKind| footprint(scale, benches, deposit, k);
+        let site = Site { terrain, ages: &self.ages, now: self.clock, min_age: 0.0, occupancy: occ, footprint: &fp };
+        let f = self.world.force_at(FindKind::Deposit, id, at, desk, &site)?;
+        self.revealed(vec![f], desk, id);
+        Ok(REGIONS[rocks_for(&self.rocks, window_region(desk, id)).0].name)
+    }
+
+    /// A deposit's half width (px), for placement.
+    pub fn deposit_half_width(&self) -> f32 {
+        0.5 * self.deposit_box.0
+    }
+
     pub fn forget(&mut self) {
         self.world.clear();
         self.props.clear();

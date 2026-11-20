@@ -13,10 +13,12 @@ use serde::{Deserialize, Serialize};
 pub mod achievements;
 pub mod pipe;
 pub mod stakes;
+pub mod test;
 
 pub use achievements::{AchievementEntry, AchievementsInfo, UnlockedAchievement};
 pub use pipe::{ClientId, Connection, PIPE_NAME, Server, ServerEvent, connect};
 pub use stakes::{SPELLS, StakesCommand, StakesInfo};
+pub use test::{Placeable, Scene, TestCommand, TestInfo, TestNote, VisitorEntry};
 
 /// Everything the user can ask the pet for, from hotkeys, the tray menu or a panel.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -37,6 +39,9 @@ pub enum Command {
     ToggleFightMode,
     /// Curious about highlighted text (UI Automation, rectangles only); on by default.
     ToggleTextCuriosity,
+    /// Holds up his lantern while standing over dark-mode windows or a dark wallpaper; on by
+    /// default.
+    ToggleLantern,
     PlaceBenchAtCursor(usize),
     PlaceBenchNearKnight(usize),
     ClearBenches,
@@ -76,6 +81,8 @@ pub enum Command {
     Stakes(StakesCommand),
     /// Forget every unlocked achievement and all progress (debug).
     ResetAchievements,
+    /// The panel's Test tab (see [`test`]).
+    Test(TestCommand),
     Quit,
 }
 
@@ -193,6 +200,10 @@ pub struct Hello {
     pub scales: Vec<(String, f32)>,
     pub bother_levels: Vec<(String, f32)>,
     pub log_level: Option<LogLevel>,
+    /// Visitors, indexed like [`TestCommand::Visit`] (empty: older pet / none loaded).
+    pub visitors: Vec<VisitorEntry>,
+    /// Enemy kinds (display names), indexed like [`TestCommand::Enemy`].
+    pub enemies: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -208,6 +219,8 @@ pub struct Status {
     pub share_visible: bool,
     /// Curious about highlighted text (on by default).
     pub text_curiosity: bool,
+    /// Lantern on dark backgrounds (on by default; absent from older pets: off).
+    pub lantern: bool,
     pub vision: bool,
     pub overlay: bool,
     pub overlay_layers: OverlayLayers,
@@ -228,6 +241,8 @@ pub struct Status {
     pub stakes: Option<StakesInfo>,
     /// Connected panels.
     pub panels: usize,
+    /// The Test tab: placing, feedback (absent from older pets).
+    pub test: Option<TestInfo>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -386,6 +401,51 @@ mod tests {
         // Missing fields default.
         let e: AchievementsInfo = decode("{}").unwrap();
         assert_eq!(e.total(), 0);
+    }
+
+    #[test]
+    fn test_tab_commands_and_feedback_round_trip() {
+        let mut cmds = vec![
+            Command::ToggleLantern,
+            Command::Test(TestCommand::Enemy { kind: 2 }),
+            Command::Test(TestCommand::View),
+            Command::Test(TestCommand::Stargaze),
+            Command::Test(TestCommand::DreamGateReady),
+            Command::Test(TestCommand::Slug),
+            Command::Test(TestCommand::ToggleEmoteTest),
+            Command::Test(TestCommand::CancelPlace),
+        ];
+        cmds.extend(Scene::ALL.map(|scene| Command::Test(TestCommand::Visit { who: 3, scene })));
+        for p in [
+            Placeable::Dummy,
+            Placeable::Flame,
+            Placeable::Deposit,
+            Placeable::Shiny,
+            Placeable::Bench(1),
+            Placeable::Enemy(0),
+            Placeable::GeoShower,
+            Placeable::DreamGate,
+            Placeable::Visitor { who: 4, scene: Scene::Company },
+        ] {
+            cmds.push(Command::Test(TestCommand::Place(p)));
+        }
+        for c in cmds {
+            round_trip(PanelMsg::Command(c));
+        }
+        assert_eq!(encode(&PanelMsg::Command(Command::Test(TestCommand::Visit { who: 1, scene: Scene::Race }))), "{\"Command\":{\"Test\":{\"Visit\":{\"who\":1,\"scene\":\"Race\"}}}}\n");
+        let mut s = Status { lantern: true, ..Default::default() };
+        s.test = Some(TestInfo { placing: Some("training dummy".into()), placing_secs: 12.5, emote_test: true, notes: vec![TestNote { seq: 4, t: 9.5, ok: false, text: "Myla can't sing:\n\"no deposit\"".into() }] });
+        round_trip(PetMsg::Status(Box::new(s)));
+        round_trip(PetMsg::Hello(Hello {
+            visitors: vec![VisitorEntry { name: "zote".into(), display: "Zote".into(), scenes: vec![(Scene::Spar, "Zote spar".into())] }],
+            enemies: vec!["Crawlid".into()],
+            ..Default::default()
+        }));
+        // An older pet's status / hello: no Test tab data, no lantern flag.
+        let old: Status = decode("{\"paused\":false}").unwrap();
+        assert!(old.test.is_none() && !old.lantern);
+        let h: Hello = decode("{\"version\":\"0.1\"}").unwrap();
+        assert!(h.visitors.is_empty() && h.enemies.is_empty());
     }
 
     #[test]
