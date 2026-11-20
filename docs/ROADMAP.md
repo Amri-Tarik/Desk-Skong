@@ -76,7 +76,7 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
       > `emotes.rs`. Also a sweat drop when badly hurt and the sparkle for a big Geo haul
       > (40+ Geo within 12 s). Spotting Geo keeps the Geo-coin thought cloud rather than a
       > "!".
-- [ ] **Less time in companion mode.** More things to do on his own (`ai::pastime`, Ambient:
+- [x] **Less time in companion mode.** _(Approved live 2026-11-20: "a lot more interesting".)_ More things to do on his own (`ai::pastime`, Ambient:
       the Shade, fights, visitors, Geo, shinies and deposits always come first). They come up
       after ~25 s of plain company (or when bored stiff), each with a cooldown. In a 30-min
       simulated desk session plain company went from ~91 % to ~67–72 %.
