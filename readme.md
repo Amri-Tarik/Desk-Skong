@@ -145,6 +145,11 @@ and support its creators.
 rights are reserved. Hollow Knight's art, sound and text are not part of this project
 and are never distributed with it.
 
+The panel and the achievement banner use two freely licensed fonts, built into the
+programs: [Cinzel](https://github.com/NDISCOVER/Cinzel) and
+[Crimson Pro](https://github.com/Fonthausen/CrimsonPro), both under the SIL Open Font
+License 1.1 (see `FONTS-OFL.txt`).
+
 ---
 
 ## For developers

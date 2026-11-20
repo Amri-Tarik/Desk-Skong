@@ -2008,6 +2008,7 @@ dependencies = [
  "anyhow",
  "env_logger",
  "log",
+ "png",
  "serde",
  "serde_json",
  "skong-core",
@@ -2057,6 +2058,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "eframe",
+ "skong-core",
  "skong-extract",
  "skong-ipc",
  "windows",

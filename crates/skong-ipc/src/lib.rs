@@ -501,6 +501,7 @@ mod tests {
             Command::Test(TestCommand::DreamGateReady),
             Command::Test(TestCommand::Slug),
             Command::Test(TestCommand::ToggleEmoteTest),
+            Command::Test(TestCommand::PreviewBanner),
             Command::Test(TestCommand::CancelPlace),
         ];
         cmds.extend(Scene::ALL.map(|scene| Command::Test(TestCommand::Visit { who: 3, scene })));

@@ -5,10 +5,12 @@
 //!
 //! Part of the Sandbox tab: only shown once the sandbox is on (achievements paused until
 //! restart), and the pet refuses these commands before that anyway.
-use eframe::egui::{self, Color32, RichText};
+use eframe::egui::{self, RichText};
 use skong_ipc::{Command, Hello, Placeable, SPELLS, Scene, StakesCommand, Status, TestCommand, TestInfo};
 
 use super::Panel;
+use super::palette as pal;
+use super::style::{self, hint};
 
 /// The "place where I click" companion of a button.
 const PIN: &str = "📍";
@@ -46,31 +48,31 @@ fn row(ui: &mut egui::Ui, out: &mut Vec<Command>, label: &str, tip: &str, now: O
 }
 
 fn section(ui: &mut egui::Ui, title: &str, body: impl FnOnce(&mut egui::Ui)) {
-    egui::CollapsingHeader::new(RichText::new(title).strong()).default_open(true).show(ui, body);
+    egui::CollapsingHeader::new(RichText::new(title).font(style::heading(18.0)).color(pal::SOUL)).default_open(true).show(ui, body);
 }
 
 /// Placing in progress and the latest notes, newest first.
 fn feedback(ui: &mut egui::Ui, out: &mut Vec<Command>, info: Option<&TestInfo>) {
     let Some(info) = info else {
-        ui.weak("this pet sends no test feedback (older version)");
+        hint(ui, "this pet sends no test feedback (older version)");
         return;
     };
     if let Some(what) = &info.placing {
-        ui.horizontal(|ui| {
-            ui.label(RichText::new(format!("{PIN} Placing {what}: click a spot on screen ({:.0} s)", info.placing_secs.ceil())).strong().color(Color32::from_rgb(235, 150, 90)));
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new(format!("{PIN} Placing {what}: click a spot on screen ({:.0} s)", info.placing_secs.ceil())).color(pal::EMBER));
             if ui.button("Cancel").on_hover_text("or press Esc / right-click anywhere").clicked() {
                 out.push(test(TestCommand::CancelPlace));
             }
         });
     }
     if info.notes.is_empty() {
-        ui.weak("results show here");
+        hint(ui, "results show here");
     }
     for n in info.notes.iter().rev().take(6) {
-        let (mark, color) = if n.ok { ("✔", Color32::from_rgb(110, 200, 120)) } else { ("✖", Color32::from_rgb(235, 160, 70)) };
+        let color = if n.ok { pal::TEXT } else { pal::EMBER };
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new(mark).color(color));
-            ui.label(RichText::new(format!("{:>7.1}s", n.t)).monospace().weak());
+            style::marker(ui, n.ok, color);
+            ui.label(RichText::new(format!("{:>7.1}s", n.t)).monospace().color(pal::SUB));
             ui.label(RichText::new(&n.text).color(color));
         });
     }
@@ -78,14 +80,14 @@ fn feedback(ui: &mut egui::Ui, out: &mut Vec<Command>, info: Option<&TestInfo>) 
 
 pub(super) fn show(p: &mut Panel, ui: &mut egui::Ui, status: Option<&Status>, hello: Option<&Hello>) {
     let Some(h) = hello else {
-        ui.weak("waiting for the pet…");
+        hint(ui, "waiting for the pet…");
         return;
     };
     let info = status.and_then(|s| s.test.as_ref());
     let mut out: Vec<Command> = Vec::new();
-    ui.weak("Make him do one specific thing now; 📍 puts it where you click next on screen.");
+    hint(ui, "Make him do one specific thing now; 📍 puts it where you click next on screen.");
     ui.add_space(4.0);
-    egui::Frame::group(ui.style()).show(ui, |ui| {
+    style::frame(ui, |ui| {
         ui.set_width(ui.available_width());
         feedback(ui, &mut out, info);
     });
@@ -95,7 +97,7 @@ pub(super) fn show(p: &mut Panel, ui: &mut egui::Ui, status: Option<&Status>, he
         // --- Visitors -------------------------------------------------------------------
         section(ui, "Visitors", |ui| {
             if h.visitors.is_empty() {
-                ui.weak("no visitors loaded (older pet, or data/npcs.json missing)");
+                hint(ui, "no visitors loaded (older pet, or data/npcs.json missing)");
                 return;
             }
             p.visit_who = p.visit_who.min(h.visitors.len() - 1);
@@ -198,6 +200,7 @@ pub(super) fn show(p: &mut Panel, ui: &mut egui::Ui, status: Option<&Status>, he
                 row(ui, &mut out, "Slug form", "Unn's slug crawl now (he has to be standing)", Some(test(TestCommand::Slug)), None);
                 let emote = info.is_some_and(|i| i.emote_test);
                 row(ui, &mut out, if emote { "Emote cycle: on" } else { "Emote cycle: off" }, "cycle every expression bubble above his head, 2.5 s each (as --emote-test)", Some(test(TestCommand::ToggleEmoteTest)), None);
+                row(ui, &mut out, "Preview achievement banner", "the 'area title' banner an unlock shows near the top of his monitor (your latest achievement, or a sample); it waits while a fullscreen game or app covers the monitor", Some(test(TestCommand::PreviewBanner)), None);
             });
             ui.horizontal_wrapped(|ui| {
                 ui.label("Spells");

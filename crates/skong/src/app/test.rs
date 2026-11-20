@@ -161,6 +161,7 @@ impl Pet {
                 }
                 self.note(true, format!("emote cycle {}", if self.emote_test { "on (every 2.5 s)" } else { "off" }));
             }
+            TestCommand::PreviewBanner => self.preview_banner(),
             TestCommand::Place(what) => self.begin_place(what),
             TestCommand::CancelPlace => {
                 if let Some(p) = self.test.placing.take() {

@@ -78,6 +78,8 @@ pub enum TestCommand {
     Slug,
     /// Cycle every emote above his head (`--emote-test`), on / off.
     ToggleEmoteTest,
+    /// Show the achievement banner (the latest unlock, or a sample) as an unlock would.
+    PreviewBanner,
     /// Next left-click on screen places this (Esc / right-click cancels; times out).
     Place(Placeable),
     CancelPlace,

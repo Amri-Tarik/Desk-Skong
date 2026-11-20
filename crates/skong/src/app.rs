@@ -194,6 +194,8 @@ struct Pet {
     benches: Benches,
     /// Silent knight: emote icons above his head.
     emotes: Emotes,
+    /// The achievement banner ("area title") near the top of his monitor.
+    banner: crate::banner::Banner,
     /// Last act already turned into an emote.
     emote_seen: Option<ActId>,
     emote_test: bool,
@@ -370,6 +372,7 @@ pub fn run(args: &Args) -> Result<()> {
         seat_y: None,
         benches,
         emotes,
+        banner: crate::banner::Banner::new(args.capturable),
         emote_seen: None,
         emote_test: args.emote_test,
         haul: Default::default(),
@@ -500,6 +503,7 @@ pub fn run(args: &Args) -> Result<()> {
         if !pet.paused {
             pet.tick(tick.dt)?;
         }
+        pet.banner.tick(tick.dt, pet.watcher.snapshot(), &pet.games.game_monitors, pet.ch.pos, pet.paused);
         // Time played (all sessions): saved once a minute, at most a minute is lost.
         pet.settings.played_secs += f64::from(tick.dt);
         if last_played_save.elapsed().as_secs() >= 60 {
@@ -517,6 +521,7 @@ pub fn run(args: &Args) -> Result<()> {
             pet.pastimes.raise_all();
             pet.win.raise();
             pet.emotes.raise();
+            pet.banner.raise();
             log::debug!(
                 "knight at ({:.0},{:.0}) {:?} clip '{}' act {:?} | brain: {}",
                 pet.ch.pos.x,
