@@ -682,6 +682,8 @@ pub(crate) struct Pastime {
     /// Chase: where his travel goes, when it was set, jumps tried.
     goal_set_at: f64,
     jumps: u32,
+    /// Walking under the fly along his own ledge (until close; see `follow`).
+    walking: bool,
     /// Finished (the brain drops its utility to 0 this think).
     pub over: bool,
 }
@@ -716,7 +718,7 @@ impl Pastime {
         };
         let drills = 4 + (ctx.rng.f32() * 3.0) as u32;
         log::debug!("brain: pastime {} ({:.2}) at ({:.0},{:.0})", c.kind.label(), c.value, c.at.x, c.at.y);
-        Self { kind: c.kind, target: c.target, at: c.at, place: c.place, style: c.style, phase, started: ctx.now, drills_left: drills, drills_done: 0, last_drill: None, goal_set_at: f64::NEG_INFINITY, jumps: 0, over: false }
+        Self { kind: c.kind, target: c.target, at: c.at, place: c.place, style: c.style, phase, started: ctx.now, drills_left: drills, drills_done: 0, last_drill: None, goal_set_at: f64::NEG_INFINITY, jumps: 0, walking: false, over: false }
     }
 
     fn finish(&mut self, ctx: &mut Ctx, satisfied: bool) -> Status {
@@ -1015,8 +1017,34 @@ impl Pastime {
             self.phase = Phase::Chase(ChasePhase::Jump { t: 0.0, swiped: false, airborne: false });
             return Status::Running;
         }
-        // Travel under it, re-aimed as it drifts.
         let under = spots::project(ctx.p.terrain, f.pos).unwrap_or(Vec2::new(f.pos.x, k.pos.y));
+        // Under it on the ledge he stands on: walk there directly, with slack. Routes
+        // re-planned to the drifting spot started behind him or dashed past it (live: back,
+        // forth, a dash, turning on the spot six times a second).
+        let same_ledge = k.is_grounded() && (k.pos.y - under.y).abs() < 4.0 && k.support.is_some_and(|s| (s.x0..=s.x1).contains(&under.x));
+        if same_ledge {
+            if matches!(self.phase, Phase::Travel(_)) {
+                ctx.nav.stop();
+                self.phase = Phase::Chase(ChasePhase::Follow);
+            }
+            let dx = under.x - k.pos.x;
+            if dx.abs() > 0.8 * ppu {
+                self.walking = true;
+            } else if dx.abs() < 0.25 * ppu {
+                self.walking = false;
+            }
+            if self.walking && ctx.free_to_move() {
+                let x = dx.signum() * (dx.abs() / (1.5 * ppu)).clamp(0.35, 1.0);
+                ctx.out.motion = Motion::Direct(MoveInput { x, ..MoveInput::default() });
+            } else {
+                ctx.nav.stop();
+                ctx.face_toward(f.pos.x);
+                ctx.out.waiting = false; // eyes on it
+            }
+            return Status::Running;
+        }
+        self.walking = false;
+        // Elsewhere: travel under it, re-aimed as it drifts.
         let travelling = matches!(self.phase, Phase::Travel(_));
         let stale = (under.x - self.at.x).abs() > 50.0 || (under.y - self.at.y).abs() > 4.0;
         if (!travelling || stale) && ctx.now - self.goal_set_at > 0.6 {
