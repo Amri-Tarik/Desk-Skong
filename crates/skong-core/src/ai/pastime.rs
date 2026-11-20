@@ -143,6 +143,8 @@ pub struct PastimeMemory {
     dummy_unreached: Option<(u64, f64)>,
     /// What he last made of each dummy (logged when it changes, to diagnose live).
     dummy_view: Option<(u64, &'static str)>,
+    /// The dummy that broke last (the app told him): practising on it, he stops with a look.
+    dummy_broke: Option<u64>,
 }
 
 impl PastimeMemory {
@@ -303,6 +305,13 @@ impl Brain {
         }
         // Lifted from under his nail mid-drill: no cooldown for that (he may go on).
         mem.ready_at.remove(&PastimeKind::Dummy);
+    }
+
+    /// Dummy `id` broke (worn out, under his nail or the user's clicks): if he was practising
+    /// on it he stops gracefully (the last swing finishes, a look down at the pieces, then
+    /// back to whatever's next). Call when it breaks; it's gone from the percepts from then.
+    pub fn dummy_broken(&mut self, id: u64) {
+        self.interest.pastimes.dummy_broke = Some(id);
     }
 
     /// The pastime under way, if any.
@@ -648,7 +657,13 @@ enum Phase {
     Chase(ChasePhase),
     /// At the spot: the pastime's act (the view, the stars).
     Settle { turn: f32, act: Option<ActWait> },
+    /// The dummy broke: the last swing / landing finishes (`wait` at most), then a look
+    /// down at the pieces (`look`, started), and the pastime ends.
+    Broken { wait: f32, look: Option<ActWait>, looked: bool },
 }
+
+/// Longest he waits for the last swing / landing after the dummy breaks (s).
+const BROKEN_WAIT: f32 = 2.0;
 
 /// Doing a pastime.
 #[derive(Clone, Debug)]
@@ -759,7 +774,16 @@ impl Pastime {
     // --- the dummy -----------------------------------------------------------------
 
     fn tick_dummy(&mut self, ctx: &mut Ctx) -> Status {
+        if let Phase::Broken { .. } = self.phase {
+            return self.tick_broken(ctx);
+        }
         let Some(d) = ctx.interest.pastimes.dummy().filter(|d| d.id == self.target) else {
+            if ctx.interest.pastimes.dummy_broke == Some(self.target) {
+                log::debug!("brain: training dummy #{} broke; he stops", self.target);
+                ctx.nav.stop();
+                self.phase = Phase::Broken { wait: BROKEN_WAIT, look: None, looked: false };
+                return self.tick_broken(ctx);
+            }
             // Gone (faded out, its window closed).
             let ok = self.drills_done > 0;
             return self.finish(ctx, ok);
@@ -838,7 +862,7 @@ impl Pastime {
                 }
                 Status::Running
             }
-            Phase::Chase(_) | Phase::Settle { .. } => Status::Running,
+            Phase::Chase(_) | Phase::Settle { .. } | Phase::Broken { .. } => Status::Running,
         }
     }
 
@@ -862,6 +886,28 @@ impl Pastime {
         ];
         let options: Vec<(Drill, f32)> = options.into_iter().map(|(dr, w)| (dr, if Some(dr) == self.last_drill { 0.0 } else { w })).collect();
         ctx.rng.pick_weighted(&options).unwrap_or(Drill::Combo)
+    }
+
+    /// The dummy broke: no more drills. The swing or landing under way finishes, he looks
+    /// down at the pieces a moment, and that's the end of it (practised: satisfied).
+    fn tick_broken(&mut self, ctx: &mut Ctx) -> Status {
+        let dt = ctx.dt();
+        let Phase::Broken { wait, look, looked } = &mut self.phase else { return Status::Running };
+        ctx.nav.stop();
+        if !*looked {
+            *wait -= dt;
+            if (!ctx.grounded() || ctx.p.act.is_some()) && *wait > 0.0 {
+                ctx.out.waiting = true;
+                return Status::Running;
+            }
+            *looked = true;
+            *look = ActWait::named(ctx, "look_down");
+        }
+        if look.as_mut().is_none_or(|w| w.tick(ctx)) {
+            let ok = self.drills_done > 0;
+            return self.finish(ctx, ok);
+        }
+        Status::Running
     }
 
     // --- the lumafly ---------------------------------------------------------------
@@ -1062,6 +1108,7 @@ impl Pastime {
             (PastimeKind::Dummy, Phase::Travel(_)) => "walking over to the training dummy".into(),
             (PastimeKind::Dummy, Phase::Breather { .. }) => format!("training dummy: catching his breath ({} drills done)", self.drills_done),
             (PastimeKind::Dummy, Phase::Drill(r)) => format!("training dummy: {}", r.drill.label()),
+            (PastimeKind::Dummy, Phase::Broken { .. }) => format!("the training dummy broke ({} drills done); a look at the pieces", self.drills_done),
             (PastimeKind::Lumafly, Phase::Chase(ChasePhase::Watch { .. })) => "a lumafly drifting by!".into(),
             (PastimeKind::Lumafly, Phase::Chase(ChasePhase::Jump { .. })) => "jumping to catch the lumafly".into(),
             (PastimeKind::Lumafly, Phase::Chase(ChasePhase::Farewell { .. })) => "watching the lumafly float away".into(),

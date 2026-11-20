@@ -4,11 +4,10 @@ use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 use skong_core::ai::Poke;
+use skong_core::drag::is_drag;
 use skong_core::geom::Vec2;
 use skong_win::sprite_window::MouseEvent;
 
-/// Movement (px) that turns a press into a drag.
-const DRAG_START: f32 = 6.0;
 /// Velocity is measured over this much recent cursor history.
 const THROW_WINDOW: Duration = Duration::from_millis(90);
 const MAX_THROW: f32 = 4000.0;
@@ -43,7 +42,8 @@ impl Grab {
                     self.history.pop_front();
                 }
                 match self.press {
-                    Some((start, _)) if !self.held && start.distance(p) > DRAG_START => {
+                    // Past the drag threshold (`skong_core::drag::DRAG_START`): picked up.
+                    Some((start, _)) if !self.held && is_drag(start, p) => {
                         self.held = true;
                         Some(Poke::Grab)
                     }

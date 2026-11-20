@@ -224,6 +224,13 @@ checklist, with how to trigger each from the panel's Sandbox tab, is [TESTING.md
       cleanly when their visitor is lifted; a seated knight getting up when his bench is
       lifted; a dragged deposit's new region look and its kept hits; nothing landing on a
       game monitor
+- [ ] The breakable dummy (`pastime::Yard` wear, `pastimes.rs`, `particles::DUMMY_SPLINTERS`;
+      TESTING.md "Pastimes & props"): a click on it swings it from that side with a white
+      flash and a hit marker, and a press-and-move still drags it; ~5 clicks break it; the
+      break (no break clip in its library: a fast fade + brown / beige splinters + a dust
+      puff) reads as breaking; the knight finishing his swing and looking down at the
+      pieces; the next one 2.5× later after a user break; wear tuning (13–18 min alone,
+      ≈ 8–10 min of keen practice, ≈ 15 % a session); *Splinters*
 - [ ] Step-behind crossings (TurnToBG / TurnFromBG at drawn lines)
 - [ ] Pester tricks and their persistence (45–90 s)
 - [ ] Sly's lesson: demo arcs vs. nearby windows; his nail vanishing at the bow

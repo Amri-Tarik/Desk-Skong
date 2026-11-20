@@ -39,6 +39,7 @@
     { "id": "hornet_race", "title": "Faster Than Silk", "description": "Beat Hornet to her own needle. She will want a rematch.", "hint": "a visitor" },
     { "id": "hornet_duel", "title": "Needle Practice", "description": "Crossed nails with Hornet and saw the duel through. She won. She always wins.", "hint": "a visitor" },
     { "id": "grimm_cameo", "title": "A Passing Troupe", "description": "The Troupe Master dropped by just to bow, and was gone in a flicker of red.", "hint": "the troupe" },
-    { "id": "interior_decorator", "title": "Interior Decorator", "description": "Picked up five different things around him and set them down somewhere better.", "hint": "your hand", "goal": 5 }
+    { "id": "interior_decorator", "title": "Interior Decorator", "description": "Picked up five different things around him and set them down somewhere better.", "hint": "your hand", "goal": 5 },
+    { "id": "splinters", "title": "Splinters", "description": "Practised on a training dummy until it gave up and came apart under his nail.", "hint": "practice" }
   ]
 }
