@@ -154,3 +154,67 @@ fn dream_nails_a_visitor_only_after_the_talk_and_at_most_once() {
     }
     assert!(some > 0 && none > 0, "sometimes, not always: {some} of 40");
 }
+
+/// A small window (top at y 450) above a wider one (top at y 700); the visitor stands on
+/// the small one at x 500.
+fn perched_visitor(sim: &mut Sim) -> Visitor {
+    sim.open(window(1, RectI::new(200, 700, 900, 1000), "editor.exe"));
+    sim.open(window(2, RectI::new(300, 450, 700, 600), "notes.exe"));
+    sim.run(1.0);
+    Visitor { pos: Vec2::new(500.0, 450.0), ..visitor(6, 500.0) }
+}
+
+#[test]
+fn a_visitor_he_cannot_get_beside_is_talked_to_from_a_ledge_below() {
+    // Live: "gave up on visitor 2 (no route or no answer)" — Elderbug in a busy window,
+    // right after the knight got fairly close. A talk needs no contact.
+    let mut sim = calm(BrainConfig::default());
+    let v = perched_visitor(&mut sim);
+    let off = STAND_OFF_UNITS * 64.0;
+    for x in [v.pos.x - off, v.pos.x + off] {
+        // No way up onto the small window: routes there end on the floor.
+        sim.nav.ends.push((Vec2::new(x, 450.0), None, Vec2::new(x, FLOOR)));
+    }
+    sim.brain.see_visitors(vec![v.clone()]);
+    assert!(sim.run_until(1.0, BehaviourKind::Greet), "{}", sim.last_reason());
+    assert!(until(&mut sim, 8.0, |_, i| i.greet == Some(6)), "talks from close by: {} at {:?}", sim.last_reason(), sim.knight.pos);
+    assert_eq!(sim.knight.pos.y, 700.0, "from the wider window just below");
+    assert!((sim.knight.pos.x - v.pos.x).abs() <= crate::ai::greet::TALK_DX_UNITS * 64.0);
+    assert!(sim.nav.gos.iter().all(|(g, _)| !matches!(g, NavGoal::Point(p) if p.y == 450.0)), "never set off for the unreachable spot: {:?}", sim.nav.gos);
+    assert_eq!(sim.intents.last().and_then(|i| i.face), Some(Side::Left), "faces the visitor");
+    assert_eq!(sim.brain.behaviour(), BehaviourKind::Greet);
+}
+
+#[test]
+fn a_visitor_he_can_get_beside_is_still_approached_normally() {
+    let mut sim = calm(BrainConfig::default());
+    let v = perched_visitor(&mut sim);
+    sim.brain.see_visitors(vec![v.clone()]);
+    assert!(sim.run_until(1.0, BehaviourKind::Greet), "{}", sim.last_reason());
+    sim.step();
+    let (goal, _) = *sim.nav.gos.last().expect("travels");
+    let NavGoal::Point(p) = goal else { panic!("point goal") };
+    assert_eq!(p.y, 450.0, "right beside them on their window: {p}");
+    assert!(until(&mut sim, 8.0, |_, i| i.greet == Some(6)), "{}", sim.last_reason());
+    assert_eq!(sim.knight.pos.y, 450.0);
+}
+
+#[test]
+fn a_visitor_out_of_talking_range_everywhere_is_given_up_on() {
+    // (No Dream Gate here: that would take him up to them.)
+    let mut cfg = BrainConfig::default();
+    cfg.dream_gate.enabled = false;
+    let mut sim = calm(cfg);
+    sim.open(window(2, RectI::new(300, 300, 700, 500), "notes.exe"));
+    sim.run(1.0);
+    let v = Visitor { pos: Vec2::new(500.0, 300.0), ..visitor(7, 500.0) };
+    let off = STAND_OFF_UNITS * 64.0;
+    for x in [v.pos.x - off, v.pos.x + off] {
+        sim.nav.ends.push((Vec2::new(x, 300.0), None, Vec2::new(x, FLOOR)));
+    }
+    sim.brain.see_visitors(vec![v]);
+    assert!(sim.run_until(1.0, BehaviourKind::Greet), "{}", sim.last_reason());
+    // The floor is 740 px below: too far to talk. He tries the walk, it fails, he lets it be.
+    assert!(sim.run_while(15.0, |s| s.brain.behaviour() == BehaviourKind::Greet), "{}", sim.last_reason());
+    assert!(!sim.intents.iter().any(|i| i.greet == Some(7)), "no talk from out of range");
+}
