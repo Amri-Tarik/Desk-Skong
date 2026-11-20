@@ -230,6 +230,12 @@ fn a_gauntlet_never_starts_during_a_visit_or_another_fight() {
     tr.run_until(5.0, |_| false);
     assert!(tr.events.is_empty());
     tr.world.fullscreen = false;
+    // His Shade waits to be reclaimed: that comes first, even for a requested gauntlet.
+    tr.world.shade = true;
+    tr.run_until(5.0, |_| false);
+    assert!(tr.events.is_empty() && !tr.g.active(), "not while his Shade waits");
+    assert_eq!(tr.g.pending(), Some(GauntletTrigger::Requested));
+    tr.world.shade = false;
     assert!(tr.run_until(1.0, |t| t.g.active()), "starts once it's quiet");
     // A visitor turning up mid-gauntlet ends it.
     tr.world.visitor_present = true;
@@ -284,6 +290,32 @@ fn a_gauntlet_comes_on_its_own_after_several_single_kills() {
     assert_eq!(tr.g.pending(), None);
     tr.g.request();
     assert_eq!(tr.g.pending(), Some(GauntletTrigger::Requested));
+}
+
+/// Days of uptime at the app's 120 Hz: the natural gauntlet's cooldown still runs out
+/// (an f32 clock stops at 2^18 s, 72.8 h, and it never would).
+#[test]
+fn the_natural_cooldown_still_runs_out_after_days_of_uptime() {
+    const TICK: f32 = 1.0 / 120.0;
+    let mut cfg = GauntletConfig::default();
+    cfg.natural.chance = 1.0;
+    cfg.natural.after_kills = 1;
+    cfg.natural.cooldown = 30.0;
+    let mut tr = Trial::new(cfg);
+    let mut rng = Rng::new(3);
+    tr.g.skip_clock(80.0 * 3600.0);
+    // One ends (typing): the cooldown starts now.
+    tr.g.request();
+    assert!(tr.run_until(1.0, |t| t.g.active()));
+    tr.world.keys_per_sec = 5.0;
+    assert!(tr.run_until(5.0, |t| !t.g.active()));
+    tr.world.keys_per_sec = 0.0;
+    let quiet = tr.world;
+    for _ in 0..(31.0 / TICK) as usize {
+        tr.g.tick(TICK, &quiet, &|_| false, &mut rng);
+    }
+    tr.g.on_kill(500, &mut rng);
+    assert_eq!(tr.g.pending(), Some(GauntletTrigger::Natural), "cooled down after 31 s");
 }
 
 #[test]

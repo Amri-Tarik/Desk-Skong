@@ -56,7 +56,7 @@ pub struct Shade {
     phase: ShadePhase,
     /// Seconds in the current phase.
     t: f32,
-    clock: f32,
+    clock: f64,
     wander: Vec2,
     wander_in: f32,
     lunge: Vec2,
@@ -144,7 +144,7 @@ impl Shade {
     /// keep it on screen: never in a dead zone between monitors, never off an edge.
     pub fn step(&mut self, dt: f32, knight: Option<Vec2>, hunted: bool, areas: &[RectF]) -> ShadeTick {
         self.t += dt;
-        self.clock += dt;
+        self.clock += dt as f64;
         let s = self.scale.max(0.1);
         let mut out = ShadeTick::default();
         let near = knight.filter(|k| k.distance(self.pos) < 320.0 * s);
@@ -249,7 +249,7 @@ impl Shade {
             self.wander = Vec2::new(self.rng.range(-50.0, 50.0), self.rng.range(-12.0, 12.0)) * s;
             self.wander_in = self.rng.range(3.0, 6.0);
         }
-        let bob = Vec2::new(0.0, (self.clock * std::f32::consts::TAU / 2.6).sin() * 6.0 * s);
+        let bob = Vec2::new(0.0, ((self.clock / 2.6).fract() as f32 * std::f32::consts::TAU).sin() * 6.0 * s);
         let goal = self.home + self.wander + bob;
         let far = self.pos.distance(goal) > 80.0 * s;
         self.fly_to(goal, if far { 160.0 * s } else { 30.0 * s }, dt);

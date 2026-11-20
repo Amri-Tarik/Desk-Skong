@@ -111,16 +111,16 @@ pub struct PastimeMemory {
     dummy: Option<KnownDummy>,
     flies: Vec<KnownLumafly>,
     events: Vec<PastimeEvent>,
-    ready_at: BTreeMap<PastimeKind, f32>,
-    tried_flies: BTreeMap<u64, f32>,
+    ready_at: BTreeMap<PastimeKind, f64>,
+    tried_flies: BTreeMap<u64, f64>,
     pub(crate) best: Option<PastimeChoice>,
     /// Seat / ledge scans for the view and the stars (route planning): cached a while.
-    scanned_at: Option<f32>,
+    scanned_at: Option<f64>,
     view: Option<PastimeChoice>,
     stars: Option<PastimeChoice>,
     /// Seconds of plain company / idling in a row (restlessness).
     company: f32,
-    last_now: f32,
+    last_now: f64,
     last_kind: Option<PastimeKind>,
     /// The value the running pastime started with (it keeps it until done).
     running_value: f32,
@@ -141,8 +141,8 @@ impl PastimeMemory {
         }
     }
 
-    fn rest(&mut self, kind: PastimeKind, now: f32) {
-        self.ready_at.insert(kind, now + kind.cooldown());
+    fn rest(&mut self, kind: PastimeKind, now: f64) {
+        self.ready_at.insert(kind, now + kind.cooldown() as f64);
     }
 }
 
@@ -212,7 +212,7 @@ impl Brain {
         let now = self.now;
         let kind = self.active.kind();
         let mem = &mut self.interest.pastimes;
-        let dt = (now - mem.last_now).max(0.0);
+        let dt = (now - mem.last_now).max(0.0) as f32;
         mem.last_now = now;
         mem.company = match kind {
             BehaviourKind::Companion | BehaviourKind::Idle => mem.company + dt,
@@ -270,7 +270,7 @@ impl Brain {
         }
 
         // The view and the stars: re-scanned every few seconds.
-        if self.interest.pastimes.scanned_at.is_none_or(|t| now - t >= SCAN_EVERY) {
+        if self.interest.pastimes.scanned_at.is_none_or(|t| (now - t) as f32 >= SCAN_EVERY) {
             self.interest.pastimes.scanned_at = Some(now);
             let view = if ready(&self.interest.pastimes, PastimeKind::View) { self.find_view(p, nav) } else { None };
             let stars = if night(p) && ready(&self.interest.pastimes, PastimeKind::Stargaze) { self.find_sky(p, nav) } else { None };
@@ -505,12 +505,12 @@ pub(crate) struct Pastime {
     at: Vec2,
     place: String,
     phase: Phase,
-    started: f32,
+    started: f64,
     drills_left: u32,
     drills_done: u32,
     last_drill: Option<Drill>,
     /// Chase: where his travel goes, when it was set, jumps tried.
-    goal_set_at: f32,
+    goal_set_at: f64,
     jumps: u32,
     /// Finished (the brain drops its utility to 0 this think).
     pub over: bool,
@@ -546,7 +546,7 @@ impl Pastime {
         };
         let drills = 4 + (ctx.rng.f32() * 3.0) as u32;
         log::debug!("brain: pastime {} ({:.2}) at ({:.0},{:.0})", c.kind.label(), c.value, c.at.x, c.at.y);
-        Self { kind: c.kind, target: c.target, at: c.at, place: c.place, phase, started: ctx.now, drills_left: drills, drills_done: 0, last_drill: None, goal_set_at: f32::NEG_INFINITY, jumps: 0, over: false }
+        Self { kind: c.kind, target: c.target, at: c.at, place: c.place, phase, started: ctx.now, drills_left: drills, drills_done: 0, last_drill: None, goal_set_at: f64::NEG_INFINITY, jumps: 0, over: false }
     }
 
     fn finish(&mut self, ctx: &mut Ctx, satisfied: bool) -> Status {
@@ -762,7 +762,7 @@ impl Pastime {
                     if never_left {
                         self.jumps += 1; // couldn't jump here: counts as a try
                     }
-                    self.goal_set_at = f32::NEG_INFINITY;
+                    self.goal_set_at = f64::NEG_INFINITY;
                     self.phase = Phase::Chase(ChasePhase::Follow);
                 }
                 Status::Running

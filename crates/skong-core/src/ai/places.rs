@@ -86,13 +86,13 @@ pub(crate) struct PlaceChoice {
 #[derive(Clone, Debug, Default)]
 pub struct PlaceMemory {
     places: Vec<KnownPlace>,
-    used: BTreeMap<PlaceId, f32>,
+    used: BTreeMap<PlaceId, f64>,
     noticed: BTreeSet<PlaceId>,
     /// The visit in progress: place and whether it was just found.
     current: Option<(PlaceId, bool)>,
     pub(crate) best: Option<PlaceChoice>,
     /// Brain clock of the last scoring (route plans): at most every 0.25 s.
-    scored_at: Option<f32>,
+    scored_at: Option<f64>,
 }
 
 impl PlaceMemory {
@@ -109,8 +109,8 @@ impl PlaceMemory {
         self.scored_at = None;
     }
 
-    fn cooling(&self, p: &KnownPlace, now: f32) -> bool {
-        self.used.get(&p.id).is_some_and(|t| now - t < p.kind.cooldown())
+    fn cooling(&self, p: &KnownPlace, now: f64) -> bool {
+        self.used.get(&p.id).is_some_and(|t| ((now - t) as f32) < p.kind.cooldown())
     }
 
     fn needs_notice(&self, p: &KnownPlace) -> bool {

@@ -48,7 +48,7 @@ pub(crate) struct Battle {
     dash_cd: f32,
     jump_hold: f32,
     double_jumped: bool,
-    last_hit_taken: f32,
+    last_hit_taken: f64,
     travel: Option<Travel>,
     goal_at: Vec2,
     /// Seconds the cursor has stayed out of slash reach while fighting.
@@ -67,7 +67,7 @@ impl Battle {
             dash_cd: 0.0,
             jump_hold: 0.0,
             double_jumped: false,
-            last_hit_taken: f32::NEG_INFINITY,
+            last_hit_taken: f64::NEG_INFINITY,
             travel: None,
             goal_at: Vec2::ZERO,
             out_of_reach: 0.0,
@@ -130,7 +130,7 @@ impl Battle {
             if self.score.cursor >= b.lose_hits {
                 return self.finish(ctx, Outcome::Lost);
             }
-            let quick = ctx.now - self.last_hit_taken < b.stun_window;
+            let quick = ((ctx.now - self.last_hit_taken) as f32) < b.stun_window;
             self.last_hit_taken = ctx.now;
             ctx.nav.stop();
             self.phase = if quick {

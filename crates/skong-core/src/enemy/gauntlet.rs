@@ -261,6 +261,8 @@ pub struct GauntletWorld {
     pub knight_fighting: bool,
     pub knight_down: bool,
     pub knight_hurt: bool,
+    /// His Shade waits to be reclaimed: that comes first (no gauntlet, requested or not).
+    pub shade: bool,
     /// The knight's feet (the arena).
     pub knight_at: Vec2,
     /// Arrivals can be placed (a nav graph is ready).
@@ -280,6 +282,8 @@ pub fn start_blocked(cfg: &GauntletConfig, w: &GauntletWorld, trigger: GauntletT
         Some("another fight")
     } else if w.knight_down || w.knight_hurt {
         Some("the knight is hurt")
+    } else if w.shade {
+        Some("his Shade waits")
     } else if w.keys_per_sec >= cfg.busy_keys_per_sec {
         Some("the user is typing")
     } else if natural && (w.knight_busy || w.user_idle_secs >= w.away_secs) {
@@ -333,11 +337,11 @@ struct Run {
 pub struct GauntletDirector {
     pub cfg: GauntletConfig,
     mix: Vec<Vec<(usize, f32)>>,
-    now: f32,
+    now: f64,
     /// Single enemies beaten since the last gauntlet.
     kills: u32,
     /// No natural gauntlet before this time.
-    ready_at: f32,
+    ready_at: f64,
     /// A gauntlet waiting for a good moment, and how long it has waited.
     pending: Option<(GauntletTrigger, f32)>,
     run: Option<Run>,
@@ -350,6 +354,12 @@ impl GauntletDirector {
     pub fn new(cfg: GauntletConfig, set: &EnemySet) -> Result<Self> {
         let mix = cfg.resolve(set)?;
         Ok(Self { cfg, mix, now: 0.0, kills: 0, ready_at: 0.0, pending: None, run: None, serial: 0, held_by: None })
+    }
+
+    /// Tests: days of uptime pass in an instant.
+    #[cfg(test)]
+    pub(crate) fn skip_clock(&mut self, secs: f64) {
+        self.now += secs;
     }
 
     /// The user asked for one (tray / panel): it starts at the next good moment.
@@ -430,7 +440,7 @@ impl GauntletDirector {
 
     /// Advance. `alive(id)`: is that enemy still alive (not dying, dead or gone)?
     pub fn tick(&mut self, dt: f32, w: &GauntletWorld, alive: &dyn Fn(u32) -> bool, rng: &mut Rng) -> GauntletStep {
-        self.now += dt;
+        self.now += dt as f64;
         let mut step = GauntletStep::default();
         if self.run.is_none() {
             self.try_start(dt, w, rng, &mut step);
@@ -587,6 +597,6 @@ impl GauntletDirector {
     fn finish(&mut self) {
         self.run = None;
         self.kills = 0;
-        self.ready_at = self.now + self.cfg.natural.cooldown;
+        self.ready_at = self.now + self.cfg.natural.cooldown as f64;
     }
 }

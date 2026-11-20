@@ -92,13 +92,21 @@ impl Pet {
         }
     }
 
+    /// Can foes hurt him now? Not while the user holds him or steers him (manual control, a
+    /// go-to-cursor trip): the brain can't answer then, and bumps piling up meanwhile would
+    /// all land at once afterwards.
+    pub(super) fn hittable(&self) -> bool {
+        self.grab.held_pos().is_none() && !self.manual && !self.forced_nav
+    }
+
     /// Per tick, after the knight moved.
     pub(super) fn tick_enemies(&mut self, dt: f32) {
         let Some(mut e) = self.enemies.take() else { return };
         let keys = self.user_input.keys_per_sec();
         // A visitor, or the troupe's flame / show: no enemies wander in meanwhile.
         let visiting = self.visitors.as_ref().is_some_and(|v| v.present()) || self.troupe_active();
-        let knight = (self.brain.behaviour() != BehaviourKind::Dead).then(|| self.ch.body());
+        // Dead, held or steered by the user: nobody to fight.
+        let knight = (self.brain.behaviour() != BehaviourKind::Dead && self.hittable()).then(|| self.ch.body());
         let (discoveries, terrain) = (&self.discoveries, &self.terrain);
         let settled = |f: &skong_core::portal::Footing| discoveries.settled(terrain, f.owner, f.y, f.x0, f.x1);
         let behaviour = self.brain.behaviour();
@@ -107,6 +115,7 @@ impl Pet {
             down: behaviour == BehaviourKind::Dead,
             hurt: self.brain.mind().emotions.hurt,
             backed_off: self.brain.fight_backed_off(),
+            shade: self.stakes.has_shade(),
         };
         let news = e.tick(dt, &self.world(&settled, keys), knight, visiting, ks);
         self.enemy_hits += news.hits;

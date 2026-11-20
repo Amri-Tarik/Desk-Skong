@@ -121,7 +121,7 @@ pub(crate) struct Ending {
 /// What the knight is up to this tick, as far as expressions care.
 #[derive(Clone, Debug)]
 pub(crate) struct Observation {
-    pub now: f32,
+    pub now: f64,
     pub dt: f32,
     pub kind: BehaviourKind,
     /// The last behaviour switch (new ones are told apart by their time).
@@ -166,10 +166,10 @@ impl Default for Observation {
 #[derive(Clone, Debug)]
 pub(crate) struct Expressions {
     /// When each expression last showed.
-    last: [f32; Expression::ALL.len()],
+    last: [f64; Expression::ALL.len()],
     /// When the last soft bubble showed.
-    last_soft: f32,
-    seen_switch: Option<f32>,
+    last_soft: f64,
+    seen_switch: Option<f64>,
     endings: Vec<Ending>,
     bored_for: f32,
     bored: Latch,
@@ -181,8 +181,8 @@ pub(crate) struct Expressions {
 impl Default for Expressions {
     fn default() -> Self {
         Self {
-            last: [f32::NEG_INFINITY; Expression::ALL.len()],
-            last_soft: f32::NEG_INFINITY,
+            last: [f64::NEG_INFINITY; Expression::ALL.len()],
+            last_soft: f64::NEG_INFINITY,
             seen_switch: None,
             endings: Vec::new(),
             bored_for: 0.0,
@@ -253,7 +253,7 @@ impl Expressions {
             return None;
         }
         due.sort();
-        let pick = due.into_iter().find(|&e| o.now - self.last[e as usize] >= e.cooldown() && (e.reaction() || o.now - self.last_soft >= SOFT_GAP))?;
+        let pick = due.into_iter().find(|&e| (o.now - self.last[e as usize]) as f32 >= e.cooldown() && (e.reaction() || (o.now - self.last_soft) as f32 >= SOFT_GAP))?;
         self.last[pick as usize] = o.now;
         if !pick.reaction() {
             self.last_soft = o.now;
@@ -329,23 +329,23 @@ pub const HAUL_COOLDOWN: f32 = 120.0;
 
 #[derive(Clone, Debug)]
 pub struct GeoHaul {
-    recent: Vec<(f32, u32)>,
-    last: f32,
+    recent: Vec<(f64, u32)>,
+    last: f64,
 }
 
 impl Default for GeoHaul {
     fn default() -> Self {
-        Self { recent: Vec::new(), last: f32::NEG_INFINITY }
+        Self { recent: Vec::new(), last: f64::NEG_INFINITY }
     }
 }
 
 impl GeoHaul {
     /// `geo` picked up at `now`: `true` when it completes a big haul.
-    pub fn collect(&mut self, now: f32, geo: u32) -> bool {
-        self.recent.retain(|(t, _)| now - t < HAUL_WINDOW);
+    pub fn collect(&mut self, now: f64, geo: u32) -> bool {
+        self.recent.retain(|(t, _)| ((now - t) as f32) < HAUL_WINDOW);
         self.recent.push((now, geo));
         let sum: u32 = self.recent.iter().map(|(_, g)| g).sum();
-        if sum >= HAUL_GEO && now - self.last >= HAUL_COOLDOWN {
+        if sum >= HAUL_GEO && (now - self.last) as f32 >= HAUL_COOLDOWN {
             self.last = now;
             self.recent.clear();
             return true;
@@ -361,11 +361,11 @@ mod tests {
 
     const DT: f32 = 1.0 / 30.0;
 
-    fn calm(now: f32) -> Observation {
+    fn calm(now: f64) -> Observation {
         Observation { now, dt: DT, kind: BehaviourKind::Companion, boredom: 0.3, energy: 0.8, ..Default::default() }
     }
 
-    fn switch(at: f32, from: BehaviourKind, to: BehaviourKind) -> Option<Switch> {
+    fn switch(at: f64, from: BehaviourKind, to: BehaviourKind) -> Option<Switch> {
         Some(Switch { at, from, to, reason: SwitchReason::Outscored })
     }
 
@@ -398,7 +398,7 @@ mod tests {
         let mut x = Expressions::default();
         assert_eq!(x.observe(&Observation { lantern: true, ..calm(1.0) }), Some(Expression::Alert));
         for i in 0..300 {
-            assert_eq!(x.observe(&Observation { lantern: true, ..calm(1.0 + i as f32 * DT) }), None);
+            assert_eq!(x.observe(&Observation { lantern: true, ..calm(1.0 + (i as f32 * DT) as f64) }), None);
         }
         // Going to strike it (a fight with only the lantern about): "!", never anger.
         let got = x.observe(&Observation { lantern: true, switch: switch(20.0, BehaviourKind::Idle, BehaviourKind::Fight), ..calm(20.0) });
@@ -427,7 +427,7 @@ mod tests {
         let mut shown = 0;
         // An enemy every 5 s for a minute: anger once per its cooldown.
         for i in 0..12 {
-            let at = 1.0 + i as f32 * 5.0;
+            let at = 1.0 + i as f64 * 5.0;
             let k = if i % 2 == 0 { BehaviourKind::Fight } else { BehaviourKind::Idle };
             let from = if i % 2 == 0 { BehaviourKind::Idle } else { BehaviourKind::Fight };
             if x.observe(&Observation { switch: switch(at, from, k), enemies: true, ..calm(at) }) == Some(Expression::Angry) {
@@ -455,9 +455,9 @@ mod tests {
     }
 
     /// Run `secs` of the same observation (needs fixed), counting each expression.
-    fn hold(x: &mut Expressions, from: f32, secs: f32, o: Observation) -> Vec<Expression> {
+    fn hold(x: &mut Expressions, from: f64, secs: f32, o: Observation) -> Vec<Expression> {
         let n = (secs / DT) as usize;
-        (0..n).filter_map(|i| x.observe(&Observation { now: from + i as f32 * DT, ..o.clone() })).collect()
+        (0..n).filter_map(|i| x.observe(&Observation { now: from + (i as f32 * DT) as f64, ..o.clone() })).collect()
     }
 
     #[test]
@@ -469,7 +469,7 @@ mod tests {
         // Idle and bored: once, after BORED_HOLD s.
         let got = hold(&mut x, 100.0, BORED_HOLD - 1.0, bored.clone());
         assert!(got.is_empty(), "not bored long enough yet");
-        let got = hold(&mut x, 100.0 + BORED_HOLD - 1.0, 10.0, bored.clone());
+        let got = hold(&mut x, 100.0 + (BORED_HOLD - 1.0) as f64, 10.0, bored.clone());
         assert_eq!(got, [Expression::Bored]);
         assert!(hold(&mut x, 130.0, 600.0, bored.clone()).is_empty(), "stays quiet until boredom falls back");
         // Dips a little (not past BORED_OFF): still latched.
@@ -511,6 +511,6 @@ mod tests {
         assert!(!h.collect(20.0, 25), "spread out: not a haul");
         assert!(h.collect(21.0, 20));
         assert!(!h.collect(30.0, 100), "cooldown");
-        assert!(h.collect(30.0 + HAUL_COOLDOWN, 45));
+        assert!(h.collect(30.0 + HAUL_COOLDOWN as f64, 45));
     }
 }

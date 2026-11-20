@@ -26,8 +26,8 @@ struct Entry {
     dy: f32,
     x0: f32,
     x1: f32,
-    first: f32,
-    last: f32,
+    first: f64,
+    last: f64,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -56,7 +56,7 @@ impl LedgeAges {
 
     /// Note every window-owned ledge of `terrain` as seen at `now` (call on each terrain
     /// rebuild and every so often in between).
-    pub fn observe(&mut self, terrain: &Terrain, now: f32) {
+    pub fn observe(&mut self, terrain: &Terrain, now: f64) {
         for l in &terrain.ledges {
             let Some((owner, x0, x1, dy)) = rel(terrain, l) else { continue };
             match self.find(owner, x0, x1, dy) {
@@ -67,27 +67,27 @@ impl LedgeAges {
                 None => self.entries.push(Entry { owner, dy, x0, x1, first: now, last: now }),
             }
         }
-        self.entries.retain(|e| now - e.last <= FORGET_SECS);
+        self.entries.retain(|e| ((now - e.last) as f32) <= FORGET_SECS);
     }
 
     /// Like [`LedgeAges::observe`], but anything new counts as already `age` seconds old (the
     /// first look at a desktop: what is there was there before anyone looked).
-    pub fn observe_aged(&mut self, terrain: &Terrain, now: f32, age: f32) {
+    pub fn observe_aged(&mut self, terrain: &Terrain, now: f64, age: f32) {
         self.observe(terrain, now);
         for e in self.entries.iter_mut().filter(|e| e.first == now) {
-            e.first = now - age;
+            e.first = now - age as f64;
         }
     }
 
     /// Has `l` been around long enough to stand things on ([`SETTLED_SECS`])? Ledges no
     /// window owns (monitor floors) always are.
-    pub fn settled(&self, terrain: &Terrain, l: &Ledge, now: f32) -> bool {
+    pub fn settled(&self, terrain: &Terrain, l: &Ledge, now: f64) -> bool {
         l.owner.is_none() || self.age(terrain, l, now) >= SETTLED_SECS
     }
 
     /// Seconds `l` has been on screen (0 if unknown).
-    pub fn age(&self, terrain: &Terrain, l: &Ledge, now: f32) -> f32 {
-        rel(terrain, l).and_then(|(o, x0, x1, dy)| self.find(o, x0, x1, dy)).map_or(0.0, |i| now - self.entries[i].first)
+    pub fn age(&self, terrain: &Terrain, l: &Ledge, now: f64) -> f32 {
+        rel(terrain, l).and_then(|(o, x0, x1, dy)| self.find(o, x0, x1, dy)).map_or(0.0, |i| (now - self.entries[i].first) as f32)
     }
 }
 
@@ -110,7 +110,7 @@ mod tests {
         let mut a = LedgeAges::default();
         let t = terrain(100.0, 100.0, true);
         for i in 0..=40 {
-            a.observe(&t, i as f32);
+            a.observe(&t, i as f64);
         }
         assert_eq!(a.age(&t, &t.ledges[1], 40.0), 40.0);
         // The window moves: same ledges, same ages.
@@ -146,11 +146,11 @@ mod tests {
         // A content line that appears later must last SETTLED_SECS first.
         let line = terrain(100.0, 100.0, true);
         for i in 1..=10 {
-            a.observe(&line, i as f32);
+            a.observe(&line, i as f64);
         }
         assert!(!a.settled(&line, &line.ledges[1], 10.0));
         for i in 11..=26 {
-            a.observe(&line, i as f32);
+            a.observe(&line, i as f64);
         }
         assert!(a.settled(&line, &line.ledges[1], 26.0));
         // Floors (no owner) always are.

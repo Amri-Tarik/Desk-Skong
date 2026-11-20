@@ -240,14 +240,28 @@ fn progress_round_trips_through_the_file() {
     let mut t = tracker();
     feed(&mut t, &[E::Pogo, E::CursorBattleWon, E::DepositMined { region: 3 }, E::Died { shade: true, fall: true }]);
     let dir = std::env::temp_dir().join(format!("skong-ach-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
     let path = dir.join("achievements.json");
     write_save(&path, t.save()).expect("write");
     let back = read_save(&path);
     assert_eq!(&back, t.save());
     assert!(back.unlocked.contains_key(POGO) && back.counts[CURSOR_VICTOR] == 1 && back.shade_from_fall);
-    // Missing or malformed files start fresh.
+    // Rewritten in place, atomically: nothing left beside it.
+    write_save(&path, t.save()).expect("rewrite");
+    let names: Vec<_> = std::fs::read_dir(&dir).expect("dir").map(|e| e.expect("entry").file_name()).collect();
+    assert_eq!(names, ["achievements.json"]);
+    // A truncated (or otherwise malformed) file starts fresh, but its progress is kept.
+    let whole = std::fs::read_to_string(&path).expect("read");
+    std::fs::write(&path, &whole[..whole.len() / 2]).expect("truncate");
+    assert_eq!(read_save(&path), AchievementSave::default());
+    let bak = dir.join("achievements.json.bak");
+    assert_eq!(std::fs::read_to_string(&bak).expect("kept"), whole[..whole.len() / 2]);
+    // A second bad file never overwrites the first backup.
     std::fs::write(&path, "{ nope").expect("write");
     assert_eq!(read_save(&path), AchievementSave::default());
+    assert_eq!(std::fs::read_to_string(&bak).expect("kept"), whole[..whole.len() / 2]);
+    assert_eq!(std::fs::read_dir(&dir).expect("dir").count(), 3, "a second backup beside the first");
+    // Missing files start fresh.
     let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(read_save(&path), AchievementSave::default());
 }

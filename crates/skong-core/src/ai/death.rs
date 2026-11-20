@@ -85,7 +85,7 @@ impl Dead {
         ctx.mind.adjust(|n| &mut n.loneliness, 0.25);
         ctx.mind.adjust(|n| &mut n.energy, -0.15);
         ctx.mind.adjust(|n| &mut n.mischief, -0.6);
-        ctx.stakes.shade_ready_at = ctx.stakes.shade_ready_at.max(ctx.now + ctx.cfg.stakes.shade_delay);
+        ctx.stakes.shade_ready_at = ctx.stakes.shade_ready_at.max(ctx.now + ctx.cfg.stakes.shade_delay as f64);
         // Somewhere new: look for a way to it afresh.
         ctx.stakes.shade_way = true;
         ctx.stakes.dying = false;

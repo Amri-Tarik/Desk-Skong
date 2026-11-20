@@ -97,8 +97,16 @@ impl Pester {
             travel: None,
             goal_at: Vec2::ZERO,
             chase_cd: 0.0,
-            kit: Kit::new(ctx.now),
+            kit: Kit::playful(ctx.now),
         }
+    }
+
+    /// Tests: playing the pogo trick, for a good while.
+    #[cfg(test)]
+    pub(super) fn force_pogo(&mut self) {
+        self.phase = Phase::Play;
+        self.trick = Trick::Pogo;
+        self.trick_left = 60.0;
     }
 
     pub fn reason(&self) -> String {
@@ -321,6 +329,9 @@ impl Pester {
         let ppu = k.params.px_per_unit;
         let off = c.offset;
         let toward = Side::of(off.x).unwrap_or(k.facing);
+        // A play kit never dives, but keep its bookkeeping as every kit user does (a dive
+        // left marked would hold every later airborne tick `Busy`).
+        self.kit.dive_landed(ctx);
         match self.kit.step(ctx, &Mark::point(off), self.flick_cd <= 0.0, false, false, input) {
             Some(KitMove::PogoSwing) => {
                 // Bouncing off the cursor itself: showing off, nothing scores.

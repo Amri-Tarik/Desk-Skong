@@ -151,13 +151,13 @@ pub(crate) struct StakesMind {
     pub spells: SpellBook,
     /// A death to play out (set by a lethal loss, the Shade or the app).
     pub pending_death: Option<(DeathKind, bool)>,
-    pub shade_ready_at: f32,
+    pub shade_ready_at: f64,
     /// There's a way to the Shade (a route, or a Dream Gate spot by it) as far as he knows.
     /// Cleared when a hunt finds none; [`Brain::probe_shade`] looks again every few seconds.
     pub shade_way: bool,
     /// Next look for a way to the Shade (brain time).
-    pub shade_probe_at: f32,
-    pub loot_ready_at: f32,
+    pub shade_probe_at: f64,
+    pub loot_ready_at: f64,
     /// Debug: go after the Shade right away.
     pub force_hunt: bool,
     /// A death is playing out.
@@ -252,7 +252,7 @@ impl Brain {
         if st.shade_way || self.now < st.shade_probe_at || !p.knight.is_grounded() || matches!(self.active, Active::ShadeHunt(_)) {
             return;
         }
-        st.shade_probe_at = self.now + SHADE_PROBE_SECS;
+        st.shade_probe_at = self.now + SHADE_PROBE_SECS as f64;
         let mut scratch = super::Intent::default();
         let mut ctx = self.ctx(p, nav, &mut scratch);
         let way = super::shade_hunt::ShadeHunt::way(&mut ctx).is_some();

@@ -105,6 +105,7 @@ impl Gym {
             knight_fighting: matches!(behaviour, BehaviourKind::Fight | BehaviourKind::Train),
             knight_down: behaviour == BehaviourKind::Dead,
             knight_hurt: self.sim.brain.mind().emotions.hurt > self.g.cfg.hurt || self.sim.brain.fight_backed_off(),
+            shade: false,
             knight_at: self.sim.knight.pos,
             ready: true,
         };
@@ -217,10 +218,40 @@ fn he_readies_himself_fights_the_waves_in_order_and_cheers_for_the_reward() {
     assert!(!gym.log.iter().any(|(b, s)| *b == BehaviourKind::Gauntlet && *s == Some(GauntletStage::Wave)), "no ceremony mid-wave");
     // The reward: his cheer, then he gathers it.
     assert!(gym.run_while(4.0, |g| !g.sim.started.iter().any(|a| a == "victory")), "victory: {:?} / {}", gym.sim.started, gym.sim.last_reason());
+    // The cheer plays out (the reward's Geo waits for it), then he goes for the Geo.
+    let cheering = |g: &Gym| g.sim.act.as_ref().is_some_and(|a| g.sim.act_name(a.act.id) == "victory");
+    assert!(cheering(&gym), "{:?}", gym.sim.started);
+    let mut left = f32::INFINITY;
+    while cheering(&gym) {
+        left = gym.sim.act.as_ref().map_or(0.0, |a| a.left);
+        assert_eq!(gym.sim.brain.behaviour(), BehaviourKind::Gauntlet, "left the cheer {left:.2} s early: {}", gym.sim.last_reason());
+        gym.step();
+    }
+    assert!(left <= DT + 1e-3, "the cheer was cut {left:.2} s early: {}", gym.sim.last_reason());
     assert!(!gym.reward.is_empty(), "the reward burst");
     assert!(gym.run_while(30.0, |g| g.coins.iter().any(|c| g.reward.contains(c))), "gathers the reward: {:?} left, {}", gym.coins, gym.sim.last_reason());
     assert!(gym.g.cue().is_none());
     assert_eq!(gym.sim.started.iter().filter(|a| *a == "victory").count(), 1, "one cheer");
+}
+
+#[test]
+fn the_announcement_bow_is_finished_before_any_geo() {
+    let mut gym = Gym::new(calm(BrainConfig::default()));
+    gym.run(1.0);
+    gym.g.request();
+    assert!(gym.run_while(3.0, |g| !g.sim.started.iter().any(|a| a == "challenge")), "the challenge bow: {:?}", gym.sim.started);
+    // Geo lying about (an earlier fight's): it waits for the bow.
+    let k = gym.sim.knight.pos;
+    gym.coins.extend([k + Vec2::new(160.0, 0.0), k + Vec2::new(-220.0, 0.0)]);
+    let bowing = |g: &Gym| g.sim.act.as_ref().is_some_and(|a| g.sim.act_name(a.act.id) == "challenge");
+    assert!(bowing(&gym), "{:?}", gym.sim.started);
+    let mut left = f32::INFINITY;
+    while bowing(&gym) {
+        left = gym.sim.act.as_ref().map_or(0.0, |a| a.left);
+        assert_eq!(gym.sim.brain.behaviour(), BehaviourKind::Gauntlet, "left the bow {left:.2} s early: {}", gym.sim.last_reason());
+        gym.step();
+    }
+    assert!(left <= DT + 1e-3, "the bow was cut {left:.2} s early: {}", gym.sim.last_reason());
 }
 
 #[test]

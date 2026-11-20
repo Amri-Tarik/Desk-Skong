@@ -154,7 +154,7 @@ pub(crate) struct Train {
     /// The lesson ended (finished or stopped): the brain sends no `Stop` when switching.
     pub ended: bool,
     /// Don't try walking back before this time (the way back failed).
-    return_ready_at: f32,
+    return_ready_at: f64,
     drills: u32,
     /// The after-lesson dream nail was considered.
     dream_decided: bool,

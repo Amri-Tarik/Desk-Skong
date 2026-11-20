@@ -60,7 +60,7 @@ impl DummyArt {
 struct FlyWin {
     id: u64,
     win: SpriteWindow,
-    drawn_at: f32,
+    drawn_at: f64,
 }
 
 pub struct PastimeProps {
@@ -87,7 +87,7 @@ pub struct Where<'a> {
     pub desk: &'a DesktopSnapshot,
     pub terrain: &'a Terrain,
     pub ages: &'a LedgeAges,
-    pub now: f32,
+    pub now: f64,
     pub occupancy: &'a Occupancy,
     pub knight: Vec2,
     pub reachable: &'a dyn Fn(Vec2) -> bool,
@@ -143,7 +143,7 @@ impl PastimeProps {
         }
         self.dummy_drawn = None;
         for f in &mut self.flies {
-            f.drawn_at = f32::NEG_INFINITY;
+            f.drawn_at = f64::NEG_INFINITY;
         }
     }
 
@@ -325,13 +325,13 @@ impl PastimeProps {
                     let Ok(win) = SpriteWindow::new() else { continue };
                     win.set_capturable(self.capturable);
                     win.set_click_through(true);
-                    self.flies.push(FlyWin { id: f.id, win, drawn_at: f32::NEG_INFINITY });
+                    self.flies.push(FlyWin { id: f.id, win, drawn_at: f64::NEG_INFINITY });
                     created = true;
                     self.flies.last_mut().expect("just pushed")
                 }
             };
             let (x, y) = ((f.pos.x - size as f32 * 0.5).round() as i32, (f.pos.y - size as f32 * 0.5).round() as i32);
-            if clock - fw.drawn_at >= 1.0 / FLY_FPS {
+            if (clock - fw.drawn_at) as f32 >= 1.0 / FLY_FPS {
                 fw.drawn_at = clock;
                 let img = pastime::glow(size, clock, f.phase, f.glow, f.alpha);
                 if let Err(e) = fw.win.present(&img, x, y) {

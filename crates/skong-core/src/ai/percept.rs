@@ -199,7 +199,7 @@ pub struct Senses {
     pub changes: DesktopChanges,
     pub cursor: Option<CursorSense>,
     /// Brain clock time of the last `PlatformMoved` event.
-    pub carried_at: Option<f32>,
+    pub carried_at: Option<f64>,
     /// Window the knight stood on last tick.
     pub support_owner: Option<WindowId>,
     /// The window the knight stood on just closed under it (this tick).
@@ -228,7 +228,7 @@ pub struct Senses {
     /// Night (local time) or dark surroundings.
     pub dark: bool,
     /// Brain clock time the user last came back after being away.
-    pub returned_at: Option<f32>,
+    pub returned_at: Option<f64>,
     /// NPC visitors on screen (from [`super::Brain::see_visitors`]).
     pub visitors: Vec<super::Visitor>,
     /// Enemies and sparring partners on screen (from [`super::Brain::see_foes`]).
@@ -238,7 +238,7 @@ pub struct Senses {
 }
 
 impl Senses {
-    pub(crate) fn update(&mut self, p: &Percepts, now: f32, cfg: &BrainConfig) {
+    pub(crate) fn update(&mut self, p: &Percepts, now: f64, cfg: &BrainConfig) {
         self.changes = self.desktop.update(p.desktop);
         let center = p.knight.body().center();
 
@@ -309,7 +309,7 @@ impl Senses {
     }
 
     /// Seconds since the window under the knight last moved (he fell off / it slid away).
-    pub fn since_carried(&self, now: f32) -> f32 {
-        self.carried_at.map_or(f32::INFINITY, |t| now - t)
+    pub fn since_carried(&self, now: f64) -> f32 {
+        self.carried_at.map_or(f32::INFINITY, |t| (now - t) as f32)
     }
 }

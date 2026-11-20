@@ -190,6 +190,28 @@ fn the_shade_still_comes_first() {
 }
 
 #[test]
+fn back_from_an_urgent_errand_mid_show_his_masks_are_what_he_left_with() {
+    let cfg = BrainConfig::default();
+    let full = cfg.fight.boss_masks;
+    let mut s = Show::new(calm(cfg), 3);
+    s.sim.run(0.3);
+    s.d.request(Summon::Direct);
+    assert!(s.run_while(12.0, |s| !s.sim.last_reason().contains("troupe master")), "fighting him: {}", s.sim.last_reason());
+    s.hits += 3;
+    s.run_while(0.2, |_| true);
+    let left = s.sim.brain.stakes.fight.masks.expect("masks noted").left;
+    assert!(left < full, "{left} of {full}");
+    // Something urgent (his Shade) pulls him away; then back to the show.
+    s.shade = Some(ShadeSense { pos: Vec2::new(400.0, FLOOR - 60.0), vulnerable: true, fighting: false, geo: 120 });
+    assert!(s.run_while(2.0, |s| s.sim.brain.behaviour() != BehaviourKind::ShadeHunt), "{}", s.sim.last_reason());
+    s.shade = None;
+    assert!(s.run_while(5.0, |s| s.sim.brain.behaviour() != BehaviourKind::Fight), "{}", s.sim.last_reason());
+    s.run_while(0.1, |_| true);
+    let back = s.sim.brain.stakes.fight.masks.expect("masks noted").left;
+    assert!(back <= left, "fresh masks after the errand: {back} (left with {left} of {full})");
+}
+
+#[test]
 fn a_fullscreen_app_ends_the_show_without_harm() {
     let mut s = Show::new(calm(BrainConfig::default()), 3);
     s.sim.run(0.3);

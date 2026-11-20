@@ -72,9 +72,9 @@ impl ActCatalog {
 pub(crate) struct Repertoire {
     pub catalog: ActCatalog,
     /// Keyed by `ActId.0` (ActId is not `Ord`).
-    ready_at: BTreeMap<u16, f32>,
+    ready_at: BTreeMap<u16, f64>,
     /// When each act was last started (keyed by `ActId.0`).
-    last_used: BTreeMap<u16, f32>,
+    last_used: BTreeMap<u16, f64>,
     /// Acts started within this many seconds are penalised when picking (variety).
     pub repeat_window: f32,
 }
@@ -88,29 +88,29 @@ impl Repertoire {
         Self { repeat_window, ..Self::new(catalog) }
     }
 
-    pub fn ready(&self, id: ActId, now: f32) -> bool {
+    pub fn ready(&self, id: ActId, now: f64) -> bool {
         self.ready_at.get(&id.0).is_none_or(|&t| t <= now)
     }
 
     /// Seconds since `id` was last started (infinite if never).
-    pub fn since_used(&self, id: ActId, now: f32) -> f32 {
-        self.last_used.get(&id.0).map_or(f32::INFINITY, |t| now - t)
+    pub fn since_used(&self, id: ActId, now: f64) -> f32 {
+        self.last_used.get(&id.0).map_or(f32::INFINITY, |t| (now - t) as f32)
     }
 
     /// Seconds since any seated act was last started.
-    pub fn since_seated(&self, now: f32) -> f32 {
+    pub fn since_seated(&self, now: f64) -> f32 {
         self.catalog.iter().filter(|a| a.requires == Requirement::Seat).map(|a| self.since_used(a.id, now)).fold(f32::INFINITY, f32::min)
     }
 
-    pub fn used(&mut self, id: ActId, now: f32) {
+    pub fn used(&mut self, id: ActId, now: f64) {
         self.last_used.insert(id.0, now);
         let cd = self.catalog.get(id).map_or(0.0, |a| a.cooldown);
-        self.ready_at.insert(id.0, now + cd);
+        self.ready_at.insert(id.0, now + cd as f64);
     }
 
     /// Weighted pick among acts whose tags fit the mood. `prefer` multiplies acts that
     /// carry that tag (e.g. "curious" when arriving somewhere new).
-    pub fn pick(&self, mind: &Mind, user_away: bool, (grounded, at_bench): (bool, bool), prefer: Option<&str>, now: f32, rng: &mut Rng) -> Option<ActId> {
+    pub fn pick(&self, mind: &Mind, user_away: bool, (grounded, at_bench): (bool, bool), prefer: Option<&str>, now: f64, rng: &mut Rng) -> Option<ActId> {
         let candidates: Vec<(ActId, f32)> = self
             .catalog
             .iter()

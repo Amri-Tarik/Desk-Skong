@@ -159,6 +159,8 @@ struct Sim {
     dummy: Option<KnownDummy>,
     flies: Vec<KnownLumafly>,
     pastime_events: Vec<PastimeEvent>,
+    /// Tick length (s): [`DT`]; the app ticks at 1/120.
+    dt: f32,
 }
 
 fn window(id: WindowId, rect: RectI, process: &str) -> WindowInfo {
@@ -230,6 +232,7 @@ impl Sim {
             dummy: None,
             flies: vec![],
             pastime_events: vec![],
+            dt: DT,
         }
     }
 
@@ -295,7 +298,7 @@ impl Sim {
         }
         let perch = self.knight.support.is_some_and(|s| s.kind != LedgeKind::Ground);
         let p = Percepts {
-            dt: DT,
+            dt: self.dt,
             knight: &self.knight,
             terrain: &self.terrain,
             desktop: &self.desk,
@@ -327,8 +330,8 @@ impl Sim {
         self.last_motion = intent.motion;
         self.pokes.clear();
         self.events.clear();
-        self.t += DT;
-        self.user.idle_secs += DT;
+        self.t += self.dt;
+        self.user.idle_secs += self.dt;
 
         // Act player emulation.
         if intent.cancel_act && self.act.as_ref().is_some_and(|a| a.act.interruptible) {
@@ -374,7 +377,7 @@ impl Sim {
             self.picked.push(id);
         }
         if let Some(a) = &mut self.act {
-            a.left -= DT;
+            a.left -= self.dt;
             if a.left <= 0.0 {
                 self.act = None;
             }
@@ -386,7 +389,7 @@ impl Sim {
 
         // Every route arrives after `trip` seconds (unless a wall is in the way).
         if self.nav.status == NavStatus::Moving && !self.wall {
-            self.nav.elapsed += DT;
+            self.nav.elapsed += self.dt;
             if self.nav.elapsed >= self.nav.trip {
                 self.nav.status = NavStatus::Arrived;
                 if let Some(&(goal, style)) = self.nav.gos.last() {
@@ -419,7 +422,7 @@ impl Sim {
         };
         let held = MoveInput { jump_pressed: false, dash_pressed: false, dive_pressed: false, pogo: false, ..input };
         for i in 0..4 {
-            self.knight.step(if i == 0 { &input } else { &held }, &self.terrain, DT / 4.0, &mut self.events);
+            self.knight.step(if i == 0 { &input } else { &held }, &self.terrain, self.dt / 4.0, &mut self.events);
         }
     }
 
@@ -432,7 +435,7 @@ impl Sim {
             self.gate.event(ev, &mut out);
         }
         let running = self.act.as_ref().map(|a| (self.act_name(a.act.id), usize::from(a.left < 0.3)));
-        self.gate.tick(DT, running.as_ref().map(|(n, s)| (n.as_str(), *s)), |_| true, &mut out);
+        self.gate.tick(self.dt, running.as_ref().map(|(n, s)| (n.as_str(), *s)), |_| true, &mut out);
         for a in out {
             if let GateAction::WarpTo(at) = a {
                 self.place(at);
@@ -447,7 +450,7 @@ impl Sim {
     }
 
     fn run(&mut self, secs: f32) -> Vec<BehaviourKind> {
-        let n = (secs / DT).round() as usize;
+        let n = (secs / self.dt).round() as usize;
         (0..n).map(|_| self.step().behaviour.unwrap_or(BehaviourKind::Idle)).collect()
     }
 
@@ -457,7 +460,7 @@ impl Sim {
 
     /// Step while `cond` holds; `true` if it stopped holding within `secs`.
     fn run_while(&mut self, secs: f32, mut cond: impl FnMut(&Sim) -> bool) -> bool {
-        let n = (secs / DT).round() as usize;
+        let n = (secs / self.dt).round() as usize;
         for _ in 0..n {
             self.step();
             if !cond(self) {
@@ -976,10 +979,10 @@ fn reasons_are_always_given() {
 #[test]
 fn commitment_prevents_dithering() {
     let switches = dithering_switches(BrainConfig::default());
-    let mut prev_at = f32::NEG_INFINITY;
+    let mut prev_at = f64::NEG_INFINITY;
     for s in &switches {
         if s.reason == SwitchReason::Outscored {
-            assert!(s.at - prev_at >= BrainConfig::default().min_commit - 1e-3, "switched after {:.2}s: {s:?}", s.at - prev_at);
+            assert!((s.at - prev_at) as f32 >= BrainConfig::default().min_commit - 1e-3, "switched after {:.2}s: {s:?}", s.at - prev_at);
         }
         prev_at = s.at;
     }
@@ -1004,6 +1007,32 @@ fn dithering_switches(cfg: BrainConfig) -> Vec<Switch> {
         sim.step();
     }
     sim.switches
+}
+
+/// Days of uptime at the app's 120 Hz: the brain clock keeps time, so every cooldown
+/// (the next fight, the Shade, a nap, a failed behaviour) still runs out.
+#[test]
+fn cooldowns_still_expire_after_days_of_uptime() {
+    // Why it is an f64: an f32 clock stops at 2^18 s (72.8 h), where 1/120 s is under half
+    // a step, and every `ready_at` after that never comes.
+    let uptime = 80.0 * 3600.0;
+    assert_eq!(uptime as f32 + 1.0 / 120.0, uptime as f32);
+    let mut sim = calm(BrainConfig::default());
+    sim.dt = 1.0 / 120.0;
+    sim.run(1.0);
+    sim.brain.now += uptime;
+    let start = sim.brain.now;
+    let until = start + 5.0;
+    sim.brain.stakes.fight.ready_at = until;
+    sim.brain.stakes.shade_ready_at = until;
+    sim.brain.nap_ready_at = until;
+    sim.brain.cooldown.insert(BehaviourKind::Rest, until);
+    sim.run(6.0);
+    let ran = sim.brain.now - start;
+    assert!((ran - 6.0).abs() < 1e-3, "6 s at 120 Hz ran the clock {ran:.4} s");
+    let now = sim.brain.now;
+    assert!(now >= sim.brain.stakes.fight.ready_at && now >= sim.brain.stakes.shade_ready_at && now >= sim.brain.nap_ready_at);
+    assert!(sim.brain.cooldown.get(&BehaviourKind::Rest).is_none_or(|t| now >= *t), "Rest still cooling");
 }
 
 #[test]
@@ -1125,8 +1154,8 @@ fn arriving_without_getting_seated_blocks_the_seat_and_cools_rest_down() {
     sim.nav.trip = 1.0;
     sim.run(30.0);
     assert!(sim.seat_trips(left) <= 1 && sim.seat_trips(right) <= 1, "retried a seat it failed to sit on: {:?}", sim.nav.gos);
-    let fails: Vec<f32> = sim.switches.iter().filter(|s| s.from == BehaviourKind::Rest).map(|s| s.at).collect();
-    let rest_starts: Vec<f32> = sim.switches.iter().filter(|s| s.to == BehaviourKind::Rest).map(|s| s.at).collect();
+    let fails: Vec<f64> = sim.switches.iter().filter(|s| s.from == BehaviourKind::Rest).map(|s| s.at).collect();
+    let rest_starts: Vec<f64> = sim.switches.iter().filter(|s| s.to == BehaviourKind::Rest).map(|s| s.at).collect();
     for (i, w) in rest_starts.windows(2).enumerate() {
         assert!(w[1] - w[0] >= 10.0, "rest re-picked {:.1}s after it ended (#{i}); ends {fails:?}", w[1] - w[0]);
     }
@@ -1387,6 +1416,33 @@ fn bother_level_zero_never_pesters() {
     sim.brain.pester_until = 1e9;
     let kinds = sim.run(60.0);
     assert!(!kinds.contains(&BehaviourKind::Pester));
+}
+
+#[test]
+fn pestering_never_spends_soul_on_a_dive() {
+    // On a window top right above the cursor, soul to spare: a fight's kit would Desolate
+    // Dive onto it. Play pogos (and a dive left marked would hold him `Busy` in the air).
+    let mut sim = calm(BrainConfig::default());
+    sim.open(window(1, RectI::new(700, 600, 1300, 900), "editor.exe"));
+    sim.physics = true;
+    sim.brain.mind_mut().needs.mischief = 0.95;
+    sim.brain.pester_until = 1e9;
+    sim.brain.battle_ready_at = 1e9;
+    sim.place(Vec2::new(1000.0, 600.0));
+    sim.park_cursor(Vec2::new(0.0, 300.0));
+    assert!(sim.run_until(4.0, BehaviourKind::Pester), "{}", sim.last_reason());
+    let Active::Pester(p) = &mut sim.brain.active else { unreachable!() };
+    p.force_pogo();
+    sim.place(Vec2::new(1000.0, 600.0));
+    sim.park_cursor(Vec2::new(0.0, 300.0));
+    sim.brain.stakes.spells.soul = 1.0;
+    let from = sim.intents.len();
+    sim.run(4.0);
+    let dives = sim.intents[from..].iter().filter(|i| matches!(i.motion, Motion::Direct(m) if m.dive_pressed)).count();
+    assert_eq!(dives, 0, "dived at the cursor: {}", sim.last_reason());
+    assert_eq!(sim.brain.stakes.spells.soul, 1.0, "soul spent in play");
+    let jumps = sim.intents[from..].iter().filter(|i| matches!(i.motion, Motion::Direct(m) if m.jump_pressed)).count();
+    assert!(jumps >= 1, "played the pogo trick: {}", sim.last_reason());
 }
 
 #[test]

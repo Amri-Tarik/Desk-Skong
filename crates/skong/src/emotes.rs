@@ -125,8 +125,8 @@ pub struct Emotes {
     coin: Option<Image>,
     ppu: f32,
     current: Option<(Emote, f32)>,
-    clock: f32,
-    last_shown: f32,
+    clock: f64,
+    last_shown: f64,
     /// (emote, phase) of the rendered picture in `base`.
     based: Option<(Emote, u32)>,
     base: Option<Image>,
@@ -150,7 +150,7 @@ impl Emotes {
             ppu: px_per_unit,
             current: None,
             clock: 0.0,
-            last_shown: -COOLDOWN,
+            last_shown: -(COOLDOWN as f64),
             based: None,
             base: None,
             drawn: None,
@@ -176,7 +176,7 @@ impl Emotes {
         if self.current.is_some_and(|(c, _)| c == e) {
             return;
         }
-        if !e.urgent() && self.clock - self.last_shown < COOLDOWN {
+        if !e.urgent() && ((self.clock - self.last_shown) as f32) < COOLDOWN {
             return;
         }
         self.current = Some((e, 0.0));
@@ -191,7 +191,7 @@ impl Emotes {
     }
 
     /// Seconds since start (for debug cycling).
-    pub fn clock(&self) -> f32 {
+    pub fn clock(&self) -> f64 {
         self.clock
     }
 
@@ -211,7 +211,7 @@ impl Emotes {
 
     /// Advance and draw above `head` (screen point just above the knight's head).
     pub fn update(&mut self, dt: f32, head: Vec2) -> Result<()> {
-        self.clock += dt;
+        self.clock += dt as f64;
         let Some((e, t)) = self.current.as_mut() else { return Ok(()) };
         *t += dt;
         let (e, t) = (*e, *t);

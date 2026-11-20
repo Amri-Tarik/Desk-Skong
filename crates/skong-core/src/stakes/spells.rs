@@ -177,13 +177,13 @@ impl SpellCues {
 pub struct SpellBook {
     pub soul: f32,
     /// Brain-clock time each spell becomes available again.
-    ready_at: [f32; 7],
-    last_special: f32,
+    ready_at: [f64; 7],
+    last_special: f64,
 }
 
 impl SpellBook {
     pub fn new(cfg: &SpellConfig) -> Self {
-        Self { soul: cfg.start_soul.clamp(0.0, 1.0), ready_at: [0.0; 7], last_special: f32::NEG_INFINITY }
+        Self { soul: cfg.start_soul.clamp(0.0, 1.0), ready_at: [0.0; 7], last_special: f64::NEG_INFINITY }
     }
 
     /// A nail hit landed.
@@ -191,12 +191,12 @@ impl SpellBook {
         self.soul = (self.soul + SOUL_PER_HIT * hits as f32).min(1.0);
     }
 
-    fn ready(&self, spell: Spell, now: f32) -> bool {
+    fn ready(&self, spell: Spell, now: f64) -> bool {
         now >= self.ready_at[spell.index()] && self.soul + 1e-4 >= spell.soul()
     }
 
     /// The spell that fits `s` right now, if any (and pay for it).
-    pub fn choose(&mut self, s: &SpellSituation, now: f32, cfg: &SpellConfig) -> Option<Spell> {
+    pub fn choose(&mut self, s: &SpellSituation, now: f64, cfg: &SpellConfig) -> Option<Spell> {
         let pick = self.candidate(s, now, cfg)?;
         self.soul = (self.soul - pick.soul()).max(0.0);
         self.last_special = now;
@@ -205,11 +205,11 @@ impl SpellBook {
             Spell::Thorns => 4.0,
             _ => cfg.min_gap,
         };
-        self.ready_at[pick.index()] = now + cd;
+        self.ready_at[pick.index()] = now + cd as f64;
         Some(pick)
     }
 
-    fn candidate(&self, s: &SpellSituation, now: f32, cfg: &SpellConfig) -> Option<Spell> {
+    fn candidate(&self, s: &SpellSituation, now: f64, cfg: &SpellConfig) -> Option<Spell> {
         if s.fight_over {
             return (s.hurt > cfg.focus_hurt && s.grounded && self.ready(Spell::Focus, now)).then_some(Spell::Focus);
         }
@@ -219,7 +219,7 @@ impl SpellBook {
             return (near && self.ready(Spell::Thorns, now) && s.rolls[0] < cfg.thorns_chance).then_some(Spell::Thorns);
         }
         let off = s.target?;
-        if !s.grounded || now - self.last_special < cfg.min_gap {
+        if !s.grounded || ((now - self.last_special) as f32) < cfg.min_gap {
             return None;
         }
         // The moment calls for it: no roll.

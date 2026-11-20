@@ -59,7 +59,7 @@ pub(crate) struct Company {
     tried: bool,
     /// The scene ended (finished or stopped): the brain sends no `part` when switching.
     pub ended: bool,
-    return_ready_at: f32,
+    return_ready_at: f64,
     /// Seconds spent together.
     together: f32,
 }
