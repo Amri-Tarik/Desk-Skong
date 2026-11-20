@@ -12,6 +12,8 @@ use crate::terrain::Terrain;
 use super::lesson::Lesson;
 use super::{Arrival, Faces, Leave, NpcSet};
 
+mod company_run;
+
 /// Where a visitor appears (computed by the app from terrain / nav / monitors).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Placement {
@@ -39,6 +41,8 @@ pub enum NpcEvent {
     HitKnight,
     /// The spar is over (`lost`: he was beaten; otherwise it fizzled out).
     SparOver { lost: bool },
+    /// The calm scene after the talk ended (`finished`: they parted as planned, not cut short).
+    CompanyOver { finished: bool },
     /// Fully gone: drop the visitor.
     Gone,
 }
@@ -51,6 +55,8 @@ pub enum NpcPhase {
     Talking,
     Teaching,
     Sparring,
+    /// A calm scene with the knight.
+    Company,
     Leaving,
     Gone,
 }
@@ -74,6 +80,8 @@ enum State {
     Teaching(Box<Teach>),
     /// A spar after the conversation.
     Sparring(Box<Spar>),
+    /// A calm scene after the conversation.
+    Company(Box<company_run::Company>),
     /// After the conversation: a moment before leaving.
     Lingering { left: f32 },
     /// `hold`: seconds of the leave clip still to play before moving / fading.
@@ -217,6 +225,8 @@ pub struct Npc {
     lesson: Option<Lesson>,
     /// Challenge the knight to a spar once the conversation is over.
     spar_planned: bool,
+    /// Invite the knight to a calm scene once the conversation is over.
+    company: Option<company_run::Plan>,
     /// White hit flash (sparring), 1 → 0.
     pub flash: f32,
 }
@@ -259,6 +269,7 @@ impl Npc {
             knight_right: false,
             lesson: None,
             spar_planned: false,
+            company: None,
             flash: 0.0,
         }
     }
@@ -270,6 +281,7 @@ impl Npc {
             State::Talking { .. } => NpcPhase::Talking,
             State::Teaching(_) => NpcPhase::Teaching,
             State::Sparring(_) => NpcPhase::Sparring,
+            State::Company(_) => NpcPhase::Company,
             State::Exit { .. } => NpcPhase::Leaving,
             State::Gone => NpcPhase::Gone,
         }
@@ -334,8 +346,11 @@ impl Npc {
     /// Leave now (e.g. nobody can reach us, or the app shuts visits off).
     pub fn leave(&mut self, set: &NpcSet, env: &NpcEnv, events: &mut Vec<NpcEvent>) {
         if !matches!(self.state, State::Exit { .. } | State::Gone) {
-            if matches!(self.state, State::Talking { .. } | State::Teaching(_) | State::Sparring(_)) {
+            if matches!(self.state, State::Talking { .. } | State::Teaching(_) | State::Sparring(_) | State::Company(_)) {
                 events.push(NpcEvent::LineDone);
+            }
+            if matches!(self.state, State::Company(_)) {
+                events.push(NpcEvent::CompanyOver { finished: false });
             }
             if matches!(self.state, State::Sparring(_)) {
                 events.push(NpcEvent::SparOver { lost: false });
@@ -354,6 +369,7 @@ impl Npc {
             }
             State::Teaching(t) => (VisitorState::Teaching, None, t.react()),
             State::Sparring(_) => (VisitorState::Sparring, None, None),
+            State::Company(_) => (VisitorState::Company, None, None),
             _ => {
                 let s = match self.phase() {
                     NpcPhase::Arriving => VisitorState::Arriving,
@@ -376,6 +392,10 @@ impl Npc {
             stand_off: d.stand_off * ppu,
             lesson: match &self.state {
                 State::Teaching(t) => t.cue(),
+                _ => None,
+            },
+            company: match &self.state {
+                State::Company(c) => c.cue(set, self.def),
                 _ => None,
             },
         }
@@ -457,6 +477,7 @@ impl Npc {
             State::Talking { lines, i, t, stage } => self.talk_tick(lines, i, t + dt, stage, set, events),
             State::Teaching(teach) => self.teach_tick(teach, dt, set, env, events),
             State::Sparring(spar) => self.spar_tick(spar, dt, set, env, events),
+            State::Company(c) => self.company_tick(c, dt, set, env, events),
             State::Lingering { left } => {
                 if near_knight {
                     self.looking_right = env.knight.x > self.pos.x;
@@ -598,6 +619,7 @@ impl Npc {
                     match self.lesson.take() {
                         Some(lesson) => self.start_lesson(lesson, set, events),
                         None if std::mem::take(&mut self.spar_planned) => self.start_spar(set, events),
+                        None if self.company.is_some() => self.start_company(set, events),
                         None => State::Lingering { left: self.rng.range(3.0, 6.0) },
                     }
                 }

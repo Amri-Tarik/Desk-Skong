@@ -26,6 +26,8 @@ pub enum VisitorState {
     Teaching,
     /// Sparring with the knight after the talk (he is also one of the brain's foes).
     Sparring,
+    /// A calm scene after the talk: keep them company (see [`Visitor::company`]).
+    Company,
     Leaving,
 }
 
@@ -52,6 +54,8 @@ pub struct Visitor {
     pub stand_off: f32,
     /// While teaching: the drill and what the knight should be doing.
     pub lesson: Option<super::train::LessonCue>,
+    /// While keeping company: the knight's part and where the scene is.
+    pub company: Option<super::company::CompanyCue>,
 }
 
 /// Chance (at curiosity 0.5) that the knight dream-nails a visitor after their talk.
@@ -225,7 +229,7 @@ impl Greet {
                 }
                 ctx.out.waiting = false;
                 if !talking && act.is_none() {
-                    if v.greeted && !self.dream_decided && !matches!(v.state, VisitorState::Teaching | VisitorState::Sparring) {
+                    if v.greeted && !self.dream_decided && !matches!(v.state, VisitorState::Teaching | VisitorState::Sparring | VisitorState::Company) {
                         // Afterwards, sometimes: dream-nail them to hear what they really think.
                         self.dream_decided = true;
                         let chance = DREAM_NAIL_CHANCE * (0.5 + ctx.mind.personality.curiosity);

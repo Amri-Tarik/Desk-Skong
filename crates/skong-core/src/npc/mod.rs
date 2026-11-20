@@ -13,9 +13,12 @@
 //!   dream-nail thoughts about windows.
 //! * [`lesson`] — teachers (Sly) follow the talk with a training session: drills,
 //!   demonstrations with their own clips, praise and corrections.
+//! * [`company`] — calm scenes after the talk: sitting together with maps, taking in the
+//!   view, a song while mining.
 //!
 //! The brain sees visitors as [`crate::ai::Visitor`] percepts (see [`Npc::percept`]).
 mod actor;
+pub mod company;
 pub mod dream;
 pub mod lesson;
 pub mod spar;
@@ -38,6 +41,7 @@ pub use actor::{Npc, NpcEnv, NpcEvent, NpcPhase, Placement, once_secs};
 pub use dream::DreamRules;
 pub use lesson::{DemoStep, DrillDef, Lesson, LessonDef, PlannedDrill};
 pub use spar::{SparClips, SparDef};
+pub use company::{CompanyClips, CompanyDef, CompanyNeeds};
 pub use talk::{Line, TalkContext};
 pub use visits::{VisitConditions, VisitConfig, VisitScheduler};
 
@@ -173,6 +177,9 @@ pub struct NpcDef {
     /// A fighter: after the conversation he may challenge the knight to a spar (see [`spar`]).
     #[serde(default)]
     pub spar: Option<SparDef>,
+    /// A calm scene that may follow the conversation (see [`company`]).
+    #[serde(default)]
+    pub company: Option<CompanyDef>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -226,6 +233,7 @@ pub struct NpcClips {
     /// The lesson stance (idle when unset).
     pub stance: Option<ClipId>,
     pub spar: Option<SparClips>,
+    pub company: Option<CompanyClips>,
 }
 
 /// Every visitor definition with its clip library.
@@ -309,6 +317,7 @@ fn resolve(d: &NpcDef, lib: &ClipLibrary) -> Result<NpcClips> {
             .collect::<Result<_>>()?,
         stance: d.lesson.as_ref().and_then(|l| l.stance.as_deref()).map(get).transpose()?,
         spar: d.spar.as_ref().map(|s| s.resolve(lib, &d.name)).transpose()?,
+        company: d.company.as_ref().map(|s| s.resolve(lib, get(&c.idle)?, &d.name)).transpose()?,
     })
 }
 
@@ -340,6 +349,9 @@ fn validate(d: &NpcDef) -> Result<()> {
     }
     if d.after_fight.is_some_and(|s| s.is_nan() || s <= 0.0) {
         bail!("npc '{}': after_fight must be positive", d.name);
+    }
+    if let Some(s) = &d.company {
+        s.validate().with_context(|| format!("npc '{}'", d.name))?;
     }
     if let Some(s) = &d.spar {
         s.validate().with_context(|| format!("npc '{}'", d.name))?;

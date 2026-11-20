@@ -47,10 +47,14 @@ pub mod ids {
     pub const EVERY_ENEMY: &str = "every_enemy";
     pub const TROUPE_MASTER: &str = "troupe_master";
     pub const TROUPE_ENCORE: &str = "troupe_encore";
+    pub const CORNIFER_MAPS: &str = "cornifer_maps";
+    pub const QUIRREL_VIEW: &str = "quirrel_view";
+    pub const MYLA_SONG: &str = "myla_song";
 
     pub const ALL: &[&str] = &[
         HORNET_TALK, DREAM_WINDOW, DREAM_VISITOR, FIRST_SPELL, POGO, VENGEFLY_AIRBORNE, FALL_AND_RECLAIM, WINDOW_RIDE, CURSOR_DEFEAT, CURSOR_VICTOR, WALL_CRYSTAL_DASH, DREAM_GATE, EVERY_REGION, EVERY_BENCH, EVERY_VISITOR, SLY_LESSON, ZOTE_SPAR, GAUNTLET,
         UNN_FORM, HIGHLIGHTED_TEXT, SHATTERED_WINDOW, GEO_HOARD, NAP_POKE, THROW, MIDAIR_CATCH, STEP_BEHIND, WALL_JUMP_CHAIN, SUPER_HARD_LANDING, EVERY_ENEMY, TROUPE_MASTER, TROUPE_ENCORE,
+        CORNIFER_MAPS, QUIRREL_VIEW, MYLA_SONG,
     ];
 }
 use ids::*;
@@ -149,6 +153,8 @@ pub enum AchievementEvent {
     LessonFinished { who: String },
     /// A sparring visitor went down.
     SparWon { who: String },
+    /// A visitor's calm scene (maps, the view, a song) ran until they parted.
+    CompanyKept { who: String },
     /// The brain cast a spell or a nail art.
     SpellCast,
     /// A down-strike in mid-air connected and bounced him up.
@@ -287,6 +293,12 @@ impl Tracker {
             E::LessonFinished { .. } => unlock(SLY_LESSON),
             E::SparWon { who } if who == "zote" => unlock(ZOTE_SPAR),
             E::SparWon { .. } => {}
+            E::CompanyKept { who } => match who.as_str() {
+                "cornifer" => unlock(CORNIFER_MAPS),
+                "quirrel" => unlock(QUIRREL_VIEW),
+                "myla" => unlock(MYLA_SONG),
+                _ => {}
+            },
             E::SpellCast => unlock(FIRST_SPELL),
             E::Pogo => unlock(POGO),
             E::EnemyStruck { foe, on_floor } => {

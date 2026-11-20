@@ -19,6 +19,7 @@ use skong_core::geom::{RectF, RectI, Vec2};
 use skong_core::nav::{NavGoal, NavGraph, TravelStyle};
 use skong_core::occupancy::{ClaimKey, ClaimKind, Occupancy};
 use skong_core::npc::{Arrival, Lesson, Npc, NpcEnv, NpcEvent, NpcPhase, NpcSet, Placement, TalkContext, VisitConditions, VisitScheduler, plan_placement};
+use skong_core::npc::company::{CompanyNeeds, beside_deposit, high_up, seat_beside};
 use skong_core::portal::{Footing, Portal, PortalPhase, PortalSpot, PortalStyle, SpotOptions, arrival_footings, has_headroom, pick_spot};
 use skong_core::terrain::Terrain;
 use skong_win::sprite_window::SpriteWindow;
@@ -41,6 +42,8 @@ struct LiveNpc {
     /// Last drawn (frame, mirrored, alpha, flash level).
     drawn: Option<(SpriteKey, bool, u8, u8)>,
     bubble: Option<BubbleId>,
+    /// The Geo deposit they arrived beside (Myla mines it), rock bottom center.
+    deposit: Option<Vec2>,
 }
 
 /// A portal whose guest has not stepped out yet (`def` None: a departure portal).
@@ -58,6 +61,8 @@ pub enum VisitorNews {
     LessonOver { who: String, finished: bool },
     /// A spar ended (`lost`: the visitor went down).
     SparOver { who: String, lost: bool },
+    /// A calm scene after the talk ended (`finished`: they parted as planned).
+    Company { who: String, finished: bool },
     /// The dream nail showed a thought: a visitor's (`Some`) or a window's (`None`).
     Dreamed { who: Option<String> },
 }
@@ -83,6 +88,8 @@ pub struct World<'a> {
     /// Has this footing been on screen long enough to arrive on (see
     /// [`skong_core::lasting::SETTLED_SECS`])? Dragged windows and scrolling content aren't.
     pub settled: &'a dyn Fn(&Footing) -> bool,
+    /// Geo deposits on screen: (rock bottom center, where the knight mines it from).
+    pub deposits: &'a [(Vec2, Vec2)],
 }
 
 /// Room (units) an arrival needs above its footing, so nothing opens high enough to clip
@@ -126,6 +133,8 @@ pub struct Visitors {
     knight_hits: u32,
     /// Since the pet last looked (see [`Visitors::take_news`]).
     news: Vec<VisitorNews>,
+    /// The visitor about to step out was placed beside this deposit.
+    pending_deposit: Option<Vec2>,
 }
 
 const SLASH_CLIP: &str = "DN Slash";
@@ -167,6 +176,7 @@ impl Visitors {
             dream_wanted: false,
             knight_hits: 0,
             news: Vec::new(),
+            pending_deposit: None,
         };
         v.rescale(vanilla, scale)?;
         Ok(v)
@@ -251,6 +261,20 @@ impl Visitors {
         {
             // A fighter: the talk ends in a challenge.
             self.live[i].npc.plan_spar(&self.set);
+        } else if let Some(c) = &self.set.defs[def].company
+            && self.rng.chance(c.chance)
+            && self.company_fits(i, c.needs, w)
+        {
+            // A calm scene follows: the visitor invites the knight to stay a while.
+            let face = self.live[i].deposit.map(|d| d.x);
+            self.live[i].npc.plan_company(&self.set, face);
+        }
+        let mut lines = lines;
+        if self.live[i].npc.company_planned()
+            && let Some(last) = lines.last_mut()
+        {
+            // The scene is the knight's answer to the last line (no map read on top of it).
+            last.1 = None;
         }
         let mut events = Vec::new();
         if self.live[i].npc.begin_talk(lines, w.knight.pos.x, &self.set, &mut events) {
@@ -269,6 +293,34 @@ impl Visitors {
             LessonSignal::Stop => self.live[i].npc.end_lesson(&mut events),
         }
         self.handle_events(i, events, w);
+    }
+
+    /// The knight was called away from a calm scene with visitor `id`.
+    pub fn part(&mut self, id: u32, w: &World) {
+        let Some(i) = self.live.iter().position(|l| l.npc.id == id) else { return };
+        let mut events = Vec::new();
+        self.live[i].npc.end_company(&self.set, &mut events);
+        self.handle_events(i, events, w);
+    }
+
+    /// Does a calm scene of this kind fit where visitor `i` and the knight are? Never with a
+    /// fullscreen app up or the user typing hard; settled window edges only for seats.
+    fn company_fits(&self, i: usize, needs: CompanyNeeds, w: &World) -> bool {
+        let npc = &self.live[i].npc;
+        if w.fullscreen || w.keys_per_sec >= self.set.visits.busy_keys_per_sec {
+            return false;
+        }
+        let ppu = self.ppu;
+        match needs {
+            CompanyNeeds::Any => true,
+            // The deposit she arrived beside is still there.
+            CompanyNeeds::Deposit => self.live[i].deposit.is_some_and(|d| w.deposits.iter().any(|(c, _)| c.distance(d) < 2.0 * ppu)),
+            CompanyNeeds::Seat | CompanyNeeds::View => {
+                let Some(l) = seat_beside(w.terrain, npc.pos, w.knight.pos.x, ppu) else { return false };
+                let settled = (w.settled)(&Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner });
+                settled && (needs == CompanyNeeds::Seat || high_up(l.y, self.area_at(npc.pos, w.desk)))
+            }
+        }
     }
 
     /// A visitor sparring with the knight, as one of the brain's foes.
@@ -448,7 +500,7 @@ impl Visitors {
 
     /// A visitor is talking (no dream nails, no unrelated acts meanwhile).
     pub fn conversing(&self) -> bool {
-        self.live.iter().any(|l| matches!(l.npc.phase(), NpcPhase::Talking | NpcPhase::Teaching | NpcPhase::Sparring))
+        self.live.iter().any(|l| matches!(l.npc.phase(), NpcPhase::Talking | NpcPhase::Teaching | NpcPhase::Sparring | NpcPhase::Company))
     }
 
     /// The brain aimed its dream nail at visitor `id`.
@@ -495,8 +547,20 @@ impl Visitors {
         let ledges: Vec<Footing> = w.terrain.ledges.iter().map(|l| Footing { x0: l.x0, x1: l.x1, y: l.y, owner: l.owner }).filter(|f| ok(f)).collect();
         // Nav surfaces first (reachable by construction), raw ledges as a fallback.
         let monitors: Vec<_> = w.desk.monitors.iter().filter(|m| !w.game_monitors.contains(&m.rect)).cloned().collect();
-        let at = plan_placement(arrive, &footings, knight.pos, &monitors, &mut self.rng, &mut reachable)
-            .or_else(|| plan_placement(arrive, &ledges, knight.pos, &monitors, &mut self.rng, &mut reachable));
+        // A miner turns up beside a Geo deposit when there is one (her calm scene needs it).
+        let mut deposit = None;
+        if self.set.defs[def].company.as_ref().is_some_and(|c| c.needs == CompanyNeeds::Deposit) {
+            let free_monitor = |p: Vec2| monitors.iter().any(|m| m.work.contains(p.x as i32, (p.y - 1.0) as i32));
+            let deposits: Vec<(Vec2, Vec2)> = w.deposits.iter().copied().filter(|(c, _)| free_monitor(*c)).collect();
+            let mut ok = |p: Vec2| free_monitor(p) && reachable(p);
+            deposit = beside_deposit(&deposits, &footings, ppu, &mut self.rng, &mut ok).or_else(|| beside_deposit(&deposits, &ledges, ppu, &mut self.rng, &mut ok));
+        }
+        let at = match deposit {
+            Some((at, _)) => Some(at),
+            None => plan_placement(arrive, &footings, knight.pos, &monitors, &mut self.rng, &mut reachable)
+                .or_else(|| plan_placement(arrive, &ledges, knight.pos, &monitors, &mut self.rng, &mut reachable)),
+        };
+        self.pending_deposit = deposit.map(|d| d.1);
         let Some(at) = at else {
             log::info!("visitor: no good spot for {} right now", self.set.defs[def].display);
             return;
@@ -529,7 +593,8 @@ impl Visitors {
         let mut npc = Npc::new(id, def, &self.set, at, self.rng.next_u32(), self.ppu);
         let area = self.area_at(at.feet, w.desk);
         npc.attach(&NpcEnv { terrain: w.terrain, knight: w.knight.pos, ppu: self.ppu, area });
-        self.live.push(LiveNpc { npc, win, drawn: None, bubble: None });
+        let deposit = self.pending_deposit.take();
+        self.live.push(LiveNpc { npc, win, drawn: None, bubble: None, deposit });
     }
 
     fn handle_events(&mut self, i: usize, events: Vec<NpcEvent>, w: &World) {
@@ -560,6 +625,11 @@ impl Visitors {
                     let who = &self.set.defs[self.live[i].npc.def].display;
                     log::info!("visitor: the spar with {who} is over ({})", if lost { "he lost" } else { "it fizzled out" });
                     self.news.push(VisitorNews::SparOver { who: self.set.defs[self.live[i].npc.def].name.clone(), lost });
+                }
+                NpcEvent::CompanyOver { finished } => {
+                    let who = &self.set.defs[self.live[i].npc.def];
+                    log::info!("visitor: the calm scene with {} {}", who.display, if finished { "is over" } else { "was cut short" });
+                    self.news.push(VisitorNews::Company { who: who.name.clone(), finished });
                 }
                 NpcEvent::OpenPortal(at) => {
                     self.portals.push(OpenPortal { portal: Portal::open(PortalSpot { at, owner: None }, self.set.portal_style), guest: None });
@@ -678,7 +748,7 @@ impl Visitors {
     /// The dream-nailed visitor's inner thought (never over their own speech bubble).
     fn visitor_thought(&mut self, i: usize, w: &World) {
         let l = &self.live[i];
-        if matches!(l.npc.phase(), NpcPhase::Talking | NpcPhase::Teaching | NpcPhase::Sparring) || l.bubble.is_some_and(|b| self.bubbles.is_open(b)) {
+        if matches!(l.npc.phase(), NpcPhase::Talking | NpcPhase::Teaching | NpcPhase::Sparring | NpcPhase::Company) || l.bubble.is_some_and(|b| self.bubbles.is_open(b)) {
             return;
         }
         let d = &self.set.defs[l.npc.def];

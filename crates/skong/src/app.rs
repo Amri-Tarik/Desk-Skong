@@ -986,6 +986,9 @@ impl Pet {
         if let Some(r) = intent.lesson {
             self.lesson_signal(r);
         }
+        if let Some(id) = intent.part {
+            self.part_from_visitor(id);
+        }
         if let Some(ev) = intent.discovery {
             self.on_discovery(ev);
         }
