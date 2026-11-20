@@ -1,0 +1,2063 @@
+{
+  "name": "Hornet Boss Anim",
+  "clips": [
+    {
+      "name": "Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 155,
+          "sprite": "idle0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 156,
+          "sprite": "idle0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 157,
+          "sprite": "idle0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 158,
+          "sprite": "idle0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 159,
+          "sprite": "idle0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 160,
+          "sprite": "idle0005"
+        }
+      ]
+    },
+    {
+      "name": "G Dash Antic",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 52,
+          "sprite": "hornet_dash0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 40,
+          "sprite": "hornet_dash0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 51,
+          "sprite": "hornet_dash0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 47,
+          "sprite": "hornet_dash0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 42,
+          "sprite": "hornet_dash0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 54,
+          "sprite": "hornet_dash0005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 47,
+          "sprite": "hornet_dash0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 42,
+          "sprite": "hornet_dash0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 54,
+          "sprite": "hornet_dash0005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 43,
+          "sprite": "hornet_dash0006"
+        }
+      ]
+    },
+    {
+      "name": "G Dash",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 41,
+          "sprite": "hornet_dash0007"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 48,
+          "sprite": "hornet_dash0008"
+        }
+      ]
+    },
+    {
+      "name": "G Dash Recover1",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 46,
+          "sprite": "hornet_dash0009"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 49,
+          "sprite": "hornet_dash0010"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 50,
+          "sprite": "hornet_dash0011"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 44,
+          "sprite": "hornet_dash0012"
+        }
+      ]
+    },
+    {
+      "name": "G Dash Recover2",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 53,
+          "sprite": "hornet_dash0013"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 45,
+          "sprite": "hornet_dash0014"
+        }
+      ]
+    },
+    {
+      "name": "Jump Antic",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 136,
+          "sprite": "hard_land0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 137,
+          "sprite": "hard_land0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 138,
+          "sprite": "hard_land0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 169,
+          "sprite": "jump0000"
+        }
+      ]
+    },
+    {
+      "name": "Jump",
+      "fps": 12,
+      "loop_start": 5,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 170,
+          "sprite": "jump0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 171,
+          "sprite": "jump0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 172,
+          "sprite": "jump0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 173,
+          "sprite": "jump0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 174,
+          "sprite": "jump0005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 175,
+          "sprite": "jump0006"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 176,
+          "sprite": "jump0007"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 177,
+          "sprite": "jump0008"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 178,
+          "sprite": "jump0009"
+        }
+      ]
+    },
+    {
+      "name": "Land",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 187,
+          "sprite": "soft_land0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 188,
+          "sprite": "soft_land0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 189,
+          "sprite": "soft_land0002"
+        }
+      ]
+    },
+    {
+      "name": "A Dash Antic",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 7,
+          "sprite": "attack_air_dash0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 6,
+          "sprite": "attack_air_dash0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 1,
+          "sprite": "attack_air_dash0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 2,
+          "sprite": "attack_air_dash0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 3,
+          "sprite": "attack_air_dash0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 0,
+          "sprite": "attack_air_dash0005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 2,
+          "sprite": "attack_air_dash0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 3,
+          "sprite": "attack_air_dash0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 4,
+          "sprite": "attack_air_dash0006"
+        }
+      ]
+    },
+    {
+      "name": "A Dash",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 8,
+          "sprite": "attack_air_dash0007"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 5,
+          "sprite": "attack_air_dash0008"
+        }
+      ]
+    },
+    {
+      "name": "A Dash Recover",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 9,
+          "sprite": "attack_air_dash0009"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 175,
+          "sprite": "jump0006"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 176,
+          "sprite": "jump0007"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 177,
+          "sprite": "jump0008"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 178,
+          "sprite": "jump0009"
+        }
+      ]
+    },
+    {
+      "name": "Wall Impact",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 234,
+          "sprite": "wall_impact0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 235,
+          "sprite": "wall_impact0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 233,
+          "sprite": "wall_impact0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 232,
+          "sprite": "wall_impact0003"
+        }
+      ]
+    },
+    {
+      "name": "Sphere Antic G",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 63,
+          "sprite": "attack_ground_thread_sphere0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 72,
+          "sprite": "attack_ground_thread_sphere0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 68,
+          "sprite": "attack_ground_thread_sphere0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 64,
+          "sprite": "attack_ground_thread_sphere0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 66,
+          "sprite": "attack_ground_thread_sphere0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 59,
+          "sprite": "attack_ground_thread_sphere0005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 71,
+          "sprite": "attack_ground_thread_sphere0006"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 59,
+          "sprite": "attack_ground_thread_sphere0005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 66,
+          "sprite": "attack_ground_thread_sphere0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 64,
+          "sprite": "attack_ground_thread_sphere0003"
+        }
+      ]
+    },
+    {
+      "name": "Sphere Antic A",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 119,
+          "sprite": "attack_thread0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 106,
+          "sprite": "attack_thread0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 117,
+          "sprite": "attack_thread0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 114,
+          "sprite": "attack_thread0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 112,
+          "sprite": "attack_thread0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 113,
+          "sprite": "attack_thread0005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 105,
+          "sprite": "attack_thread0006"
+        }
+      ]
+    },
+    {
+      "name": "Sphere Attack",
+      "fps": 15,
+      "loop_start": 5,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 102,
+          "sprite": "attack_thread0007"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 116,
+          "sprite": "attack_thread0008"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 109,
+          "sprite": "attack_thread0009"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 104,
+          "sprite": "attack_thread0010"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 111,
+          "sprite": "attack_thread0011"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 103,
+          "sprite": "attack_thread0012"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 110,
+          "sprite": "attack_thread0013"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 107,
+          "sprite": "attack_thread0014"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 108,
+          "sprite": "attack_thread0015"
+        }
+      ]
+    },
+    {
+      "name": "Sphere Recover G",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 60,
+          "sprite": "attack_ground_thread_sphere0016"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 56,
+          "sprite": "attack_ground_thread_sphere0017"
+        }
+      ]
+    },
+    {
+      "name": "Sphere Recover A",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 118,
+          "sprite": "attack_thread0016"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 120,
+          "sprite": "attack_thread0017"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 115,
+          "sprite": "attack_thread0018"
+        }
+      ]
+    },
+    {
+      "name": "Sphere Ball",
+      "fps": 20,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 127,
+          "sprite": "thread_sphere_effect0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 121,
+          "sprite": "thread_sphere_effect0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 122,
+          "sprite": "thread_sphere_effect0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 124,
+          "sprite": "thread_sphere_effect0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 126,
+          "sprite": "thread_sphere_effect0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 123,
+          "sprite": "thread_sphere_effect0005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 125,
+          "sprite": "thread_sphere_effect0006"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 128,
+          "sprite": "thread_sphere_effect0007"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 129,
+          "sprite": "thread_sphere_effect0008"
+        }
+      ]
+    },
+    {
+      "name": "Fall",
+      "fps": 12,
+      "loop_start": 4,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 175,
+          "sprite": "jump0006"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 176,
+          "sprite": "jump0007"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 177,
+          "sprite": "jump0008"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 178,
+          "sprite": "jump0009"
+        }
+      ]
+    },
+    {
+      "name": "Throw Antic",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 87,
+          "sprite": "hornet_throw0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 76,
+          "sprite": "hornet_throw0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 89,
+          "sprite": "hornet_throw0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 79,
+          "sprite": "hornet_throw0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 84,
+          "sprite": "hornet_throw0005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 90,
+          "sprite": "hornet_throw0006"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 74,
+          "sprite": "hornet_throw0007"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 84,
+          "sprite": "hornet_throw0005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 90,
+          "sprite": "hornet_throw0006"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 74,
+          "sprite": "hornet_throw0007"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 84,
+          "sprite": "hornet_throw0005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 90,
+          "sprite": "hornet_throw0006"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 74,
+          "sprite": "hornet_throw0007"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 92,
+          "sprite": "hornet_throw0008"
+        }
+      ]
+    },
+    {
+      "name": "Throw",
+      "fps": 12,
+      "loop_start": 3,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 75,
+          "sprite": "hornet_throw0009"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 86,
+          "sprite": "hornet_throw0010"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 80,
+          "sprite": "hornet_throw0011"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 73,
+          "sprite": "hornet_throw0012"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 78,
+          "sprite": "hornet_throw0013"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 83,
+          "sprite": "hornet_throw0014"
+        }
+      ]
+    },
+    {
+      "name": "Throw Recover",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 91,
+          "sprite": "hornet_throw0015"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 81,
+          "sprite": "hornet_throw0016"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 85,
+          "sprite": "hornet_throw0017"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 77,
+          "sprite": "hornet_throw0018"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 82,
+          "sprite": "hornet_throw0019"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 88,
+          "sprite": "hornet_throw0020"
+        }
+      ]
+    },
+    {
+      "name": "Needle",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 93,
+          "sprite": "needle_projectile0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 94,
+          "sprite": "needle_projectile0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 95,
+          "sprite": "needle_projectile0002"
+        }
+      ]
+    },
+    {
+      "name": "Needle Thread",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 101,
+          "sprite": "needle_thread0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 96,
+          "sprite": "needle_thread0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 99,
+          "sprite": "needle_thread0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 100,
+          "sprite": "needle_thread0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 98,
+          "sprite": "needle_thread0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 97,
+          "sprite": "needle_thread0005"
+        }
+      ]
+    },
+    {
+      "name": "Run",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 179,
+          "sprite": "run0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 180,
+          "sprite": "run0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 181,
+          "sprite": "run0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 182,
+          "sprite": "run0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 183,
+          "sprite": "run0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 184,
+          "sprite": "run0005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 185,
+          "sprite": "run0006"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 186,
+          "sprite": "run0007"
+        }
+      ]
+    },
+    {
+      "name": "Hard Land",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 136,
+          "sprite": "hard_land0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 137,
+          "sprite": "hard_land0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 138,
+          "sprite": "hard_land0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 139,
+          "sprite": "hard_land0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 140,
+          "sprite": "hard_land0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 141,
+          "sprite": "hard_land0005"
+        }
+      ]
+    },
+    {
+      "name": "Evade Antic",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 130,
+          "sprite": "evade0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 131,
+          "sprite": "evade0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 132,
+          "sprite": "evade0002"
+        }
+      ]
+    },
+    {
+      "name": "Evade",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 133,
+          "sprite": "evade0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 134,
+          "sprite": "evade0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 135,
+          "sprite": "evade0005"
+        }
+      ]
+    },
+    {
+      "name": "Stun Air",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 199,
+          "sprite": "stun_air0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 193,
+          "sprite": "stun_air0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 198,
+          "sprite": "stun_air0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 196,
+          "sprite": "stun_air0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 200,
+          "sprite": "stun_air0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 197,
+          "sprite": "stun_air0005"
+        }
+      ]
+    },
+    {
+      "name": "Stun",
+      "fps": 12,
+      "loop_start": 2,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 201,
+          "sprite": "stun_ground0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 194,
+          "sprite": "stun_ground0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 190,
+          "sprite": "stun_ground0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 195,
+          "sprite": "stun_ground0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 191,
+          "sprite": "stun_ground0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 192,
+          "sprite": "stun_ground0005"
+        }
+      ]
+    },
+    {
+      "name": "Stun Recover",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 194,
+          "sprite": "stun_ground0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 201,
+          "sprite": "stun_ground0000"
+        }
+      ]
+    },
+    {
+      "name": "Air Dash Effect",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 261,
+          "sprite": "air_dash_effects0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 262,
+          "sprite": "air_dash_effects0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 263,
+          "sprite": "air_dash_effects0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 264,
+          "sprite": "air_dash_effects0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 265,
+          "sprite": "air_dash_effects0004"
+        }
+      ]
+    },
+    {
+      "name": "G Dash Effect",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 266,
+          "sprite": "ground_dash_effect0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 267,
+          "sprite": "ground_dash_effect0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 268,
+          "sprite": "ground_dash_effect0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 269,
+          "sprite": "ground_dash_effect0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 270,
+          "sprite": "ground_dash_effect0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 271,
+          "sprite": "ground_dash_effect0005"
+        }
+      ]
+    },
+    {
+      "name": "Flash",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 272,
+          "sprite": "hornet_flash_effect0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 273,
+          "sprite": "hornet_flash_effect0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 274,
+          "sprite": "hornet_flash_effect0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 275,
+          "sprite": "hornet_flash_effect0003"
+        }
+      ]
+    },
+    {
+      "name": "Throw Effect",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 276,
+          "sprite": "throw_effect0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 277,
+          "sprite": "throw_effect0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 278,
+          "sprite": "throw_effect0002"
+        }
+      ]
+    },
+    {
+      "name": "G Dash Recover",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 46,
+          "sprite": "hornet_dash0009"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 49,
+          "sprite": "hornet_dash0010"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 50,
+          "sprite": "hornet_dash0011"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 44,
+          "sprite": "hornet_dash0012"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 53,
+          "sprite": "hornet_dash0013"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 45,
+          "sprite": "hornet_dash0014"
+        }
+      ]
+    },
+    {
+      "name": "Wounded",
+      "fps": 12,
+      "loop_start": 3,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 201,
+          "sprite": "stun_ground0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 194,
+          "sprite": "stun_ground0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 288,
+          "sprite": "hornet_flourish002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 241,
+          "sprite": "weak_idle0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 239,
+          "sprite": "weak_idle0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 238,
+          "sprite": "weak_idle0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 240,
+          "sprite": "weak_idle0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 237,
+          "sprite": "weak_idle0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 236,
+          "sprite": "weak_idle0005"
+        }
+      ]
+    },
+    {
+      "name": "Death Air",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 199,
+          "sprite": "stun_air0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 193,
+          "sprite": "stun_air0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 198,
+          "sprite": "stun_air0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 196,
+          "sprite": "stun_air0003"
+        }
+      ]
+    },
+    {
+      "name": "G Dash Antic Q",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 52,
+          "sprite": "hornet_dash0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 40,
+          "sprite": "hornet_dash0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 51,
+          "sprite": "hornet_dash0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 47,
+          "sprite": "hornet_dash0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 42,
+          "sprite": "hornet_dash0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 54,
+          "sprite": "hornet_dash0005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 47,
+          "sprite": "hornet_dash0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 43,
+          "sprite": "hornet_dash0006"
+        }
+      ]
+    },
+    {
+      "name": "A Dash Antic Q",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 7,
+          "sprite": "attack_air_dash0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 6,
+          "sprite": "attack_air_dash0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 1,
+          "sprite": "attack_air_dash0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 2,
+          "sprite": "attack_air_dash0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 3,
+          "sprite": "attack_air_dash0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 4,
+          "sprite": "attack_air_dash0006"
+        }
+      ]
+    },
+    {
+      "name": "Jump Antic Q",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 136,
+          "sprite": "hard_land0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 137,
+          "sprite": "hard_land0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 169,
+          "sprite": "jump0000"
+        }
+      ]
+    },
+    {
+      "name": "Throw Antic Q",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 87,
+          "sprite": "hornet_throw0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 76,
+          "sprite": "hornet_throw0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 89,
+          "sprite": "hornet_throw0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 79,
+          "sprite": "hornet_throw0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 84,
+          "sprite": "hornet_throw0005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 90,
+          "sprite": "hornet_throw0006"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 74,
+          "sprite": "hornet_throw0007"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 84,
+          "sprite": "hornet_throw0005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 74,
+          "sprite": "hornet_throw0007"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 92,
+          "sprite": "hornet_throw0008"
+        }
+      ]
+    },
+    {
+      "name": "Sphere Antic G Q",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 63,
+          "sprite": "attack_ground_thread_sphere0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 72,
+          "sprite": "attack_ground_thread_sphere0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 68,
+          "sprite": "attack_ground_thread_sphere0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 64,
+          "sprite": "attack_ground_thread_sphere0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 66,
+          "sprite": "attack_ground_thread_sphere0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 59,
+          "sprite": "attack_ground_thread_sphere0005"
+        }
+      ]
+    },
+    {
+      "name": "Sphere Antic A Q",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 119,
+          "sprite": "attack_thread0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 106,
+          "sprite": "attack_thread0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 117,
+          "sprite": "attack_thread0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 114,
+          "sprite": "attack_thread0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 112,
+          "sprite": "attack_thread0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 113,
+          "sprite": "attack_thread0005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 105,
+          "sprite": "attack_thread0006"
+        }
+      ]
+    },
+    {
+      "name": "Counter Antic",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 245,
+          "sprite": "attack_counter0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 246,
+          "sprite": "attack_counter0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 243,
+          "sprite": "attack_counter0004"
+        }
+      ]
+    },
+    {
+      "name": "Counter Stance",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 243,
+          "sprite": "attack_counter0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 251,
+          "sprite": "attack_counter0005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 254,
+          "sprite": "attack_counter0006"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 244,
+          "sprite": "attack_counter0007"
+        }
+      ]
+    },
+    {
+      "name": "Counter End",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 246,
+          "sprite": "attack_counter0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 245,
+          "sprite": "attack_counter0002"
+        }
+      ]
+    },
+    {
+      "name": "Counter Attack Antic",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 249,
+          "sprite": "attack_counter0008"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 242,
+          "sprite": "attack_counter0009"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 248,
+          "sprite": "attack_counter0010"
+        }
+      ]
+    },
+    {
+      "name": "Counter Attack 1",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 252,
+          "sprite": "attack_counter0011"
+        }
+      ]
+    },
+    {
+      "name": "Counter Attack Recover",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 250,
+          "sprite": "attack_counter0013"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 247,
+          "sprite": "attack_counter0014"
+        }
+      ]
+    },
+    {
+      "name": "Counter Attack 2",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 253,
+          "sprite": "attack_counter0012"
+        }
+      ]
+    },
+    {
+      "name": "Barb Thread",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 24,
+          "sprite": "barb_thread0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 25,
+          "sprite": "barb_thread0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 38,
+          "sprite": "barb_thread0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 26,
+          "sprite": "barb_thread0003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 37,
+          "sprite": "barb_thread0004"
+        }
+      ]
+    },
+    {
+      "name": "Barb Spike",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 29,
+          "sprite": "barb_thread0007"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 32,
+          "sprite": "barb_thread0008"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 36,
+          "sprite": "barb_thread0009"
+        }
+      ]
+    },
+    {
+      "name": "Barb Spike Antic",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 33,
+          "sprite": "barb_thread0006"
+        }
+      ]
+    },
+    {
+      "name": "Barb Loose",
+      "fps": 18,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 34,
+          "sprite": "barb_thread0010"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 39,
+          "sprite": "barb_thread0011"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 28,
+          "sprite": "barb_thread0012"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 23,
+          "sprite": "barb_thread0013"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 34,
+          "sprite": "barb_thread0010"
+        }
+      ]
+    },
+    {
+      "name": "Barb Break",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 27,
+          "sprite": "barb_thread0014"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 31,
+          "sprite": "barb_thread0015"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 30,
+          "sprite": "barb_thread0016"
+        }
+      ]
+    },
+    {
+      "name": "Barb Throw Antic",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 17,
+          "sprite": "barb_thread_throw0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 19,
+          "sprite": "barb_thread_throw0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 12,
+          "sprite": "barb_thread_throw0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 14,
+          "sprite": "barb_thread_throw0003"
+        }
+      ]
+    },
+    {
+      "name": "Barb Throw",
+      "fps": 18,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 11,
+          "sprite": "barb_thread_throw0004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 20,
+          "sprite": "barb_thread_throw0005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 13,
+          "sprite": "barb_thread_throw0006"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 10,
+          "sprite": "barb_thread_throw0007"
+        }
+      ]
+    },
+    {
+      "name": "Barb Throw Recover",
+      "fps": 15,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 15,
+          "sprite": "barb_thread_throw0008"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 16,
+          "sprite": "barb_thread_throw0009"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 18,
+          "sprite": "barb_thread_throw0010"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 22,
+          "sprite": "barb_thread_throw0011"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 21,
+          "sprite": "barb_thread_throw0012"
+        }
+      ]
+    },
+    {
+      "name": "Flourish",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 281,
+          "sprite": "hornet_flourish000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 284,
+          "sprite": "hornet_flourish001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 288,
+          "sprite": "hornet_flourish002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 285,
+          "sprite": "hornet_flourish003"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 283,
+          "sprite": "hornet_flourish004"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 286,
+          "sprite": "hornet_flourish005"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 291,
+          "sprite": "hornet_flourish006"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 282,
+          "sprite": "hornet_flourish007"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 292,
+          "sprite": "hornet_flourish008"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 279,
+          "sprite": "hornet_flourish009"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 289,
+          "sprite": "hornet_flourish010"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 280,
+          "sprite": "hornet_flourish011"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 290,
+          "sprite": "hornet_flourish012"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 287,
+          "sprite": "hornet_flourish013"
+        }
+      ]
+    },
+    {
+      "name": "Hornet Flash",
+      "fps": 20,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 272,
+          "sprite": "hornet_flash_effect0000"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 273,
+          "sprite": "hornet_flash_effect0001"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 274,
+          "sprite": "hornet_flash_effect0002"
+        },
+        {
+          "collection": "Hornet Boss Cln",
+          "sprite_id": 275,
+          "sprite": "hornet_flash_effect0003"
+        }
+      ]
+    }
+  ]
+}

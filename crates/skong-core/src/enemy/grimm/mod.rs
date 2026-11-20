@@ -1,24 +1,35 @@
 //! The Troupe Master: a secret boss fight. Rare and earned: once enough achievements are
 //! unlocked, a dim scarlet flame (a Nightmare Lantern's) now and then appears on a settled
-//! ledge the knight can reach; when he strikes it, Grimm steps out of the flame, bows, says
-//! a line, and the show begins. A debug command summons him (or the flame) at once.
+//! ledge the knight can reach. The knight can't summon him: he goes over, lingers by it and
+//! wonders ("?"), drawing the user's attention. The flame waits a long while (`lantern.secs`,
+//! time to arrange the windows into an arena); when the user clicks it, Grimm steps out of
+//! the flame, bows, says a line, and the show begins right there. A debug command summons
+//! him (or lights the flame) at once.
 //!
 //! * [`GrimmConfig`] / [`GrimmSet`]: `data/grimm.json` and his clips (`Grimm Anim`,
 //!   `Flameball Anim`, `Grimm Flash Anim`), validated.
 //! * [`Grimm`] (`sim`): the routine (teleports, dash / dive, slashes and uppercut, firebats,
 //!   flame pillars, spikes, the balloon at each phase change), all placed relative to the
 //!   knight so any desktop is a stage; his flames ([`Hazard`]); the endings.
-//! * [`GrimmDirector`]: the lantern (schedule, start rules, lifetime), the summons, the
-//!   aborts (fullscreen app, visitor, hard typing, a fight that drags on: he bows out, no
-//!   penalty), and the outcome events. Pure; the app (`skong/src/grimm.rs`) places the
-//!   lantern ([`plan_lantern`]), renders, and applies blows, hits and the reward.
+//! * [`Cameo`] (`cameo`): his rare friendly visit (a flourish, a bow, a line, a couple of
+//!   teleports around the knight, farewell); sometimes he leaves the flame behind as a hint,
+//!   only for a knight who could already find it.
+//! * [`GrimmDirector`]: the lantern (schedule, start rules, lifetime, the click), the
+//!   cameo's schedule, the summons, the aborts (fullscreen app, visitor, hard typing, a
+//!   fight that drags on: he bows out, no penalty), and the outcome events. Pure; the app
+//!   (`skong/src/grimm.rs`) places the lantern ([`plan_lantern`]), renders, passes the
+//!   user's click on, and applies blows, hits and the reward.
 //!
-//! The brain sees him as foes: the lantern (`FoeKind::Lantern`, struck to summon him),
-//! Grimm (`FoeKind::Boss`, fought at the engagement tier, lethal), and his flames
-//! (`FoeKind::Hazard`, never targets: dodged, jumped, stepped away from).
+//! The brain sees the flame and the cameo as scenes ([`crate::ai::SceneCue`]: lingering by
+//! the flame, watching him perform), Grimm as a foe (`FoeKind::Boss`, fought at the
+//! engagement tier, lethal), and his flames (`FoeKind::Hazard`, never targets: dodged,
+//! jumped, stepped away from).
+mod cameo;
 mod sim;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod cameo_tests;
 
 use std::path::Path;
 
@@ -26,7 +37,7 @@ use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
 use crate::ai::rng::Rng;
-use crate::ai::{Foe, FoeKind};
+use crate::ai::{Foe, SceneCue};
 use crate::anim::{ClipId, ClipLibrary};
 use crate::assets::{SpriteBank, read_json};
 use crate::desktop::{Monitor, WindowId};
@@ -34,6 +45,7 @@ use crate::geom::Vec2;
 use crate::npc::{TalkContext, VisitConditions, VisitConfig, VisitScheduler};
 use crate::portal::Footing;
 
+pub use cameo::{Cameo, CameoTick};
 pub use sim::{GRIMM_ID, Grimm, GrimmEnv, GrimmOutcome, GrimmStage, GrimmTick, Hazard, HazardKind, HitBy, LANTERN_ID, Move, SPIKE_CUE, ground_under};
 
 /// How the lantern comes about (see `lantern` in `data/grimm.json`).
@@ -43,7 +55,7 @@ pub struct LanternConfig {
     pub enabled: bool,
     /// Achievements unlocked before the flame ever shows.
     pub min_achievements: usize,
-    /// Seconds the flame waits to be struck.
+    /// Seconds the flame waits for the user's click (long: time to build an arena).
     pub secs: f32,
     pub schedule: VisitConfig,
 }
@@ -53,8 +65,32 @@ impl Default for LanternConfig {
         Self {
             enabled: true,
             min_achievements: 8,
-            secs: 150.0,
+            secs: 1800.0,
             schedule: VisitConfig { enabled: true, first: [1800.0, 4800.0], gap: [5400.0, 14400.0], busy_keys_per_sec: 2.5, away_secs: 90.0, retry: 60.0 },
+        }
+    }
+}
+
+/// His rare friendly visit (see `cameo` in `data/grimm.json`).
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct CameoConfig {
+    pub enabled: bool,
+    /// Teleports around the knight ([min, max]).
+    pub hops: [u32; 2],
+    /// Chance he leaves the scarlet flame behind (only once `lantern.min_achievements` are
+    /// unlocked: the secret's own rule).
+    pub flame_chance: f32,
+    pub schedule: VisitConfig,
+}
+
+impl Default for CameoConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            hops: [2, 3],
+            flame_chance: 0.4,
+            schedule: VisitConfig { enabled: true, first: [2400.0, 6000.0], gap: [7200.0, 18000.0], busy_keys_per_sec: 2.5, away_secs: 90.0, retry: 60.0 },
         }
     }
 }
@@ -71,6 +107,10 @@ pub enum LineKind {
     Triumph,
     /// Called off.
     BowOut,
+    /// The friendly visit: after his bow.
+    Cameo,
+    /// The friendly visit: farewell.
+    CameoBye,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
@@ -82,6 +122,10 @@ pub struct GrimmLines {
     pub defeat: Vec<String>,
     pub triumph: Vec<String>,
     pub bow_out: Vec<String>,
+    #[serde(default)]
+    pub cameo: Vec<String>,
+    #[serde(default)]
+    pub cameo_bye: Vec<String>,
 }
 
 impl GrimmLines {
@@ -93,6 +137,8 @@ impl GrimmLines {
             LineKind::Defeat => &self.defeat,
             LineKind::Triumph => &self.triumph,
             LineKind::BowOut => &self.bow_out,
+            LineKind::Cameo => &self.cameo,
+            LineKind::CameoBye => &self.cameo_bye,
         }
     }
 
@@ -130,6 +176,8 @@ pub struct GrimmConfig {
     pub busy_secs: f32,
     #[serde(default)]
     pub lantern: LanternConfig,
+    #[serde(default)]
+    pub cameo: CameoConfig,
     pub lines: GrimmLines,
 }
 
@@ -153,7 +201,14 @@ impl GrimmConfig {
         if self.geo[1] < self.geo[0] || !non_neg(self.invuln) || !non_neg(self.busy_secs) || !pos(self.lantern.secs) {
             bail!("grimm: bad range");
         }
-        for kind in [LineKind::Intro, LineKind::Phase2, LineKind::Phase3, LineKind::Defeat, LineKind::Triumph, LineKind::BowOut] {
+        if self.cameo.hops[1] < self.cameo.hops[0] || !(0.0..=1.0).contains(&self.cameo.flame_chance) {
+            bail!("grimm: bad cameo hops or flame_chance");
+        }
+        let mut kinds = vec![LineKind::Intro, LineKind::Phase2, LineKind::Phase3, LineKind::Defeat, LineKind::Triumph, LineKind::BowOut];
+        if self.cameo.enabled {
+            kinds.extend([LineKind::Cameo, LineKind::CameoBye]);
+        }
+        for kind in kinds {
             let pool = self.lines.of(kind);
             if pool.is_empty() {
                 bail!("grimm: no {kind:?} lines");
@@ -212,6 +267,11 @@ pub struct GrimmClips {
     /// His flames (same library).
     pub firebat: ClipId,
     pub pillar: ClipId,
+    /// The friendly visit's flourishes.
+    pub tele_to_idle: ClipId,
+    pub hand_out: ClipId,
+    pub hand_click: ClipId,
+    pub look_back: ClipId,
 }
 
 impl GrimmClips {
@@ -256,6 +316,10 @@ impl GrimmClips {
             bat_fly: get("Bat Fly")?,
             firebat: get("Firebat")?,
             pillar: get("Pillar")?,
+            tele_to_idle: get("TeleToIdle")?,
+            hand_out: get("Hand Out")?,
+            hand_click: get("Hand Click")?,
+            look_back: get("LookBack")?,
         })
     }
 }
@@ -339,26 +403,21 @@ pub struct Lantern {
 }
 
 impl Lantern {
-    /// The brain's view: something to strike.
-    pub fn foe(&self, ppu: f32) -> Foe {
-        let half = Vec2::new(0.4, 0.6) * ppu;
-        Foe {
-            id: LANTERN_ID,
-            kind: FoeKind::Lantern,
-            pos: self.at - Vec2::new(0.0, half.y),
-            feet: self.at,
-            half,
-            flying: false,
-            vulnerable: self.alpha >= 0.5 && !self.fading,
-            ..Default::default()
-        }
+    /// Burning bright enough to be clicked (not fading).
+    pub fn lit(&self) -> bool {
+        self.alpha >= 0.5 && !self.fading
+    }
+
+    /// Where its (clickable) flame is drawn, about: a box over its feet point.
+    pub fn rect(&self, ppu: f32) -> crate::geom::RectF {
+        crate::geom::RectF::from_feet(self.at, Vec2::new(0.8, 1.2) * ppu)
     }
 }
 
 /// How Grimm came.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Summon {
-    /// The knight struck the lantern.
+    /// The user clicked the scarlet flame.
     Lantern,
     /// The debug command, straight to the show.
     Direct,
@@ -392,6 +451,11 @@ pub enum GrimmEvent {
     KnightFell,
     /// `grimm_bowed_out`.
     BowedOut { reason: BowOutReason },
+    /// `grimm_cameo`: his friendly visit began.
+    CameoArrived,
+    /// `grimm_cameo_over`: it ended (`finished`: seen through to his farewell; `flame`: he
+    /// left the scarlet flame behind).
+    CameoOver { finished: bool, flame: bool },
 }
 
 impl GrimmEvent {
@@ -404,6 +468,8 @@ impl GrimmEvent {
             GrimmEvent::Defeated { .. } => "grimm_defeated",
             GrimmEvent::KnightFell => "grimm_triumphed",
             GrimmEvent::BowedOut { .. } => "grimm_bowed_out",
+            GrimmEvent::CameoArrived => "grimm_cameo",
+            GrimmEvent::CameoOver { .. } => "grimm_cameo_over",
         }
     }
 }
@@ -500,6 +566,15 @@ pub struct GrimmDirector {
     /// Seconds of the show so far.
     secs: f32,
     held_by: Option<&'static str>,
+    /// The user clicked the flame: Grimm steps out at the next good moment.
+    clicked: bool,
+    /// His friendly visit, its schedule, a debug request for one (and how long it waited).
+    cameo: Option<Cameo>,
+    cameo_sched: VisitScheduler,
+    cameo_pending: Option<f32>,
+    /// The cameo was cut short.
+    cameo_cut: bool,
+    cameos: u32,
 }
 
 /// A requested summon waits this long for a good moment (s).
@@ -509,7 +584,70 @@ impl GrimmDirector {
     pub fn new(cfg: &GrimmConfig, seed: u32) -> Self {
         let mut rng = Rng::new(seed);
         let sched = VisitScheduler::new(cfg.lantern.schedule, &mut rng);
-        Self { sched, rng, lantern: None, grimm: None, pending: None, want: None, asked: false, busy_for: 0.0, secs: 0.0, held_by: None }
+        let cameo_sched = VisitScheduler::new(cfg.cameo.schedule, &mut rng);
+        Self {
+            sched,
+            rng,
+            lantern: None,
+            grimm: None,
+            pending: None,
+            want: None,
+            asked: false,
+            busy_for: 0.0,
+            secs: 0.0,
+            held_by: None,
+            clicked: false,
+            cameo: None,
+            cameo_sched,
+            cameo_pending: None,
+            cameo_cut: false,
+            cameos: 0,
+        }
+    }
+
+    /// Debug: his friendly visit at the next good moment.
+    pub fn request_cameo(&mut self) {
+        if self.grimm.is_some() || self.cameo.is_some() {
+            log::info!("grimm: he's already here");
+            return;
+        }
+        self.cameo_pending = Some(0.0);
+    }
+
+    pub fn cameo(&self) -> Option<&Cameo> {
+        self.cameo.as_ref()
+    }
+
+    /// Grimm on stage (the show or his visit), or about to be: no visitors or enemies now.
+    /// A scarlet flame alone doesn't hold anything up: it waits for the user's click.
+    pub fn busy(&self) -> bool {
+        self.grimm.is_some() || self.cameo.is_some() || self.pending.is_some() || self.cameo_pending.is_some()
+    }
+
+    /// The user clicked the scarlet flame: `true` when one is lit (Grimm steps out of it at
+    /// the next good moment).
+    pub fn click_lantern(&mut self) -> bool {
+        match &self.lantern {
+            Some(l) if l.lit() => {
+                if !self.clicked {
+                    log::info!("grimm: the scarlet flame is clicked");
+                }
+                self.clicked = true;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// The knight's part: watching the friendly visit, or lingering by a lit flame.
+    pub fn scene_cue(&self, set: &GrimmSet) -> Option<SceneCue> {
+        if self.grimm.is_some() {
+            return None;
+        }
+        if let Some(c) = &self.cameo {
+            return (!c.leaving()).then(|| c.cue(set));
+        }
+        self.lantern.filter(|l| !l.fading).map(|l| SceneCue::Flame { at: l.at })
     }
 
     /// Seconds of presence until the next lantern may show (0 = due).
@@ -527,9 +665,9 @@ impl GrimmDirector {
         self.held_by = None;
     }
 
-    /// The flame or the show is on (no other events meanwhile).
+    /// The flame, the show or his visit is on (or wanted): his art stays loaded.
     pub fn active(&self) -> bool {
-        self.grimm.is_some() || self.lantern.is_some() || self.want.is_some() || self.pending.is_some()
+        self.busy() || self.lantern.is_some() || self.want.is_some()
     }
 
     /// Grimm is on stage.
@@ -545,9 +683,9 @@ impl GrimmDirector {
         self.lantern.as_ref()
     }
 
-    /// The brain's foes: the lantern, Grimm, his flames.
+    /// The brain's foes: Grimm and his flames (the scarlet flame is the user's to click).
     pub fn foes(&self, set: &GrimmSet, ppu: f32) -> Vec<Foe> {
-        let mut v: Vec<Foe> = self.lantern.iter().map(|l| l.foe(ppu)).collect();
+        let mut v: Vec<Foe> = Vec::new();
         if let Some(g) = &self.grimm {
             v.extend(g.foe(set, ppu));
             v.extend(g.hazards.iter().map(Hazard::foe));
@@ -583,14 +721,6 @@ impl GrimmDirector {
         }
     }
 
-    /// The knight struck the lantern: Grimm steps out of the flame.
-    pub fn strike_lantern(&mut self, set: &GrimmSet, knight_x: f32, ppu: f32) -> Option<GrimmEvent> {
-        let l = self.lantern.take_if(|l| !l.fading && l.alpha >= 0.5)?;
-        log::info!("grimm: the lantern is struck; the troupe master arrives");
-        self.spawn(set, l.at, knight_x, ppu);
-        Some(GrimmEvent::Summoned { via: Summon::Lantern })
-    }
-
     fn spawn(&mut self, set: &GrimmSet, at: Vec2, toward: f32, ppu: f32) {
         self.grimm = Some(Grimm::new(set, at, toward, self.rng.next_u32(), ppu));
         self.secs = 0.0;
@@ -599,7 +729,26 @@ impl GrimmDirector {
         self.want = None;
         self.asked = false;
         self.lantern = None;
+        self.clicked = false;
         self.sched.schedule_next(&mut self.rng);
+    }
+
+    /// His friendly visit begins beside the knight (on his ground line, the roomier side).
+    fn spawn_cameo(&mut self, set: &GrimmSet, w: &GrimmWorld, env: &GrimmEnv) {
+        let (gy, x0, x1) = ground_under(env.terrain, w.knight_at, env.area);
+        let side = if w.knight_at.x - x0 > x1 - w.knight_at.x { -1.0 } else { 1.0 };
+        let u = env.ppu;
+        let x = (w.knight_at.x + side * 4.0 * u).clamp(env.area.left + u, (env.area.right - u).max(env.area.left + u));
+        let c = &set.cfg.cameo;
+        let hops = c.hops[0] + self.rng.next_u32() % (c.hops[1] - c.hops[0] + 1);
+        // The hint only for a knight who could already find the secret.
+        let flame = set.cfg.lantern.enabled && w.achievements >= set.cfg.lantern.min_achievements && self.rng.chance(c.flame_chance);
+        self.cameos += 1;
+        log::info!("grimm: a friendly visit ({hops} teleports{})", if flame { ", leaving his flame" } else { "" });
+        self.cameo = Some(Cameo::new(set, Vec2::new(x, gy), w.knight_at.x, hops, flame, self.cameos, self.rng.next_u32(), u));
+        self.cameo_pending = None;
+        self.cameo_cut = false;
+        self.cameo_sched.schedule_next(&mut self.rng);
     }
 
     /// The knight's blow on Grimm: `Some(beaten)` when it landed.
@@ -618,8 +767,12 @@ impl GrimmDirector {
         {
             ev.push(GrimmEvent::BowedOut { reason: BowOutReason::Game });
         }
+        if self.cameo.take().is_some() {
+            ev.push(GrimmEvent::CameoOver { finished: false, flame: false });
+        }
         self.want = None;
         self.asked = false;
+        self.clicked = false;
         ev
     }
 
@@ -675,7 +828,32 @@ impl GrimmDirector {
             return step;
         }
 
-        // 2. The flame, waiting to be struck (it goes out when the moment passes).
+        // 1b. His friendly visit.
+        if let Some(c) = self.cameo.as_mut() {
+            self.busy_for = if w.keys_per_sec >= cfg.busy_keys_per_sec { self.busy_for + dt } else { 0.0 };
+            let abort = w.fullscreen || w.visitor_present || w.gauntlet || w.others_alive > 0 || w.knight_down || w.shade || self.busy_for >= cfg.busy_secs;
+            if abort && !c.leaving() {
+                log::info!("grimm: his visit is cut short");
+                c.bow_out(set);
+                self.cameo_cut = true;
+            }
+            let t = c.tick(dt, set, env);
+            step.say = t.say;
+            step.flashes = t.flashes;
+            if let Some(flame) = t.left {
+                step.events.push(GrimmEvent::CameoOver { finished: !self.cameo_cut, flame });
+                if flame {
+                    // The hint: his flame, placed like a natural one (settled, reachable).
+                    self.want = Some(Want { natural: true, tries: 3, retry_in: 0.5, waited: 0.0 });
+                }
+            }
+            if c.gone() {
+                self.cameo = None;
+            }
+            return step;
+        }
+
+        // 2. The flame, waiting for the user's click (a long while: time to build an arena).
         if let Some(l) = self.lantern.as_mut() {
             l.age += dt;
             match l.owner.map(|id| env.terrain.window_rect(id)) {
@@ -683,15 +861,35 @@ impl GrimmDirector {
                 Some(None) => l.fading = true,
                 None => {}
             }
-            let gone = w.fullscreen || w.visitor_present || w.gauntlet || w.others_alive > 0 || w.knight_down;
-            if gone || l.age >= cfg.lantern.secs {
+            // Only hard aborts put it out early (a fullscreen app); visitors, fights and
+            // the Shade come and go while it waits.
+            if w.fullscreen || l.age >= cfg.lantern.secs {
                 l.fading = true;
+            }
+            if self.clicked && !l.fading {
+                match start_blocked(cfg, w, false) {
+                    None => {
+                        let at = l.at;
+                        log::info!("grimm: the troupe master steps out of the clicked flame");
+                        self.spawn(set, at, w.knight_at.x, env.ppu);
+                        self.held_by = None;
+                        step.events.push(GrimmEvent::Summoned { via: Summon::Lantern });
+                        return step;
+                    }
+                    Some(why) => {
+                        if self.held_by != Some(why) {
+                            log::info!("grimm: clicked; he waits for a good moment ({why})");
+                            self.held_by = Some(why);
+                        }
+                    }
+                }
             }
             if l.fading {
                 l.alpha -= dt / 1.5;
                 if l.alpha <= 0.0 {
                     log::info!("grimm: the scarlet flame goes out");
                     self.lantern = None;
+                    self.clicked = false;
                     step.events.push(GrimmEvent::LanternFaded);
                 }
             } else {
@@ -744,6 +942,42 @@ impl GrimmDirector {
             if self.sched.tick(dt, &c, &mut self.rng) {
                 log::info!("grimm: a lantern is due");
                 self.want = Some(Want { natural: true, tries: 3, retry_in: 0.0, waited: 0.0 });
+            }
+        }
+
+        // 4b. His friendly visit: rare, for everyone (or asked for).
+        if self.want.is_none() {
+            if self.cameo_pending.is_none() && cfg.cameo.enabled && self.lantern.is_none() {
+                let c = VisitConditions {
+                    user_idle_secs: w.user_idle_secs,
+                    keys_per_sec: w.keys_per_sec,
+                    fullscreen: w.fullscreen,
+                    visitor_present: w.visitor_present || w.gauntlet || w.others_alive > 0 || w.shade,
+                    knight_busy: w.knight_busy || w.knight_down,
+                };
+                if self.cameo_sched.tick(dt, &c, &mut self.rng) {
+                    log::info!("grimm: a friendly visit is due");
+                    self.cameo_pending = Some(0.0);
+                }
+            }
+            if let Some(waited) = self.cameo_pending.as_mut() {
+                // Waits (art loading, a good moment) a little, like a summon.
+                *waited += dt;
+                let blocked = start_blocked(cfg, w, false).or(if w.shade || w.knight_busy { Some("the knight is busy") } else { None });
+                if *waited > SUMMON_WAIT {
+                    log::info!("grimm: no good moment for a visit came; maybe later");
+                    self.cameo_pending = None;
+                } else if let Some(why) = blocked {
+                    if self.held_by != Some(why) {
+                        log::info!("grimm: a visit waits ({why})");
+                        self.held_by = Some(why);
+                    }
+                } else {
+                    self.held_by = None;
+                    self.spawn_cameo(set, w, env);
+                    step.events.push(GrimmEvent::CameoArrived);
+                    return step;
+                }
             }
         }
 

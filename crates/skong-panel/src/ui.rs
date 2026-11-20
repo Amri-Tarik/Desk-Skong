@@ -214,7 +214,7 @@ impl Panel {
                 if ui.button("Start a gauntlet").on_hover_text("three waves of enemies, then a big Geo reward; ends early if you type or go fullscreen").clicked() {
                     self.cmd(Command::StartGauntlet);
                 }
-                if ui.button("Light a scarlet flame").on_hover_text("a dim flame near the knight; striking it summons the troupe master").clicked() {
+                if ui.button("Light a scarlet flame").on_hover_text("a dim flame near the knight; click it to summon the troupe master (it waits ~30 min: build him an arena)").clicked() {
                     self.cmd(Command::SummonGrimm { lantern: true });
                 }
                 if ui.button("Dream nail").on_hover_text("dream-nail the window he stands on").clicked() {
@@ -413,8 +413,20 @@ impl Panel {
                     if ui.add_enabled(connected, egui::Button::new("Summon the troupe master")).on_hover_text("straight to the show, at the next good moment").clicked() {
                         self.cmd(Command::SummonGrimm { lantern: false });
                     }
-                    if ui.add_enabled(connected, egui::Button::new("Light a scarlet flame")).on_hover_text("his lantern near the knight; striking it summons him").clicked() {
+                    if ui.add_enabled(connected, egui::Button::new("Light a scarlet flame")).on_hover_text("his lantern near the knight; click the flame to summon him").clicked() {
                         self.cmd(Command::SummonGrimm { lantern: true });
+                    }
+                    if ui.add_enabled(connected, egui::Button::new("Grimm's friendly visit")).on_hover_text("he drops by, bows, teleports around the knight and leaves").clicked() {
+                        self.cmd(Command::GrimmVisit);
+                    }
+                });
+                // Hornet's challenges.
+                ui.horizontal(|ui| {
+                    if ui.add_enabled(connected, egui::Button::new("Hornet: race")).on_hover_text("she drops by; after the talk, a race to her needle").clicked() {
+                        self.cmd(Command::HornetChallenge { race: true });
+                    }
+                    if ui.add_enabled(connected, egui::Button::new("Hornet: duel")).on_hover_text("she drops by; after the talk, a short duel").clicked() {
+                        self.cmd(Command::HornetChallenge { race: false });
                     }
                 });
             });

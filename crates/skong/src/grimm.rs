@@ -25,7 +25,7 @@ use skong_core::desktop::WindowId;
 use skong_core::enemy::grimm::{GrimmDirector, GrimmEnv, GrimmEvent, GrimmSet, GrimmStep, GrimmWorld, HazardKind, Summon};
 use skong_core::geom::{RectI, Vec2};
 use skong_core::npc::TalkContext;
-use skong_win::sprite_window::SpriteWindow;
+use skong_win::sprite_window::{MouseEvent, SpriteWindow};
 
 use crate::bubble::{BubbleId, Bubbles, faded};
 use crate::enemies::flashed;
@@ -164,10 +164,31 @@ impl Troupe {
         self.director.strike(damage, &self.set)
     }
 
-    /// The knight struck the lantern.
-    pub fn strike_lantern(&mut self, knight_x: f32) -> Option<GrimmEvent> {
-        let ppu = self.ppu();
-        self.director.strike_lantern(&self.set, knight_x, ppu)
+    /// Grimm on stage or about to be (the show, his friendly visit): no visitors or enemies
+    /// now. A waiting flame alone holds nothing up.
+    pub fn busy(&self) -> bool {
+        self.director.busy()
+    }
+
+    /// Debug: his friendly visit at the next good moment.
+    pub fn request_cameo(&mut self) {
+        self.director.request_cameo();
+    }
+
+    /// The knight's part: watching the friendly visit, or lingering by a lit flame.
+    pub fn scene_cue(&self) -> Option<skong_core::ai::SceneCue> {
+        self.director.scene_cue(&self.set)
+    }
+
+    /// Where the flame burns, while one is lit (the knight's "?" lingers there).
+    pub fn flame_at(&self) -> Option<Vec2> {
+        self.director.lantern().filter(|l| l.lit()).map(|l| l.at)
+    }
+
+    /// The user clicked the flame's window since the last tick?
+    fn take_flame_click(&mut self) -> bool {
+        let Some(s) = &self.lantern_win else { return false };
+        s.win.take_mouse().into_iter().any(|e| matches!(e, MouseEvent::Up { .. }))
     }
 
     /// Grimm's body centre (hit markers).
@@ -299,6 +320,10 @@ impl Troupe {
             }
         }
         self.art_housekeeping(dt, w.achievements);
+        // The user's click on the scarlet flame summons him (the knight can't).
+        if self.take_flame_click() && self.director.click_lantern() {
+            log::info!("grimm: the user clicked the scarlet flame");
+        }
         let world = GrimmWorld { ready: w.ready && self.art.is_some(), ..*w };
         let step = self.director.tick(dt, &world, env, &self.set);
         for e in &step.events {
@@ -341,9 +366,9 @@ impl Troupe {
 
     /// Just above his head (the bubble's anchor).
     fn head(&self) -> Option<Vec2> {
-        let g = self.director.grimm()?;
+        let pos = self.director.grimm().map(|g| g.pos).or(self.director.cameo().filter(|c| c.alpha > 0.01).map(|c| c.pos))?;
         let u = self.ppu();
-        Some(Vec2::new(g.pos.x, g.pos.y - self.set.cfg.size[1] * u - 0.4 * u))
+        Some(Vec2::new(pos.x, pos.y - self.set.cfg.size[1] * u - 0.4 * u))
     }
 
     fn take_window(&mut self) -> Option<Shown> {
@@ -369,6 +394,7 @@ impl Troupe {
 
     fn release(&mut self, s: Shown) {
         s.win.set_visible(false);
+        s.win.set_click_through(true); // the flame's window was clickable
         self.pool.push(s.win);
     }
 
@@ -402,8 +428,9 @@ impl Troupe {
     }
 
     fn draw_with(&mut self, art: &Art, dt: f32, ppu: f32) -> Result<()> {
-        // Grimm.
+        // Grimm (the show, or his friendly visit).
         let seen = self.director.grimm().filter(|g| g.alpha > 0.01).map(|g| (g.pos, g.alpha, g.flash, g.facing_right, g.sprite(&self.set), g.body(&self.set, ppu)));
+        let seen = seen.or_else(|| self.director.cameo().filter(|c| c.alpha > 0.01).map(|c| (c.pos, c.alpha, 0.0, c.facing_right, c.sprite(&self.set), c.body(&self.set, ppu))));
         match seen {
             Some((pos, alpha, flash, flip, key, body)) => {
                 if self.grimm_win.is_none() {
@@ -458,6 +485,10 @@ impl Troupe {
             Some(l) => {
                 if self.lantern_win.is_none() {
                     self.lantern_win = self.take_window();
+                    // The one window of ours the user may click: it summons him.
+                    if let Some(s) = &self.lantern_win {
+                        s.win.set_click_through(false);
+                    }
                 }
                 let flicker = 0.62 + 0.12 * (l.age * 5.3).sin() + 0.06 * (l.age * 11.7).sin();
                 let alpha = (l.alpha.clamp(0.0, 1.0) * flicker * 255.0) as u8;

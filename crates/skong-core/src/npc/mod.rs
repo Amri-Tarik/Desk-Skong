@@ -16,16 +16,24 @@
 //! * [`company`] — calm scenes after the talk: sitting together with maps, taking in the
 //!   view, a song while mining.
 //!
+//! * [`challenge`] — Hornet's challenges after the talk: a [`race`] to where her needle
+//!   lands, or a short [`duel`] she wins.
+//!
 //! The brain sees visitors as [`crate::ai::Visitor`] percepts (see [`Npc::percept`]).
 mod actor;
 pub mod company;
+pub mod challenge;
 pub mod dream;
+pub mod duel;
 pub mod lesson;
+pub mod race;
 pub mod spar;
 pub mod talk;
 mod visits;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod challenge_tests;
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
@@ -37,7 +45,8 @@ use crate::anim::{ClipId, ClipLibrary};
 use crate::ai::rng::Rng;
 use crate::assets::{SpriteBank, read_json};
 
-pub use actor::{Npc, NpcEnv, NpcEvent, NpcPhase, Placement, once_secs};
+pub use actor::{Npc, NpcEnv, NpcEvent, NpcPhase, NpcProp, Placement, once_secs};
+pub use challenge::{ChallengeClips, ChallengeDef, ChallengeKind, ChallengePlan};
 pub use dream::DreamRules;
 pub use lesson::{DemoStep, DrillDef, Lesson, LessonDef, PlannedDrill};
 pub use spar::{SparClips, SparDef};
@@ -180,6 +189,10 @@ pub struct NpcDef {
     /// A calm scene that may follow the conversation (see [`company`]).
     #[serde(default)]
     pub company: Option<CompanyDef>,
+    /// Hornet: after the conversation she may challenge the knight to a race or a duel (see
+    /// [`challenge`]).
+    #[serde(default)]
+    pub challenge: Option<ChallengeDef>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -187,6 +200,9 @@ pub struct NpcDef {
 pub struct ExtraLibrary {
     pub library: String,
     pub prefix: String,
+    /// Only these clips (unprefixed names) of the library; all when empty.
+    #[serde(default)]
+    pub clips: Vec<String>,
 }
 
 fn one() -> f32 {
@@ -234,6 +250,7 @@ pub struct NpcClips {
     pub stance: Option<ClipId>,
     pub spar: Option<SparClips>,
     pub company: Option<CompanyClips>,
+    pub challenge: Option<ChallengeClips>,
 }
 
 /// Every visitor definition with its clip library.
@@ -270,7 +287,7 @@ impl NpcSet {
                 None => {
                     let mut lib = load(&d.library, &d.name)?;
                     for e in &d.extra_libraries {
-                        lib.merge(load(&e.library, &d.name)?, &e.prefix);
+                        lib.merge_only(load(&e.library, &d.name)?, &e.prefix, &e.clips);
                     }
                     libs.push(lib);
                     lib_idx.insert(key, libs.len() - 1);
@@ -318,6 +335,7 @@ fn resolve(d: &NpcDef, lib: &ClipLibrary) -> Result<NpcClips> {
         stance: d.lesson.as_ref().and_then(|l| l.stance.as_deref()).map(get).transpose()?,
         spar: d.spar.as_ref().map(|s| s.resolve(lib, &d.name)).transpose()?,
         company: d.company.as_ref().map(|s| s.resolve(lib, get(&c.idle)?, &d.name)).transpose()?,
+        challenge: d.challenge.as_ref().map(|c| c.resolve(lib, &d.name)).transpose()?,
     })
 }
 
@@ -355,6 +373,9 @@ fn validate(d: &NpcDef) -> Result<()> {
     }
     if let Some(s) = &d.spar {
         s.validate().with_context(|| format!("npc '{}'", d.name))?;
+    }
+    if let Some(c) = &d.challenge {
+        c.validate().with_context(|| format!("npc '{}'", d.name))?;
     }
     Ok(())
 }

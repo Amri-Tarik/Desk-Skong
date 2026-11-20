@@ -53,7 +53,7 @@ impl Pet {
                     }
                 }
                 FoeKind::Boss => self.strike_grimm(s.damage, s.at, right),
-                FoeKind::Lantern => self.strike_lantern(s.at, right),
+                FoeKind::Lantern => {} // the scarlet flame is the user's to click
                 FoeKind::Hazard => {}
                 FoeKind::Sparring => {
                     self.fx.spawn("cursor_hit", s.at, right);

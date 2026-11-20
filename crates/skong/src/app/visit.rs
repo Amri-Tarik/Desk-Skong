@@ -28,14 +28,48 @@ impl Pet {
         self.visitors.as_ref().map(|v| v.percepts()).unwrap_or_default()
     }
 
+    /// The knight's part in a visitor scene (Hornet's race), if one is on.
+    pub(super) fn visitor_scene(&self) -> Option<skong_core::ai::SceneCue> {
+        self.visitors.as_ref().and_then(|v| v.scene_cue())
+    }
+
+    /// Why Hornet's challenges are off right now: the user needs the screen (a fullscreen
+    /// app, hard typing), the Shade waits, enemies came, the troupe is in town.
+    fn challenge_hold(&mut self) -> Option<&'static str> {
+        let fullscreen = self.brain.senses().fullscreen || self.watcher.snapshot().windows.iter().any(|w| w.fullscreen && w.foreground) || !self.games.game_monitors.is_empty();
+        if fullscreen {
+            Some("a fullscreen app")
+        } else if self.user_input.keys_per_sec() >= 3.0 {
+            Some("the user is typing")
+        } else if self.stakes.has_shade() {
+            Some("his Shade waits")
+        } else if self.enemies.as_ref().is_some_and(|e| !e.foes().is_empty()) {
+            Some("enemies came")
+        } else if self.troupe_active() {
+            Some("the troupe is in town")
+        } else {
+            None
+        }
+    }
+
+    /// Debug (panel): Hornet now, and her talk ends in a race or a duel.
+    pub(super) fn hornet_challenge(&mut self, race: bool) {
+        match self.visitors.as_mut() {
+            Some(v) => v.invite_challenge(race),
+            None => log::warn!("visitors are not available"),
+        }
+    }
+
     /// Build the visitors' view of the world and run `f` on them.
     fn with_visitors(&mut self, f: impl FnOnce(&mut Visitors, &World, &mut crate::fx::Fx)) {
+        let hold = self.challenge_hold();
         let Some(v) = self.visitors.as_mut() else { return };
+        v.set_challenge_hold(hold);
         let busy = self.grab.held_pos().is_some()
             || matches!(self.brain.behaviour(), BehaviourKind::Nap | BehaviourKind::Hide | BehaviourKind::KnockedOut | BehaviourKind::Flee | BehaviourKind::Fight | BehaviourKind::Gauntlet)
             // No visits in the middle of a gauntlet, or with the troupe in town.
             || self.enemies.as_ref().is_some_and(|e| e.gauntlet_active())
-            || self.troupe.as_ref().is_some_and(|t| t.active());
+            || self.troupe.as_ref().is_some_and(|t| t.busy());
         let (discoveries, terrain) = (&self.discoveries, &self.terrain);
         let settled = |f: &skong_core::portal::Footing| discoveries.settled(terrain, f.owner, f.y, f.x0, f.x1);
         let deposits: Vec<_> = discoveries.places().into_iter().filter(|p| p.kind == skong_core::ai::PlaceKind::Deposit).map(|p| (p.center, p.at)).collect();

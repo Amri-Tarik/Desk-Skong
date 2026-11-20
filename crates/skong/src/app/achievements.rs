@@ -332,7 +332,9 @@ impl Pet {
                 N::Dreamed { who: Some(who) } => E::VisitorDreamed { who },
                 N::Dreamed { who: None } => E::WindowDreamed,
                 N::Company { who, finished: true } => E::CompanyKept { who },
-                N::LessonOver { .. } | N::SparOver { .. } | N::Company { .. } => continue,
+                N::RaceOver { knight_won: Some(true), .. } => E::HornetRaceWon,
+                N::DuelOver { finished: true, .. } => E::HornetDuelDone,
+                N::LessonOver { .. } | N::SparOver { .. } | N::Company { .. } | N::RaceOver { .. } | N::DuelOver { .. } => continue,
             });
         }
         for (foe, kind) in self.enemies.as_mut().map(|e| std::mem::take(&mut e.killed)).unwrap_or_default() {
@@ -349,6 +351,7 @@ impl Pet {
             match ev {
                 G::Defeated { .. } => evs.push(E::TroupeMasterBeaten),
                 G::KnightFell => evs.push(E::FellToTroupeMaster),
+                G::CameoOver { finished: true, .. } => evs.push(E::GrimmCameoSeen),
                 _ => {}
             }
         }

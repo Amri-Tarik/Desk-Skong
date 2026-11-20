@@ -62,6 +62,12 @@ pub enum Command {
     /// Debug (the panel's hidden Debug section only): the secret boss at the next good
     /// moment; `lantern`: light his scarlet flame first instead of skipping to the show.
     SummonGrimm { lantern: bool },
+    /// Debug (hidden Debug section): the troupe master's friendly visit, at the next good
+    /// moment.
+    GrimmVisit,
+    /// Debug (hidden Debug section): Hornet drops by and challenges the knight to a race
+    /// (`race`) or a duel after their talk.
+    HornetChallenge { race: bool },
     /// The knight dream-nails the window he stands on (thought bubble).
     DreamNail,
     /// Path-find to the cursor (Stroll, or Hurry with the full movement kit).
@@ -339,6 +345,8 @@ mod tests {
             Command::ToggleDebugOverlay,
             Command::StartGauntlet,
             Command::SummonGrimm { lantern: true },
+            Command::GrimmVisit,
+            Command::HornetChallenge { race: true },
             Command::ResetAchievements,
             Command::Quit,
         ] {

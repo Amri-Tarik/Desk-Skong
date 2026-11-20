@@ -28,6 +28,8 @@ pub enum VisitorState {
     Sparring,
     /// A calm scene after the talk: keep them company (see [`Visitor::company`]).
     Company,
+    /// Racing the knight after the talk (Hornet; the race itself is a [`super::SceneCue`]).
+    Racing,
     Leaving,
 }
 

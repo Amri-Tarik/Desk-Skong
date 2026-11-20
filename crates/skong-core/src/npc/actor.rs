@@ -9,10 +9,21 @@ use crate::geom::{RectF, Vec2};
 use crate::props::ledge_below;
 use crate::terrain::Terrain;
 
+use super::challenge::{Body, Challenge, ChallengePlan, Next};
 use super::lesson::Lesson;
 use super::{Arrival, Faces, Leave, NpcSet};
 
 mod company_run;
+/// An extra sprite a visitor shows apart from its body (Hornet's needle and its thread).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NpcProp {
+    pub key: SpriteKey,
+    /// Where the sprite's origin (its anchor) goes (screen px).
+    pub at: Vec2,
+    /// Mirrored (the art points left).
+    pub flip: bool,
+    pub alpha: f32,
+}
 
 /// Where a visitor appears (computed by the app from terrain / nav / monitors).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -43,6 +54,10 @@ pub enum NpcEvent {
     SparOver { lost: bool },
     /// The calm scene after the talk ended (`finished`: they parted as planned, not cut short).
     CompanyOver { finished: bool },
+    /// Hornet's race was decided (`Some(true)`: the knight won) or called off (`None`).
+    RaceOver { knight_won: Option<bool> },
+    /// Hornet's duel ended (`finished`: she saw it through and won; otherwise called off).
+    DuelOver { finished: bool },
     /// Fully gone: drop the visitor.
     Gone,
 }
@@ -57,6 +72,8 @@ pub enum NpcPhase {
     Sparring,
     /// A calm scene with the knight.
     Company,
+    /// Hornet's race.
+    Racing,
     Leaving,
     Gone,
 }
@@ -82,6 +99,8 @@ enum State {
     Sparring(Box<Spar>),
     /// A calm scene after the conversation.
     Company(Box<company_run::Company>),
+    /// Hornet's race or duel after the conversation.
+    Challenge(Box<Challenge>),
     /// After the conversation: a moment before leaving.
     Lingering { left: f32 },
     /// `hold`: seconds of the leave clip still to play before moving / fading.
@@ -227,6 +246,8 @@ pub struct Npc {
     spar_planned: bool,
     /// Invite the knight to a calm scene once the conversation is over.
     company: Option<company_run::Plan>,
+    /// Hornet's challenge once the conversation is over.
+    challenge_plan: Option<ChallengePlan>,
     /// White hit flash (sparring), 1 → 0.
     pub flash: f32,
 }
@@ -270,6 +291,7 @@ impl Npc {
             lesson: None,
             spar_planned: false,
             company: None,
+            challenge_plan: None,
             flash: 0.0,
         }
     }
@@ -282,6 +304,8 @@ impl Npc {
             State::Teaching(_) => NpcPhase::Teaching,
             State::Sparring(_) => NpcPhase::Sparring,
             State::Company(_) => NpcPhase::Company,
+            State::Challenge(ref c) if c.is_race() => NpcPhase::Racing,
+            State::Challenge(_) => NpcPhase::Sparring,
             State::Exit { .. } => NpcPhase::Leaving,
             State::Gone => NpcPhase::Gone,
         }
@@ -343,6 +367,17 @@ impl Npc {
         self.spar_planned = set.clips[self.def].spar.is_some();
     }
 
+    /// Challenge the knight (race or duel) once the conversation is over (needs a
+    /// `challenge` def).
+    pub fn plan_challenge(&mut self, plan: ChallengePlan, set: &NpcSet) {
+        self.challenge_plan = set.clips[self.def].challenge.is_some().then_some(plan);
+    }
+
+    /// A challenge planned or under way.
+    pub fn challenging(&self) -> bool {
+        self.challenge_plan.is_some() || matches!(self.state, State::Challenge(_))
+    }
+
     /// Leave now (e.g. nobody can reach us, or the app shuts visits off).
     pub fn leave(&mut self, set: &NpcSet, env: &NpcEnv, events: &mut Vec<NpcEvent>) {
         if !matches!(self.state, State::Exit { .. } | State::Gone) {
@@ -355,8 +390,76 @@ impl Npc {
             if matches!(self.state, State::Sparring(_)) {
                 events.push(NpcEvent::SparOver { lost: false });
             }
+            if matches!(self.state, State::Challenge(_)) {
+                self.call_off(set, events);
+            }
+            self.challenge_plan = None;
             self.state = self.start_exit(set, env, events);
         }
+    }
+
+    /// Call a challenge off gracefully (the user needs the screen, the Shade waits, enemies
+    /// came): a parting word, then she leaves. A planned one is dropped. Returns whether
+    /// there was one.
+    pub fn call_off(&mut self, set: &NpcSet, events: &mut Vec<NpcEvent>) -> bool {
+        let planned = self.challenge_plan.take().is_some();
+        let State::Challenge(c) = &mut self.state else { return planned };
+        let Some(def) = set.defs[self.def].challenge.as_ref() else { return planned };
+        let mut body = Body { pos: &mut self.pos, looking_right: &mut self.looking_right, alpha: &mut self.alpha, flash: &mut self.flash, anim: &mut self.anim, lib: set.lib(self.def), rng: &mut self.rng };
+        c.abandon(def, &mut body, events);
+        true
+    }
+
+    /// The knight's part in a scene with this visitor (Hornet's race).
+    pub fn scene_cue(&self) -> Option<crate::ai::SceneCue> {
+        match &self.state {
+            State::Challenge(c) => c.cue(self.id),
+            _ => None,
+        }
+    }
+
+    /// Extra sprites to draw (Hornet's needle and thread).
+    pub fn props(&self, set: &NpcSet, ppu: f32) -> Vec<NpcProp> {
+        let (State::Challenge(c), Some(def), Some(clips)) = (&self.state, set.defs[self.def].challenge.as_ref(), set.clips[self.def].challenge.as_ref()) else {
+            return Vec::new();
+        };
+        c.props(self.pos, self.looking_right, set.lib(self.def), def, clips, ppu)
+    }
+
+    fn challenge_tick(&mut self, mut c: Box<Challenge>, dt: f32, set: &NpcSet, env: &NpcEnv, events: &mut Vec<NpcEvent>) -> State {
+        let (Some(def), Some(clips)) = (set.defs[self.def].challenge.as_ref(), set.clips[self.def].challenge.as_ref()) else {
+            return State::Lingering { left: 1.0 };
+        };
+        let mut body = Body { pos: &mut self.pos, looking_right: &mut self.looking_right, alpha: &mut self.alpha, flash: &mut self.flash, anim: &mut self.anim, lib: set.lib(self.def), rng: &mut self.rng };
+        match c.tick(dt, def, clips, &mut body, env, events) {
+            Next::Stay => {
+                if !c.airborne() {
+                    self.resync_rel(env);
+                }
+                State::Challenge(c)
+            }
+            Next::Landed => {
+                self.land(env);
+                State::Challenge(c)
+            }
+            Next::Linger(left) => {
+                self.land(env);
+                State::Lingering { left }
+            }
+            Next::Gone => self.gone(events),
+        }
+    }
+
+    fn start_challenge(&mut self, plan: ChallengePlan, set: &NpcSet, env_knight_x: f32, events: &mut Vec<NpcEvent>) -> State {
+        let (Some(def), Some(clips)) = (set.defs[self.def].challenge.as_ref(), set.clips[self.def].challenge.as_ref()) else {
+            return State::Lingering { left: self.rng.range(3.0, 6.0) };
+        };
+        let mut body = Body { pos: &mut self.pos, looking_right: &mut self.looking_right, alpha: &mut self.alpha, flash: &mut self.flash, anim: &mut self.anim, lib: set.lib(self.def), rng: &mut self.rng };
+        let c = match plan {
+            ChallengePlan::Race { finish, knight_eta, .. } => Challenge::Race(Box::new(super::race::Race::start(finish, knight_eta, &def.race, &clips.race, &mut body, events))),
+            ChallengePlan::Duel => Challenge::Duel(Box::new(super::duel::Duel::start(&def.duel, &clips.duel, &mut body, env_knight_x, events))),
+        };
+        State::Challenge(Box::new(c))
     }
 
     /// The brain's view of this visitor.
@@ -370,6 +473,8 @@ impl Npc {
             State::Teaching(t) => (VisitorState::Teaching, None, t.react()),
             State::Sparring(_) => (VisitorState::Sparring, None, None),
             State::Company(_) => (VisitorState::Company, None, None),
+            State::Challenge(c) if c.is_race() => (VisitorState::Racing, None, None),
+            State::Challenge(_) => (VisitorState::Sparring, None, None),
             _ => {
                 let s = match self.phase() {
                     NpcPhase::Arriving => VisitorState::Arriving,
@@ -478,6 +583,7 @@ impl Npc {
             State::Teaching(teach) => self.teach_tick(teach, dt, set, env, events),
             State::Sparring(spar) => self.spar_tick(spar, dt, set, env, events),
             State::Company(c) => self.company_tick(c, dt, set, env, events),
+            State::Challenge(c) => self.challenge_tick(c, dt, set, env, events),
             State::Lingering { left } => {
                 if near_knight {
                     self.looking_right = env.knight.x > self.pos.x;
@@ -620,6 +726,11 @@ impl Npc {
                         Some(lesson) => self.start_lesson(lesson, set, events),
                         None if std::mem::take(&mut self.spar_planned) => self.start_spar(set, events),
                         None if self.company.is_some() => self.start_company(set, events),
+                        None if self.challenge_plan.is_some() => {
+                            let plan = self.challenge_plan.take().unwrap_or(ChallengePlan::Duel);
+                            let knight_x = self.pos.x + if self.knight_right { 100.0 } else { -100.0 };
+                            self.start_challenge(plan, set, knight_x, events)
+                        }
                         None => State::Lingering { left: self.rng.range(3.0, 6.0) },
                     }
                 }
@@ -800,6 +911,9 @@ impl Npc {
 
     /// The brain's view of him as a sparring partner (while the spar is on).
     pub fn foe(&self, set: &NpcSet, ppu: f32) -> Option<Foe> {
+        if let State::Challenge(c) = &self.state {
+            return c.foe(self.id, self.pos, set.defs[self.def].challenge.as_ref()?, ppu);
+        }
         let State::Sparring(s) = &self.state else { return None };
         if matches!(s.stage, SparStage::Down | SparStage::GetUp | SparStage::Concede) {
             return None;
@@ -823,6 +937,14 @@ impl Npc {
 
     /// The knight's blow lands (from `from_x`). Returns `true` when it puts him down.
     pub fn spar_strike(&mut self, damage: u32, from_x: f32, set: &NpcSet, env: &NpcEnv) -> bool {
+        if let State::Challenge(c) = &mut self.state {
+            // Hornet's duel: the blow lands (she flashes) but never puts her down.
+            let Some(def) = set.defs[self.def].challenge.as_ref() else { return false };
+            let mut body = Body { pos: &mut self.pos, looking_right: &mut self.looking_right, alpha: &mut self.alpha, flash: &mut self.flash, anim: &mut self.anim, lib: set.lib(self.def), rng: &mut self.rng };
+            c.strike(damage, from_x, &mut body, def, env);
+            self.resync_rel(env);
+            return false;
+        }
         if !self.spar_vulnerable() {
             return false;
         }
@@ -972,6 +1094,9 @@ impl Npc {
 
     /// Ride the owner window; fall onto the next ledge when unsupported.
     fn follow(&mut self, env: &NpcEnv, dt: f32) {
+        if matches!(&self.state, State::Challenge(c) if c.airborne()) {
+            return; // mid-leap: her course carries her
+        }
         if let Some(r) = self.owner.and_then(|id| env.terrain.window_rect(id))
             && self.vy.is_none()
         {

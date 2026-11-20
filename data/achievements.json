@@ -30,10 +30,13 @@
     { "id": "wall_jump_chain", "title": "Up the Shaft", "description": "Five wall jumps in a row without touching down.", "hint": "movement", "goal": 5 },
     { "id": "super_hard_landing", "title": "Long Way Down", "description": "Fell so far that the landing shook him to the shell.", "hint": "movement" },
     { "id": "every_enemy", "title": "Field Guide", "description": "Beat one of every kind of enemy that wanders in.", "hint": "a foe" },
-    { "id": "troupe_master", "title": "Final Curtain", "description": "Struck a scarlet flame, met the master of its troupe, and won the show.", "hint": "the troupe" },
+    { "id": "troupe_master", "title": "Final Curtain", "description": "Answered a scarlet flame, met the master of its troupe, and won the show.", "hint": "the troupe" },
     { "id": "troupe_encore", "title": "Taken a Bow", "description": "Fell to the Troupe Master. He bowed, very politely, and left a Shade behind.", "hint": "the troupe" },
     { "id": "cornifer_maps", "title": "Comparing Notes", "description": "Sat beside Cornifer, maps open, while he hummed and corrected them both.", "hint": "cartography" },
     { "id": "quirrel_view", "title": "Room for Two", "description": "Shared a high ledge with Quirrel and simply took in the view.", "hint": "high places" },
-    { "id": "myla_song", "title": "Work Song", "description": "Stayed by Myla at the rock face until her mining song was done.", "hint": "a song" }
+    { "id": "myla_song", "title": "Work Song", "description": "Stayed by Myla at the rock face until her mining song was done.", "hint": "a song" },
+    { "id": "hornet_race", "title": "Faster Than Silk", "description": "Beat Hornet to her own needle. She will want a rematch.", "hint": "a visitor" },
+    { "id": "hornet_duel", "title": "Needle Practice", "description": "Crossed nails with Hornet and saw the duel through. She won. She always wins.", "hint": "a visitor" },
+    { "id": "grimm_cameo", "title": "A Passing Troupe", "description": "The Troupe Master dropped by just to bow, and was gone in a flicker of red.", "hint": "the troupe" }
   ]
 }

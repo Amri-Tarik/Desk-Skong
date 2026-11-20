@@ -51,6 +51,7 @@ mod pester;
 mod places;
 mod repertoire;
 pub mod rng;
+mod scene;
 mod shade_hunt;
 mod shiny;
 mod spots;
@@ -73,6 +74,7 @@ pub use dream_gate::{DreamGateConfig, GateWish, Prize};
 pub use expression::{Expression, GeoHaul};
 pub use fight::{FightConfig, Foe, FoeKind, FoeStrike};
 pub use greet::{STAND_OFF_UNITS, Visitor, VisitorState};
+pub use scene::SceneCue;
 pub use train::{LessonCue, LessonReport, LessonSignal, LessonStage};
 pub use company::{CompanyCue, CompanyStage, PARTED};
 pub use interest::{InterestMap, Poi, PoiKey, PoiKind, PoiTarget, ScoredPoi};
@@ -309,6 +311,10 @@ pub struct Brain {
     gauntlet_done: Option<(u32, crate::enemy::GauntletStage)>,
     /// Emote bubbles: cooldowns and need latches (see [`expression`]).
     expr: expression::Expressions,
+    /// The race (serial) he already reacted to (see `ai::scene`).
+    scene_reacted: Option<u32>,
+    /// The scarlet flame doesn't draw him back before this time.
+    flame_rest_until: f64,
 }
 
 impl Brain {
@@ -356,6 +362,8 @@ impl Brain {
             last_fight_at: f64::NEG_INFINITY,
             gauntlet_done: None,
             expr: Default::default(),
+            scene_reacted: None,
+            flame_rest_until: f64::NEG_INFINITY,
             cfg,
         }
     }
@@ -515,6 +523,16 @@ impl Brain {
         for _ in 0..2 {
             out.waiting = false;
             let status = self.run_active(p, nav, &mut out);
+            if let Active::Scene(s) = &self.active {
+                if s.reacted.is_some() {
+                    self.scene_reacted = s.reacted;
+                }
+                if status != Status::Running && self.scene_is_pastime() {
+                    // Done staring at the flame for now: it draws him back later. (Called
+                    // away by something more important, he comes straight back after.)
+                    self.flame_rest_until = self.now + f64::from(scene::FLAME_REST);
+                }
+            }
             if status == Status::Running {
                 break;
             }
@@ -925,6 +943,8 @@ impl Brain {
             BehaviourKind::Loot | BehaviourKind::Shiny if self.asleep(p) => Tier::Ambient,
             // The Shade comes first, always: it may even interrupt fights and visitors.
             BehaviourKind::ShadeHunt => Tier::Urgent,
+            // Lingering by a scarlet flame is a pastime; races and performances engage him.
+            BehaviourKind::Scene if self.scene_is_pastime() => Tier::Ambient,
             _ => kind.tier(),
         }
     }
@@ -1080,6 +1100,7 @@ impl Brain {
                 Some(c) => Active::Pastime(Box::new(pastime::Pastime::start(&mut ctx, c))),
                 None => Active::Idle(Idle::start(&mut ctx)),
             },
+            BehaviourKind::Scene => Active::Scene(Box::new(scene::Scene::start(&mut ctx))),
         };
         let kind = active.kind();
         log::debug!("brain: {} -> {} ({reason:?})", from.label(), kind.label());
@@ -1345,6 +1366,7 @@ impl Brain {
             (BehaviourKind::Fight, fight),
             (BehaviourKind::Gauntlet, self.gauntlet_utility(p)),
             (BehaviourKind::Pastime, self.pastime_utility(p)),
+            (BehaviourKind::Scene, self.scene_utility()),
         ];
         u.extend(self.stakes_utilities(p));
         let calm = self.now < self.calm_until;
