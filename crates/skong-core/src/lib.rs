@@ -27,6 +27,7 @@ pub mod npc;
 pub mod occupancy;
 pub mod particles;
 pub mod pastime;
+pub mod persist;
 pub mod placement;
 pub mod portal;
 pub mod props;

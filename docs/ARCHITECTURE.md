@@ -79,7 +79,10 @@ Key app files: `app.rs` (Pet + tick + commands + tray), `app/panel.rs` (status/I
 events become achievement events; announce, save, panel copy), `enemies.rs` + `app/enemy.rs` (enemies, strikes, spar glue), `grimm.rs` + `app/grimm.rs` (the secret boss: art loaded on a background thread when a show draws near, his windows, lines in speech bubbles; world glue), `benches.rs`, `shinies.rs`, `fx.rs` (pooled effect windows),
 `app/test.rs` + `placehint.rs` (the panel's Test tab: forced visitors / scenes / enemies / pastimes, placing where the user clicks, the feedback notes in `Status::test`),
 `gameguard.rs`, `navbuild.rs`, `grab.rs`, `control.rs` (pipe server), `logring.rs`
-(logger + ring buffer for panels), `settings.rs`, `keyboard.rs`, `browser.rs` (`--browse`).
+(logger + ring buffer for panels), `logfile.rs` (opt-in log file, crash reports via a panic
+hook), `settings.rs`, `keyboard.rs`, `browser.rs` (`--browse`). Saves go through
+`skong_core::persist` (atomic writes, malformed files kept as `.bak`); see
+[DEVELOPING.md](DEVELOPING.md#saved-files).
 
 ## Data files (`data/`)
 
@@ -95,7 +98,8 @@ events become achievement events; announce, save, panel copy), `enemies.rs` + `a
 | `grimm.json` | The secret boss: art libraries and scale, hp, phases, tempo, reward, aborts, the lantern's rules, his (original) lines (schema in its `$comment`). |
 
 Local, git-ignored: `skins/Vanilla/` (exported atlases, `props/` sprites), community skins
-under `skins/`, `%APPDATA%\Desk-Skong\{settings,world,achievements}.json`.
+under `skins/`, `%APPDATA%\Desk-Skong\{settings,world,achievements}.json` and
+`%APPDATA%\Desk-Skong\logs\` (log and crash files).
 
 ## Debug flags & tools
 

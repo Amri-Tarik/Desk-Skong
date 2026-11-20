@@ -92,6 +92,8 @@ const ID_FIGHT: u32 = 15;
 const ID_SHOWER: u32 = 20;
 const ID_TEXT: u32 = 16;
 const ID_LANTERN: u32 = 17;
+const ID_LOG_FILE: u32 = 18;
+const ID_LOG_FOLDER: u32 = 19;
 const ID_QUIT: u32 = 9;
 const ID_SKIN0: u32 = 1000;
 const ID_SCALE0: u32 = 2000;
@@ -1249,6 +1251,12 @@ impl Pet {
                 self.settings.save();
                 log::info!("lantern on dark backgrounds: {}", self.settings.lantern);
             }
+            Command::ToggleLogFile => {
+                self.settings.log_file = !self.settings.log_file;
+                crate::logfile::set_enabled(self.settings.log_file);
+                self.settings.save();
+            }
+            Command::OpenLogFolder => crate::logfile::open_folder(),
             Command::Test(t) => self.apply_test(t),
             Command::TogglePause => {
                 self.paused = !self.paused;
@@ -1358,6 +1366,8 @@ impl Pet {
             MenuItem::Separator,
             MenuItem::check(ID_VISION, "Vision (content terrain)", self.content.is_enabled()),
             MenuItem::check(ID_OVERLAY, "Debug overlay\tCtrl+Alt+D", self.overlay.is_on()),
+            MenuItem::check(ID_LOG_FILE, "Write a log file (for bug reports)", self.settings.log_file),
+            MenuItem::action(ID_LOG_FOLDER, "Open log folder"),
             MenuItem::action(ID_PANEL, "Open control panel"),
             MenuItem::Separator,
             MenuItem::action(ID_QUIT, "Quit"),
@@ -1371,6 +1381,8 @@ impl Pet {
             ID_FIGHT => Command::ToggleFightMode,
             ID_TEXT => Command::ToggleTextCuriosity,
             ID_LANTERN => Command::ToggleLantern,
+            ID_LOG_FILE => Command::ToggleLogFile,
+            ID_LOG_FOLDER => Command::OpenLogFolder,
             ID_PAUSE => Command::TogglePause,
             ID_ACT => Command::RandomAct,
             ID_RESPAWN => Command::RespawnAtCursor,

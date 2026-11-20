@@ -115,58 +115,17 @@ pub struct AchievementSave {
 }
 
 /// Read a save; a missing file is a fresh start. So is a malformed one, but it is kept
-/// beside it first ([`backup_path`]): the next save would overwrite the progress in it.
+/// beside it first ([`crate::persist::backup_path`]): the next save would overwrite the
+/// progress in it.
 pub fn read_save(path: &Path) -> AchievementSave {
-    match std::fs::read_to_string(path) {
-        Ok(s) => serde_json::from_str(&s).unwrap_or_else(|e| {
-            let bak = backup_path(path);
-            match std::fs::copy(path, &bak) {
-                Ok(_) => log::warn!("malformed {} ({e}); kept as {}, starting fresh", path.display(), bak.display()),
-                Err(c) => log::warn!("malformed {} ({e}); could not keep a copy ({c}), starting fresh", path.display()),
-            }
-            AchievementSave::default()
-        }),
-        Err(_) => AchievementSave::default(),
-    }
+    crate::persist::load_or_fresh(path, |s| serde_json::from_str(s), AchievementSave::default)
 }
 
-/// Where a malformed save is kept: `<file>.bak`, or `<file>.bak-<unix secs>` if that one is
-/// taken (an earlier one is never overwritten).
-pub fn backup_path(path: &Path) -> std::path::PathBuf {
-    let with = |suffix: &str| {
-        let mut s = path.as_os_str().to_owned();
-        s.push(suffix);
-        std::path::PathBuf::from(s)
-    };
-    let bak = with(".bak");
-    if !bak.exists() {
-        return bak;
-    }
-    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-    with(&format!(".bak-{secs}"))
-}
-
-/// Write a save atomically: to a temporary file beside it, flushed, then renamed over it (a
-/// crash or a full disk mid-write leaves the old save whole, never a truncated one).
+/// Write a save atomically ([`crate::persist::write_atomic`]: a crash or a full disk
+/// mid-write leaves the old save whole, never a truncated one).
 pub fn write_save(path: &Path, save: &AchievementSave) -> std::io::Result<()> {
-    use std::io::Write;
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
     let json = serde_json::to_string_pretty(save).map_err(std::io::Error::other)?;
-    let mut tmp = path.as_os_str().to_owned();
-    tmp.push(".tmp");
-    let tmp = std::path::PathBuf::from(tmp);
-    let written = (|| {
-        let mut f = std::fs::File::create(&tmp)?;
-        f.write_all(json.as_bytes())?;
-        f.sync_all()
-    })();
-    if let Err(e) = written.and_then(|()| std::fs::rename(&tmp, path)) {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(e);
-    }
-    Ok(())
+    crate::persist::write_atomic(path, json.as_bytes())
 }
 
 /// How many there are of the things "every ..." achievements ask for (set by the app from

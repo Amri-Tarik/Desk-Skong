@@ -1,5 +1,6 @@
 //! Logging: `env_logger` to stderr (honours `RUST_LOG`, default `info`) plus a bounded
-//! in-memory ring of formatted records that the control server streams to panels.
+//! in-memory ring of formatted records that the control server streams to panels. What
+//! goes to stderr also goes to the opt-in log file ([`crate::logfile`]).
 //!
 //! Panels can raise the captured level for `skong*` targets ([`set_panel_level`]); such
 //! extra records go to the ring only, so stderr keeps following `RUST_LOG`.
@@ -91,6 +92,7 @@ impl Log for Logger {
         }
         if to_stderr {
             self.env.log(record);
+            crate::logfile::record(record.level(), record.target(), record.args());
         }
         self.ring.push(record.level().into(), record.target(), record.args().to_string());
     }

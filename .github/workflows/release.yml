@@ -1,0 +1,60 @@
+# Push a tag like v0.3.0 to build the portable zip and attach it to a *draft* GitHub
+# Release. Check the notes and the zip by hand, then publish the draft.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: package and draft a release
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Tests
+        run: cargo test --workspace --locked
+
+      - name: Build and package
+        id: package
+        shell: pwsh
+        run: ./scripts/package.ps1
+
+      - name: The tag matches the Cargo version
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $version = '${{ steps.package.outputs.version }}'
+          if ($tag -ne "v$version") { throw "tag $tag does not match the Cargo version $version (expected v$version)" }
+
+      - name: Draft the GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notes = @(
+            '**Windows 10/11 · needs your own copy of Hollow Knight** (the art is read from your install on first run; nothing from the game is included).',
+            '',
+            'Download the zip below, unzip it anywhere and run `skong.exe`. See the README for details.',
+            '',
+            '_Desk-Skong is an unofficial fan project, not affiliated with or endorsed by Team Cherry. Hollow Knight and its characters, art and music are property of Team Cherry._',
+            ''
+          ) -join "`n"
+          gh release create '${{ github.ref_name }}' '${{ steps.package.outputs.zip }}' `
+            --draft --generate-notes --notes "$notes" `
+            --title "Desk-Skong ${{ steps.package.outputs.version }}"
+          if ($LASTEXITCODE -ne 0) { throw 'gh release create failed' }
