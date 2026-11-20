@@ -26,7 +26,6 @@ pub mod ids {
     pub const WINDOW_RIDE: &str = "window_ride";
     pub const CURSOR_DEFEAT: &str = "cursor_defeat";
     pub const CURSOR_VICTOR: &str = "cursor_victor";
-    pub const DASH_ACROSS_MONITORS: &str = "dash_across_monitors";
     pub const WALL_CRYSTAL_DASH: &str = "wall_crystal_dash";
     pub const DREAM_GATE: &str = "dream_gate";
     pub const EVERY_REGION: &str = "every_region";
@@ -37,12 +36,10 @@ pub mod ids {
     pub const GAUNTLET: &str = "gauntlet";
     pub const UNN_FORM: &str = "unn_form";
     pub const HIGHLIGHTED_TEXT: &str = "highlighted_text";
-    pub const GAME_RETREAT: &str = "game_retreat";
     pub const SHATTERED_WINDOW: &str = "shattered_window";
     pub const GEO_HOARD: &str = "geo_hoard";
     pub const NAP_POKE: &str = "nap_poke";
     pub const THROW: &str = "throw";
-    pub const AIR_MAIL: &str = "air_mail";
     pub const MIDAIR_CATCH: &str = "midair_catch";
     pub const STEP_BEHIND: &str = "step_behind";
     pub const WALL_JUMP_CHAIN: &str = "wall_jump_chain";
@@ -52,8 +49,8 @@ pub mod ids {
     pub const TROUPE_ENCORE: &str = "troupe_encore";
 
     pub const ALL: &[&str] = &[
-        HORNET_TALK, DREAM_WINDOW, DREAM_VISITOR, FIRST_SPELL, POGO, VENGEFLY_AIRBORNE, FALL_AND_RECLAIM, WINDOW_RIDE, CURSOR_DEFEAT, CURSOR_VICTOR, DASH_ACROSS_MONITORS, WALL_CRYSTAL_DASH, DREAM_GATE, EVERY_REGION, EVERY_BENCH, EVERY_VISITOR, SLY_LESSON, ZOTE_SPAR, GAUNTLET,
-        UNN_FORM, HIGHLIGHTED_TEXT, GAME_RETREAT, SHATTERED_WINDOW, GEO_HOARD, NAP_POKE, THROW, AIR_MAIL, MIDAIR_CATCH, STEP_BEHIND, WALL_JUMP_CHAIN, SUPER_HARD_LANDING, EVERY_ENEMY, TROUPE_MASTER, TROUPE_ENCORE,
+        HORNET_TALK, DREAM_WINDOW, DREAM_VISITOR, FIRST_SPELL, POGO, VENGEFLY_AIRBORNE, FALL_AND_RECLAIM, WINDOW_RIDE, CURSOR_DEFEAT, CURSOR_VICTOR, WALL_CRYSTAL_DASH, DREAM_GATE, EVERY_REGION, EVERY_BENCH, EVERY_VISITOR, SLY_LESSON, ZOTE_SPAR, GAUNTLET,
+        UNN_FORM, HIGHLIGHTED_TEXT, SHATTERED_WINDOW, GEO_HOARD, NAP_POKE, THROW, MIDAIR_CATCH, STEP_BEHIND, WALL_JUMP_CHAIN, SUPER_HARD_LANDING, EVERY_ENEMY, TROUPE_MASTER, TROUPE_ENCORE,
     ];
 }
 use ids::*;
@@ -221,8 +218,6 @@ pub struct Tracker {
     fights: BTreeMap<u32, bool>,
     /// Wall jumps since he last landed.
     wall_jumps: u32,
-    /// Monitor a crystal dash launched over (while it flies).
-    dash_from: Option<usize>,
     /// Monitor he was thrown from (while he flies).
     thrown_from: Option<usize>,
     dirty: bool,
@@ -230,7 +225,7 @@ pub struct Tracker {
 
 impl Tracker {
     pub fn new(defs: Vec<AchievementDef>, save: AchievementSave) -> Self {
-        Self { defs, save, totals: Totals::default(), fights: BTreeMap::new(), wall_jumps: 0, dash_from: None, thrown_from: None, dirty: false }
+        Self { defs, save, totals: Totals::default(), fights: BTreeMap::new(), wall_jumps: 0, thrown_from: None, dirty: false }
     }
 
     pub fn set_totals(&mut self, totals: Totals) {
@@ -269,7 +264,6 @@ impl Tracker {
         self.save = AchievementSave::default();
         self.fights.clear();
         self.wall_jumps = 0;
-        self.dash_from = None;
         self.thrown_from = None;
         self.dirty = true;
     }
@@ -308,16 +302,12 @@ impl Tracker {
                     unlock(EVERY_ENEMY);
                 }
             }
-            E::Landed { monitor, floor } => {
+            E::Landed { floor, .. } => {
                 if *floor {
                     self.fights.values_mut().for_each(|c| *c = false);
                 }
                 self.wall_jumps = 0;
-                if let Some(from) = self.thrown_from.take()
-                    && from != *monitor
-                {
-                    unlock(AIR_MAIL);
-                }
+                self.thrown_from = None;
             }
             E::Died { shade, fall } => {
                 self.fights.clear();
@@ -340,18 +330,13 @@ impl Tracker {
                     unlock(CURSOR_VICTOR);
                 }
             }
-            E::SuperdashLaunched { monitor, from_wall } => {
+            E::SuperdashLaunched { from_wall, .. } => {
                 if *from_wall {
                     unlock(WALL_CRYSTAL_DASH);
                 }
-                self.dash_from = Some(*monitor);
             }
-            E::SuperdashFlying { monitor } => {
-                if self.dash_from.is_some_and(|m| m != *monitor) {
-                    unlock(DASH_ACROSS_MONITORS);
-                }
-            }
-            E::SuperdashOver => self.dash_from = None,
+            // (Achievements never need a second monitor: everyone can reach 100 %.)
+            E::SuperdashFlying { .. } | E::SuperdashOver => {}
             E::DreamGateWarp => unlock(DREAM_GATE),
             E::DepositMined { region } => {
                 if self.see(EVERY_REGION, &region.to_string(), self.totals.regions) {
@@ -366,7 +351,8 @@ impl Tracker {
             E::GauntletCleared => unlock(GAUNTLET),
             E::SlugForm => unlock(UNN_FORM),
             E::TextHighlighted => unlock(HIGHLIGHTED_TEXT),
-            E::HidFromGame => unlock(GAME_RETREAT),
+            // (Not everyone plays fullscreen games: no achievement for it.)
+            E::HidFromGame => {}
             E::WindowShattered => unlock(SHATTERED_WINDOW),
             E::GeoCollected(n) => {
                 if self.count(GEO_HOARD, *n) {

@@ -74,11 +74,9 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
 
 ## 4. Achievements: everyone can reach 100 %
 
-- [ ] **Remove anything that needs specific hardware or software:**
-      - multi-monitor ones: "Border Crossing" (crystal dash across monitors) and "Air Mail"
-        (thrown onto another monitor);
-      - review "Not My Kind of Game" (needs a detected fullscreen game);
-      - review anything else tied to hardware or a particular app.
+- [x] **Removed anything that needs specific hardware or software:** "Border Crossing" and
+      "Air Mail" (two monitors), "Not My Kind of Game" (a detected fullscreen game). The
+      rest only need the knight and ordinary windows. A test guards this.
 - [ ] Achievements stay locked in sandbox sessions (see 5).
 
 ## 5. Public release (GitHub), last: ship a more complete pet first
