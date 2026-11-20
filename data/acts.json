@@ -659,6 +659,28 @@
       ]
     },
     {
+      "name": "dizzy",
+      "tags": [
+        "hurt"
+      ],
+      "requires": "grounded",
+      "weight": 0.0,
+      "steps": [
+        {
+          "clip": "Recoil",
+          "interruptible": false
+        },
+        {
+          "clip": "Idle Hurt",
+          "hold": [
+            1.4,
+            2.0
+          ],
+          "interruptible": false
+        }
+      ]
+    },
+    {
       "name": "victory",
       "tags": [
         "fight",

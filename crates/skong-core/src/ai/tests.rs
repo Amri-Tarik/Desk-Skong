@@ -1110,7 +1110,7 @@ fn every_named_act_exists_and_only_fidgets_are_random() {
     let cat = catalog();
     for name in [
         "nap", "rest", "lean_back", "read_map", "take_out_map", "put_map_away", "challenge", "startled", "windswept", "look_up", "look_down", "gaze_into_screen",
-        "stare_at_user", "pick_up_trinket", "focus", "hurt_idle", "recoil", "stunned", "bow_down", "victory",
+        "stare_at_user", "pick_up_trinket", "focus", "hurt_idle", "recoil", "stunned", "dizzy", "bow_down", "victory",
     ] {
         assert!(cat.id(name).is_some(), "missing act '{name}'");
     }

@@ -916,7 +916,8 @@ impl KnockedOut {
     }
 }
 
-/// Shaken about while held: once he lands, he reels ("stunned": the Stun clip).
+/// Shaken about while held: once he lands, he reels ("dizzy": a recoil, then the swaying
+/// Idle Hurt loop; the one-frame Stun clip looked frozen).
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Dizzy {
     act: Option<ActWait>,
@@ -938,7 +939,7 @@ impl Dizzy {
             return if self.airborne > Self::LAND_WITHIN { Status::Done } else { Status::Running };
         }
         if self.act.is_none() {
-            self.act = ActWait::named(ctx, "stunned");
+            self.act = ActWait::named(ctx, "dizzy");
             if self.act.is_none() {
                 return Status::Done;
             }
