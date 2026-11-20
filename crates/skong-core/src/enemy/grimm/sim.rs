@@ -250,6 +250,19 @@ pub fn ground_under(terrain: &Terrain, feet: Vec2, area: RectF) -> (f32, f32, f3
     }
 }
 
+/// Where Grimm lands for a slash on the knight's ledge `[x0, x1]` (on side `s` = ±1 of his
+/// feet at `fx`, `u` px per unit): a few steps away, kept 0.7 units in from the ends, at
+/// least 2.5 units from him. `None` when it doesn't fit — including a ledge narrower than
+/// 1.4 units (a sliver of an occluded window, a small content ledge), where clamping to
+/// `[x0 + 0.7u, x1 − 0.7u]` would panic (min > max).
+pub(crate) fn slash_x(fx: f32, x0: f32, x1: f32, s: f32, u: f32) -> Option<f32> {
+    if x1 - x0 < 1.4 * u {
+        return None;
+    }
+    let x = (fx + s * 4.5 * u).clamp(x0 + 0.7 * u, x1 - 0.7 * u);
+    ((x - fx).abs() >= 2.5 * u).then_some(x)
+}
+
 impl Grimm {
     /// Grimm appearing at `at` (feet), facing `toward` (x).
     pub fn new(set: &GrimmSet, at: Vec2, toward: f32, seed: u32, ppu: f32) -> Self {
@@ -726,10 +739,7 @@ impl Grimm {
             Move::AirDash => at(5.0, gy - 5.5 * u),
             Move::Slash => {
                 // On his ledge, a few steps away (the other side if this one is too short).
-                let on = |s: f32| {
-                    let x = (feet.x + s * 4.5 * u).clamp(x0 + 0.7 * u, x1 - 0.7 * u);
-                    ((x - feet.x).abs() >= 2.5 * u).then_some(Vec2::new(x, gy))
-                };
+                let on = |s: f32| slash_x(feet.x, x0, x1, s, u).map(|x| Vec2::new(x, gy));
                 on(side).or_else(|| on(-side)).unwrap_or(at(4.5, gy))
             }
             Move::Firebats => at(9.0, gy),
