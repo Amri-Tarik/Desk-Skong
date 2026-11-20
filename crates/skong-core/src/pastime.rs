@@ -3,8 +3,12 @@
 //!
 //! * **The training dummy** ([`Yard`]): now and then a dummy stands on a settled ledge (the
 //!   shinies' placement rules: lasting surfaces, shared occupancy, never on a game monitor,
-//!   reachable, not right under his feet). It stays a few minutes, then fades. Struck, it
-//!   swings (`Light Hit` / `Heavy Hit`, L or R by the side the blow comes from).
+//!   reachable, not right under his feet). Struck, it swings (`Light Hit` / `Heavy Hit`, L
+//!   or R by the side the blow comes from). It wears out: standing (≈ 13–18 min alone), his
+//!   blows (a practice session takes ≈ a fifth of it, never all) and the user's clicks (≈ 5
+//!   break a fresh one) all wear it, and at nothing left it breaks ([`DummyBreak`]): a quick
+//!   fade while the app throws splinters, then the next one on the usual schedule (later
+//!   when the user broke it: they didn't want it there).
 //! * **A lumafly** ([`Sky`]): a small glowing fly that drifts from window to window (a
 //!   little above their title bars) on the knight's monitor, bobbing. Swiped at, it may be
 //!   caught (it glows bright and slips away upwards) or it darts off. It leaves after a
@@ -20,26 +24,60 @@ use crate::terrain::{Ledge, LedgeKind, Terrain};
 
 // --- the training dummy ---------------------------------------------------------------
 
-/// How often a dummy stands somewhere and for how long.
+/// How often a dummy stands somewhere, and how it wears out.
+///
+/// Wear is a share of the dummy (1 = broken), summed over time and blows. A drill wears
+/// ≈ 3 % on average (a combo's three slashes 3.6 %, a nail art or fireball 3 %, a cyclone
+/// 5.4 %), a session of 4–6 drills ≈ 15 % (at most ≈ 27 %: one never breaks a fresh dummy).
+/// Practising every ≈ 3 min (the pastime's cooldown plus the session), it breaks after
+/// ≈ 8–10 min; with no practice after ≈ 13–18 min; ≈ 5 clicks break a fresh one.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DummyRules {
-    /// Seconds between dummies, [min, max] (only counts while allowed).
+    /// Seconds between dummies, [min, max], counted from when the last one went (only
+    /// counts while allowed).
     pub every_secs: [f32; 2],
-    /// Seconds one stays, [min, max].
-    pub stay_secs: [f32; 2],
+    /// Seconds standing alone wears one out, [min, max] (rolled per dummy).
+    pub life_secs: [f32; 2],
     /// Never closer to the knight than this (px at scale 1).
     pub min_distance: f32,
+    /// Wear of one light blow (a nail slash, a pogo) and one heavy (nail arts, spells).
+    pub light_wear: f32,
+    pub heavy_wear: f32,
+    /// Wear of one click by the user.
+    pub click_wear: f32,
+    /// The next dummy after one the user broke waits this many times longer.
+    pub user_break_delay: f32,
 }
 
 impl Default for DummyRules {
     fn default() -> Self {
-        Self { every_secs: [240.0, 600.0], stay_secs: [420.0, 780.0], min_distance: 220.0 }
+        Self { every_secs: [240.0, 600.0], life_secs: [780.0, 1080.0], min_distance: 220.0, light_wear: 0.012, heavy_wear: 0.03, click_wear: 0.2, user_break_delay: 2.5 }
     }
 }
 
 /// Fade in / out (s).
 pub const DUMMY_FADE_IN: f32 = 1.2;
 pub const DUMMY_FADE_OUT: f32 = 2.5;
+/// A broken dummy fades this fast (s) while its splinters fly.
+pub const DUMMY_BREAK_FADE: f32 = 0.35;
+
+/// What broke the dummy.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Breaker {
+    /// Standing out in the weather (time).
+    Wear,
+    /// His blow (practice).
+    Knight,
+    /// The user's click.
+    User,
+}
+
+/// A dummy broke (see [`Yard::take_broken`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DummyBreak {
+    pub id: u64,
+    pub by: Breaker,
+}
 
 /// A blow landing on the dummy.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -60,18 +98,42 @@ impl DummyHit {
             (true, true) => "Heavy Hit L",
         }
     }
+
+    /// The user's click at `at` on a dummy standing at `foot`: a light blow from that side
+    /// (clicked right of the pole, it swings left).
+    pub fn clicked(at: Vec2, foot: Vec2) -> DummyHit {
+        DummyHit { heavy: false, from_right: at.x > foot.x }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Dummy {
     pub id: u64,
     pub spot: Spot,
-    /// [`Yard::clock`] when it turned up and when it starts fading away.
+    /// [`Yard::clock`] when it turned up and when it starts fading away (never, unless sent
+    /// away: it breaks instead).
     pub born: f64,
     pub leave_at: f64,
     /// The user put it there (the Test tab placed it, or it was dragged): it stays, even
     /// where he can't get to it (see [`Yard::relocatable`]).
     pub pinned: bool,
+    /// Seconds standing alone would wear it out.
+    pub life: f32,
+    /// Wear from blows and clicks (time's share is [`Dummy::wear_at`]'s).
+    pub knocks: f32,
+    /// When it broke (it fades out [`DUMMY_BREAK_FADE`] s, then it's gone).
+    pub broke_at: Option<f64>,
+}
+
+impl Dummy {
+    /// How worn it is at `clock` (0 fresh, 1 and over: broken).
+    pub fn wear_at(&self, clock: f64) -> f32 {
+        ((clock - self.born) as f32 / self.life.max(1.0)).max(0.0) + self.knocks
+    }
+
+    pub fn is_broken(&self) -> bool {
+        self.broke_at.is_some()
+    }
 }
 
 /// The dummy on screen this frame.
@@ -84,6 +146,8 @@ pub struct ShownDummy {
     pub span: (f32, f32),
     /// 0..1 (fading in / out).
     pub alpha: f32,
+    /// Broken: fading out fast (no blows, clicks or drags; the brain doesn't see it).
+    pub broken: bool,
 }
 
 /// The training dummy (at most one) and when the next one turns up.
@@ -94,9 +158,13 @@ pub struct Yard {
     pending: Vec<(f64, DummyHit)>,
     /// Blows that landed since the app last looked.
     landed: Vec<DummyHit>,
+    /// Dummies that broke since the app last looked.
+    broken: Vec<DummyBreak>,
     next_id: u64,
     clock: f64,
     next_at: f64,
+    /// The dummy went: the next one is scheduled from then, its delay times this.
+    reschedule: Option<f32>,
     mix: Mix,
 }
 
@@ -105,14 +173,37 @@ const DUMMY_TAG: u64 = 0x6475_6d79;
 
 impl Yard {
     pub fn new(seed: u64, rules: &DummyRules) -> Self {
-        let mut y = Self { dummy: None, pending: Vec::new(), landed: Vec::new(), next_id: 1, clock: 0.0, next_at: 0.0, mix: Mix(seed ^ DUMMY_TAG) };
-        y.schedule(rules);
+        let mut y = Self { dummy: None, pending: Vec::new(), landed: Vec::new(), broken: Vec::new(), next_id: 1, clock: 0.0, next_at: 0.0, reschedule: None, mix: Mix(seed ^ DUMMY_TAG) };
+        y.schedule(rules, 1.0);
         y
     }
 
-    fn schedule(&mut self, rules: &DummyRules) {
+    fn schedule(&mut self, rules: &DummyRules, times: f32) {
         let [lo, hi] = rules.every_secs;
-        self.next_at = self.clock + (lo + (hi - lo).max(0.0) * self.mix.f32()) as f64;
+        self.next_at = self.clock + ((lo + (hi - lo).max(0.0) * self.mix.f32()) * times.max(0.0)) as f64;
+    }
+
+    /// The dummy is gone (faded, its window closed, broken): the next one counts from now.
+    fn remove(&mut self) {
+        self.dummy = None;
+        self.pending.clear();
+        self.reschedule.get_or_insert(1.0);
+    }
+
+    /// Wear it by `amount`; at 1 it breaks (`by`). `true` if it broke.
+    fn knock(&mut self, amount: f32, by: Breaker, rules: &DummyRules) -> bool {
+        let clock = self.clock;
+        let Some(d) = self.dummy.as_mut().filter(|d| !d.is_broken()) else { return false };
+        d.knocks += amount;
+        if d.wear_at(clock) < 1.0 - 1e-4 {
+            return false;
+        }
+        d.broke_at = Some(clock);
+        let id = d.id;
+        self.pending.clear();
+        self.broken.push(DummyBreak { id, by });
+        self.reschedule = Some(if by == Breaker::User { rules.user_break_delay } else { 1.0 });
+        true
     }
 
     pub fn clock(&self) -> f64 {
@@ -123,18 +214,29 @@ impl Yard {
         self.dummy.as_ref()
     }
 
-    /// Advance the clock and land due blows. `true` when a dummy should turn up now (then
-    /// [`place`] one, or [`Self::retry_soon`]). The timer only runs while `allowed`.
+    /// Advance the clock, land due blows and wear the dummy (it may break: see
+    /// [`Self::take_broken`]). `true` when a dummy should turn up now (then [`place`] one, or
+    /// [`Self::retry_soon`]). The timer only runs while `allowed`.
     pub fn due(&mut self, dt: f32, allowed: bool, rules: &DummyRules) -> bool {
         self.clock += dt as f64;
         let now = self.clock;
         let (due, later): (Vec<_>, Vec<_>) = self.pending.drain(..).partition(|(t, _)| *t <= now);
         self.pending = later;
-        if self.dummy.is_some() {
-            self.landed.extend(due.into_iter().map(|(_, h)| h));
+        for (_, hit) in due {
+            if !self.dummy.is_some_and(|d| !d.is_broken()) {
+                break;
+            }
+            self.landed.push(hit);
+            let w = if hit.heavy { rules.heavy_wear } else { rules.light_wear };
+            self.knock(w, Breaker::Knight, rules);
         }
+        // Time's share (no knock): broken once it adds up.
+        self.knock(0.0, Breaker::Wear, rules);
         if self.dummy.is_some() {
             return false;
+        }
+        if let Some(times) = self.reschedule.take() {
+            self.schedule(rules, times);
         }
         if !allowed {
             self.next_at += dt as f64;
@@ -143,8 +245,28 @@ impl Yard {
         if self.clock < self.next_at {
             return false;
         }
-        self.schedule(rules);
+        self.schedule(rules, 1.0);
         true
+    }
+
+    /// The user clicked dummy `id`: it wears ([`DummyRules::click_wear`]); `Some(true)` if
+    /// that broke it, `None` if there's no such dummy standing. Not practice: not among
+    /// [`Self::take_landed`] (the app swings it at once), and the brain never hears of it.
+    pub fn click(&mut self, id: u64, rules: &DummyRules) -> Option<bool> {
+        if !self.dummy.is_some_and(|d| d.id == id && !d.is_broken()) {
+            return None;
+        }
+        Some(self.knock(rules.click_wear, Breaker::User, rules))
+    }
+
+    /// Dummies that broke since the last call (the app throws the splinters).
+    pub fn take_broken(&mut self) -> Vec<DummyBreak> {
+        std::mem::take(&mut self.broken)
+    }
+
+    /// How worn the dummy standing is (0 fresh .. 1 broken), for the log.
+    pub fn wear(&self) -> Option<f32> {
+        self.dummy.map(|d| d.wear_at(self.clock).min(1.0))
     }
 
     /// No room just now: try again in a little while.
@@ -156,11 +278,12 @@ impl Yard {
     pub fn add(&mut self, spot: Spot, rules: &DummyRules) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
-        let [lo, hi] = rules.stay_secs;
-        let stay = lo + (hi - lo).max(0.0) * self.mix.f32();
-        self.dummy = Some(Dummy { id, spot, born: self.clock, leave_at: self.clock + stay as f64, pinned: false });
+        let [lo, hi] = rules.life_secs;
+        let life = lo + (hi - lo).max(0.0) * self.mix.f32();
+        self.dummy = Some(Dummy { id, spot, born: self.clock, leave_at: f64::INFINITY, pinned: false, life, knocks: 0.0, broke_at: None });
         self.pending.clear();
         self.landed.clear();
+        self.reschedule = None;
         id
     }
 
@@ -172,9 +295,9 @@ impl Yard {
     }
 
     /// The user dragged dummy `id` to `spot`: same dummy (and stay), new place, pinned there.
-    /// Blows on their way miss.
+    /// Blows on their way miss. Wear goes with it. Not a broken one.
     pub fn moved(&mut self, id: u64, spot: Spot) -> bool {
-        let Some(d) = self.dummy.as_mut().filter(|d| d.id == id) else { return false };
+        let Some(d) = self.dummy.as_mut().filter(|d| d.id == id && !d.is_broken()) else { return false };
         d.spot = spot;
         d.pinned = true;
         self.pending.clear();
@@ -184,12 +307,12 @@ impl Yard {
     /// May dummy `id` be moved elsewhere (or sent away) when he can't get to it? Not one the
     /// user put where it is.
     pub fn relocatable(&self, id: u64) -> bool {
-        self.dummy.is_some_and(|d| d.id == id && !d.pinned)
+        self.dummy.is_some_and(|d| d.id == id && !d.pinned && !d.is_broken())
     }
 
     /// A blow lands after `delay` seconds (the swing / the fireball's flight).
     pub fn strike(&mut self, hit: DummyHit, delay: f32) {
-        if self.dummy.is_some() {
+        if self.dummy.is_some_and(|d| !d.is_broken()) {
             self.pending.push((self.clock + delay.max(0.0) as f64, hit));
         }
     }
@@ -213,7 +336,8 @@ impl Yard {
     }
 
     /// The dummy on screen (`None` if there is none or its ledge is covered right now). One
-    /// past its stay, or whose window closed or went fullscreen, is gone.
+    /// sent away and faded, broken and faded, or whose window closed or went fullscreen, is
+    /// gone (the next one is scheduled from then).
     pub fn shown(&mut self, desk: &DesktopSnapshot, terrain: &Terrain, width: f32, settled: &dyn Fn(&Ledge) -> bool) -> Option<ShownDummy> {
         let clock = self.clock;
         let d = self.dummy?;
@@ -221,14 +345,17 @@ impl Yard {
             Spot::Window { id, .. } => desk.window(id).is_some_and(|w| !w.fullscreen),
             Spot::Ground { .. } => true,
         };
-        if !open || clock >= d.leave_at + DUMMY_FADE_OUT as f64 {
-            self.dummy = None;
-            self.pending.clear();
+        let faded = clock >= d.leave_at + DUMMY_FADE_OUT as f64 || d.broke_at.is_some_and(|t| clock >= t + DUMMY_BREAK_FADE as f64);
+        if !open || faded {
+            self.remove();
             return None;
         }
         let (pos, span) = shiny::resolve(terrain, d.spot, width, settled)?;
-        let alpha = ((clock - d.born) as f32 / DUMMY_FADE_IN).min((d.leave_at - clock) as f32 / DUMMY_FADE_OUT + 1.0).clamp(0.0, 1.0);
-        Some(ShownDummy { id: d.id, pos, span, alpha })
+        let mut alpha = ((clock - d.born) as f32 / DUMMY_FADE_IN).min((d.leave_at - clock) as f32 / DUMMY_FADE_OUT + 1.0).clamp(0.0, 1.0);
+        if let Some(t) = d.broke_at {
+            alpha *= (1.0 - (clock - t) as f32 / DUMMY_BREAK_FADE).clamp(0.0, 1.0);
+        }
+        Some(ShownDummy { id: d.id, pos, span, alpha, broken: d.is_broken() })
     }
 }
 
@@ -712,8 +839,8 @@ mod tests {
     }
 
     #[test]
-    fn a_dummy_turns_up_on_schedule_stays_a_while_and_fades() {
-        let rules = DummyRules { every_secs: [10.0, 10.0], stay_secs: [60.0, 60.0], min_distance: 0.0 };
+    fn a_dummy_turns_up_on_schedule_wears_out_and_breaks() {
+        let rules = DummyRules { every_secs: [10.0, 10.0], life_secs: [60.0, 60.0], min_distance: 0.0, ..Default::default() };
         let mut yard = Yard::new(1, &rules);
         let (d, t) = desk(vec![]);
         let mut due = false;
@@ -737,11 +864,128 @@ mod tests {
         yard.due(0.2, true, &rules);
         assert_eq!(yard.take_landed(), vec![DummyHit { heavy: true, from_right: false }]);
         assert!(yard.take_landed().is_empty());
-        for _ in 0..(70.0 / 0.1) as usize {
+        // Standing wears it out: it breaks at the end of its life (time's doing).
+        let mut broke_at = None;
+        for i in 0..(70.0 / 0.1) as usize {
             assert!(!yard.due(0.1, true, &rules), "one at a time");
+            let b = yard.take_broken();
+            if !b.is_empty() {
+                assert_eq!(b, vec![DummyBreak { id: 1, by: Breaker::Wear }]);
+                broke_at = Some(i as f32 * 0.1);
+                break;
+            }
+            assert!(yard.shown(&d, &t, 40.0, &|_| true).is_some_and(|s| !s.broken));
         }
-        assert!(yard.shown(&d, &t, 40.0, &|_| true).is_none(), "gone after its stay");
+        // 60 s of life, less the heavy blow's 3 % (1.8 s), from 0.4 s in.
+        let at = broke_at.expect("broke");
+        assert!((57.0..59.0).contains(&at), "{at}");
+        // A quick fade (unseen by the brain), then gone.
+        let s = yard.shown(&d, &t, 40.0, &|_| true).expect("fading");
+        assert!(s.broken && s.alpha > 0.5);
+        yard.strike(DummyHit { heavy: false, from_right: false }, 0.0);
+        yard.due(0.2, true, &rules);
+        assert!(yard.take_landed().is_empty(), "no blows land on a broken dummy");
+        assert!(yard.shown(&d, &t, 40.0, &|_| true).is_some_and(|s| s.alpha < 0.5));
+        yard.due(0.2, true, &rules);
+        assert!(yard.shown(&d, &t, 40.0, &|_| true).is_none());
         assert!(yard.dummy().is_none());
+        // The next one on the usual schedule, counted from when it went.
+        assert!(!(0..95).any(|_| yard.due(0.1, true, &rules)), "not before its time");
+        assert!((0..10).any(|_| yard.due(0.1, true, &rules)), "due again ~10 s after it went");
+    }
+
+    #[test]
+    fn his_blows_wear_it_and_a_session_never_breaks_a_fresh_one() {
+        let rules = DummyRules::default();
+        let mut yard = Yard::new(4, &rules);
+        let id = yard.add(Spot::Ground { pos: Vec2::new(500.0, 1040.0) }, &rules);
+        // The heaviest session there is: six drills alternating cyclones (two light, one
+        // heavy) and three-slash combos, over a minute.
+        for drill in 0..6 {
+            let blows: &[bool] = if drill % 2 == 0 { &[false, false, true] } else { &[false, false, false] };
+            for &heavy in blows {
+                yard.strike(DummyHit { heavy, from_right: false }, 0.1);
+                yard.due(0.5, true, &rules);
+            }
+            yard.due(8.0, true, &rules);
+        }
+        assert!(yard.take_broken().is_empty());
+        let w = yard.wear().unwrap();
+        assert!((0.2..0.4).contains(&w), "a good dent, not the end: {w}");
+        // A few more sessions finish it, under his nail.
+        let mut sessions = 1;
+        while yard.take_broken().is_empty() {
+            sessions += 1;
+            assert!(sessions < 8, "{:?}", yard.wear());
+            for _ in 0..15 {
+                yard.strike(DummyHit { heavy: false, from_right: false }, 0.0);
+                yard.due(0.3, true, &rules);
+            }
+            let b = yard.take_broken();
+            if !b.is_empty() {
+                assert_eq!(b, vec![DummyBreak { id, by: Breaker::Knight }]);
+                break;
+            }
+        }
+        assert!(sessions >= 3, "a good few sessions: {sessions}");
+        // Over its life alone it would have lasted 13-18 min.
+        let mut y = Yard::new(6, &rules);
+        y.add(Spot::Ground { pos: Vec2::ZERO }, &rules);
+        let mut t = 0.0;
+        while y.take_broken().is_empty() {
+            y.due(1.0, true, &rules);
+            t += 1.0;
+            assert!(t < 1200.0);
+        }
+        assert!((780.0..=1081.0).contains(&t), "{t}");
+    }
+
+    #[test]
+    fn five_clicks_break_it_and_the_next_one_waits_longer() {
+        let rules = DummyRules { every_secs: [100.0, 100.0], ..Default::default() };
+        let (d, t) = desk(vec![]);
+        let mut yard = Yard::new(7, &rules);
+        let id = yard.add(Spot::Ground { pos: Vec2::new(500.0, 1040.0) }, &rules);
+        assert_eq!(yard.click(id + 1, &rules), None, "another dummy");
+        for n in 1..=4 {
+            assert_eq!(yard.click(id, &rules), Some(false), "click {n}");
+        }
+        assert!(yard.take_landed().is_empty(), "not his blows (the app swings it itself)");
+        assert_eq!(yard.click(id, &rules), Some(true), "the fifth breaks it");
+        assert_eq!(yard.take_broken(), vec![DummyBreak { id, by: Breaker::User }]);
+        assert_eq!(yard.click(id, &rules), None, "broken: no more");
+        assert!(!yard.moved(id, Spot::Ground { pos: Vec2::ZERO }), "nor dragged");
+        yard.due(0.5, true, &rules);
+        assert!(yard.shown(&d, &t, 40.0, &|_| true).is_none());
+        // 2.5 × the usual 100 s before the next.
+        let mut secs = 0.0;
+        while !yard.due(1.0, true, &rules) {
+            secs += 1.0;
+            assert!(secs < 400.0);
+        }
+        assert!((245.0..=252.0).contains(&secs), "{secs}");
+        // A worn dummy takes fewer clicks.
+        let id = yard.add(Spot::Ground { pos: Vec2::new(500.0, 1040.0) }, &rules);
+        for _ in 0..25 {
+            yard.strike(DummyHit { heavy: true, from_right: false }, 0.0);
+            yard.due(0.1, true, &rules);
+        }
+        assert!(yard.take_broken().is_empty());
+        let clicks = (1..=5).find(|_| yard.click(id, &rules) == Some(true)).expect("broke");
+        assert!(clicks <= 2, "{clicks}");
+    }
+
+    #[test]
+    fn a_placed_or_dragged_dummy_wears_and_breaks_too() {
+        let rules = DummyRules { life_secs: [100.0, 100.0], ..Default::default() };
+        let mut yard = Yard::new(8, &rules);
+        let id = yard.add(Spot::Ground { pos: Vec2::new(500.0, 1040.0) }, &rules);
+        yard.pin(id);
+        yard.due(50.0, true, &rules);
+        assert!(yard.moved(id, Spot::Ground { pos: Vec2::new(900.0, 1040.0) }));
+        assert!((yard.wear().unwrap() - 0.5).abs() < 0.01, "wear goes with it");
+        yard.due(51.0, true, &rules);
+        assert_eq!(yard.take_broken(), vec![DummyBreak { id, by: Breaker::Wear }]);
     }
 
     #[test]
@@ -835,6 +1079,10 @@ mod tests {
     fn hit_clips_swing_away_from_the_blow() {
         assert_eq!(DummyHit { heavy: false, from_right: true }.clip(), "Light Hit L");
         assert_eq!(DummyHit { heavy: true, from_right: false }.clip(), "Heavy Hit R");
+        // The user's clicks: from the side clicked on.
+        let foot = Vec2::new(500.0, 1040.0);
+        assert_eq!(DummyHit::clicked(Vec2::new(510.0, 950.0), foot).clip(), "Light Hit L");
+        assert_eq!(DummyHit::clicked(Vec2::new(490.0, 950.0), foot).clip(), "Light Hit R");
     }
 
     fn sky() -> (Sky, LumaflyRules, RectF) {

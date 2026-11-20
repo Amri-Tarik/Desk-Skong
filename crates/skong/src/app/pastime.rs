@@ -1,11 +1,14 @@
 //! Pastime props glue for [`Pet`] (`crate::pastimes`): the training dummy and lumaflies turn
 //! up on their schedules (never while the user types hard, is away, a fullscreen app is up,
 //! or he's dead; never on a game monitor), the brain learns where they are, and its blows and
-//! swipes reach them. Kept out of `app.rs`.
+//! swipes reach them, and the dummy breaks in splinters when worn out (the brain is told:
+//! he stops practising with a look). Kept out of `app.rs`.
+use skong_core::achievements::AchievementEvent as E;
 use skong_core::ai::{BehaviourKind, KnownDummy, PastimeEvent, Reach, dummy_stand};
 use skong_core::geom::Vec2;
 use skong_core::nav::NavGoal;
-use skong_core::pastime::Swipe;
+use skong_core::particles::{DUMMY_SPLINTERS, HARD_LAND_DUST};
+use skong_core::pastime::{Breaker, Swipe};
 use skong_core::terrain::LedgeKind;
 
 use super::Pet;
@@ -41,6 +44,22 @@ impl Pet {
         for (at, hit) in news.hits {
             // The game's hit marker, along the blow.
             self.fx.spawn("cursor_hit", at, !hit.from_right);
+        }
+        for (b, figure, foot) in news.broken {
+            // No break clip in its library: wood splinters both ways, a puff at its foot.
+            let ppu = self.ch.params.px_per_unit;
+            let dir = if self.ch.pos.x > foot.x { -1.0 } else { 1.0 };
+            self.fx.particles(DUMMY_SPLINTERS, figure, dir, ppu);
+            self.fx.particles(HARD_LAND_DUST, foot, dir, ppu);
+            let how = match b.by {
+                Breaker::Wear => "worn out by time",
+                Breaker::Knight => "under his nail",
+                Breaker::User => "the user's clicks; the next one waits longer",
+            };
+            log::info!("training dummy #{} broke at ({:.0},{:.0}) ({how})", b.id, foot.x, foot.y);
+            // Practising on it: he stops with a look at the pieces.
+            self.brain.dummy_broken(b.id);
+            self.achieve(E::DummyBroken { by_knight: b.by == Breaker::Knight });
         }
         if created {
             self.win.raise(); // the knight stays in front

@@ -22,6 +22,8 @@ pub enum Shape {
     Shard,
     /// A tiny four-point twinkle.
     Spark,
+    /// A wood splinter: a shard's sliver, flat-coloured (no bright core).
+    Splinter,
 }
 
 /// How one kind of particle is born and moves.
@@ -61,6 +63,7 @@ pub struct Spec {
 const DUST: &[[u8; 3]] = &[[214, 208, 196], [188, 182, 172], [230, 226, 218]];
 const CRYSTAL: &[[u8; 3]] = &[[255, 214, 240], [255, 242, 250], [244, 176, 226]];
 const GLEAM: &[[u8; 3]] = &[[255, 249, 226], [255, 238, 200]];
+const WOOD: &[[u8; 3]] = &[[122, 86, 54], [96, 66, 42], [168, 128, 86], [206, 178, 134], [146, 104, 66]];
 
 /// Bits kicked back from the feet while running fast (a stream).
 pub const RUN_DUST: Spec = Spec {
@@ -165,6 +168,26 @@ pub const GEO_SPARKLE: Spec = Spec {
     colors: GLEAM,
     shape: Shape::Spark,
     reach: 2.0,
+    rate: 0.0,
+};
+
+/// The training dummy breaking: brown and beige splinters thrown out and up from its
+/// figure, both ways, falling back hard.
+pub const DUMMY_SPLINTERS: Spec = Spec {
+    count: [16, 20],
+    speed: [2.5, 6.5],
+    angle: [15.0, 150.0],
+    both_sides: true,
+    jitter: [0.35, 0.6],
+    life: [0.6, 0.95],
+    size: [0.07, 0.13],
+    grow: 1.0,
+    gravity: 18.0,
+    drag: 1.2,
+    alpha: 0.95,
+    colors: WOOD,
+    shape: Shape::Splinter,
+    reach: 4.0,
     rate: 0.0,
 };
 
@@ -311,11 +334,12 @@ fn stamp(img: &mut Image, shape: Shape, c: Vec2, vel: Vec2, r: f32, rgb: [u8; 3]
                     let rr = r.max(0.8);
                     ((rr + 0.5 - d.length()).clamp(0.0, 1.0) * (1.0 - 0.35 * (d.length() / rr).min(1.0)), 0.0)
                 }
-                Shape::Shard => {
+                Shape::Shard | Shape::Splinter => {
                     let (len, wid) = (r.max(1.2), (r * 0.32).max(0.6));
                     let (u, v) = (d.dot(axis).abs(), d.perp_dot(axis).abs());
                     let s = u / len + v / wid;
-                    (((1.0 - s) * wid + 0.6).clamp(0.0, 1.0), (1.0 - s).max(0.0))
+                    let core = if shape == Shape::Shard { (1.0 - s).max(0.0) } else { 0.0 };
+                    (((1.0 - s) * wid + 0.6).clamp(0.0, 1.0), core)
                 }
                 Shape::Spark => {
                     let rr = r.max(0.8);
@@ -357,7 +381,7 @@ mod tests {
 
     #[test]
     fn spawn_counts_stay_in_range() {
-        for (spec, name) in [(LAND_DUST, "land"), (HARD_LAND_DUST, "hard"), (JUMP_DUST, "jump"), (DASH_DUST, "dash"), (WALL_DUST, "wall"), (SD_BURST_SHARDS, "burst"), (SD_BREAK_SHARDS, "break"), (GEO_SPARKLE, "geo")] {
+        for (spec, name) in [(LAND_DUST, "land"), (HARD_LAND_DUST, "hard"), (JUMP_DUST, "jump"), (DASH_DUST, "dash"), (WALL_DUST, "wall"), (SD_BURST_SHARDS, "burst"), (SD_BREAK_SHARDS, "break"), (GEO_SPARKLE, "geo"), (DUMMY_SPLINTERS, "splinters")] {
             for seed in 0..200 {
                 let mut b = Burst::new(spec, PPU, seed);
                 b.emit(Vec2::ZERO, -1.0);
@@ -368,7 +392,7 @@ mod tests {
 
     #[test]
     fn every_particle_dies_within_its_lifetime() {
-        for spec in [LAND_DUST, HARD_LAND_DUST, SD_BURST_SHARDS, SD_BREAK_SHARDS, GEO_SPARKLE] {
+        for spec in [LAND_DUST, HARD_LAND_DUST, SD_BURST_SHARDS, SD_BREAK_SHARDS, GEO_SPARKLE, DUMMY_SPLINTERS] {
             let counts = run(spec, 7, spec.life[1] + 0.02);
             assert!(counts[0] > 0);
             assert_eq!(*counts.last().unwrap(), 0, "all gone after the longest life");
@@ -393,7 +417,7 @@ mod tests {
 
     #[test]
     fn particles_stay_within_reach_and_bounds_cover_them() {
-        for spec in [HARD_LAND_DUST, SD_BURST_SHARDS, SD_BREAK_SHARDS, GEO_SPARKLE, DASH_DUST] {
+        for spec in [HARD_LAND_DUST, SD_BURST_SHARDS, SD_BREAK_SHARDS, GEO_SPARKLE, DASH_DUST, DUMMY_SPLINTERS] {
             let mut b = Burst::new(spec, PPU, 3);
             b.emit(Vec2::new(200.0, 200.0), 1.0);
             let mut img = Image::default();
@@ -481,5 +505,26 @@ mod tests {
         assert!(lit.iter().all(|p| (p >> 16) & 0xff >= (p >> 8) & 0xff));
         // Mostly empty canvas: a few sparse bits, not a cloud.
         assert!(lit.len() * 4 < img.px.len(), "{} of {}", lit.len(), img.px.len());
+    }
+
+    #[test]
+    fn dummy_splinters_are_wood_thrown_both_ways_and_fall_back() {
+        let mut b = Burst::new(DUMMY_SPLINTERS, PPU, 4);
+        b.emit(Vec2::new(300.0, 300.0), 1.0);
+        assert!(b.particles().iter().any(|p| p.vel.x > 0.0) && b.particles().iter().any(|p| p.vel.x < 0.0));
+        assert!(b.particles().iter().all(|p| p.vel.y < 0.0), "thrown up and out");
+        b.step(0.05);
+        let mut img = Image::default();
+        b.draw(&mut img).expect("live");
+        // Brown / beige (red ≥ green ≥ blue, premultiplied), never whitened like crystal.
+        for p in img.px.iter().copied().filter(|p| p >> 24 > 0) {
+            let (a, r, g, bl) = (p >> 24, (p >> 16) & 0xff, (p >> 8) & 0xff, p & 0xff);
+            assert!(r >= g && g >= bl, "{p:08x}");
+            assert!(r * 255 <= 210 * a + 255, "no white core: {p:08x}");
+        }
+        for _ in 0..48 {
+            b.step(1.0 / 120.0);
+        }
+        assert!(b.particles().iter().all(|p| p.vel.y > 0.0), "falling by 0.45 s");
     }
 }

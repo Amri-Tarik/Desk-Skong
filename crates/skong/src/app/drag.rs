@@ -1,8 +1,10 @@
 //! The user's hand on the props and visitors (rules in `skong_core::drag`): press on the
 //! training dummy, a visitor, a Geo deposit or a bench (placed or found) and move, and it's
 //! picked up; it follows the cursor (at the grab offset) and, let go, falls onto the first
-//! good enough ledge below. A plain click does nothing. Only their opaque pixels catch the
-//! mouse (layered windows hit-test per pixel); the cursor is only ever read, never moved.
+//! good enough ledge below. A plain click (less than `drag::DRAG_START` of movement) on the
+//! dummy strikes it like the knight's blow (it wears: about five break it, see
+//! `PastimeProps::click`); on the others it does nothing. Only their opaque pixels catch
+//! the mouse (layered windows hit-test per pixel); the cursor is only ever read, never moved.
 //!
 //! Consequences, once it lands: the dummy stays put (pinned, never moved away by itself)
 //! and the brain judges it afresh; a visitor goes on with what they were doing, or takes
@@ -126,8 +128,16 @@ impl Pet {
                     self.let_go(t, feet, vel);
                 }
             }
-            // A plain click: nothing (they aren't the knight).
-            Some(Poke::Click { .. }) => self.hand.pressed = None,
+            // A plain click (moved less than `drag::DRAG_START`): a blow on the dummy;
+            // nothing on the others (they aren't the knight).
+            Some(Poke::Click { pos }) => {
+                self.hand.pressed = None;
+                if let Target::Dummy(id) = t
+                    && let Some(wear) = self.pastimes.click(id, pos)
+                {
+                    log::info!("the user struck training dummy #{id} ({:.0} % worn)", 100.0 * wear);
+                }
+            }
             None => {}
         }
     }

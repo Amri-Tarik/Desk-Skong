@@ -244,6 +244,13 @@ fn five_different_things_dragged() {
 }
 
 #[test]
+fn a_dummy_broken_by_his_practice_and_not_otherwise() {
+    let mut t = tracker();
+    assert!(feed(&mut t, &[E::DummyBroken { by_knight: false }]).is_empty(), "worn out, or the user's clicks");
+    assert_eq!(feed(&mut t, &[E::DummyBroken { by_knight: true }]), [SPLINTERS]);
+}
+
+#[test]
 fn no_achievement_needs_special_hardware_or_apps() {
     for gone in ["dash_across_monitors", "air_mail", "game_retreat"] {
         assert!(!ALL.contains(&gone), "{gone}");

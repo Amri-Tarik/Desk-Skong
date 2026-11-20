@@ -3,12 +3,15 @@
 //!
 //! * the **training dummy**: the game's `Training Dummy Real Anim` (exported into the vanilla
 //!   skin as `Training_Dummy_Anim.png`), or a drawn stand-in when that art is missing. Idle,
-//!   then a light / heavy hit swing per blow, with the game's hit marker.
+//!   then a light / heavy hit swing per blow, with the game's hit marker and a short white
+//!   hit flash. The user's click on it is a blow too (no drag: `app/drag.rs`). Worn out it
+//!   breaks: its library has no break clip, so it fades fast while the app throws wood
+//!   splinters (`particles::DUMMY_SPLINTERS`, [`PastimeNews::broken`]).
 //! * **lumaflies**: a procedural glow (`pastime::glow`), bobbing as it drifts.
 //!
 //! One small capture-excluded sprite window each (lumaflies' are click-through; the
-//! dummy's opaque pixels catch the mouse: the user can drag it, see `app/drag.rs`).
-//! Nothing is saved.
+//! dummy's opaque pixels catch the mouse: the user can drag it or strike it, see
+//! `app/drag.rs`; its window is kept hidden for the next dummy). Nothing is saved.
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -20,12 +23,16 @@ use skong_core::discovery::Footprint;
 use skong_core::geom::{RectF, RectI, Vec2};
 use skong_core::lasting::{LedgeAges, SETTLED_SECS};
 use skong_core::occupancy::{ClaimKey, ClaimKind, Occupancy};
-use skong_core::pastime::{self, DummyHit, DummyMiss, DummyRules, LumaflyRules, ShownDummy, ShownFly, Sky, Swipe, Yard};
+use skong_core::pastime::{self, DummyBreak, DummyHit, DummyMiss, DummyRules, LumaflyRules, ShownDummy, ShownFly, Sky, Swipe, Yard};
 use skong_core::shiny::{self, LASTING_SECS, ShinySite};
 use skong_core::terrain::{Ledge, Terrain};
 use skong_win::sprite_window::SpriteWindow;
 
 use crate::bubble::faded;
+use crate::enemies::flashed;
+
+/// The white hit flash on a blow (s; drawn in 4 steps, as the enemies').
+const HIT_FLASH: f32 = 0.12;
 
 /// The dummy's art, relative to the game's size (its sprite is 7.4 units tall: too tall
 /// beside the knight on a desktop). About 1.8 knights tall.
@@ -76,7 +83,14 @@ pub struct PastimeProps {
     /// Stand-in swing (−1..1) and its decay, when there's no art.
     swing: f32,
     dummy_win: Option<SpriteWindow>,
-    dummy_drawn: Option<(Option<SpriteKey>, u8, i32)>,
+    /// The last dummy's window, hidden, for the next one.
+    spare_win: Option<SpriteWindow>,
+    /// (frame or none for the stand-in, alpha, stand-in tilt, flash step) last drawn.
+    dummy_drawn: Option<(Option<SpriteKey>, u8, i32, u8)>,
+    /// Hit flash left (s).
+    flash: f32,
+    /// The user's blows since the last update: where they clicked, the blow.
+    clicks: Vec<(Vec2, DummyHit)>,
     shown_dummy: Option<ShownDummy>,
     /// In the user's hand (or falling from it): its foot. The brain doesn't see it meanwhile.
     held: Option<Vec2>,
@@ -102,8 +116,11 @@ pub struct Where<'a> {
 /// What happened this tick, for the pet (hit markers).
 #[derive(Default)]
 pub struct PastimeNews {
-    /// Blows that landed on the dummy: where (its figure's centre) and from which side.
+    /// Blows that landed on the dummy: where (its figure's centre, or the user's click) and
+    /// from which side.
     pub hits: Vec<(Vec2, DummyHit)>,
+    /// The dummy broke: what broke it, its figure's centre and its foot (the splinters).
+    pub broken: Vec<(DummyBreak, Vec2, Vec2)>,
 }
 
 impl PastimeProps {
@@ -133,7 +150,10 @@ impl PastimeProps {
             anim: None,
             swing: 0.0,
             dummy_win: None,
+            spare_win: None,
             dummy_drawn: None,
+            flash: 0.0,
+            clicks: Vec::new(),
             shown_dummy: None,
             held: None,
             flies: Vec::new(),
@@ -243,15 +263,29 @@ impl PastimeProps {
     pub fn take_mouse(&self) -> Vec<(u64, skong_win::sprite_window::MouseEvent)> {
         let events = self.dummy_win.as_ref().map(|w| w.take_mouse()).unwrap_or_default();
         match self.yard.dummy() {
-            Some(d) => events.into_iter().map(|e| (d.id, e)).collect(),
-            None => Vec::new(),
+            // A broken one (fading out) is past handling.
+            Some(d) if !d.is_broken() => events.into_iter().map(|e| (d.id, e)).collect(),
+            _ => Vec::new(),
         }
     }
 
-    /// Where dummy `id` stands (or hangs in the user's hand).
+    /// Where dummy `id` stands (or hangs in the user's hand), while it's whole.
     pub fn dummy_at(&self, id: u64) -> Option<Vec2> {
-        self.yard.dummy().filter(|d| d.id == id)?;
+        self.yard.dummy().filter(|d| d.id == id && !d.is_broken())?;
         self.held.or(self.shown_dummy.map(|d| d.pos))
+    }
+
+    /// The user clicked dummy `id` at `at` (a press without a drag): a blow, as the knight's
+    /// (the hit clip from that side, the flash, the hit marker where they clicked). It wears
+    /// it: about five break a fresh one. `Some(wear)` after the blow (1: it broke).
+    pub fn click(&mut self, id: u64, at: Vec2) -> Option<f32> {
+        let foot = self.dummy_at(id).filter(|_| self.held.is_none())?;
+        let hit = DummyHit::clicked(at, foot);
+        self.yard.click(id, &self.drules)?;
+        self.clicks.push((at, hit));
+        self.wobble(hit);
+        self.flash = HIT_FLASH;
+        Some(self.yard.wear().unwrap_or(1.0))
     }
 
     /// The user picked dummy `id` up: it wobbles; the brain loses sight of it.
@@ -303,7 +337,7 @@ impl PastimeProps {
 
     /// The dummy standing, if one is up and not on its way out (its id).
     pub fn dummy_id(&self) -> Option<u64> {
-        self.yard.dummy().filter(|d| d.leave_at > self.yard.clock()).map(|d| d.id)
+        self.yard.dummy().filter(|d| d.leave_at > self.yard.clock() && !d.is_broken()).map(|d| d.id)
     }
 
     /// Fade the dummy out (one he can't get to and no better place for it).
@@ -337,44 +371,68 @@ impl PastimeProps {
         let mut news = PastimeNews::default();
         let (w, h) = self.dummy_size();
         let mut shown = self.yard.shown(desk, terrain, self.footprint().w, settled);
+        let broke = self.yard.take_broken();
         match self.held {
-            // In the user's hand: drawn where the hand is (its stay still runs out).
+            // Worn out in the user's hand (or gone): it comes apart right there.
+            Some(p) if !broke.is_empty() || self.yard.dummy().is_none_or(|d| d.is_broken()) => {
+                news.broken.extend(broke.iter().map(|b| (*b, self.body(p).center(), p)));
+                self.held = None;
+                shown = None;
+            }
+            // In the user's hand: drawn where the hand is (it still wears).
             Some(p) => {
-                shown = self.yard.dummy().map(|d| ShownDummy { id: d.id, pos: p, span: (p.x, p.x), alpha: shown.map_or(1.0, |s| s.alpha) });
-                if shown.is_none() {
-                    self.held = None;
+                shown = self.yard.dummy().map(|d| ShownDummy { id: d.id, pos: p, span: (p.x, p.x), alpha: shown.map_or(1.0, |s| s.alpha), broken: false });
+            }
+            None => {
+                shown = shown.filter(|d| !self.game_monitors.iter().any(|m| m.contains(d.pos.x as i32, d.pos.y as i32 - 1)));
+                // Splinters from where it stood (last seen, if its ledge is covered now).
+                if let Some(d) = shown.or(self.shown_dummy) {
+                    news.broken.extend(broke.iter().map(|b| (*b, self.body(d.pos).center(), d.pos)));
                 }
             }
-            None => shown = shown.filter(|d| !self.game_monitors.iter().any(|m| m.contains(d.pos.x as i32, d.pos.y as i32 - 1))),
         }
         occ.release(DUMMY_CLAIM);
         if let Some(d) = shown.filter(|_| self.held.is_none()) {
             occ.claim(DUMMY_CLAIM, self.footprint().rect(d.pos), 20);
         }
-        // Blows that landed: swing, hit marker.
+        // Blows that landed: swing, flash, hit marker (the user's where they clicked).
         for hit in self.yard.take_landed() {
             if let Some(d) = shown {
                 news.hits.push((self.body(d.pos).center(), hit));
             }
             self.wobble(hit);
+            self.flash = HIT_FLASH;
         }
+        news.hits.append(&mut self.clicks);
         self.swing *= (-dt * 5.0).exp();
+        let flash = ((self.flash / HIT_FLASH) * 4.0).ceil().clamp(0.0, 4.0) as u8;
+        self.flash = (self.flash - dt).max(0.0);
+        let mut reshow = false;
         match shown {
             None => {
+                // Hidden, kept for the next dummy.
                 if let Some(win) = self.dummy_win.take() {
                     win.set_visible(false);
+                    self.spare_win = Some(win);
                 }
                 self.anim = None;
                 self.dummy_drawn = None;
+                self.flash = 0.0;
             }
             Some(d) => {
-                if self.dummy_win.is_none()
-                    && let Ok(win) = SpriteWindow::new()
-                {
-                    win.set_capturable(self.capturable);
-                    // Its opaque pixels catch the mouse: the user can pick it up.
-                    self.dummy_win = Some(win);
-                    created = true;
+                if self.dummy_win.is_none() {
+                    if let Some(win) = self.spare_win.take() {
+                        let _ = win.take_mouse(); // nothing from its last dummy
+                        win.set_capturable(self.capturable);
+                        self.dummy_win = Some(win);
+                        reshow = true;
+                        created = true;
+                    } else if let Ok(win) = SpriteWindow::new() {
+                        win.set_capturable(self.capturable);
+                        // Its opaque pixels catch the mouse: the user can pick it up or strike it.
+                        self.dummy_win = Some(win);
+                        created = true;
+                    }
                 }
                 let alpha = (d.alpha * 255.0) as u8;
                 if let Some(art) = &self.art {
@@ -391,28 +449,35 @@ impl PastimeProps {
                         // The pole's foot on the ledge (sunk a hair into it).
                         let x = (d.pos.x - f.anchor_x(false)).round() as i32;
                         let y = (d.pos.y + 2.0 * self.scale - f.image.height as f32).round() as i32;
-                        if self.dummy_drawn != Some((Some(k), alpha, 0)) {
-                            let img = if alpha < 255 { faded(&f.image, alpha) } else { f.image.clone() };
+                        if self.dummy_drawn != Some((Some(k), alpha, 0, flash)) {
+                            let lit = if flash > 0 { flashed(&f.image, flash as f32 / 4.0) } else { f.image.clone() };
+                            let img = if alpha < 255 { faded(&lit, alpha) } else { lit };
                             if let Err(e) = win.present(&img, x, y) {
                                 log::warn!("dummy: {e:#}");
                             }
-                            self.dummy_drawn = Some((Some(k), alpha, 0));
+                            self.dummy_drawn = Some((Some(k), alpha, 0, flash));
                         } else if let Err(e) = win.move_to(x, y) {
                             log::warn!("dummy: {e:#}");
                         }
                     }
                 } else if let Some(win) = self.dummy_win.as_mut() {
                     let tilt = (self.swing * 20.0).round() as i32;
-                    let img = pastime::dummy_stand_in(w.round() as u32, h.round() as u32, self.swing, d.alpha);
                     let (x, y) = ((d.pos.x - w * 0.5).round() as i32, (d.pos.y - h).round() as i32);
-                    if self.dummy_drawn != Some((None, alpha, tilt)) {
+                    if self.dummy_drawn != Some((None, alpha, tilt, flash)) {
+                        let mut img = pastime::dummy_stand_in(w.round() as u32, h.round() as u32, self.swing, d.alpha);
+                        if flash > 0 {
+                            img = flashed(&img, flash as f32 / 4.0);
+                        }
                         if let Err(e) = win.present(&img, x, y) {
                             log::warn!("dummy: {e:#}");
                         }
-                        self.dummy_drawn = Some((None, alpha, tilt));
+                        self.dummy_drawn = Some((None, alpha, tilt, flash));
                     } else if let Err(e) = win.move_to(x, y) {
                         log::warn!("dummy: {e:#}");
                     }
+                }
+                if reshow && let Some(win) = &self.dummy_win {
+                    win.set_visible(true);
                 }
             }
         }
@@ -465,14 +530,14 @@ impl PastimeProps {
 
     /// What the brain knows.
     pub fn percepts(&self) -> (Option<KnownDummy>, Vec<KnownLumafly>) {
-        let dummy = self.shown_dummy.filter(|d| d.alpha > 0.5 && self.held.is_none()).map(|d| self.known(d.id, d.pos, d.span));
+        let dummy = self.shown_dummy.filter(|d| d.alpha > 0.5 && !d.broken && self.held.is_none()).map(|d| self.known(d.id, d.pos, d.span));
         let flies = self.shown_flies.iter().map(|f| KnownLumafly { id: f.id, pos: f.pos, leaving: f.leaving || f.alpha < 0.3 }).collect();
         (dummy, flies)
     }
 
     /// The dummy's foot, if one stands (its ledge stays in the planner).
     pub fn dummy_foot(&self) -> Option<Vec2> {
-        self.shown_dummy.filter(|_| self.held.is_none()).map(|d| d.pos)
+        self.shown_dummy.filter(|d| !d.broken && self.held.is_none()).map(|d| d.pos)
     }
 
     /// Nothing on monitors running a fullscreen game: the dummy leaves, lumaflies drift off.
@@ -499,6 +564,7 @@ impl PastimeProps {
         self.yard.clear();
         self.sky.clear();
         self.held = None;
+        self.clicks.clear();
     }
 }
 

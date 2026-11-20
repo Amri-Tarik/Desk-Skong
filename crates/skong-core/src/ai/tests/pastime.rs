@@ -159,6 +159,25 @@ fn the_dummy_gone_mid_session_ends_it() {
 }
 
 #[test]
+fn the_dummy_breaking_mid_session_he_stops_with_a_look_at_the_pieces() {
+    let mut sim = in_company();
+    sim.dummy = Some(dummy_at(1400.0));
+    assert!(sim.run_until(150.0, BehaviourKind::Pastime), "{}", sim.last_reason());
+    // Practising.
+    assert!(sim.run_while(30.0, |s| hits(s).len() < 3), "{}", sim.last_reason());
+    let started = sim.started.len();
+    let n = sim.pastime_events.len();
+    let i = sim.intents.len();
+    sim.dummy = None;
+    sim.brain.dummy_broken(1);
+    assert!(sim.run_while(6.0, |s| s.brain.behaviour() == BehaviourKind::Pastime), "stops soon: {}", sim.last_reason());
+    assert!(sim.started[started..].iter().any(|a| a == "look_down"), "a look at the pieces: {:?}", &sim.started[started..]);
+    assert!(sim.intents[i..].iter().any(|i| i.reason.contains("the training dummy broke")), "says why");
+    assert!(sim.pastime_events.len() - n <= 3, "no new drills on it (only blows already in the air)");
+    assert_eq!(sim.switches.last().map(|s| s.reason), Some(SwitchReason::Finished), "ends cleanly");
+}
+
+#[test]
 fn geo_a_visitor_and_the_shade_all_preempt_a_pastime() {
     // Geo.
     let mut sim = in_company();

@@ -162,8 +162,24 @@ Pick a visitor in the drop-down, or use the "Every scene" row.
       (combos, up slashes, pogos, Great / Cyclone / Dash Slash, fireballs); it swings per
       blow · *look for* its size beside him (`DUMMY_ART_SCALE` 0.34), its foot on the
       ledge, the hit clips swinging *away* from the blow (L / R is a guess), slash / pogo
-      reach, the dash slash not carrying him off, hit markers on the figure; whether he runs
-      off to it too eagerly.
+      reach, the dash slash not carrying him off, hit markers on the figure, a short white
+      hit flash per blow; whether he runs off to it too eagerly.
+- [ ] **Strike the dummy yourself**: click its art (press and let go without moving more
+      than ~6 px) → it swings away from the side you clicked (`Light Hit L/R`), flashes
+      white, the hit marker where you clicked; the log has "the user struck training dummy
+      #… (N % worn)". About 5 clicks break a fresh one (fewer once worn) → it fades out fast
+      in a burst of brown / beige splinters (+ a puff of dust at its foot); log "training
+      dummy #… broke … (the user's clicks; the next one waits longer)". The next one comes
+      2.5× later than usual. Press and move → still a drag, not a blow · *look for* the
+      splinters' size / colour / spread, the fade's speed, whether ~5 clicks feels right.
+- [ ] **The dummy breaking while he practises**: place one (📍) and click it 4 times, then let
+      him practise → his blows finish it ("under his nail" in the log): the swing in progress
+      finishes, he looks down at the pieces (`LookDown`) and goes back to what he was doing.
+      First time → *Splinters*. Same for one broken by your click mid-session (no
+      achievement).
+- [ ] **Wear over time**: a dummy left standing breaks by itself after 13–18 min (sooner
+      with practice: ≈ 15 % a session, ≈ 8–10 min of keen practice); placed (📍) and dragged
+      ones wear the same.
 - [ ] **Lumafly** → a glow drifts from title bar to title bar; he follows along the ledges,
       jumps at it, sometimes catches it (a flare) and watches it float off · *look for* the
       glow's size / colour / bob, how catchable it feels.
@@ -171,7 +187,8 @@ Pick a visitor in the drop-down, or use the "Every scene" row.
       the view (or the result line says there's no such edge) · *look for* which end he
       picks and which way he faces.
 - [ ] **Stargazing** (any hour from here) → up to an open ledge, Look At King held 16–28 s.
-- [ ] On its own: the dummy every 4–10 min (stays 7–13 min), lumaflies now and then; the
+- [ ] On its own: the dummy 4–10 min after the last one went (it stands until it breaks),
+      lumaflies now and then; the
       view and the stars after ~25 s of plain company or when bored (stars 21:00–05:00);
       *look for* how often versus keeping company (aim: plain company ~70 % of the time).
 
@@ -204,11 +221,12 @@ enemies, Grimm and his flames (the scarlet flame's click still summons him), the
 Geo coins, shinies, lumaflies. Press on one and move a few px → picked up; let go → it
 falls onto the first ledge below that's wide enough for it (a title bar, the floor, or a
 content line that has settled); over a fullscreen game's monitor it drops onto the nearest
-other monitor instead. A plain click does nothing.
+other monitor instead. A plain click does nothing (on the dummy it's a blow: see
+"Strike the dummy yourself" above).
 
 - [ ] **Hit-testing**: click a *transparent* part of a prop's / visitor's box (beside the
       dummy's pole, around a bench's legs) → the click reaches the window under it; click
-      the art itself → nothing happens (no click on the app below) · *look for* soft edges
+      the art itself → no click on the app below (the dummy swings) · *look for* soft edges
       (semi-transparent pixels catch the mouse too), the cursor never moving.
 - [ ] **Training dummy**: drag it (it wobbles when lifted, thuds on landing) onto another
       window / the floor → it stays there, never moved away by itself; the log has "training

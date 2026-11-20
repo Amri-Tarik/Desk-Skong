@@ -213,6 +213,12 @@ impl Fall {
     }
 }
 
+/// Has the hand moved far enough from the press (`press` → `now`) to pick the thing up?
+/// Within [`DRAG_START`] it's still a click (on the dummy: a blow).
+pub fn is_drag(press: Vec2, now: Vec2) -> bool {
+    press.distance(now) > DRAG_START
+}
+
 /// Is the knight sitting on the bench whose foot is at `bench` (`half`: half its width)?
 /// `seat`: his feet while a seated act plays (`None`: not seated).
 pub fn sitting_on(seat: Option<Vec2>, bench: Vec2, half: f32) -> bool {
@@ -249,6 +255,16 @@ mod tests {
     }
 
     const PPU: f32 = 38.4;
+
+    #[test]
+    fn a_press_moved_a_few_px_is_a_click_further_a_drag() {
+        let p = Vec2::new(500.0, 300.0);
+        assert!(!is_drag(p, p));
+        assert!(!is_drag(p, p + Vec2::new(3.0, -4.0)), "5 px: a hand's wobble, still a click");
+        assert!(!is_drag(p, p + Vec2::new(DRAG_START, 0.0)));
+        assert!(is_drag(p, p + Vec2::new(5.0, 5.0)), "7 px: picked up");
+        assert!(is_drag(p, p + Vec2::new(0.0, -40.0)));
+    }
 
     fn drop_at(t: &Terrain, games: &[RectI], half: f32, settled: bool, at: Vec2) -> Landing {
         let m = monitors();
