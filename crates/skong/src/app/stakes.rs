@@ -307,6 +307,10 @@ impl Pet {
                 self.fx.spawn("geo_get", origin, self.ch.facing == Side::Right);
                 self.fx.particles_once("geo_sparkle", skong_core::particles::GEO_SPARKLE, self.ch.body().center(), self.ch.facing.sign(), self.ch.params.px_per_unit);
                 log::debug!("picked up {got} geo ({} total)", st.save.geo);
+                if self.haul.collect(self.emotes.clock(), got) {
+                    // A big haul: the quiet sparkle.
+                    self.emotes.show(crate::emotes::Emote::Spark);
+                }
             }
         }
         if let Some(v) = st.view.as_mut() {

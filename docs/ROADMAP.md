@@ -42,13 +42,19 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
 
 ## 2. Expression and variety
 
-- [ ] **Expression bubbles** (small, in an HK style, never noisy):
+- [x] **Expression bubbles** (small, in an HK style, never noisy):
       - "…" when bored;
       - an anger mark when there are enemies or a cursor to fight;
       - "!" on spotting the Shade, Geo or a flame;
       - "?" when he can't reach something;
       - "z" when drowsy;
       - a heart after a nice visitor chat.
+
+      > note: decided in `ai::expression` (brain transitions + need latches, per-bubble
+      > cooldowns, a 6 s gap between soft ones) and sent as `Intent::emote`; drawn in
+      > `emotes.rs`. Also a sweat drop when badly hurt and the sparkle for a big Geo haul
+      > (40+ Geo within 12 s). Spotting Geo keeps the Geo-coin thought cloud rather than a
+      > "!".
 - [ ] **Less time in companion mode.** More things to do on his own:
       - the training dummy (`Training Dummy Real Anim`, sharedassets321);
       - chasing a lumafly across windows;
@@ -155,6 +161,12 @@ Checked in tests only (unless noted). Note anything that looks off:
       - firebat / fireball / pillar scale and orientation;
       - the pillar glow and spikes;
       - how often he wins on a real desktop.
+- [ ] Expression bubbles (`--emote-test` cycles them all):
+      - the drawn marks at every Size: the anger mark's shape (four arcs), the heart, the
+        sweat drop, the "…" cloud; their colours on light and dark windows;
+      - the short fade in / out (four steps) and the sweat drop sliding down;
+      - how often they show over a real day (the brain tests allow at most ~1 a minute);
+      - the "z" when he settles for a nap vs. the "zzz" once asleep.
 
 ## Recently done
 

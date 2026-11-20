@@ -14,6 +14,7 @@ use crate::geom::RectI;
 use crate::terrain::{LedgeKind, Terrain, TerrainOptions};
 
 mod dream_gate;
+mod expression;
 mod fight;
 mod gauntlet;
 mod greet;

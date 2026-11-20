@@ -140,6 +140,11 @@ impl Greet {
         Self { id: v.id, name: v.name.clone(), phase, failed: false, dream_decided: false }
     }
 
+    /// They got to talk (the conversation started and he didn't give up).
+    pub fn chatted(&self) -> bool {
+        matches!(self.phase, Phase::Converse { .. }) && !self.failed
+    }
+
     pub fn tick(&mut self, ctx: &mut Ctx) -> Status {
         let Some(v) = ctx.senses.visitors.iter().find(|v| v.id == self.id).cloned() else {
             ctx.nav.stop();
