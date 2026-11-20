@@ -17,8 +17,11 @@ use skong_win::sprite_window::SpriteWindow;
 
 /// Redraw rate of particle windows (the tick runs at 120 Hz).
 const PARTICLE_FPS: f32 = 60.0;
-/// At most this many particle bursts at once (new one-shots are skipped beyond it).
+/// At most this many particle bursts at once (a new one replaces the oldest beyond it).
 const MAX_BURSTS: usize = 8;
+/// A one-shot burst still alive this long is stuck (every spec's particles live < 1 s):
+/// retire it. Streams are retired this long after their last feed.
+const BURST_MAX_AGE: f32 = 3.0;
 /// Unpacked effect frames not drawn for this long are dropped (they stay packed).
 const EVICT_PERIOD: f32 = 60.0;
 
@@ -30,6 +33,8 @@ struct LiveBurst {
     win: SpriteWindow,
     since_draw: f32,
     shown: bool,
+    /// Seconds since it was created (one-shots) or last fed (streams).
+    age: f32,
 }
 
 /// A stream request for this tick: (key, spec, where, dir, px per unit).
@@ -61,6 +66,8 @@ pub struct Fx {
     feeds: Vec<Feed>,
     scratch: Image,
     seed: u32,
+    /// The burst cap was hit (logged once, with what was alive).
+    cap_logged: bool,
 }
 
 impl Fx {
@@ -79,6 +86,7 @@ impl Fx {
             feeds: Vec::new(),
             scratch: Image::default(),
             seed: 0x5EED_D057,
+            cap_logged: false,
         }
     }
 
@@ -97,7 +105,16 @@ impl Fx {
 
     fn one_shot(&mut self, tag: Option<&'static str>, spec: Spec, at: Vec2, dir: f32, ppu: f32) {
         if self.bursts.len() >= MAX_BURSTS {
-            return;
+            // Full: the oldest gives way (skipping new ones meant particles could stop for
+            // good if a few bursts ever got stuck).
+            if !self.cap_logged {
+                self.cap_logged = true;
+                let alive: Vec<String> = self.bursts.iter().map(|b| format!("{}:{}p/{:.1}s", b.tag.unwrap_or("once"), b.burst.len(), b.age)).collect();
+                log::warn!("particles: {MAX_BURSTS} bursts alive, the oldest gives way ({})", alive.join(", "));
+            }
+            if let Some(i) = self.bursts.iter().enumerate().max_by(|a, b| a.1.age.total_cmp(&b.1.age)).map(|(i, _)| i) {
+                self.retire(i);
+            }
         }
         let mut burst = Burst::new(spec, ppu, self.next_seed());
         burst.emit(at, dir);
@@ -130,7 +147,14 @@ impl Fx {
                 }
             },
         };
-        self.bursts.push(LiveBurst { tag, burst, win, since_draw: f32::INFINITY, shown: false });
+        self.bursts.push(LiveBurst { tag, burst, win, since_draw: f32::INFINITY, shown: false, age: 0.0 });
+    }
+
+    /// Hide burst `i`'s window and return it to the pool.
+    fn retire(&mut self, i: usize) {
+        let b = self.bursts.swap_remove(i);
+        b.win.set_visible(false);
+        self.burst_pool.push(b.win);
     }
 
     /// Feed streams, step the physics, redraw (throttled), retire empty bursts.
@@ -138,6 +162,7 @@ impl Fx {
         for (key, spec, at, dir, ppu) in std::mem::take(&mut self.feeds) {
             if let Some(b) = self.bursts.iter_mut().find(|b| b.tag == Some(key)) {
                 b.burst.feed(dt, at, dir);
+                b.age = 0.0;
             } else {
                 // A new stream starts with one emission right away.
                 self.one_shot(Some(key), spec, at, dir, ppu);
@@ -147,10 +172,12 @@ impl Fx {
         while i < self.bursts.len() {
             let b = &mut self.bursts[i];
             b.burst.step(dt);
-            if b.burst.is_empty() {
-                let b = self.bursts.swap_remove(i);
-                b.win.set_visible(false);
-                self.burst_pool.push(b.win);
+            b.age += dt;
+            if b.burst.is_empty() || b.age > BURST_MAX_AGE {
+                if !b.burst.is_empty() {
+                    log::warn!("particles: retiring a stuck burst ({}, {} particles, {:.1} s)", b.tag.unwrap_or("once"), b.burst.len(), b.age);
+                }
+                self.retire(i);
                 continue;
             }
             b.since_draw += dt;
@@ -158,7 +185,12 @@ impl Fx {
                 && let Some((x, y)) = b.burst.draw(&mut self.scratch)
             {
                 b.since_draw = 0.0;
-                b.win.present(&self.scratch, x, y)?;
+                // A window that can't be drawn loses its burst, not the whole pet.
+                if let Err(e) = b.win.present(&self.scratch, x, y) {
+                    log::warn!("particles: a burst window failed to draw, dropping it: {e:#}");
+                    self.retire(i);
+                    continue;
+                }
                 if !b.shown {
                     b.win.set_visible(true);
                     b.shown = true;
