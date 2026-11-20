@@ -29,10 +29,14 @@ mod movefx;
 mod settings;
 mod navbuild;
 mod placehint;
+mod art;
 
 pub struct Args {
+    /// Metadata (`--data`, else `data/hk` found by [`art::locate`]).
     pub data: PathBuf,
-    pub skins: PathBuf,
+    /// Skin folders, searched in order: `--skins` (else the dev `skins/`), then the art
+    /// extracted into the user's data folder ([`art::skin_roots`]).
+    pub skins: Vec<PathBuf>,
     pub skin: Option<String>,
     pub scale: Option<f32>,
     pub clip: String,
@@ -61,8 +65,8 @@ const USAGE: &str = "usage: skong [--browse] [--capturable] [--panel|--no-panel]
 
 fn parse_args() -> Result<Args> {
     let mut a = Args {
-        data: "data/hk".into(),
-        skins: "skins".into(),
+        data: PathBuf::new(),
+        skins: Vec::new(),
         skin: None,
         scale: None,
         clip: "Idle".into(),
@@ -79,12 +83,13 @@ fn parse_args() -> Result<Args> {
         move_test: false,
         sandbox: false,
     };
+    let mut dev_skins: Option<PathBuf> = None;
     let mut it = std::env::args().skip(1);
     while let Some(k) = it.next() {
         let mut v = || it.next().with_context(|| format!("missing value for {k}"));
         match k.as_str() {
             "--data" => a.data = v()?.into(),
-            "--skins" => a.skins = v()?.into(),
+            "--skins" => dev_skins = Some(v()?.into()),
             "--skin" => a.skin = Some(v()?),
             "--scale" => a.scale = Some(v()?.parse()?),
             "--clip" => a.clip = v()?,
@@ -109,6 +114,10 @@ fn parse_args() -> Result<Args> {
             _ => bail!("unknown argument {k}\n{USAGE}"),
         }
     }
+    if a.data.as_os_str().is_empty() {
+        a.data = art::locate("data/hk");
+    }
+    a.skins = art::skin_roots(&dev_skins.unwrap_or_else(|| art::locate("skins")));
     Ok(a)
 }
 
@@ -145,6 +154,10 @@ fn run() -> Result<()> {
             }
         }
     };
+    // First run: the art comes from the player's own copy of the game.
+    if !art::ensure(&args.data, &args.skins)? {
+        return Ok(());
+    }
     if args.browse { browser::run(&args) } else { app::run(&args) }
 }
 

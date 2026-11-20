@@ -2011,6 +2011,7 @@ dependencies = [
  "serde",
  "serde_json",
  "skong-core",
+ "skong-extract",
  "skong-ipc",
  "skong-win",
 ]
@@ -2025,6 +2026,19 @@ dependencies = [
  "png",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "skong-extract"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "log",
+ "png",
+ "serde",
+ "serde_json",
+ "skong-core",
+ "windows",
 ]
 
 [[package]]
@@ -2043,7 +2057,9 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "eframe",
+ "skong-extract",
  "skong-ipc",
+ "windows",
 ]
 
 [[package]]

@@ -197,6 +197,13 @@ fn settings(p: &mut Panel, ui: &mut egui::Ui, s: &Status, h: &Hello) {
                 p.cmd(Command::OpenLogFolder);
             }
         });
+        if ui
+            .button("Re-extract game art…")
+            .on_hover_text("Read the sprites from your Hollow Knight install again (after a game update, or if some look wrong). They stay on this PC only.")
+            .clicked()
+        {
+            p.cmd(Command::ReextractArt);
+        }
         ui.add_space(8.0);
         ui.label(RichText::new("Anywhere: Ctrl+Alt+G / H he walks / hurries to your cursor · Ctrl+Alt+W wakes him · Ctrl+Alt+M the tray menu · Ctrl+Alt+Q quits").small().color(pal::WEAK));
     });

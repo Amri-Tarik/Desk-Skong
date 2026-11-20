@@ -129,6 +129,21 @@ impl Skin {
         out.sort_by_key(|s| (!s.name.eq_ignore_ascii_case(VANILLA), s.name.to_lowercase()));
         out
     }
+
+    /// [`Skin::discover`] over several roots (the dev `skins/` folder, the art extracted
+    /// into the user's data folder): a name found in an earlier root wins.
+    pub fn discover_all(roots: &[PathBuf]) -> Vec<Skin> {
+        let mut out: Vec<Skin> = Vec::new();
+        for root in roots {
+            for s in Skin::discover(root) {
+                if !out.iter().any(|o| o.name.eq_ignore_ascii_case(&s.name)) {
+                    out.push(s);
+                }
+            }
+        }
+        out.sort_by_key(|s| (!s.name.eq_ignore_ascii_case(VANILLA), s.name.to_lowercase()));
+        out
+    }
 }
 
 fn find_ci(dir: &Path, file: &str) -> Option<PathBuf> {
@@ -603,6 +618,21 @@ impl SpriteBank {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn skins_from_several_roots_first_root_wins_vanilla_first() {
+        let d = std::env::temp_dir().join(format!("skong-core-skins-{}", std::process::id()));
+        std::fs::remove_dir_all(&d).ok();
+        for (root, skin) in [("dev", "Zed"), ("dev", "Vanilla"), ("user", "vanilla"), ("user", "Abyss")] {
+            std::fs::create_dir_all(d.join(root).join(skin)).unwrap();
+            std::fs::write(d.join(root).join(skin).join("Knight.png"), b"").unwrap();
+        }
+        let skins = Skin::discover_all(&[d.join("dev"), d.join("user"), d.join("missing")]);
+        let names: Vec<&str> = skins.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["Vanilla", "Abyss", "Zed"]);
+        assert_eq!(skins[0].dir, d.join("dev").join("Vanilla"));
+        std::fs::remove_dir_all(&d).ok();
+    }
 
     /// 2x2 atlas: TL red, TR green, BL blue, BR white (top-down rows).
     fn atlas() -> Atlas {

@@ -50,11 +50,26 @@ are kept in `%APPDATA%\Desk-Skong` and carry over.
 
 ## First run: your Hollow Knight install
 
-<!-- PLACEHOLDER: filled in by the first-run extraction work (finding the game, what is
-     extracted where, the legal requirement). Keep this heading. -->
+Desk-Skong needs your own copy of Hollow Knight. The first time you start it, a small
+window reads the game's sprites from your installation, once, and keeps them on this PC
+only:
 
-*Coming soon: how Desk-Skong finds your Hollow Knight install and prepares the knight's
-art on first run.*
+1. **It looks for the game** in every Steam library (and the usual GOG, Epic and Xbox
+   folders). If it can't find it, click **Locate hollow_knight.exe…** and pick the game's
+   exe (Steam: right-click Hollow Knight › *Manage* › *Browse local files*).
+2. **It extracts the art** (a few seconds), then the knight appears. Nothing in the game
+   folder is changed: it's only read.
+3. **The art is saved in** `%APPDATA%\Desk-Skong\skins\Vanilla`, next to your settings, so
+   updating Desk-Skong doesn't need it again. After a game update (or if something looks
+   wrong), use **Re-extract game art…** in the tray menu or the Desk-Skong window.
+
+If the window is closed before it's done, Desk-Skong doesn't start; run it again any time.
+
+> **Legal.** Desk-Skong requires a legitimately owned copy of Hollow Knight. Nothing from
+> the game (art, sound or text) is distributed with Desk-Skong, and the extracted art is
+> for your own use on your own PC: please don't share it. Desk-Skong is an unofficial fan
+> project, not affiliated with or endorsed by Team Cherry; Hollow Knight and its art
+> belong to Team Cherry.
 
 ## Using it
 
