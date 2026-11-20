@@ -19,13 +19,15 @@ use super::{BehaviourKind, Brain, FoeKind, Intent, StakeEvent, Switch};
 pub enum Expression {
     /// "!": a startle, or spotting the Shade, the scarlet flame, a visitor, a gauntlet.
     Alert,
-    /// An anger mark: enemies, or a cursor worth fighting (as he goes for them).
+    /// An anger mark: enemies, or a cursor worth fighting (as he goes for them); clicked
+    /// once too often, woken by a click, thrown around (`ai::handling`).
     Angry,
     /// A sweat drop: badly hurt.
     Sweat,
-    /// A bare "?": he couldn't get to what he wanted (no route, gave up).
+    /// A bare "?": he couldn't get to what he wanted (no route, gave up), or reeling after
+    /// a shake.
     Lost,
-    /// A small heart: a pleasant chat with a visitor just ended.
+    /// A small heart: a pleasant chat with a visitor just ended, or (rarely) a gentle carry.
     Fond,
     /// A Geo coin in a thought cloud: going for loot.
     Greedy,
@@ -140,6 +142,8 @@ pub(crate) struct Observation {
     pub gauntlet_announce: bool,
     /// He let a coin go (couldn't reach it).
     pub abandoned_coin: bool,
+    /// A reaction to how the user handles him (`ai::handling`).
+    pub handled: Option<Expression>,
 }
 
 impl Default for Observation {
@@ -158,6 +162,7 @@ impl Default for Observation {
             lantern: false,
             gauntlet_announce: false,
             abandoned_coin: false,
+            handled: None,
         }
     }
 }
@@ -218,7 +223,9 @@ impl Expressions {
         }
         // Behaviours that just ended.
         for e in &endings {
-            if e.failed && !matches!(e.kind, BehaviourKind::Dead | BehaviourKind::KnockedOut | BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::Ride | BehaviourKind::Idle) {
+            if e.failed
+                && !matches!(e.kind, BehaviourKind::Dead | BehaviourKind::KnockedOut | BehaviourKind::Flee | BehaviourKind::Hide | BehaviourKind::Ride | BehaviourKind::Idle | BehaviourKind::Dizzy)
+            {
                 due.push(Expression::Lost);
             } else if e.chatted && e.kind == BehaviourKind::Greet {
                 due.push(Expression::Fond);
@@ -226,6 +233,9 @@ impl Expressions {
         }
         if o.abandoned_coin {
             due.push(Expression::Lost);
+        }
+        if let Some(e) = o.handled {
+            due.push(e);
         }
         // The scarlet flame appears.
         if o.lantern && !self.lantern_seen {
@@ -281,6 +291,8 @@ fn on_switch(sw: Switch, o: &Observation) -> Option<Expression> {
         K::Fight if !o.enemies => o.lantern.then_some(Expression::Alert),
         K::Battle | K::Pester | K::Fight if !fighting(sw.from) => Some(Expression::Angry),
         K::Loot => Some(Expression::Greedy),
+        // Reeling after a shake: which way is up?
+        K::Dizzy => Some(Expression::Lost),
         K::Explore | K::Watch | K::Shiny | K::Highlight => Some(Expression::Curious),
         K::Nap if !o.asleep => Some(Expression::Drowsy),
         _ => None,
@@ -315,6 +327,7 @@ impl Brain {
             lantern: s.foes.iter().any(|f| f.kind == FoeKind::Lantern),
             gauntlet_announce: s.gauntlet.is_some_and(|c| c.stage == crate::enemy::GauntletStage::Announce),
             abandoned_coin: out.stakes.iter().any(|e| matches!(e, StakeEvent::AbandonCoin { .. })),
+            handled: self.handling.take_emote(),
         };
         self.expr.observe(&o)
     }

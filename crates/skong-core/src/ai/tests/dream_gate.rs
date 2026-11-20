@@ -152,12 +152,9 @@ fn a_gate_he_is_called_away_from_fades() {
     unreachable(&mut sim, coin);
     coins(&mut sim, &[coin]);
     assert!(sim.run_while(6.0, |s| gates(s).is_empty()), "{}", sim.last_reason());
-    // Poked hard while planting: he flees, and the gate closes.
-    for _ in 0..3 {
-        sim.pokes.push(Poke::Click { pos: sim.body_center() });
-        sim.step();
-    }
-    assert!(sim.run_until(1.0, BehaviourKind::Flee), "{}", sim.last_reason());
+    // Shaken about while planting: he reels once set down, and the gate closes.
+    sim.shake();
+    assert!(sim.run_until(1.0, BehaviourKind::Dizzy), "{}", sim.last_reason());
     assert_eq!(gates(&sim), vec![GateEvent::Set { at: coin }, GateEvent::Close]);
     assert_eq!(sim.gate.at(), None);
     assert!(!sim.started.iter().any(|a| a == "dreamgate_warp"));

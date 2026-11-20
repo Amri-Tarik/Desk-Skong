@@ -557,12 +557,39 @@ fn urgent_reactions_beat_engagements() {
     let mut sim = Sim::new();
     sim.coins = (0..6).map(|i| Vec2::new(1400.0 + 60.0 * i as f32, FLOOR)).collect();
     assert!(sim.run_until(3.0, |s| s.brain.behaviour() == BehaviourKind::Loot));
-    let at = sim.knight.body().center();
-    for _ in 0..3 {
-        sim.pokes.push(Poke::Click { pos: at });
+    // Shaken about mid-loot: he reels once set down (a reflex), then gets back to the Geo.
+    let home = sim.knight.pos;
+    sim.pokes.push(Poke::Grab);
+    for i in 0..45 {
+        sim.knight.pos = home + Vec2::new(100.0 * (i as f32 * DT * 18.0).sin(), -200.0);
         sim.step();
     }
-    assert!(sim.run_until(1.0, |s| s.brain.behaviour() == BehaviourKind::Flee), "three quick pokes make him flee mid-loot");
+    sim.knight.pos = home;
+    sim.pokes.push(Poke::Release { vel: Vec2::ZERO });
+    assert!(sim.run_until(1.0, |s| s.brain.behaviour() == BehaviourKind::Dizzy), "a shake makes him reel mid-loot");
+    assert!(sim.run_until(4.0, |s| s.brain.behaviour() == BehaviourKind::Loot), "back to the Geo");
+    assert!(sim.started.iter().any(|a| a == "stunned"), "{:?}", sim.started);
+}
+
+#[test]
+fn clicked_mid_loot_he_finishes_the_geo_first() {
+    // Clicked once too often while gathering Geo: provoked, but Geo comes before the cursor.
+    let mut sim = Sim::new();
+    sim.coins = (0..6).map(|i| Vec2::new(1400.0 + 60.0 * i as f32, FLOOR)).collect();
+    sim.cursor = Some(Cursor { pos: sim.knight.body().center() + Vec2::new(150.0, -20.0), ..Default::default() });
+    assert!(sim.run_until(3.0, |s| s.brain.behaviour() == BehaviourKind::Loot));
+    for _ in 0..6 {
+        sim.pokes.push(Poke::Click { pos: sim.knight.body().center() });
+        sim.step();
+    }
+    for _ in 0..(3.0 / DT) as usize {
+        sim.step();
+        if sim.coins.is_empty() {
+            break;
+        }
+        assert_ne!(sim.brain.behaviour(), BehaviourKind::Battle, "the cursor waits until the Geo is in");
+        assert_ne!(sim.brain.behaviour(), BehaviourKind::Flee, "clicks don't scare him off");
+    }
 }
 
 #[test]

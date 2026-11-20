@@ -55,6 +55,8 @@ pub(crate) struct Battle {
     out_of_reach: f32,
     /// Pogo off the cursor, dive onto it (see [`super::combat`]).
     kit: Kit,
+    /// Clicked once too often: he started this one (see `ai::handling`).
+    pub provoked: bool,
 }
 
 impl Battle {
@@ -72,6 +74,7 @@ impl Battle {
             goal_at: Vec2::ZERO,
             out_of_reach: 0.0,
             kit: Kit::new(_ctx.now),
+            provoked: false,
         }
     }
 
@@ -94,7 +97,8 @@ impl Battle {
             Phase::Finale(Outcome::Lost, _) => "lost",
             Phase::Finale(Outcome::GaveUp, _) => "gave up",
         };
-        format!("{phase} {}-{}", self.score.knight, self.score.cursor)
+        let why = if self.provoked { "provoked, " } else { "" };
+        format!("{why}{phase} {}-{}", self.score.knight, self.score.cursor)
     }
 
     pub fn tick(&mut self, ctx: &mut Ctx) -> Status {
