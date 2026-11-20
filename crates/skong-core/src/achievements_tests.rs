@@ -151,6 +151,23 @@ fn counting_achievements_reach_their_goal_and_persist() {
 }
 
 #[test]
+fn the_heavy_purse_counts_the_same_geo_and_starts_from_hoarders_progress() {
+    // A save from before the purse existed: Hoarder already full.
+    let mut save = AchievementSave::default();
+    save.counts.insert(GEO_HOARD.to_string(), 1000);
+    save.unlocked.insert(GEO_HOARD.to_string(), 1);
+    let mut t = Tracker::new(defs(), save);
+    assert!(feed(&mut t, &[E::GeoCollected(3000)]).is_empty());
+    assert_eq!(t.save().counts[GEO_PURSE], 4000, "the 1000 already counted carry over");
+    assert_eq!(feed(&mut t, &[E::GeoCollected(1000)]), [GEO_PURSE]);
+    // A fresh save: both count from zero, Hoarder first.
+    let mut t = tracker();
+    assert_eq!(feed(&mut t, &[E::GeoCollected(1000)]), [GEO_HOARD]);
+    assert!(feed(&mut t, &[E::GeoCollected(3999)]).is_empty());
+    assert_eq!(feed(&mut t, &[E::GeoCollected(1)]), [GEO_PURSE]);
+}
+
+#[test]
 fn wall_jumps_must_chain_without_landing() {
     let mut t = tracker();
     let four = [E::WallJumped, E::WallJumped, E::WallJumped, E::WallJumped];

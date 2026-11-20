@@ -115,6 +115,7 @@ impl Pet {
             stakes: Some(self.stakes.info(self.brain.soul())),
             test: Some(self.test_info()),
             sandbox: self.achievements.sandbox(),
+            played_secs: self.settings.played_secs as u64,
             ..Status::default() // process usage, panel count: filled by ControlServer::publish
         }
     }

@@ -23,6 +23,7 @@
     { "id": "highlighted_text", "title": "Literate Bug", "description": "Highlighted some text, and caught his curiosity.", "hint": "your windows" },
     { "id": "shattered_window", "title": "Glass into Geo", "description": "Closed a window, and it shattered into Geo.", "hint": "Geo" },
     { "id": "geo_hoard", "title": "Hoarder", "description": "Picked up a thousand Geo, one coin at a time.", "hint": "Geo", "goal": 1000 },
+    { "id": "geo_purse", "title": "A Heavy Purse", "description": "Picked up five thousand Geo. Hallownest's shopkeepers would weep.", "hint": "Geo", "goal": 5000 },
     { "id": "nap_poke", "title": "Do Not Disturb", "description": "Poked him while he napped.", "hint": "a hand" },
     { "id": "throw", "title": "Bug Toss", "description": "Picked him up and threw him.", "hint": "a hand" },
     { "id": "midair_catch", "title": "Nice Catch", "description": "Caught him again before he could land from a throw.", "hint": "a hand" },

@@ -461,6 +461,7 @@ pub fn run(args: &Args) -> Result<()> {
     log::info!("tray menu ready; hotkeys Ctrl+Alt + M menu, K manual, A act, W wake, R respawn at cursor, G walk / H hurry to cursor, S skin, P pause, D debug overlay, Q quit");
 
     let mut last_housekeeping = Instant::now();
+    let mut last_played_save = Instant::now();
     let mut goto_test_at = args.goto_test.then(Instant::now);
     rl.run(|tick| {
         let mut cmds: Vec<Command> = tick.hotkeys.iter().filter_map(|h| HOTKEYS.iter().find(|k| k.0 == *h).map(|k| k.2)).collect();
@@ -498,6 +499,12 @@ pub fn run(args: &Args) -> Result<()> {
         pet.test_tick(tick.dt);
         if !pet.paused {
             pet.tick(tick.dt)?;
+        }
+        // Time played (all sessions): saved once a minute, at most a minute is lost.
+        pet.settings.played_secs += f64::from(tick.dt);
+        if last_played_save.elapsed().as_secs() >= 60 {
+            last_played_save = Instant::now();
+            pet.settings.save();
         }
         if last_housekeeping.elapsed().as_secs() >= 2 {
             last_housekeeping = Instant::now();

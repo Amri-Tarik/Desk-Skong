@@ -38,6 +38,9 @@ pub struct Settings {
     /// The Hollow Knight data folder (`…\hollow_knight_Data`) the art was last read from,
     /// tried first by "Re-extract game art". Taken from the extracted art's record on start.
     pub game_dir: Option<String>,
+    /// Seconds the pet has been running, over every session (a statistic, not a score:
+    /// it keeps counting in the sandbox). Shown on the panel's Home tab.
+    pub played_secs: f64,
     /// Settings format (see [`Settings::migrate`]); files from before it read as 0.
     #[serde(default)]
     pub version: u32,
@@ -52,7 +55,7 @@ const VERSION: u32 = 1;
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { skin: None, scale: 0.6, bother: 0.5, share_visible: false, text_curiosity: true, lantern: true, open_panel: true, stakes: Default::default(), log_file: false, game_dir: None, version: VERSION, extra: Default::default() }
+        Self { skin: None, scale: 0.6, bother: 0.5, share_visible: false, text_curiosity: true, lantern: true, open_panel: true, stakes: Default::default(), log_file: false, game_dir: None, played_secs: 0.0, version: VERSION, extra: Default::default() }
     }
 }
 

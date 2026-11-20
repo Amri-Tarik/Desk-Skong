@@ -38,6 +38,7 @@ pub mod ids {
     pub const HIGHLIGHTED_TEXT: &str = "highlighted_text";
     pub const SHATTERED_WINDOW: &str = "shattered_window";
     pub const GEO_HOARD: &str = "geo_hoard";
+    pub const GEO_PURSE: &str = "geo_purse";
     pub const NAP_POKE: &str = "nap_poke";
     pub const THROW: &str = "throw";
     pub const MIDAIR_CATCH: &str = "midair_catch";
@@ -59,6 +60,7 @@ pub mod ids {
         HORNET_TALK, DREAM_WINDOW, DREAM_VISITOR, FIRST_SPELL, POGO, VENGEFLY_AIRBORNE, FALL_AND_RECLAIM, WINDOW_RIDE, CURSOR_DEFEAT, CURSOR_VICTOR, WALL_CRYSTAL_DASH, DREAM_GATE, EVERY_REGION, EVERY_BENCH, EVERY_VISITOR, SLY_LESSON, ZOTE_SPAR, GAUNTLET,
         UNN_FORM, HIGHLIGHTED_TEXT, SHATTERED_WINDOW, GEO_HOARD, NAP_POKE, THROW, MIDAIR_CATCH, STEP_BEHIND, WALL_JUMP_CHAIN, SUPER_HARD_LANDING, EVERY_ENEMY, TROUPE_MASTER, TROUPE_ENCORE,
         CORNIFER_MAPS, QUIRREL_VIEW, MYLA_SONG, HORNET_RACE, HORNET_DUEL, GRIMM_CAMEO, INTERIOR_DECORATOR,
+        GEO_PURSE,
     ];
 }
 use ids::*;
@@ -398,8 +400,18 @@ impl Tracker {
             E::HidFromGame => {}
             E::WindowShattered => unlock(SHATTERED_WINDOW),
             E::GeoCollected(n) => {
+                // The bigger purse counts the same pickups. Saves from before it existed
+                // start it from what Hoarder had counted (capped at Hoarder's goal), so no
+                // Geo collected so far is lost.
+                if !self.save.counts.contains_key(GEO_PURSE) {
+                    let so_far = self.save.counts.get(GEO_HOARD).copied().unwrap_or(0);
+                    self.save.counts.insert(GEO_PURSE.to_string(), so_far);
+                }
                 if self.count(GEO_HOARD, *n) {
                     unlock(GEO_HOARD);
+                }
+                if self.count(GEO_PURSE, *n) {
+                    unlock(GEO_PURSE);
                 }
             }
             E::PokedWhileNapping => unlock(NAP_POKE),
