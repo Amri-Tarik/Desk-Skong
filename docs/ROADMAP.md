@@ -138,22 +138,30 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
 - [ ] **Extractor in Rust.** The .NET exporter becomes a dev-only tool, only needed for
       regenerating metadata. Players get a single exe. The tk2d metadata JSON already in
       `data/hk` stays; only the atlas reading and cropping move into Rust.
-- [ ] **Panel = the app.**
-      - Closing the panel quits the pet; there's no separate exit button.
+- [x] **Panel = the app.**
+      - Closing the panel quits the pet; there's no separate exit button (tray *Quit* and
+        Ctrl+Alt+Q stay); a quitting pet closes the panel too.
       - A clear "Hide to tray" button, with a one-line hint on how to bring it back and how
-        to quit.
-- [ ] **Front page:**
-      - achievements (count, hints, unlocked list);
-      - the "Visible in screen shares" (capturable) toggle;
-      - Hide to tray.
-- [ ] **Sandbox, behind a consent gate.** All "make him do X" buttons and debug tools live
+        to quit. A tray click (or launching `skong.exe` again) brings the window back,
+        relaunching the panel if it was hidden, crashed or killed.
+- [x] **Front page:**
+      - achievements (count, hints, unlocked list) with the Geo wallet (a coin drawn in
+        code, the number; a score, nothing to spend);
+      - the "Visible in screen shares" (capturable) toggle, and the other everyday
+        settings (skin, size, mischief, lantern, highlighted text, fight mode, vision,
+        pause, benches);
+      - Hide to tray. Logs and live status moved to a Diagnostics tab under "Advanced".
+- [x] **Sandbox, behind a consent gate.** All "make him do X" buttons and debug tools live
       behind "Enable sandbox: achievements are disabled for the rest of this session".
-      This covers enemies, visitors, gauntlet, Grimm, flame, showers and the Dream Gate.
-- [ ] **Sandbox placement:** click on the screen to choose where things spawn.
-      > note: the panel's **Test** tab (the sandbox's precursor, no gate yet) has it: 📍 next
-      > to the dummy, flame, deposit, shiny, bench, each enemy, Geo shower, visitors and a
-      > Dream Gate target; plus forced visitor scenes, each enemy kind, the view, the stars,
-      > the slug, the emote cycle. Checklist: [TESTING.md](TESTING.md).
+      This covers enemies, visitors, gauntlet, Grimm, flame, showers and the Dream Gate,
+      manual control, respawn, random acts, discoveries on request, the debug overlay.
+      The pet enforces it (refuses those commands from hotkeys, tray and panels); the
+      tracker ignores every event and the Geo wallet stops saving until restart.
+- [x] **Sandbox placement:** click on the screen to choose where things spawn.
+      > note: the Sandbox tab's Test half: 📍 next to the dummy, flame, deposit, shiny,
+      > bench, each enemy, Geo shower, visitors and a Dream Gate target; plus forced
+      > visitor scenes, each enemy kind, the view, the stars, the slug, the emote cycle.
+      > Checklist: [TESTING.md](TESTING.md).
 - [ ] **Release basics:**
       - a portable zip (an installer later, if needed) and GitHub releases with notes;
       - a "fan project, not affiliated with Team Cherry" notice;
@@ -189,7 +197,11 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
 ## Needs a look on screen
 
 Checked in tests only (unless noted). Note anything that looks off. The full manual
-checklist, with how to trigger each from the panel's Test tab, is [TESTING.md](TESTING.md):
+checklist, with how to trigger each from the panel's Sandbox tab, is [TESTING.md](TESTING.md):
+
+- [ ] The panel as the app: X quits, Hide to tray + tray click back (and to the front when
+      behind other windows), the new Home page look, the Geo coin, the sandbox gate
+      ([TESTING.md](TESTING.md), "The window")
 
 - [ ] Step-behind crossings (TurnToBG / TurnFromBG at drawn lines)
 - [ ] Pester tricks and their persistence (45–90 s)

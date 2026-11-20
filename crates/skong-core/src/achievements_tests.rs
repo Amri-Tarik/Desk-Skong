@@ -268,3 +268,33 @@ fn progress_round_trips_through_the_file() {
     let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(read_save(&path), AchievementSave::default());
 }
+
+#[test]
+fn the_sandbox_pauses_everything() {
+    let mut t = tracker();
+    t.take_dirty();
+    let before = t.save().clone();
+    t.set_paused(true);
+    assert!(t.is_paused());
+    let events = [
+        E::Pogo,
+        E::SpellCast,
+        E::GeoCollected(5000),
+        E::VisitorTalked { who: "hornet".into() },
+        E::VisitorTalked { who: "zote".into() },
+        E::VisitorTalked { who: "sly".into() },
+        E::DepositMined { region: 0 },
+        E::WallJumped,
+        E::WallJumped,
+        E::WallJumped,
+        E::WallJumped,
+        E::WallJumped,
+        E::TroupeMasterBeaten,
+    ];
+    assert!(feed(&mut t, &events).is_empty(), "nothing unlocks in the sandbox");
+    assert_eq!(t.save(), &before, "no counter or seen set moves");
+    assert!(!t.take_dirty(), "nothing to save");
+    // (Only a restart leaves the sandbox; un-pausing is for the tracker's own sake.)
+    t.set_paused(false);
+    assert_eq!(feed(&mut t, &[E::Pogo]), [POGO]);
+}

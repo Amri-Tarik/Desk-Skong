@@ -1,49 +1,124 @@
-//! The panel window (egui). Left: controls mirroring the tray + live status. Right: logs,
-//! the Achievements tab (hidden ones show as "???" with a vague hint; only the count shows),
-//! and the Test tab (`ui/test_tab.rs`: make him do one specific thing, place things where
-//! you click).
+//! The panel window is Desk-Skong's main window (egui).
 //!
-//! While the window is focused (and no text field has focus): arrows / Up jump / Shift dash /
-//! Ctrl superdash / Z walk / X sprint drive the knight while the pet is in manual mode (a toggle,
-//! off by default — the panel never turns it on by itself), and the plain letters K A W R G H S B C P D trigger the same actions as Ctrl+Alt+letter.
-use std::time::Duration;
+//! * **Home** (`ui/home.rs`): achievements with the Geo wallet, and the everyday settings.
+//! * **Sandbox** (`ui/sandbox.rs`): locked behind a consent ("achievements are disabled for
+//!   the rest of this session"); then quick actions, keyboard driving, the debug overlay and
+//!   the Test tab (`ui/test_tab.rs`: make him do one specific thing, place things where you
+//!   click). The pet enforces the gate too: it refuses those commands until it's on.
+//! * **Diagnostics** (shown with "Advanced"): live status and the pet's logs.
+//!
+//! Lifecycle: closing this window quits Desk-Skong (it sends `Quit` and waits for it to
+//! be written). **Hide to tray** closes only the window; the pet keeps running and a click
+//! on its tray icon opens the window again. When the pet quits (tray, Ctrl+Alt+Q) it says
+//! goodbye and this window closes too.
+//!
+//! While the window is focused (and no text field has focus): the letters W G H S B P act
+//! like Ctrl+Alt+letter; with the sandbox on also K A R D, and arrows / Up jump / Shift
+//! dash / Ctrl superdash / Z walk / X sprint drive the knight in manual mode (a toggle,
+//! off by default — the panel never turns it on by itself).
+use std::time::{Duration, Instant};
 
 use eframe::egui::{self, Color32, Key, RichText, TextWrapMode};
-use skong_ipc::{AchievementsInfo, SPELLS, StakesCommand, Command, LogLevel, LogLine, ManualKeys, OverlayLayers, PanelMsg, Status};
+use skong_ipc::{Command, LogLevel, LogLine, ManualKeys, PanelMsg, Status};
 
 use crate::link::Link;
 
+mod home;
+mod sandbox;
 mod test_tab;
 
-/// Shortcuts available as plain letters while the panel is focused.
+/// Shortcuts available as plain letters while the panel is focused (the sandbox-only ones
+/// are ignored until it's on, as the pet would refuse them).
 const LETTERS: &[(Key, Command, &str)] = &[
-    (Key::K, Command::ToggleManual, "manual control"),
-    (Key::A, Command::RandomAct, "do something"),
     (Key::W, Command::Wake, "wake"),
-    (Key::R, Command::RespawnAtCursor, "come here (cursor)"),
     (Key::G, Command::GoToCursor { hurry: false }, "walk to cursor"),
     (Key::H, Command::GoToCursor { hurry: true }, "hurry to cursor"),
     (Key::S, Command::NextSkin, "next skin"),
     (Key::B, Command::PlaceBenchNearKnight(0), "bench near knight"),
     (Key::P, Command::TogglePause, "pause"),
-    (Key::D, Command::ToggleDebugOverlay, "debug overlay"),
+    (Key::K, Command::ToggleManual, "manual control (sandbox)"),
+    (Key::A, Command::RandomAct, "do something (sandbox)"),
+    (Key::R, Command::RespawnAtCursor, "come here (sandbox)"),
+    (Key::D, Command::ToggleDebugOverlay, "debug overlay (sandbox)"),
 ];
+
+/// The one line that explains the window's lifecycle.
+pub const TRAY_HINT: &str = "Desk-Skong keeps running in the tray — click the tray icon to bring this window back; close this window to quit.";
+
+/// How long a "refused" line stays in the footer.
+const REFUSED_SECS: u64 = 8;
+
+/// The palette: Hallownest at night — ink blues, pale soul-white, a little gold.
+pub mod palette {
+    use eframe::egui::Color32;
+    pub const BG: Color32 = Color32::from_rgb(11, 12, 17);
+    pub const PANEL: Color32 = Color32::from_rgb(16, 18, 25);
+    pub const CARD: Color32 = Color32::from_rgb(22, 25, 34);
+    pub const CARD_EDGE: Color32 = Color32::from_rgb(42, 47, 61);
+    pub const TEXT: Color32 = Color32::from_rgb(214, 217, 225);
+    pub const WEAK: Color32 = Color32::from_rgb(128, 135, 152);
+    pub const SOUL: Color32 = Color32::from_rgb(200, 215, 238);
+    pub const GOLD: Color32 = Color32::from_rgb(230, 200, 120);
+    pub const AMBER: Color32 = Color32::from_rgb(232, 162, 82);
+    pub const RED: Color32 = Color32::from_rgb(222, 98, 92);
+    pub const GREEN: Color32 = Color32::from_rgb(112, 190, 130);
+}
+use palette as pal;
 
 pub fn run(pipe: String) -> anyhow::Result<()> {
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_title("Desk-Skong control panel").with_inner_size([1100.0, 700.0]).with_min_inner_size([640.0, 400.0]),
+        viewport: egui::ViewportBuilder::default().with_title("Desk-Skong").with_inner_size([1040.0, 700.0]).with_min_inner_size([560.0, 420.0]),
         ..Default::default()
     };
     eframe::run_native(
-        "Desk-Skong control panel",
+        "Desk-Skong",
         options,
         Box::new(move |cc| {
+            theme(&cc.egui_ctx);
             let ctx = cc.egui_ctx.clone();
             let link = Link::start(pipe, move || ctx.request_repaint());
             Ok(Box::new(Panel::new(link)))
         }),
     )
     .map_err(|e| anyhow::anyhow!("{e}"))
+}
+
+/// Dark, muted, a soft frame around everything.
+fn theme(ctx: &egui::Context) {
+    ctx.set_theme(egui::ThemePreference::Dark);
+    let mut v = egui::Visuals::dark();
+    v.panel_fill = pal::PANEL;
+    v.window_fill = pal::CARD;
+    v.extreme_bg_color = pal::BG;
+    v.faint_bg_color = Color32::from_rgb(20, 23, 31);
+    v.hyperlink_color = pal::SOUL;
+    v.selection.bg_fill = Color32::from_rgb(58, 70, 96);
+    v.selection.stroke.color = pal::SOUL;
+    v.widgets.noninteractive.bg_fill = pal::CARD;
+    v.widgets.noninteractive.bg_stroke.color = pal::CARD_EDGE;
+    v.widgets.noninteractive.fg_stroke.color = pal::TEXT;
+    for (w, bg) in [(&mut v.widgets.inactive, (32, 36, 47)), (&mut v.widgets.hovered, (45, 51, 66)), (&mut v.widgets.active, (60, 68, 88)), (&mut v.widgets.open, (38, 43, 56))] {
+        w.bg_fill = Color32::from_rgb(bg.0, bg.1, bg.2);
+        w.weak_bg_fill = w.bg_fill;
+    }
+    v.widgets.inactive.fg_stroke.color = pal::TEXT;
+    v.widgets.hovered.fg_stroke.color = Color32::WHITE;
+    v.widgets.active.fg_stroke.color = Color32::WHITE;
+    ctx.set_visuals_of(egui::Theme::Dark, v);
+    ctx.style_mut_of(egui::Theme::Dark, |s| {
+        s.spacing.item_spacing = egui::vec2(8.0, 6.0);
+        s.spacing.button_padding = egui::vec2(8.0, 4.0);
+    });
+}
+
+/// A rounded card around a section.
+pub fn card<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    egui::Frame::new().fill(pal::CARD).stroke(egui::Stroke::new(1.0, pal::CARD_EDGE)).corner_radius(6.0).inner_margin(14.0).show(ui, add).inner
+}
+
+/// A section title in small caps style.
+pub fn title(ui: &mut egui::Ui, text: &str) {
+    ui.label(RichText::new(text.to_uppercase()).size(13.0).strong().extra_letter_spacing(1.5).color(pal::SOUL));
 }
 
 struct Panel {
@@ -59,28 +134,45 @@ struct Panel {
     sent_keys: (bool, ManualKeys),
     session: u64,
     tab: Tab,
+    /// Diagnostics tab (status, logs) shown.
+    advanced: bool,
     /// "Reset achievements" armed (a second click resets).
     reset_armed: bool,
+    /// The sandbox consent box is ticked.
+    consent: bool,
     /// Test tab: the visitor picked, the bench style to place.
     visit_who: usize,
     bench_style: usize,
+    /// Closing on purpose (hide to tray, the pet said goodbye): don't send Quit.
+    closing: bool,
+    /// Raise requests already handled.
+    raises: u64,
+    /// The last refusal shown, and since when.
+    refusals: u64,
+    refused_at: Option<Instant>,
+    /// Ever connected to a pet (else we're still waiting for the first one).
+    was_connected: bool,
+    started: Instant,
+    /// We launched skong.exe ourselves (don't offer again for a while).
+    launched_pet: Option<Instant>,
+    /// Bring the window back to its normal level next frame (after a raise).
+    unpin: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Tab {
-    Logs,
-    Achievements,
-    Test,
+    Home,
+    Sandbox,
+    Diagnostics,
 }
-
-/// Unlocks this recent are marked new (s).
-const NEW_SECS: u64 = 15 * 60;
 
 impl Panel {
     fn new(link: Link) -> Self {
         Self {
-            tab: Tab::Logs,
+            tab: Tab::Home,
+            advanced: false,
             reset_armed: false,
+            consent: false,
             visit_who: 0,
             bench_style: 0,
             link,
@@ -92,6 +184,14 @@ impl Panel {
             drive: true,
             sent_keys: (false, ManualKeys::default()),
             session: 0,
+            closing: false,
+            raises: 0,
+            refusals: 0,
+            refused_at: None,
+            was_connected: false,
+            started: Instant::now(),
+            launched_pet: None,
+            unpin: false,
         }
     }
 
@@ -100,7 +200,7 @@ impl Panel {
     }
 
     /// Keyboard driving + letter shortcuts.
-    fn keyboard(&mut self, ctx: &egui::Context, connected: bool) {
+    fn keyboard(&mut self, ctx: &egui::Context, connected: bool, sandbox: bool) {
         let typing = ctx.egui_wants_keyboard_input();
         let (focused, keys, mods, letters) = ctx.input(|i| {
             let keys = ManualKeys {
@@ -118,182 +218,138 @@ impl Panel {
             let letters: Vec<Command> = LETTERS.iter().filter(|(k, _, _)| i.key_pressed(*k)).map(|(_, c, _)| *c).collect();
             (i.focused, keys, i.modifiers, letters)
         });
-        let active = connected && self.drive && focused && !typing;
+        let active = connected && sandbox && self.drive && focused && !typing;
         let now = (active, if active { keys } else { ManualKeys::default() });
         if now != self.sent_keys && connected {
             self.link.send(PanelMsg::ManualInput { active: now.0, keys: now.1 });
         }
         self.sent_keys = now;
         if connected && focused && !typing && !mods.ctrl && !mods.alt && !mods.command {
-            for c in letters {
+            for c in letters.into_iter().filter(|c| sandbox || !c.needs_sandbox()) {
                 self.cmd(c);
             }
         }
     }
 
-    fn controls(&mut self, ui: &mut egui::Ui, st: Option<&Status>, hello: Option<&skong_ipc::Hello>, connected: bool) {
-        ui.add_enabled_ui(connected, |ui| {
-            let Some(h) = hello else {
-                ui.label("waiting for the pet…");
-                return;
-            };
-            let st_default = Status::default();
-            let s = st.unwrap_or(&st_default);
-            egui::Grid::new("settings").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
-                ui.label("Skin");
-                let current = h.skins.get(s.skin).cloned().unwrap_or_default();
-                egui::ComboBox::from_id_salt("skin").selected_text(current).width(200.0).height(400.0).show_ui(ui, |ui| {
-                    ui.add(egui::TextEdit::singleline(&mut self.skin_filter).hint_text("search…").desired_width(180.0));
-                    let f = self.skin_filter.to_lowercase();
-                    for (i, name) in h.skins.iter().enumerate().filter(|(_, n)| f.is_empty() || n.to_lowercase().contains(&f)) {
-                        if ui.selectable_label(i == s.skin, name.as_str()).clicked() {
-                            self.cmd(Command::SetSkin(i));
-                        }
-                    }
-                });
-                ui.end_row();
-
-                ui.label("Size");
-                ui.horizontal_wrapped(|ui| {
-                    for (name, v) in &h.scales {
-                        if ui.selectable_label((s.scale - v).abs() < 1e-3, name.as_str()).clicked() {
-                            self.cmd(Command::SetScale(*v));
-                        }
-                    }
-                });
-                ui.end_row();
-
-                ui.label("Mischief");
-                ui.horizontal_wrapped(|ui| {
-                    for (name, v) in &h.bother_levels {
-                        if ui.selectable_label((s.bother - v).abs() < 1e-3, name.as_str()).clicked() {
-                            self.cmd(Command::SetBother(*v));
-                        }
-                    }
-                });
-                ui.end_row();
-
-                ui.label("Bench");
-                ui.horizontal_wrapped(|ui| {
-                    for (i, name) in h.bench_styles.iter().enumerate() {
-                        let ok = s.benches_available.get(i).copied().unwrap_or(true);
-                        if ui.add_enabled(ok, egui::Button::new(name.as_str())).on_hover_text("place near the knight").clicked() {
-                            self.cmd(Command::PlaceBenchNearKnight(i));
-                        }
-                    }
-                    if ui.add_enabled(s.benches_placed > 0, egui::Button::new("Remove all")).clicked() {
-                        self.cmd(Command::ClearBenches);
-                    }
-                });
-                ui.end_row();
-
-                ui.label("Discover");
-                ui.horizontal_wrapped(|ui| {
-                    for (i, name) in ["Bench", "Geo deposit"].into_iter().enumerate() {
-                        if ui.button(name).on_hover_text("reveal one in the window the knight stands on").clicked() {
-                            self.cmd(Command::Discover(i as u8));
-                        }
-                    }
-                    if ui.button("Forget all").clicked() {
-                        self.cmd(Command::ForgetDiscoveries);
-                    }
-                });
-                ui.end_row();
-            });
-
-            ui.separator();
-            ui.horizontal_wrapped(|ui| {
-                if ui.button("Do something!  [A]").clicked() {
-                    self.cmd(Command::RandomAct);
-                }
-                if ui.button("Wake  [W]").clicked() {
-                    self.cmd(Command::Wake);
-                }
-                if ui.button("Come here  [R]").on_hover_text("respawn at the mouse cursor").clicked() {
-                    self.cmd(Command::RespawnAtCursor);
-                }
-                if ui.button("Next skin  [S]").clicked() {
-                    self.cmd(Command::NextSkin);
-                }
-                if ui.button("Invite a visitor").on_hover_text("an NPC drops by; the knight runs over to talk").clicked() {
-                    self.cmd(Command::InviteVisitor);
-                }
-                if ui.button("Send an enemy").on_hover_text("a crawlid, vengefly or husk wanders in; the knight fights it").clicked() {
-                    self.cmd(Command::SendEnemy);
-                }
-                if ui.button("Start a gauntlet").on_hover_text("three waves of enemies, then a big Geo reward; ends early if you type or go fullscreen").clicked() {
-                    self.cmd(Command::StartGauntlet);
-                }
-                if ui.button("Light a scarlet flame").on_hover_text("a dim flame near the knight; click it to summon the troupe master (it waits ~30 min: build him an arena)").clicked() {
-                    self.cmd(Command::SummonGrimm { lantern: true });
-                }
-                if ui.button("Dream nail").on_hover_text("dream-nail the window he stands on").clicked() {
-                    self.cmd(Command::DreamNail);
-                }
-            });
-            ui.horizontal_wrapped(|ui| {
-                ui.label("Stakes");
-                for (label, tip, c) in [
-                    ("Die", "kill the knight (he leaves a shade)", StakesCommand::Die),
-                    ("Drop geo", "burst geo out of the cursor", StakesCommand::DropGeo),
-                    ("Geo shower", "geo tumbles out of a portal over a settled ledge he can reach", StakesCommand::SpillGeo),
-                    ("Fight shade", "send him after his shade", StakesCommand::HuntShade),
-                ] {
-                    if ui.button(label).on_hover_text(tip).clicked() {
-                        self.cmd(Command::Stakes(c));
-                    }
-                }
-                for (i, (_, name)) in SPELLS.iter().enumerate() {
-                    if ui.small_button(*name).on_hover_text("play this spell / nail art now").clicked() {
-                        self.cmd(Command::Stakes(StakesCommand::Cast(i as u8)));
-                    }
-                }
-            });
-            let toggle = |ui: &mut egui::Ui, on: bool, label: &str, c: Command| {
-                let mut v = on;
-                if ui.checkbox(&mut v, label).changed() {
-                    self.cmd(c);
-                }
-            };
-            toggle(ui, s.manual, "Manual control  [K]", Command::ToggleManual);
-            toggle(ui, s.fight_mode, "Fight the cursor", Command::ToggleFightMode);
-            toggle(ui, s.share_visible, "Visible in screen shares", Command::ToggleShareVisible);
-            toggle(ui, s.text_curiosity, "Curious about highlighted text", Command::ToggleTextCuriosity);
-            let mut lantern = s.lantern;
-            if ui.checkbox(&mut lantern, "Lantern on dark backgrounds").on_hover_text("He holds up his lantern while standing over dark-mode windows or a dark wallpaper").changed() {
-                self.cmd(Command::ToggleLantern);
+    /// Close requests, the pet's goodbye, raise requests.
+    fn lifecycle(&mut self, ctx: &egui::Context, connected: bool, bye: bool, raises: u64) {
+        if bye && !self.closing {
+            self.closing = true;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+        if ctx.input(|i| i.viewport().close_requested()) && !self.closing {
+            // The window's X: the panel is the app, so the pet quits with it.
+            self.closing = true;
+            if connected {
+                self.cmd(Command::Quit);
+                self.link.flush(Duration::from_millis(800));
             }
-            ui.horizontal(|ui| {
-                let mut log_file = s.log_file;
-                let tip = format!("Keeps the log in {} (last 5 files) to attach to a bug report. Crash reports are written there either way. Nothing is sent anywhere.", if s.log_dir.is_empty() { "the logs folder" } else { &s.log_dir });
-                if ui.checkbox(&mut log_file, "Write a log file (for bug reports)").on_hover_text(tip).changed() {
-                    self.cmd(Command::ToggleLogFile);
-                }
-                if ui.small_button("Open folder").on_hover_text("log and crash files").clicked() {
-                    self.cmd(Command::OpenLogFolder);
-                }
+        }
+        if self.unpin {
+            self.unpin = false;
+            ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(egui::WindowLevel::Normal));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        }
+        if raises != self.raises {
+            // Tray click / second launch: un-minimize and come to the front (briefly on
+            // top, as Windows won't always hand focus to a background process).
+            self.raises = raises;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+            ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            self.unpin = true;
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
+    }
+
+    /// Hide to tray: only this window goes; the pet stays (a tray click relaunches it).
+    fn hide_to_tray(&mut self, ctx: &egui::Context) {
+        self.closing = true;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+
+    /// Top bar: name, connection, the sandbox banner.
+    fn top_bar(&mut self, ui: &mut egui::Ui, connected: bool, hello: Option<&skong_ipc::Hello>, sandbox: bool) {
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("DESK-SKONG").size(18.0).strong().extra_letter_spacing(3.0).color(pal::SOUL));
+            ui.add_space(12.0);
+            match (hello, connected) {
+                (Some(h), true) => ui.label(RichText::new(format!("● the knight is here  ·  v{}", h.version)).color(pal::GREEN).small()),
+                _ if self.was_connected => ui.label(RichText::new("● Desk-Skong stopped").color(pal::AMBER).small()),
+                _ => ui.label(RichText::new("● waiting for the knight…").color(pal::WEAK).small()),
+            };
+            if self.sent_keys.0 {
+                ui.label(RichText::new("· driving with the keyboard").small().strong());
+            }
+        });
+        if sandbox && connected {
+            ui.add_space(4.0);
+            egui::Frame::new().fill(Color32::from_rgb(58, 40, 22)).corner_radius(4.0).inner_margin(egui::vec2(10.0, 5.0)).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.label(RichText::new("Sandbox on — achievements paused until restart").strong().color(pal::AMBER));
             });
-            toggle(ui, s.paused, "Pause  [P]", Command::TogglePause);
-            toggle(ui, s.vision, "Vision (content terrain)", Command::ToggleVision);
-            toggle(ui, s.overlay, "Debug overlay  [D]", Command::ToggleDebugOverlay);
-            ui.indent("layers", |ui| {
-                let mut l: OverlayLayers = s.overlay_layers;
-                let mut changed = ui.checkbox(&mut l.terrain, "terrain (ledges, walls)").changed();
-                changed |= ui.checkbox(&mut l.nav, "nav graph (surfaces, edges)").changed();
-                changed |= ui.checkbox(&mut l.route, "current route").changed();
-                if changed {
-                    self.cmd(Command::SetOverlayLayers(l));
-                }
-            });
-            ui.checkbox(&mut self.drive, "Keys drive the knight in manual mode").on_hover_text(
-                "arrows move, Up jumps, Shift dashes, Ctrl charges a superdash, Z walk, X sprint.\nManual mode is switched on while this window has focus.",
-            );
+        }
+        ui.add_space(4.0);
+    }
+
+    /// Not connected: why, and a way to start the pet again.
+    fn offline(&mut self, ui: &mut egui::Ui) {
+        let waited = self.started.elapsed() > Duration::from_secs(3);
+        if !self.was_connected && !waited {
+            ui.weak("waiting for the knight…");
+            return;
+        }
+        card(ui, |ui| {
+            ui.set_width(ui.available_width());
+            if self.was_connected {
+                ui.label(RichText::new("Desk-Skong stopped.").strong().color(pal::AMBER));
+                ui.label("The knight isn't running any more (it may have crashed: the log file has the details).");
+            } else {
+                ui.label(RichText::new("Desk-Skong isn't running.").strong().color(pal::AMBER));
+                ui.label("This window is its control panel; start the knight to use it.");
+            }
+            ui.add_space(6.0);
+            let exe = pet_exe();
+            let recently = self.launched_pet.is_some_and(|t| t.elapsed() < Duration::from_secs(10));
             ui.horizontal(|ui| {
-                if ui.button(RichText::new("Quit pet").color(Color32::from_rgb(230, 90, 90))).clicked() {
-                    self.cmd(Command::Quit);
+                if ui.add_enabled(exe.is_some() && !recently, egui::Button::new("Start Desk-Skong")).clicked()
+                    && let Some(exe) = &exe
+                {
+                    match std::process::Command::new(exe).spawn() {
+                        Ok(_) => self.launched_pet = Some(Instant::now()),
+                        Err(e) => eprintln!("could not start {}: {e}", exe.display()),
+                    }
+                }
+                ui.weak(if recently { "starting…" } else { "or close this window." });
+            });
+        });
+    }
+
+    /// Bottom bar: Hide to tray, the hint, Advanced, the latest refusal.
+    fn footer(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, connected: bool, refused: Option<&str>) {
+        ui.add_space(6.0);
+        if let (Some(why), Some(at)) = (refused, self.refused_at)
+            && at.elapsed() < Duration::from_secs(REFUSED_SECS)
+        {
+            ui.label(RichText::new(format!("✖ {why}")).small().color(pal::AMBER));
+        }
+        ui.horizontal(|ui| {
+            let hide = egui::Button::new(RichText::new("Hide to tray").strong()).min_size(egui::vec2(130.0, 30.0));
+            if ui.add_enabled(connected, hide).on_hover_text("close this window; the knight stays. Click the tray icon to bring it back.").on_disabled_hover_text("the knight isn't running: there's no tray to hide in").clicked() {
+                self.hide_to_tray(ctx);
+            }
+            ui.add(egui::Label::new(RichText::new(TRAY_HINT).small().color(pal::WEAK)).wrap());
+        });
+        ui.add_space(2.0);
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.checkbox(&mut self.advanced, RichText::new("Advanced").small()).on_hover_text("show the Diagnostics tab (live status, logs)").changed() && !self.advanced && self.tab == Tab::Diagnostics {
+                    self.tab = Tab::Home;
                 }
             });
         });
+        ui.add_space(4.0);
     }
 
     fn status(ui: &mut egui::Ui, st: Option<&Status>) {
@@ -310,7 +366,7 @@ impl Panel {
             };
             row("Knight", format!("({:.0}, {:.0}) {} {}", k.x, k.y, k.state, if k.facing_right { "→" } else { "←" }));
             row("Clip / act", format!("{} / {}", k.clip, k.act.as_deref().unwrap_or("-")));
-            row("Mode", format!("{}{}{}", if s.manual { "manual" } else { "brain" }, if s.driven { " (panel driving)" } else { "" }, if s.paused { ", paused" } else { "" }));
+            row("Mode", format!("{}{}{}{}", if s.manual { "manual" } else { "brain" }, if s.driven { " (panel driving)" } else { "" }, if s.paused { ", paused" } else { "" }, if s.sandbox { ", sandbox" } else { "" }));
             let t = &s.terrain;
             row("Terrain", format!("ground {}  one-way {}  content {}\nwalls {}  windows {}", t.ground, t.one_way, t.content, t.walls, t.windows));
             if let Some(c) = &s.capture {
@@ -335,6 +391,17 @@ impl Panel {
             ui.label("Brain");
             ui.add(egui::Label::new(RichText::new(b).monospace().small()).wrap());
         }
+    }
+
+    /// Diagnostics: live status on the left, the pet's logs on the right.
+    fn diagnostics(&mut self, ui: &mut egui::Ui, status: Option<&Status>, connected: bool) {
+        egui::Panel::left("diag_status").resizable(true).default_size(340.0).show(ui, |ui| {
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                title(ui, "Status");
+                Self::status(ui, status.filter(|_| connected));
+            });
+        });
+        egui::CentralPanel::default().show(ui, |ui| self.logs(ui, connected));
     }
 
     fn logs(&mut self, ui: &mut egui::Ui, connected: bool) {
@@ -379,84 +446,6 @@ impl Panel {
         });
     }
 
-    /// Found ones (newest first) with what and when; the rest as "???" with their hint.
-    fn achievements(&mut self, ui: &mut egui::Ui, info: Option<&AchievementsInfo>, connected: bool) {
-        let Some(info) = info else {
-            ui.weak(if connected { "this pet doesn't keep achievements" } else { "waiting for the pet…" });
-            return;
-        };
-        let (got, total) = (info.unlocked(), info.total());
-        ui.horizontal(|ui| {
-            ui.heading(format!("{got} / {total}"));
-            ui.add(egui::ProgressBar::new(if total == 0 { 0.0 } else { got as f32 / total as f32 }).desired_width(220.0));
-        });
-        ui.weak("Each one stays hidden until the knight does it. Play with him, and see what he can do.");
-        ui.separator();
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-        let mut found: Vec<_> = info.entries.iter().filter_map(|e| e.unlocked.as_ref()).collect();
-        found.sort_by_key(|u| std::cmp::Reverse(u.at));
-        let gold = Color32::from_rgb(230, 200, 120);
-        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-            for u in found {
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("★").color(gold));
-                    ui.label(RichText::new(&u.title).strong().color(gold));
-                    if now.saturating_sub(u.at) < NEW_SECS {
-                        ui.label(RichText::new("new").small().color(Color32::from_rgb(90, 200, 110)));
-                    }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.weak(ago(now, u.at)));
-                });
-                ui.indent(&u.id, |ui| ui.label(&u.description));
-                ui.add_space(4.0);
-            }
-            for e in info.entries.iter().filter(|e| e.unlocked.is_none()) {
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("·").weak());
-                    ui.label(RichText::new("???").weak());
-                    if let Some(h) = &e.hint {
-                        ui.label(RichText::new(h).small().italics().weak());
-                    }
-                });
-            }
-            ui.add_space(12.0);
-            ui.collapsing("Debug", |ui| {
-                ui.horizontal(|ui| {
-                    let label = if self.reset_armed { "Really forget them all?" } else { "Reset achievements" };
-                    if ui.add_enabled(connected, egui::Button::new(RichText::new(label).color(Color32::from_rgb(230, 90, 90)))).clicked() {
-                        if self.reset_armed {
-                            self.cmd(Command::ResetAchievements);
-                        }
-                        self.reset_armed = !self.reset_armed;
-                    }
-                    if self.reset_armed && ui.button("Keep them").clicked() {
-                        self.reset_armed = false;
-                    }
-                });
-                // The secret boss, for testing (spoilers live here only, never in the tray).
-                ui.horizontal(|ui| {
-                    if ui.add_enabled(connected, egui::Button::new("Summon the troupe master")).on_hover_text("straight to the show, at the next good moment").clicked() {
-                        self.cmd(Command::SummonGrimm { lantern: false });
-                    }
-                    if ui.add_enabled(connected, egui::Button::new("Light a scarlet flame")).on_hover_text("his lantern near the knight; click the flame to summon him").clicked() {
-                        self.cmd(Command::SummonGrimm { lantern: true });
-                    }
-                    if ui.add_enabled(connected, egui::Button::new("Grimm's friendly visit")).on_hover_text("he drops by, bows, teleports around the knight and leaves").clicked() {
-                        self.cmd(Command::GrimmVisit);
-                    }
-                });
-                // Hornet's challenges.
-                ui.horizontal(|ui| {
-                    if ui.add_enabled(connected, egui::Button::new("Hornet: race")).on_hover_text("she drops by; after the talk, a race to her needle").clicked() {
-                        self.cmd(Command::HornetChallenge { race: true });
-                    }
-                    if ui.add_enabled(connected, egui::Button::new("Hornet: duel")).on_hover_text("she drops by; after the talk, a short duel").clicked() {
-                        self.cmd(Command::HornetChallenge { race: false });
-                    }
-                });
-            });
-        });
-    }
-
     fn filtered(&self) -> Vec<LogLine> {
         let text = self.log_text.to_lowercase();
         self.link
@@ -472,10 +461,16 @@ impl Panel {
 impl eframe::App for Panel {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        let (connected, hello, status, session, achievements) = {
+        let (connected, hello, status, session, achievements, bye, raises, refused, refusals) = {
             let s = self.link.shared();
-            (s.connected, s.hello.clone(), s.status.clone(), s.session, s.achievements.clone())
+            (s.connected, s.hello.clone(), s.status.clone(), s.session, s.achievements.clone(), s.bye, s.raises, s.refused.clone(), s.refusals)
         };
+        self.was_connected |= connected;
+        if refusals != self.refusals {
+            self.refusals = refusals;
+            self.refused_at = Some(Instant::now());
+        }
+        let sandbox = connected && status.as_ref().is_some_and(|s| s.sandbox);
         if connected && session != self.session {
             // New connection: re-apply our preferences.
             self.session = session;
@@ -484,55 +479,47 @@ impl eframe::App for Panel {
                 self.link.send(PanelMsg::SetLogLevel(self.capture_level));
             }
         }
-        self.keyboard(&ctx, connected);
+        self.lifecycle(&ctx, connected, bye, raises);
+        self.keyboard(&ctx, connected, sandbox);
 
-        egui::Panel::top("bar").show(ui, |ui| {
-            ui.horizontal(|ui| {
-                match (&hello, connected) {
-                    (Some(h), true) => ui.label(RichText::new(format!("Connected to Desk-Skong v{} (pid {})", h.version, h.pid)).color(Color32::from_rgb(90, 200, 110))),
-                    _ => ui.label(RichText::new("Not connected — waiting for the pet (skong.exe)…").color(Color32::from_rgb(230, 160, 60))),
-                };
-                if self.sent_keys.0 {
-                    ui.label(RichText::new("· driving with the keyboard").strong());
-                }
-            });
-        });
-        egui::Panel::left("controls").resizable(true).default_size(360.0).show(ui, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                ui.heading("Controls");
-                self.controls(ui, status.as_ref(), hello.as_ref(), connected);
-                ui.separator();
-                ui.heading("Status");
-                Self::status(ui, status.as_ref().filter(|_| connected));
-                ui.separator();
-                ui.collapsing("Shortcuts (when this window is focused)", |ui| {
-                    for (k, _, what) in LETTERS {
-                        ui.label(format!("{k:?}  {what}"));
-                    }
-                    ui.label("Arrows / Up / Shift / Ctrl / Z / X  drive the knight");
-                    ui.label("Ctrl+Alt+letter works everywhere (global hotkeys)");
-                });
-            });
-        });
+        egui::Panel::top("bar").show(ui, |ui| self.top_bar(ui, connected, hello.as_ref(), sandbox));
+        egui::Panel::bottom("footer").show(ui, |ui| self.footer(ui, &ctx, connected, refused.as_deref()));
         egui::CentralPanel::default().show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.tab, Tab::Logs, "Logs");
                 let count = achievements.as_ref().map_or_else(String::new, |a| format!("  {} / {}", a.unlocked(), a.total()));
-                ui.selectable_value(&mut self.tab, Tab::Achievements, format!("Achievements{count}"));
+                ui.selectable_value(&mut self.tab, Tab::Home, RichText::new(format!("Home{count}")).size(15.0));
                 let placing = status.as_ref().and_then(|s| s.test.as_ref()).is_some_and(|t| t.placing.is_some());
-                ui.selectable_value(&mut self.tab, Tab::Test, if placing { "Test  📍" } else { "Test" }).on_hover_text("make him do one specific thing now (visitors, enemies, Grimm, props...)");
+                let label = match (sandbox, placing) {
+                    (false, _) => "🔒 Sandbox",
+                    (true, false) => "Sandbox",
+                    (true, true) => "Sandbox  📍",
+                };
+                ui.selectable_value(&mut self.tab, Tab::Sandbox, RichText::new(label).size(15.0)).on_hover_text("make him do things on request, choose where they appear, debug tools (pauses achievements until restart)");
+                if self.advanced {
+                    ui.selectable_value(&mut self.tab, Tab::Diagnostics, RichText::new("Diagnostics").size(15.0));
+                }
             });
-            ui.separator();
+            ui.add_space(4.0);
+            if !connected {
+                self.offline(ui);
+                return;
+            }
             match self.tab {
-                Tab::Logs => self.logs(ui, connected),
-                Tab::Achievements => self.achievements(ui, achievements.as_ref(), connected),
-                Tab::Test => ui.add_enabled_ui(connected, |ui| test_tab::show(self, ui, status.as_ref(), hello.as_ref())).inner,
+                Tab::Home => home::show(self, ui, status.as_ref(), hello.as_ref(), achievements.as_ref()),
+                Tab::Sandbox => sandbox::show(self, ui, status.as_ref(), hello.as_ref(), sandbox),
+                Tab::Diagnostics => self.diagnostics(ui, status.as_ref(), connected),
             }
         });
 
         // Idle: a slow tick keeps the connection state fresh; data arrival wakes us anyway.
         ctx.request_repaint_after(Duration::from_millis(250));
     }
+}
+
+/// `skong.exe` next to this panel, if there is one.
+fn pet_exe() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?.parent()?.join("skong.exe");
+    exe.is_file().then_some(exe)
 }
 
 fn format_line(l: &LogLine) -> String {
@@ -564,4 +551,24 @@ fn ago(now: u64, at: u64) -> String {
 /// `items` joined with ", ", `per_line` per line.
 fn wrap_list(items: &[String], per_line: usize) -> String {
     items.chunks(per_line.max(1)).map(|c| c.join(", ")).collect::<Vec<_>>().join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn letter_shortcuts_respect_the_sandbox() {
+        // Every letter that would be refused is marked as such for the user.
+        for (k, c, what) in LETTERS {
+            assert_eq!(c.needs_sandbox(), what.ends_with("(sandbox)"), "{k:?} {what}");
+        }
+    }
+
+    #[test]
+    fn ago_reads_naturally() {
+        assert_eq!(ago(100, 90), "just now");
+        assert_eq!(ago(4000, 100), "1 h ago");
+        assert_eq!(ago(100_000, 0), "yesterday");
+    }
 }

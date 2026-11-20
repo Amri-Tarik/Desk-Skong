@@ -58,14 +58,19 @@ art on first run.*
 
 ## Using it
 
-- **The control panel** opens with the pet: settings, achievements and what he's up to.
+- **The Desk-Skong window** (the control panel) opens with the pet: achievements, your
+  Geo, and the settings.
 - **The tray icon** (notification area, by the clock) has the same switches: size,
-  skins, mischief, pause, *Visible in screen shares*, and *Open control panel*.
+  skins, mischief, pause, *Visible in screen shares*; click it (or *Open Desk-Skong*) to
+  bring the window back.
 - **Closing the panel window quits Desk-Skong.** To keep him around without the panel,
   use *Hide to tray*; bring it back from the tray icon. You can also quit from the tray
   icon (*Quit*) or with `Ctrl+Alt+Q`.
-- Handy keys (Ctrl+Alt + …): `A` do something · `W` wake him · `R` come here (to the
-  cursor) · `G` walk to the cursor · `P` pause · `Q` quit.
+- **Sandbox:** to make him do things on request (call visitors, enemies, Grimm, Geo
+  showers, drive him with the keyboard, choose where things appear), enable the sandbox
+  in the window's *Sandbox* tab. Achievements are paused until you restart Desk-Skong.
+- Handy keys (Ctrl+Alt + …): `W` wake him · `G` walk / `H` hurry to the cursor · `P`
+  pause · `M` the tray menu · `Q` quit.
 - **Skins:** community "Custom Knight" skins (a folder with `Knight.png`) work too; pick
   one from the tray.
 

@@ -338,8 +338,12 @@ impl Pet {
         if st.dirty && st.since_save > 1.0 {
             st.dirty = false;
             st.since_save = 0.0;
-            self.settings.stakes = st.save.clone();
-            self.settings.save();
+            // In the sandbox the wallet (a score) isn't saved: Geo showers on request
+            // mustn't count. The next start picks up where it was before the sandbox.
+            if !self.achievements.sandbox() {
+                self.settings.stakes = st.save.clone();
+                self.settings.save();
+            }
         }
         st.since_raise += dt;
         if st.since_raise > 2.0 {

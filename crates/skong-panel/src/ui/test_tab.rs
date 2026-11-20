@@ -3,8 +3,8 @@
 //! "📍" buttons that put the thing where you click next on screen, and the pet's feedback
 //! (what came of each request, why one couldn't run) at the top.
 //!
-//! The precursor of the sandbox: it will later sit behind an "achievements off for this
-//! session" gate (not yet: achievements still count).
+//! Part of the Sandbox tab: only shown once the sandbox is on (achievements paused until
+//! restart), and the pet refuses these commands before that anyway.
 use eframe::egui::{self, Color32, RichText};
 use skong_ipc::{Command, Hello, Placeable, SPELLS, Scene, StakesCommand, Status, TestCommand, TestInfo};
 
@@ -83,7 +83,7 @@ pub(super) fn show(p: &mut Panel, ui: &mut egui::Ui, status: Option<&Status>, he
     };
     let info = status.and_then(|s| s.test.as_ref());
     let mut out: Vec<Command> = Vec::new();
-    ui.weak("Make him do one specific thing now. (This will later sit behind an \"achievements off for this session\" gate — the sandbox; for now achievements still count.)");
+    ui.weak("Make him do one specific thing now; 📍 puts it where you click next on screen.");
     ui.add_space(4.0);
     egui::Frame::group(ui.style()).show(ui, |ui| {
         ui.set_width(ui.available_width());

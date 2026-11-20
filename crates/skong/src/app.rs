@@ -412,6 +412,10 @@ pub fn run(args: &Args) -> Result<()> {
     pet.enemies = pet.load_enemies(args.capturable);
     pet.troupe = pet.load_troupe(args.capturable);
     pet.achievements_setup();
+    // Debug flags that force things are the sandbox too.
+    if args.sandbox || args.visit.is_some() || args.dream_test || args.sit_test || args.goto_test || args.fx_test || args.move_test || args.emote_test {
+        pet.enable_sandbox("a debug flag on the command line");
+    }
     if let (Some(v), Some(name)) = (pet.visitors.as_mut(), &args.visit) {
         v.invite((name != "any").then(|| name.clone()));
     }
@@ -451,10 +455,15 @@ pub fn run(args: &Args) -> Result<()> {
         // Ctrl+Alt+M opens the tray menu at the cursor, from anywhere.
         let menu_key = tick.hotkeys.contains(&MENU_HOTKEY);
         for ev in pet.tray.take_events() {
-            if ev == TrayEvent::MenuRequested
-                && let Some(id) = pet.tray.show_menu(&pet.menu())
-            {
-                cmds.extend(pet.menu_command(id));
+            match ev {
+                // The panel is the app's window: a click on the icon brings it back
+                // (hidden to the tray, closed by a crash, or never opened).
+                TrayEvent::LeftClick => cmds.push(Command::OpenPanel),
+                TrayEvent::MenuRequested => {
+                    if let Some(id) = pet.tray.show_menu(&pet.menu()) {
+                        cmds.extend(pet.menu_command(id));
+                    }
+                }
             }
         }
         if menu_key && let Some(id) = pet.tray.show_menu(&pet.menu()) {
@@ -1177,6 +1186,10 @@ impl Pet {
     }
 
     fn apply(&mut self, c: Command) -> Result<Flow> {
+        // The pet enforces the sandbox, whoever asks (hotkey, tray, any panel).
+        if self.sandbox_refuses(&c) {
+            return Ok(Flow::Continue);
+        }
         match c {
             Command::ToggleManual => {
                 self.manual = !self.manual;
@@ -1287,13 +1300,16 @@ impl Pet {
             Command::GrimmVisit => self.grimm_visit(),
             Command::HornetChallenge { race } => self.hornet_challenge(race),
             Command::Discover(_) | Command::ForgetDiscoveries => return self.apply_discovery(c),
-            Command::Quit => return Ok(Flow::Quit),
+            Command::Quit => {
+                self.control.goodbye(); // the panel windows close with the pet
+                return Ok(Flow::Quit);
+            }
             Command::Stakes(c) => {
                 self.note_stakes(c);
                 self.apply_stakes(c);
             }
             Command::ResetAchievements => self.reset_achievements(),
-            Command::SetManual(_) | Command::ToggleVision | Command::ToggleDebugOverlay | Command::SetOverlayLayers(_) | Command::OpenPanel => return self.apply_panel(c),
+            Command::SetManual(_) | Command::ToggleVision | Command::ToggleDebugOverlay | Command::SetOverlayLayers(_) | Command::OpenPanel | Command::EnableSandbox => return self.apply_panel(c),
         }
         Ok(Flow::Continue)
     }
@@ -1340,38 +1356,46 @@ impl Pet {
             .collect();
         let scales = SCALES.iter().enumerate().map(|(i, (n, v))| MenuItem::check(ID_SCALE0 + i as u32, *n, (self.settings.scale - v).abs() < 1e-3)).collect();
         let bother = BOTHER.iter().enumerate().map(|(i, (n, v))| MenuItem::check(ID_BOTHER0 + i as u32, *n, (self.settings.bother - v).abs() < 1e-3)).collect();
-        vec![
-            MenuItem::label("Desk-Skong"),
+        let mut items = vec![
+            MenuItem::action(ID_PANEL, "Open Desk-Skong"),
             MenuItem::Separator,
             MenuItem::sub(format!("Skin ({})", self.data.skins.len()), skins),
             MenuItem::sub("Size", scales),
             MenuItem::sub("Mischief", bother),
             MenuItem::sub("Place bench", self.benches.styles.iter().enumerate().map(|(i, s)| MenuItem::Action { id: ID_BENCH0 + i as u32, label: s.name.clone(), checked: false, enabled: self.benches.available(i) }).collect()),
             MenuItem::action(ID_CLEAR_BENCHES, "Remove benches"),
-            discover::menu(),
             MenuItem::Separator,
-            MenuItem::action(ID_ACT, "Do something!"),
             MenuItem::check(ID_FIGHT, "Fight the cursor", self.brain.fight_mode()),
-            MenuItem::action(ID_INVITE, "Invite a visitor"),
-            MenuItem::action(ID_ENEMY, "Send an enemy"),
-            MenuItem::action(ID_GAUNTLET, "Start a gauntlet"),
-            MenuItem::action(ID_SHOWER, "Geo shower"),
-            MenuItem::action(ID_DREAM, "Dream-nail a window"),
-            MenuItem::action(ID_RESPAWN, "Come here (respawn at cursor)"),
-            MenuItem::check(ID_MANUAL, "Manual control", self.manual),
             MenuItem::check(ID_SHARE, "Visible in screen shares", self.settings.share_visible),
             MenuItem::check(ID_TEXT, "Curious about highlighted text", self.settings.text_curiosity),
             MenuItem::check(ID_LANTERN, "Lantern on dark backgrounds", self.settings.lantern),
+            MenuItem::check(ID_VISION, "Vision (content terrain)", self.content.is_enabled()),
             MenuItem::check(ID_PAUSE, "Pause", self.paused),
             MenuItem::Separator,
-            MenuItem::check(ID_VISION, "Vision (content terrain)", self.content.is_enabled()),
-            MenuItem::check(ID_OVERLAY, "Debug overlay\tCtrl+Alt+D", self.overlay.is_on()),
             MenuItem::check(ID_LOG_FILE, "Write a log file (for bug reports)", self.settings.log_file),
             MenuItem::action(ID_LOG_FOLDER, "Open log folder"),
-            MenuItem::action(ID_PANEL, "Open control panel"),
-            MenuItem::Separator,
-            MenuItem::action(ID_QUIT, "Quit"),
-        ]
+        ];
+        // "Make him do X" and debug tools: only once the sandbox is on (enabled from the
+        // panel, where the consent is spelled out).
+        if self.achievements.sandbox() {
+            items.push(MenuItem::sub(
+                "Sandbox",
+                vec![
+                    MenuItem::action(ID_ACT, "Do something!"),
+                    MenuItem::action(ID_INVITE, "Invite a visitor"),
+                    MenuItem::action(ID_ENEMY, "Send an enemy"),
+                    MenuItem::action(ID_GAUNTLET, "Start a gauntlet"),
+                    MenuItem::action(ID_SHOWER, "Geo shower"),
+                    MenuItem::action(ID_DREAM, "Dream-nail a window"),
+                    MenuItem::action(ID_RESPAWN, "Come here (respawn at cursor)"),
+                    discover::menu(),
+                    MenuItem::check(ID_MANUAL, "Manual control", self.manual),
+                    MenuItem::check(ID_OVERLAY, "Debug overlay\tCtrl+Alt+D", self.overlay.is_on()),
+                ],
+            ));
+        }
+        items.extend([MenuItem::Separator, MenuItem::action(ID_QUIT, "Quit")]);
+        items
     }
 
     fn menu_command(&self, id: u32) -> Option<Command> {

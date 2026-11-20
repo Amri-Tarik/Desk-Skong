@@ -52,9 +52,12 @@ pub struct Args {
     pub dream_test: bool,
     /// `--move-test`: scripted dive + turn-in-place loop (screenshots).
     pub move_test: bool,
+    /// `--sandbox`: start with the sandbox on (debug commands allowed, achievements paused).
+    /// The forcing debug flags above turn it on too.
+    pub sandbox: bool,
 }
 
-const USAGE: &str = "usage: skong [--browse] [--capturable] [--panel|--no-panel] [--no-vision] [--capture-stats] [--data DIR] [--skins DIR] [--skin NAME] [--scale F] [--clip NAME] [--visit NAME|any]";
+const USAGE: &str = "usage: skong [--browse] [--capturable] [--panel|--no-panel] [--sandbox] [--no-vision] [--capture-stats] [--data DIR] [--skins DIR] [--skin NAME] [--scale F] [--clip NAME] [--visit NAME|any]";
 
 fn parse_args() -> Result<Args> {
     let mut a = Args {
@@ -74,6 +77,7 @@ fn parse_args() -> Result<Args> {
         visit: None,
         dream_test: false,
         move_test: false,
+        sandbox: false,
     };
     let mut it = std::env::args().skip(1);
     while let Some(k) = it.next() {
@@ -97,6 +101,7 @@ fn parse_args() -> Result<Args> {
             "--visit" => a.visit = Some(v()?),
             "--dream-test" => a.dream_test = true,
             "--move-test" => a.move_test = true,
+            "--sandbox" => a.sandbox = true,
             "-h" | "--help" => {
                 println!("{USAGE}");
                 std::process::exit(0);
@@ -133,10 +138,26 @@ fn run() -> Result<()> {
         match skong_win::monitor::single_instance() {
             Some(g) => Some(g),
             None => {
-                log::warn!("Desk-Skong is already running (see the tray); exiting");
+                // Launching it again means "show me the app": bring up the running pet's panel.
+                log::warn!("Desk-Skong is already running (see the tray); showing its window and exiting");
+                show_running_panel();
                 return Ok(());
             }
         }
     };
     if args.browse { browser::run(&args) } else { app::run(&args) }
+}
+
+/// Ask the running pet to raise (or launch) its control panel, as a tray click does.
+fn show_running_panel() {
+    use std::io::Write;
+    match skong_ipc::connect(skong_ipc::PIPE_NAME) {
+        Ok(mut c) => {
+            let line = skong_ipc::encode(&skong_ipc::PanelMsg::Command(skong_ipc::Command::OpenPanel));
+            if let Err(e) = c.writer.write_all(line.as_bytes()) {
+                log::warn!("could not reach the running pet: {e}");
+            }
+        }
+        Err(e) => log::warn!("could not reach the running pet: {e}"),
+    }
 }

@@ -31,6 +31,13 @@ pub struct Shared {
     pub statuses: u64,
     /// Bumped on every connect, so the UI can resend its preferences.
     pub session: u64,
+    /// The pet said goodbye (it is quitting): the window closes with it.
+    pub bye: bool,
+    /// Bumped whenever the pet asks the window to come to the front.
+    pub raises: u64,
+    /// The latest refused command (why), and a counter bumped on each refusal.
+    pub refused: Option<String>,
+    pub refusals: u64,
     /// Pet pid + last log seq of the previous connection (a reconnect to the same pet
     /// must not duplicate its backlog; a restarted pet starts over at 0).
     prev: Option<(u32, Option<u64>)>,
@@ -52,6 +59,12 @@ impl Shared {
                 self.statuses += 1;
             }
             PetMsg::Achievements(a) => self.achievements = Some(a),
+            PetMsg::Raise => self.raises += 1,
+            PetMsg::Bye => self.bye = true,
+            PetMsg::Refused(why) => {
+                self.refused = Some(why);
+                self.refusals += 1;
+            }
             PetMsg::Logs(lines) => {
                 for l in lines {
                     if self.last_seq.is_some_and(|s| l.seq <= s) {
@@ -70,7 +83,15 @@ impl Shared {
 
 pub struct Link {
     shared: Arc<Mutex<Shared>>,
-    out: Sender<PanelMsg>,
+    out: Sender<Out>,
+}
+
+/// What the UI hands the connection thread.
+enum Out {
+    Msg(PanelMsg),
+    /// Everything queued before this is written: say so (dropped unanswered while
+    /// disconnected).
+    Flush(Sender<()>),
 }
 
 impl Link {
@@ -91,7 +112,14 @@ impl Link {
     }
 
     pub fn send(&self, msg: PanelMsg) {
-        let _ = self.out.send(msg);
+        let _ = self.out.send(Out::Msg(msg));
+    }
+
+    /// Wait (up to `timeout`) until everything sent so far is written to the pipe — before
+    /// the window closes after asking the pet to quit. False if it couldn't be confirmed.
+    pub fn flush(&self, timeout: Duration) -> bool {
+        let (tx, rx) = channel();
+        self.out.send(Out::Flush(tx)).is_ok() && rx.recv_timeout(timeout).is_ok()
     }
 }
 
@@ -100,7 +128,7 @@ fn lock(s: &Mutex<Shared>) -> MutexGuard<'_, Shared> {
 }
 
 /// Connection manager: connect, pump until the pipe breaks, repeat.
-fn manage(pipe: &str, shared: &Arc<Mutex<Shared>>, out: &Receiver<PanelMsg>, wake: Arc<dyn Fn() + Send + Sync>) {
+fn manage(pipe: &str, shared: &Arc<Mutex<Shared>>, out: &Receiver<Out>, wake: Arc<dyn Fn() + Send + Sync>) {
     loop {
         let conn = match skong_ipc::connect(pipe) {
             Ok(c) => c,
@@ -116,7 +144,7 @@ fn manage(pipe: &str, shared: &Arc<Mutex<Shared>>, out: &Receiver<PanelMsg>, wak
         {
             let mut s = lock(shared);
             let prev = s.hello.as_ref().map(|h| (h.pid, s.last_seq));
-            *s = Shared { connected: true, session: s.session + 1, logs: std::mem::take(&mut s.logs), prev, ..Shared::default() };
+            *s = Shared { connected: true, session: s.session + 1, logs: std::mem::take(&mut s.logs), prev, raises: s.raises, refusals: s.refusals, ..Shared::default() };
         }
         wake();
 
@@ -147,9 +175,14 @@ fn manage(pipe: &str, shared: &Arc<Mutex<Shared>>, out: &Receiver<PanelMsg>, wak
 
         while alive.load(Ordering::Relaxed) {
             match out.recv_timeout(Duration::from_millis(100)) {
-                Ok(msg) => {
+                Ok(Out::Msg(msg)) => {
                     if writer.write_all(encode(&msg).as_bytes()).is_err() {
                         break;
+                    }
+                }
+                Ok(Out::Flush(ack)) => {
+                    if writer.flush().is_ok() {
+                        let _ = ack.send(());
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => {}
@@ -182,6 +215,52 @@ mod tests {
         assert_eq!(s.logs.iter().map(|l| l.seq).collect::<Vec<_>>(), [0, 1, 2, 3]);
         s.ingest(PetMsg::Status(Box::default()));
         assert_eq!(s.statuses, 1);
+    }
+
+    #[test]
+    fn raise_bye_and_refusals() {
+        let mut s = Shared::default();
+        s.ingest(PetMsg::Raise);
+        s.ingest(PetMsg::Raise);
+        s.ingest(PetMsg::Refused("needs the sandbox".into()));
+        assert_eq!((s.raises, s.refusals, s.refused.as_deref(), s.bye), (2, 1, Some("needs the sandbox"), false));
+        s.ingest(PetMsg::Bye);
+        assert!(s.bye);
+    }
+
+    /// Closing the window sends Quit and waits for it to be written before the process
+    /// ends: the pet must get it.
+    #[test]
+    fn quit_is_flushed_before_the_window_closes() {
+        use skong_ipc::{Command, Server, ServerEvent};
+        use std::time::Instant;
+        let name = format!(r"\\.\pipe\desk-skong-panel-test-{}", std::process::id());
+        let mut server = Server::start(&name).unwrap();
+        let link = Link::start(name, || {});
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !link.shared().connected {
+            assert!(Instant::now() < deadline, "never connected");
+            server.poll();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        link.send(PanelMsg::Command(Command::Quit));
+        assert!(link.flush(Duration::from_secs(2)));
+        let mut got = Vec::new();
+        while !got.iter().any(|e| matches!(e, ServerEvent::Line(..))) {
+            assert!(Instant::now() < deadline, "Quit never arrived: {got:?}");
+            got.extend(server.poll());
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let line = got.iter().find_map(|e| if let ServerEvent::Line(_, l) = e { Some(l.clone()) } else { None }).unwrap();
+        assert_eq!(decode::<PanelMsg>(&line).unwrap(), PanelMsg::Command(Command::Quit));
+    }
+
+    #[test]
+    fn flush_without_a_pet_gives_up() {
+        let link = Link::start(r"\\.\pipe\desk-skong-nobody-here".into(), || {});
+        let t = std::time::Instant::now();
+        assert!(!link.flush(Duration::from_millis(300)));
+        assert!(t.elapsed() < Duration::from_secs(2));
     }
 
     #[test]
