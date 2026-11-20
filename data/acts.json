@@ -284,13 +284,15 @@
         {
           "clip": "Challenge Start",
           "interruptible": false,
+          "mirror": true,
           "hold": [
             0.6,
             1.2
           ]
         },
         {
-          "clip": "Challenge End"
+          "clip": "Challenge End",
+          "mirror": true
         }
       ]
     },
@@ -691,13 +693,15 @@
       "steps": [
         {
           "clip": "Challenge Start",
+          "mirror": true,
           "hold": [
             0.8,
             1.2
           ]
         },
         {
-          "clip": "Challenge End"
+          "clip": "Challenge End",
+          "mirror": true
         }
       ]
     }
