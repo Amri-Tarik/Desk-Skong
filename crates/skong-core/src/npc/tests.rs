@@ -118,6 +118,37 @@ fn portal_visitor_arrives_talks_and_leaves() {
 }
 
 #[test]
+fn a_visitor_asked_to_talk_again_waits_for_the_knight() {
+    let s = set();
+    let t = Terrain::from_desktop(&desk(500), &TerrainOptions::default());
+    let id = s.id("zote").expect("zote");
+    let mut npc = Npc::new(1, id, &s, Placement { feet: Vec2::new(800.0, 500.0), owner: Some(7), walk_to: None }, 3, 64.0);
+    npc.attach(&env(&t));
+    let mut ev = Vec::new();
+    assert!(!npc.talk_again(), "still arriving: nothing to ask yet");
+    for _ in 0..60 {
+        if npc.can_talk() {
+            break;
+        }
+        run(&mut npc, &s, &t, 0.5, &mut ev);
+    }
+    assert!(npc.can_talk() && npc.talk_again() && npc.can_talk());
+
+    // After the talk he lingers; asked again, he waits for a second one, and long enough.
+    let ctx = TalkContext::from_desktop(&desk(500), Some(10.0));
+    let lines = ctx.pick(&s.defs[id].conversations, &mut Rng::new(9)).expect("lines");
+    assert!(npc.begin_talk(lines, 700.0, &s, &mut ev));
+    assert!(!npc.talk_again(), "mid-talk: left alone");
+    while !npc.greeted {
+        run(&mut npc, &s, &t, 0.5, &mut ev);
+    }
+    assert!(!npc.can_talk());
+    assert!(npc.talk_again() && npc.can_talk());
+    run(&mut npc, &s, &t, 40.0, &mut ev);
+    assert!(npc.can_talk(), "stays at least {} s", actor::TALK_AGAIN_STAY);
+}
+
+#[test]
 fn lines_play_in_order() {
     let s = set();
     let t = Terrain::from_desktop(&desk(500), &TerrainOptions::default());

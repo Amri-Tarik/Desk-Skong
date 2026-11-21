@@ -74,6 +74,9 @@ pub enum TestCommand {
     Stargaze,
     /// The Dream Gate's cooldown cleared: his next unreachable prize gets a gate at once.
     DreamGateReady,
+    /// The visitor nearest him (just standing around) is ready to talk, again if they
+    /// already did, and he goes over now (no longer given up on; a Dream Gate if no route).
+    TalkToVisitor,
     /// Unn's slug form (the crawl), now.
     Slug,
     /// Cycle every emote above his head (`--emote-test`), on / off.

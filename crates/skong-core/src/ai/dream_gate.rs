@@ -277,6 +277,13 @@ impl Brain {
         }
     }
 
+    /// Test panel: go and talk to visitor `id` now — no longer given up on (no route last
+    /// time), and the Dream Gate ready in case no route reaches them this time either.
+    pub fn force_greet(&mut self, id: u32) {
+        self.visitors.unsnub(id);
+        self.ready_dream_gate();
+    }
+
     /// Test panel: no cooldown, look again now (the next prize no route reaches gets a
     /// gate at once; the rest of the rules still apply).
     pub fn ready_dream_gate(&mut self) {

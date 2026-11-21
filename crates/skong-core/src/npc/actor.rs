@@ -289,6 +289,9 @@ pub struct Npc {
 const FADE_IN: f32 = 0.4;
 const FADE_OUT: f32 = 0.9;
 const GAP: f32 = 0.5;
+/// Seconds a visitor asked to talk again (test panel) stays at least, for the knight to
+/// come over (hums held back as long).
+pub const TALK_AGAIN_STAY: f32 = 45.0;
 /// Pause between drills.
 const DRILL_GAP: f32 = 0.6;
 /// A lesson ends after this many drills in a row the knight never did.
@@ -383,6 +386,20 @@ impl Npc {
     /// Can a conversation start now?
     pub fn can_talk(&self) -> bool {
         !self.greeted && matches!(self.state, State::Waiting { .. })
+    }
+
+    /// Test panel: be ready for a (new) conversation with the knight — waiting, not yet
+    /// greeted, and staying at least [`TALK_AGAIN_STAY`] s. Only while just standing
+    /// around (waiting or lingering after a talk); false otherwise (arriving, in a talk or
+    /// a scene, held, leaving).
+    pub fn talk_again(&mut self) -> bool {
+        let left = match self.state {
+            State::Waiting { left, .. } | State::Lingering { left } => left,
+            _ => return false,
+        };
+        self.greeted = false;
+        self.state = State::Waiting { left: left.max(TALK_AGAIN_STAY), hum_in: TALK_AGAIN_STAY };
+        true
     }
 
     /// Start talking (the knight arrived next to us). `lines` come from

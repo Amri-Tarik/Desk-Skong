@@ -298,6 +298,23 @@ impl Visitors {
         !self.live.is_empty() || self.portals.iter().any(|p| p.guest.is_some())
     }
 
+    /// Test panel: the visitor nearest `knight` that is just standing around gets ready to
+    /// talk (again, if they already did). Returns their id and display name, or why not.
+    pub fn ask_to_talk(&mut self, knight: Vec2) -> Result<(u32, String), String> {
+        if self.live.is_empty() {
+            return Err("no visitor here".into());
+        }
+        let mut order: Vec<usize> = (0..self.live.len()).collect();
+        order.sort_by(|&a, &b| self.live[a].npc.pos.distance(knight).total_cmp(&self.live[b].npc.pos.distance(knight)));
+        for i in order {
+            if self.live[i].npc.talk_again() {
+                let npc = &self.live[i].npc;
+                return Ok((npc.id, self.set.defs[npc.def].display.clone()));
+            }
+        }
+        Err("every visitor is busy (arriving, talking, in a scene, held or leaving)".into())
+    }
+
     /// The brain stands beside visitor `id`: start the conversation.
     pub fn greet(&mut self, id: u32, w: &World) {
         let Some(i) = self.live.iter().position(|l| l.npc.id == id) else { return };
