@@ -1,6 +1,6 @@
 //! The panel's Test tab: make the pet do one specific thing now (a visitor and the scene
 //! after the talk, an enemy of one kind, a pastime, a spell...), optionally at a spot the
-//! user clicks on screen ("📍 Place…"), and hear back what came of it.
+//! user clicks on screen ("Place…"), and hear back what came of it.
 //!
 //! Part of the sandbox: the pet refuses every [`TestCommand`] until the user enabled it
 //! (achievements paused until restart; see [`crate::Command::needs_sandbox`]).

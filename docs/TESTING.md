@@ -12,7 +12,7 @@ the K / A / R / D hotkeys, the tray's debug items): the footer says so.
 
 **How the Test buttons work.** Every button acts now; the box at the top shows what came of
 it (✔ / ✖ with the reason, e.g. "Myla can't sing by a Geo deposit: no Geo deposit on
-screen"). **📍** buttons place the thing where you click next: the next left click
+screen"). **Place** buttons place the thing where you click next: the next left click
 anywhere on screen is taken (it doesn't reach the app under it) and lands on the nearest
 ledge at or below the click (title bar, content line, the floor), never on a fullscreen
 game's monitor. A label by the cursor shows what you're placing; **Esc**, a **right-click**
@@ -64,10 +64,10 @@ Pick a visitor in the drop-down, or use the "Every scene" row.
       runs over and they talk; nothing follows · *look for* the speech bubbles' pace and
       position, the knight's greeting act, them leaving through a portal afterwards.
 - [ ] **Visit (natural)** → as above, the scene after the talk rolled as on a natural visit.
-- [ ] **📍 next to a visit** → they arrive through a portal at the clicked spot (any
+- [ ] **Place next to a visit** → they arrive through a portal at the clicked spot (any
       arrival style) · *look for* the knight reaching them, or talking from a reachable spot
       within range (6 units across, 5 up / down) when he can't get beside them.
-- [ ] **Talk from nearby**: put a visitor (📍) on a busy window edge he can't stand next to
+- [ ] **Talk from nearby**: put a visitor (Place) on a busy window edge he can't stand next to
       → he talks from the closest reachable spot, same level first.
 - [ ] **Sly lesson** → Sly talks, draws his nail, announces and demonstrates drills with his
       own clips; the knight practises (slashes, up / down slashes, jumps, dashes, Great /
@@ -120,7 +120,7 @@ Pick a visitor in the drop-down, or use the "Every scene" row.
 - [ ] **Crawlid / Vengefly / Wandering Husk** (one each) → it wanders in (walks in from a
       monitor edge, drops onto a ledge, or flies in) and the knight fights it · *look for*
       the result line naming where it came in.
-- [ ] **📍 an enemy** → it drops in at the clicked spot (a flyer hovers above it).
+- [ ] **Place an enemy** → it drops in at the clicked spot (a flyer hovers above it).
 - [ ] Combat kit (send a few, watch): **pogo chains** on enemies; **Desolate Dive** from a
       window top onto a foe below; **shadow-dash dodge through a Husk lunge**; a
       **crystal-dash opener**; **Howling Wraiths at a Vengefly**; Focus after a hurt fight.
@@ -138,7 +138,7 @@ Pick a visitor in the drop-down, or use the "Every scene" row.
 
 ## Grimm
 
-- [ ] **Light a scarlet flame** (or **📍** it into a prepared arena) → a dim flame on a
+- [ ] **Light a scarlet flame** (or **Place** it into a prepared arena) → a dim flame on a
       settled ledge; the knight lingers by it with a "?" every 7–13 s; **you click the
       flame** (only its window takes the click) → Grimm steps out of it with a bow and a
       line · *look for* the flame's flicker; it waiting ~30 min, through visitors / enemies,
@@ -158,7 +158,7 @@ Pick a visitor in the drop-down, or use the "Every scene" row.
 
 ## Pastimes & props
 
-- [ ] **Training dummy** (near him) or **📍** → it stands on the ledge, he practises at once
+- [ ] **Training dummy** (near him) or **Place** → it stands on the ledge, he practises at once
       (combos, up slashes, pogos, Great / Cyclone / Dash Slash, fireballs); it swings per
       blow · *look for* its size beside him (`DUMMY_ART_SCALE` 0.34), its foot on the
       ledge, the hit clips swinging *away* from the blow (L / R is a guess), slash / pogo
@@ -172,13 +172,13 @@ Pick a visitor in the drop-down, or use the "Every scene" row.
       dummy #… broke … (the user's clicks; the next one waits longer)". The next one comes
       2.5× later than usual. Press and move → still a drag, not a blow · *look for* the
       splinters' size / colour / spread, the fade's speed, whether ~5 clicks feels right.
-- [ ] **The dummy breaking while he practises**: place one (📍) and click it 4 times, then let
+- [ ] **The dummy breaking while he practises**: place one (Place) and click it 4 times, then let
       him practise → his blows finish it ("under his nail" in the log): the swing in progress
       finishes, he looks down at the pieces (`LookDown`) and goes back to what he was doing.
       First time → *Splinters*. Same for one broken by your click mid-session (no
       achievement).
 - [ ] **Wear over time**: a dummy left standing breaks by itself after 13–18 min (sooner
-      with practice: ≈ 15 % a session, ≈ 8–10 min of keen practice); placed (📍) and dragged
+      with practice: ≈ 15 % a session, ≈ 8–10 min of keen practice); placed (Place) and dragged
       ones wear the same.
 - [ ] **Lumafly** → a glow drifts from title bar to title bar; he follows along the ledges,
       jumps at it, sometimes catches it (a flare) and watches it float off · *look for* the
@@ -197,15 +197,15 @@ Pick a visitor in the drop-down, or use the "Every scene" row.
 - [ ] **Bench in his window** → a found bench appears in the window he stands on; he may
       sit; seated life (breathing idle, map checks, leaning, dozing). Every kind sat on →
       *Connoisseur of Seats*.
-- [ ] **📍 Bench** (pick a style) → a placed bench on the clicked ledge, riding its window.
-- [ ] **Geo deposit** (his window) or **📍** (click a window's title bar / a line in it) →
+- [ ] **Place Bench** (pick a style) → a placed bench on the clicked ledge, riding its window.
+- [ ] **Geo deposit** (his window) or **Place** (click a window's title bar / a line in it) →
       the region's Geo Rock with its gleam; he mines it (3 hits, Geo out of the rock), and a
       new one turns up in another app later · *look for* the art and gleam for every region
       (the region follows the app: try several apps), sizes. Every region mined →
       *Rockhound*.
-- [ ] **Shiny** or **📍** → a glint; he walks over and picks it up (`Collect Normal 2`),
+- [ ] **Shiny** or **Place** → a glint; he walks over and picks it up (`Collect Normal 2`),
       sometimes Geo pops out · *look for* the twinkle and the pick-up timing.
-- [ ] **Geo shower** or **📍** → a subtle dust portal, coins tumble out a moment later; he
+- [ ] **Geo shower** or **Place** → a subtle dust portal, coins tumble out a moment later; he
       gathers them. On its own: when he's bored, over settled, reachable ledges.
 - [ ] **Spill Geo at the cursor** → 30 Geo burst from the cursor; he collects; a big haul
       (40+ in 12 s) → a sparkle bubble. 1000 picked up → *Hoarder*.
@@ -248,7 +248,7 @@ other monitor instead. A plain click does nothing (on the dummy it's a blow: see
       kept; it's still there after a restart (`world.json`). Onto the floor → it lies there
       (same look), whatever windows open or close. Never on a fullscreen window / the pet's
       own windows (it falls past them).
-- [ ] **Benches**: drag a placed bench (📍 Bench) or a found one while he **sits** on it →
+- [ ] **Benches**: drag a placed bench (Place Bench) or a found one while he **sits** on it →
       he gets up first; the bench lands and rides its new window; he may come back and sit.
 - [ ] **Interior Decorator**: five different things dragged and set down → unlocked.
 
@@ -273,7 +273,7 @@ other monitor instead. A plain click does nothing (on the dummy it's a blow: see
       "…" cloud, "!", "?", "z" / "zzz", the Geo thought cloud; colours on light and dark
       windows; the four-step fade in / out. On its own: rare (at most ~1 a minute) — note
       how often over a real day; "z" when settling for a nap vs "zzz" asleep.
-- [ ] **Dream Gate → Ready**, then put a prize out of reach, or **📍 Target** on a window top
+- [ ] **Dream Gate → Ready**, then put a prize out of reach, or **Place Target** on a window top
       with nothing to climb → he plants a gate there and warps · *look for* the gate's
       size, glow and warp timing. *Shortcut Through Sleep*. On its own: for an unreachable
       visitor / Geo / deposit / shiny, at most every 90 s.

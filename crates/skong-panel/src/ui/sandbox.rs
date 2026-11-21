@@ -1,6 +1,6 @@
 //! The Sandbox tab. Locked: what it does and what it costs, a consent box and "Enable
 //! sandbox". Unlocked: quick actions, keyboard driving and the debug overlay on the left,
-//! the Test tab (`test_tab.rs`: one specific thing now, 📍 where you click) on the right.
+//! the Test tab (`test_tab.rs`: one specific thing now, Place where you click) on the right.
 use eframe::egui::{self, RichText};
 use skong_ipc::{Command, Hello, OverlayLayers, Status};
 
@@ -29,7 +29,7 @@ fn gate(p: &mut Panel, ui: &mut egui::Ui) {
         title(ui, "Sandbox");
         ui.add_space(4.0);
         ui.label(
-            "Make the knight do things on request: call a visitor and pick the scene, send enemies or a gauntlet, light the scarlet flame, spill Geo, cast spells, drive him with the keyboard — and choose where things appear with 📍 (your next click on screen). Debug tools too: the terrain overlay, diagnostics.",
+            "Make the knight do things on request: call a visitor and pick the scene, send enemies or a gauntlet, light the scarlet flame, spill Geo, cast spells, drive him with the keyboard — and choose where things appear with Place (your next click on screen). Debug tools too: the terrain overlay, diagnostics.",
         );
         ui.add_space(8.0);
         egui::Frame::new().fill(pal::EMBER_BG).stroke(egui::Stroke::new(1.0, pal::EMBER.gamma_multiply(0.6))).inner_margin(egui::Margin::symmetric(16, 12)).show(ui, |ui| {
