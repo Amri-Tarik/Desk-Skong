@@ -187,6 +187,12 @@ Pick a visitor in the drop-down, or use the "Every scene" row.
 - [ ] **Lumafly** → a glow drifts from title bar to title bar; he follows along the ledges,
       jumps at it, sometimes catches it (a flare) and watches it float off · *look for* the
       glow's size / colour / bob, how catchable it feels.
+- [ ] **Lumafly art** (vanilla skin export has `Ambient_Life.png`) → the lumafly is the
+      game's: a small pale bug beating its wings (about the knight's head across) in a wide,
+      pulsing soft light; the catch flare whitens the bug and doubles the light · *look for*
+      its size beside the knight, whether the light is too strong / too faint, how it reads
+      over a white window (the art is near-white), the wing beat not stuttering as it bobs.
+      Without that atlas the log says "lumafly: using the drawn glow" and the old glow shows.
 - [ ] **The view** → he climbs to the end of a high, settled window edge and sits taking in
       the view (or the result line says there's no such edge) · *look for* which end he
       picks and which way he faces.
