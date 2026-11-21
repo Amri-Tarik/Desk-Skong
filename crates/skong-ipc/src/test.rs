@@ -48,6 +48,8 @@ pub enum Placeable {
     Flame,
     /// A Geo deposit (in the clicked window: the region follows its app).
     Deposit,
+    /// A grub trapped in a jar (in the clicked window); `mimic`: a Grub Mimic instead.
+    Grub { mimic: bool },
     Shiny,
     /// A placed bench of this style (`Hello::bench_styles`).
     Bench(u8),

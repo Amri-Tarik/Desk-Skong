@@ -24,6 +24,8 @@ const LUMAFLY: u8 = 4;
 /// The pick-up act and the step at which the shiny is in his hand.
 const PICK_ACT: &str = "pick_up_trinket";
 const PICK_CLIP: &str = "Collect Normal 2";
+/// Seconds after a mimic's jar breaks before it bursts out (its `Freed Fake` plays first).
+const GRUB_MIMIC_AFTER: f32 = 0.9;
 
 /// Tray submenu: reveal a find on the knight's window (or the one under the cursor).
 pub(super) fn menu() -> MenuItem {
@@ -111,8 +113,33 @@ impl Pet {
                     let up = Vec2::new(0.0, 30.0 * self.settings.scale);
                     self.stakes.burst(d.at - up, d.geo, self.settings.scale);
                 }
+                self.jars_broken();
             }
             DiscoveryEvent::PickUp(id) => self.shinies.picking(id),
+        }
+    }
+
+    /// Grub jars broken this tick: the glass bursts, and the grub wriggles free (its `Freed`
+    /// clip), or the grub looks round strangely (`Freed Fake`) and a Grub Mimic bursts out.
+    fn jars_broken(&mut self) {
+        use skong_core::achievements::AchievementEvent as E;
+        use skong_core::particles::{GLASS_SHARDS, HARD_LAND_DUST};
+        for j in std::mem::take(&mut self.discoveries.freed) {
+            let ppu = self.ch.params.px_per_unit;
+            let dir = if j.right { -1.0 } else { 1.0 };
+            self.fx.particles(GLASS_SHARDS, j.centre, dir, ppu);
+            self.fx.particles(HARD_LAND_DUST, j.foot, dir, ppu);
+            if j.mimic {
+                self.fx.spawn("grub_freed_fake", j.grub, j.right);
+                let out = self.enemies.as_mut().is_some_and(|e| e.burst_out("grub_mimic", j.foot, j.owner, GRUB_MIMIC_AFTER));
+                if !out {
+                    log::warn!("grub mimic: no enemies loaded");
+                }
+                self.achieve(E::GrubMimicMet);
+            } else {
+                self.fx.spawn("grub_freed", j.grub, j.right);
+                self.achieve(E::GrubFreed);
+            }
         }
     }
 

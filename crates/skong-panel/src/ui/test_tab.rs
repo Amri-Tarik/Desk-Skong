@@ -188,6 +188,8 @@ pub(super) fn show(p: &mut Panel, ui: &mut egui::Ui, status: Option<&Status>, he
             });
             ui.horizontal_wrapped(|ui| {
                 row(ui, &mut out, "Geo deposit", "a Geo deposit in the window he stands on; he mines it. Its rock's region follows the window's app (try different apps for Crossroads / City / Greenpath / Fungal art)", Some(Command::Discover(DISCOVER_DEPOSIT)), Some(Placeable::Deposit));
+                row(ui, &mut out, "Grub jar", "a grub trapped in a jar, on the window you click: he hurries over and breaks the glass, and the grub wriggles free", None, Some(Placeable::Grub { mimic: false }));
+                row(ui, &mut out, "Mimic jar", "a jar like any other, but it holds a Grub Mimic: it bursts out when he breaks the glass", None, Some(Placeable::Grub { mimic: true }));
                 row(ui, &mut out, "Shiny", "a glint near him; he picks it up (sometimes Geo pops out)", Some(Command::Discover(DISCOVER_SHINY)), Some(Placeable::Shiny));
                 row(ui, &mut out, "Geo shower", "Geo tumbles out of a subtle portal over a settled ledge he can reach", Some(Command::Stakes(StakesCommand::SpillGeo)), Some(Placeable::GeoShower));
                 row(ui, &mut out, "Spill Geo at the cursor", "a burst of 30 Geo out of the mouse cursor", Some(Command::Stakes(StakesCommand::DropGeo)), None);

@@ -251,6 +251,17 @@ fn a_dummy_broken_by_his_practice_and_not_otherwise() {
 }
 
 #[test]
+fn freed_grubs_count_up_and_a_mimic_counts_on_its_own() {
+    let mut t = tracker();
+    assert!(feed(&mut t, &vec![E::GrubFreed; 4]).is_empty());
+    assert_eq!(feed(&mut t, &[E::GrubFreed]), [GRUB_FRIEND], "the fifth");
+    assert!(feed(&mut t, &vec![E::GrubFreed; 40]).is_empty());
+    assert_eq!(feed(&mut t, &[E::GrubFreed]), [GRUB_RESCUER], "the forty-sixth");
+    assert_eq!(feed(&mut t, &[E::GrubMimicMet]), [GRUB_MIMIC]);
+    assert!(feed(&mut t, &[E::GrubMimicMet, E::GrubFreed]).is_empty(), "once each");
+}
+
+#[test]
 fn no_achievement_needs_special_hardware_or_apps() {
     for gone in ["dash_across_monitors", "air_mail", "game_retreat"] {
         assert!(!ALL.contains(&gone), "{gone}");

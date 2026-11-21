@@ -1318,6 +1318,42 @@ fn playful_knight_mines_a_geo_deposit() {
 }
 
 #[test]
+fn a_trapped_grub_is_freed_with_one_blow_and_seen_off() {
+    // Even a calm knight drops what he's doing for a grub in a jar.
+    let mut sim = calm(BrainConfig::default());
+    let jar = KnownPlace { center: Vec2::new(1250.0, FLOOR), ..place(5, PlaceKind::Grub, Vec2::new(1200.0, FLOOR), 0.0, false) };
+    sim.brain.set_places(&[jar]);
+    assert!(sim.run_until(3.0, BehaviourKind::Visit), "{}", sim.last_reason());
+    let struck = |sim: &Sim| sim.intents.iter().filter(|i| i.discovery == Some(DiscoveryEvent::Struck(5))).count();
+    let mut broke_at = None;
+    for _ in 0..(8.0 / DT) as usize {
+        sim.step();
+        if struck(&sim) == 1 && broke_at.is_none() {
+            sim.brain.set_places(&[]); // the jar breaks at the first blow
+            broke_at = Some(sim.intents.len());
+        }
+    }
+    assert_eq!(struck(&sim), 1, "one blow");
+    let broke_at = broke_at.unwrap();
+    let after: Vec<&Intent> = sim.intents.iter().skip(broke_at).collect();
+    let watching = after.iter().take_while(|i| i.reason.contains("grub wriggle free")).count();
+    assert!(watching as f32 * DT > 2.0, "stays to see the grub off ({} s)", watching as f32 * DT);
+    assert!(after[..watching].iter().all(|i| i.attack.is_none()), "no more swings at the empty spot");
+}
+
+#[test]
+fn a_spent_knight_still_wants_a_grub_more_than_geo() {
+    let mut m = super::needs::Mind::new(Default::default());
+    m.needs.energy = 0.25;
+    let at = Vec2::new(1200.0, FLOOR);
+    let grub = super::places::want(&place(1, PlaceKind::Grub, at, 0.0, false), &m);
+    let rock = super::places::want(&place(2, PlaceKind::Deposit, at, 0.0, false), &m);
+    assert!(grub > 0.8 && rock == 0.0, "grub {grub}, rock {rock}");
+    m.needs.energy = 0.1;
+    assert_eq!(super::places::want(&place(1, PlaceKind::Grub, at, 0.0, false), &m), 0.0, "only when spent");
+}
+
+#[test]
 fn rested_calm_knight_leaves_found_seats_alone() {
     let mut sim = calm(BrainConfig::default());
     sim.brain.set_places(&[place(1, PlaceKind::Bench, Vec2::new(1300.0, FLOOR), 0.5, false)]);

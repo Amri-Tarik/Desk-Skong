@@ -401,8 +401,12 @@ impl Pet {
                 N::LessonOver { .. } | N::SparOver { .. } | N::Company { .. } | N::RaceOver { .. } | N::DuelOver { .. } => continue,
             });
         }
+        // Only kinds that wander in count (a Grub Mimic is met through its own achievement).
+        let wanderers = self.enemies.as_ref().map(|e| e.kinds()).unwrap_or_default();
         for (foe, kind) in self.enemies.as_mut().map(|e| std::mem::take(&mut e.killed)).unwrap_or_default() {
-            evs.push(E::EnemyKilled { foe, kind });
+            if wanderers.contains(&kind) {
+                evs.push(E::EnemyKilled { foe, kind });
+            }
         }
         for region in std::mem::take(&mut self.discoveries.mined) {
             evs.push(E::DepositMined { region });

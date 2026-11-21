@@ -63,6 +63,7 @@ pub struct Spec {
 const DUST: &[[u8; 3]] = &[[214, 208, 196], [188, 182, 172], [230, 226, 218]];
 const CRYSTAL: &[[u8; 3]] = &[[255, 214, 240], [255, 242, 250], [244, 176, 226]];
 const GLEAM: &[[u8; 3]] = &[[255, 249, 226], [255, 238, 200]];
+const GLASS: &[[u8; 3]] = &[[226, 236, 248], [198, 214, 236], [244, 248, 255], [170, 190, 218]];
 const WOOD: &[[u8; 3]] = &[[122, 86, 54], [96, 66, 42], [168, 128, 86], [206, 178, 134], [146, 104, 66]];
 
 /// Bits kicked back from the feet while running fast (a stream).
@@ -189,6 +190,20 @@ pub const DUMMY_SPLINTERS: Spec = Spec {
     shape: Shape::Splinter,
     reach: 4.0,
     rate: 0.0,
+};
+
+/// A grub jar's glass bursting: pale shards (with their bright core) flung out and down.
+pub const GLASS_SHARDS: Spec = Spec {
+    count: [18, 24],
+    speed: [2.0, 6.0],
+    angle: [-10.0, 150.0],
+    jitter: [0.7, 0.8],
+    life: [0.55, 0.9],
+    size: [0.06, 0.14],
+    alpha: 0.9,
+    colors: GLASS,
+    shape: Shape::Shard,
+    ..DUMMY_SPLINTERS
 };
 
 #[derive(Clone, Copy, Debug)]

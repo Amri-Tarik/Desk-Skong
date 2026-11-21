@@ -19,6 +19,7 @@ mod npcs;
 mod enemies;
 mod grimm;
 mod discoveries;
+mod grubs;
 mod shinies;
 mod pastimes;
 mod emotes;

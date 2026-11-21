@@ -23,6 +23,7 @@ use skong_win::sprite_window::{MouseEvent, SpriteWindow};
 
 use crate::benches::Benches;
 use crate::fx::Fx;
+use crate::grubs::GrubArt;
 
 /// A revealed find fades in over this long (s).
 const REVEAL_SECS: f32 = 1.2;
@@ -41,6 +42,8 @@ const DEPOSIT_W: f32 = 124.0;
 const DEPOSIT_STAND: f32 = 82.0;
 /// ... and at least this far beyond a (bigger) rock's edge.
 const STAND_CLEAR: f32 = 28.0;
+/// A trapped grub cries for help once the knight is this close (px at scale 1).
+const GRUB_CRY_DIST: f32 = 700.0;
 
 /// Seconds between a deposit's gleams (the game's own shimmer), varied per rock.
 const GLEAM_EVERY: f32 = 6.0;
@@ -189,11 +192,12 @@ fn stand_off(rock_w: f32, scale: f32) -> f32 {
 #[serde(default)]
 struct ArtNames {
     deposit_rock: String,
+    grub_jar: String,
 }
 
 impl Default for ArtNames {
     fn default() -> Self {
-        Self { deposit_rock: "mines_small_rock".into() }
+        Self { deposit_rock: "mines_small_rock".into(), grub_jar: "brk_bottle".into() }
     }
 }
 
@@ -225,6 +229,11 @@ pub struct Discoveries {
     rules: Rules,
     path: Option<PathBuf>,
     deposit_src: Option<Image>,
+    /// The grub jar sprite (64 px per unit), and the jar with its grub at the current scale.
+    jar_src: Option<Image>,
+    grub: GrubArt,
+    /// Jars broken since the pet last looked (the app plays the glass, the grub, a mimic).
+    pub freed: Vec<FreedJar>,
     /// The plain deposit at the current scale (drawn when there is no Geo Rock art).
     deposit: Image,
     /// Room every deposit is given (px): the largest rock of any region, or `deposit`.
@@ -257,6 +266,22 @@ pub struct Discoveries {
     held: Option<(FindId, Vec2)>,
 }
 
+/// A grub jar the knight just broke.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FreedJar {
+    /// Where the jar stood (bottom centre) and the window it stood on.
+    pub foot: Vec2,
+    pub owner: Option<WindowId>,
+    /// Where the grub was in it.
+    pub grub: Vec2,
+    /// The jar's middle (the glass flies from here).
+    pub centre: Vec2,
+    /// A Grub Mimic, not a grub.
+    pub mimic: bool,
+    /// The grub faced right (toward the knight).
+    pub right: bool,
+}
+
 /// How many regions Geo rocks come from.
 pub const REGION_COUNT: usize = REGIONS.len();
 
@@ -282,17 +307,16 @@ fn load_sprite(dir: &Path, name: &str) -> Option<Image> {
 
 /// Footprint of a find at `scale`: the bench art / the deposit rock (`deposit`: the largest
 /// any region draws, so every app's rocks fit where one was placed), plus room to stand
-/// beside it to mine it.
-fn footprint(scale: f32, benches: &Benches, deposit: (f32, f32), kind: FindKind) -> Footprint {
+/// beside it to mine it. `boxes`: the deposit's and the grub jar's size.
+fn footprint(scale: f32, benches: &Benches, boxes: [(f32, f32); 2], kind: FindKind) -> Footprint {
+    let beside = |(w, h): (f32, f32)| Footprint { w, h, room: 2.0 * (stand_off(w, scale) + 24.0 * scale) };
     match kind {
         FindKind::Bench { style } => {
             let (w, h) = benches.art(style).map_or((120.0 * scale, 60.0 * scale), |i| (i.width as f32, i.height as f32));
             Footprint { w, h, room: w }
         }
-        FindKind::Deposit => {
-            let (w, h) = deposit;
-            Footprint { w, h, room: 2.0 * (stand_off(w, scale) + 24.0 * scale) }
-        }
+        FindKind::Deposit => beside(boxes[0]),
+        FindKind::Grub { .. } => beside(boxes[1]),
     }
 }
 
@@ -317,6 +341,7 @@ impl Discoveries {
     pub fn load(data: &Path, props_json: &Path, vanilla: Option<&Path>, scale: f32) -> Discoveries {
         let names = read_json::<PropsFile>(props_json).map(|p| p.discoveries).unwrap_or_default();
         let deposit_src = vanilla.and_then(|v| load_sprite(&v.join("props"), &names.deposit_rock));
+        let jar_src = vanilla.and_then(|v| load_sprite(&v.join("props"), &names.grub_jar));
         let path = world_path();
         let fresh = || World::new(now_unix() ^ 0x5eed);
         let world = path.as_deref().map_or_else(fresh, |p| load_world(p, fresh));
@@ -327,6 +352,9 @@ impl Discoveries {
             rules: Rules::default(),
             path,
             deposit_src,
+            grub: GrubArt::load(data, None, None, scale), // the real art: `rescale` below
+            jar_src,
+            freed: Vec::new(),
             deposit: Image::default(),
             deposit_box: (0.0, 0.0),
             rocks: Vec::new(),
@@ -352,6 +380,7 @@ impl Discoveries {
 
     pub fn rescale(&mut self, scale: f32) {
         self.scale = scale;
+        self.grub = GrubArt::load(&self.data_dir, self.vanilla_dir.as_deref(), self.jar_src.as_ref(), scale);
         let w = ((DEPOSIT_W * scale).round() as u32).max(1);
         let h = self.deposit_src.as_ref().map_or(((50.0 * scale).round() as u32).max(1), |r| ((r.height as f32 * w as f32 / r.width as f32).round() as u32).max(1));
         self.deposit = deposit_art(self.deposit_src.as_ref(), w, h, scale);
@@ -388,7 +417,7 @@ impl Discoveries {
             self.ages.observe(terrain, clock);
             self.observed = (terrain.generation, clock);
         }
-        let (scale, deposit) = (self.scale, self.deposit_box);
+        let (scale, deposit) = (self.scale, [self.deposit_box, self.grub.size()]);
         let fp = |k: FindKind| footprint(scale, benches, deposit, k);
 
         // Arriving on a window of an app with finds that had no lasting room yet.
@@ -404,9 +433,10 @@ impl Discoveries {
         if clock - self.relocate_checked >= 1.0 {
             self.relocate_checked = clock;
             let site = Site { terrain, ages: &self.ages, now: clock, min_age: LASTING_SECS, occupancy: occ, footprint: &fp };
-            let placed = self.world.relocate_due(desk, &site, now_unix());
+            let placed = self.world.relocate_due(desk, &site, now_unix(), &self.rules);
             for (fid, wid) in placed {
-                log::info!("discoveries: a new geo deposit turned up (window {wid})");
+                let what = self.world.find(fid).map_or("find", |f| f.kind.label());
+                log::info!("discoveries: a new {what} turned up (window {wid})");
                 self.revealed(vec![fid], desk, wid);
                 self.save();
             }
@@ -493,8 +523,19 @@ impl Discoveries {
             if p.shown.kind == FindKind::Deposit && deposit_frame(p, &self.rocks, clock) != p.frame {
                 p.dirty = true;
             }
+            // A trapped grub idles, and cries for help once the knight is near; it turns
+            // to him.
+            if let FindKind::Grub { .. } = p.shown.kind {
+                let crying = knight.pos.distance(p.shown.pos) < GRUB_CRY_DIST * scale;
+                let (cry, i) = self.grub.frame(crying, clock + (p.shown.id % 13) as f64 * 0.41);
+                let frame = (cry as usize, i, Some((knight.pos.x > p.shown.pos.x) as usize));
+                if frame != p.frame {
+                    p.frame = frame;
+                    p.dirty = true;
+                }
+            }
             if p.dirty || ((revealing || p.shake > 0.0) && clock - p.drawn_at >= 1.0 / 30.0) {
-                if let Err(e) = draw(p, &self.deposit, &self.rocks, benches, scale, clock) {
+                if let Err(e) = draw(p, &self.deposit, &self.rocks, &self.grub, benches, scale, clock) {
                     log::warn!("discovery prop: {e:#}");
                 }
                 p.drawn_at = clock;
@@ -536,7 +577,7 @@ impl Discoveries {
     /// Half the width of find `id` on screen (px).
     pub fn half_width(&self, id: FindId, benches: &Benches) -> f32 {
         let kind = self.world.find(id).map_or(FindKind::Deposit, |f| f.kind);
-        0.5 * footprint(self.scale, benches, self.deposit_box, kind).w
+        0.5 * footprint(self.scale, benches, [self.deposit_box, self.grub.size()], kind).w
     }
 
     /// The user picked find `id` up (the brain loses sight of it until it lands).
@@ -623,7 +664,7 @@ impl Discoveries {
                 let h = benches.art(style).map_or(0.0, |i| i.height as f32);
                 Some(s.pos.y - h * benches.styles.get(style).map_or(0.45, |st| st.seat))
             }
-            FindKind::Deposit => None,
+            FindKind::Deposit | FindKind::Grub { .. } => None,
         })
     }
 
@@ -639,8 +680,8 @@ impl Discoveries {
                 let reach = self.stand_off(f.id);
                 match f.kind {
                     // Mine it from whichever side has room.
-                    FindKind::Deposit if f.pos.x - reach - 20.0 >= f.span.0 => f.pos - Vec2::new(reach, 0.0),
-                    FindKind::Deposit => f.pos + Vec2::new(reach, 0.0),
+                    FindKind::Deposit | FindKind::Grub { .. } if f.pos.x - reach - 20.0 >= f.span.0 => f.pos - Vec2::new(reach, 0.0),
+                    FindKind::Deposit | FindKind::Grub { .. } => f.pos + Vec2::new(reach, 0.0),
                     FindKind::Bench { .. } => f.pos,
                 }
             },
@@ -649,6 +690,9 @@ impl Discoveries {
 
     /// How far from deposit `id`'s center the knight stands to mine it (its rock's width).
     fn stand_off(&self, id: FindId) -> f32 {
+        if self.world.find(id).is_some_and(|f| matches!(f.kind, FindKind::Grub { .. })) {
+            return stand_off(self.grub.size().0, self.scale);
+        }
         let w = self
             .props
             .iter()
@@ -663,7 +707,7 @@ impl Discoveries {
 
     /// The knight explored a never-visited window: roll / reveal its room.
     pub fn explored(&mut self, id: WindowId, (desk, terrain): (&DesktopSnapshot, &Terrain), benches: &Benches, occ: &Occupancy) {
-        let (scale, deposit) = (self.scale, self.deposit_box);
+        let (scale, deposit) = (self.scale, [self.deposit_box, self.grub.size()]);
         let fp = |k: FindKind| footprint(scale, benches, deposit, k);
         let site = Site { terrain, ages: &self.ages, now: self.clock, min_age: LASTING_SECS, occupancy: occ, footprint: &fp };
         let found = self.world.explored(id, desk, &site, &self.rules);
@@ -687,7 +731,7 @@ impl Discoveries {
     pub fn bench_style(&self, id: FindId) -> Option<usize> {
         match self.world.find(id)?.kind {
             FindKind::Bench { style } => Some(style),
-            FindKind::Deposit => None,
+            FindKind::Deposit | FindKind::Grub { .. } => None,
         }
     }
 
@@ -711,6 +755,20 @@ impl Discoveries {
         }
         p.shake = 0.25;
         let (at, region) = (p.shown.pos, p.region);
+        if let FindKind::Grub { .. } = p.shown.kind {
+            // One blow: the glass gives, and the grub (or what was in its place) is out.
+            let owner = Some(p.shown.window).filter(|&w| w != discovery::FLOOR_WINDOW);
+            let right = knight.pos.x > at.x;
+            if let Some(mimic) = self.world.free_grub(id, now_unix(), &self.rules) {
+                let (_, h) = self.grub.size();
+                self.freed.push(FreedJar { foot: at, owner, grub: self.grub.grub_at(at), centre: at - Vec2::new(0.0, h * 0.4), mimic, right });
+                self.props.retain(|p| p.shown.id != id);
+                self.shown.retain(|s| s.id != id);
+                log::info!("grub jar broken at ({:.0},{:.0}): {}", at.x, at.y, if mimic { "a Grub Mimic!" } else { "a grub, free" });
+                self.save();
+            }
+            return None;
+        }
         let drop = self.world.strike(id, at, now_unix(), &self.rules);
         if let Some(d) = drop {
             self.mined.push(region);
@@ -731,7 +789,7 @@ impl Discoveries {
             }
             _ => FindKind::Deposit,
         };
-        let (scale, deposit) = (self.scale, self.deposit_box);
+        let (scale, deposit) = (self.scale, [self.deposit_box, self.grub.size()]);
         let fp = |k: FindKind| footprint(scale, benches, deposit, k);
         let site = Site { terrain, ages: &self.ages, now: self.clock, min_age: 0.0, occupancy: occ, footprint: &fp };
         match self.world.force(kind, id, desk, &site) {
@@ -743,12 +801,28 @@ impl Discoveries {
     /// Test panel: a Geo deposit right at `at` on window `id`'s ledge. Returns the region
     /// its rocks come from (it follows the window's app).
     pub fn force_deposit_at(&mut self, id: WindowId, at: Vec2, (desk, terrain): (&DesktopSnapshot, &Terrain), benches: &Benches, occ: &Occupancy) -> Result<&'static str, &'static str> {
-        let (scale, deposit) = (self.scale, self.deposit_box);
+        let (scale, deposit) = (self.scale, [self.deposit_box, self.grub.size()]);
         let fp = |k: FindKind| footprint(scale, benches, deposit, k);
         let site = Site { terrain, ages: &self.ages, now: self.clock, min_age: 0.0, occupancy: occ, footprint: &fp };
         let f = self.world.force_at(FindKind::Deposit, id, at, desk, &site)?;
         self.revealed(vec![f], desk, id);
         Ok(REGIONS[rocks_for(&self.rocks, window_region(desk, id)).0].name)
+    }
+
+    /// Test panel: a grub jar (`mimic`: holding a Grub Mimic) right at `at` on window
+    /// `id`'s ledge.
+    pub fn force_grub_at(&mut self, id: WindowId, at: Vec2, mimic: bool, (desk, terrain): (&DesktopSnapshot, &Terrain), benches: &Benches, occ: &Occupancy) -> Result<(), &'static str> {
+        let (scale, deposit) = (self.scale, [self.deposit_box, self.grub.size()]);
+        let fp = |k: FindKind| footprint(scale, benches, deposit, k);
+        let site = Site { terrain, ages: &self.ages, now: self.clock, min_age: 0.0, occupancy: occ, footprint: &fp };
+        let f = self.world.force_at(FindKind::Grub { mimic }, id, at, desk, &site)?;
+        self.revealed(vec![f], desk, id);
+        Ok(())
+    }
+
+    /// A grub jar's half width (px), for placement.
+    pub fn jar_half_width(&self) -> f32 {
+        0.5 * self.grub.size().0
     }
 
     /// A deposit's half width (px), for placement.
@@ -792,7 +866,7 @@ fn deposit_frame(p: &Prop, rocks: &[Vec<RockArt>], clock: f64) -> (usize, usize,
     (region, shape, gleam)
 }
 
-fn draw(p: &mut Prop, deposit: &Image, all_rocks: &[Vec<RockArt>], benches: &Benches, s: f32, clock: f64) -> anyhow::Result<()> {
+fn draw(p: &mut Prop, deposit: &Image, all_rocks: &[Vec<RockArt>], grub: &GrubArt, benches: &Benches, s: f32, clock: f64) -> anyhow::Result<()> {
     let alpha = p.revealed.map_or(1.0, |t| ((clock - t) as f32 / REVEAL_SECS).clamp(0.0, 1.0));
     let pos = p.shown.pos;
     let rocks = rocks_for(all_rocks, p.region).1;
@@ -815,6 +889,13 @@ fn draw(p: &mut Prop, deposit: &Image, all_rocks: &[Vec<RockArt>], benches: &Ben
             let ay = pos.y + 2.0 * s - idle.height as f32 + idle_anchor[1];
             let img = faded(img, alpha);
             p.win.present(&img, (ax - anchor[0]).round() as i32, (ay - anchor[1]).round() as i32)
+        }
+        FindKind::Grub { .. } => {
+            let (crying, i, right) = p.frame;
+            let img = faded(&grub.compose((crying == 1, i), right == Some(1)), alpha);
+            let dx = if p.shake > 0.0 { (p.shake * 90.0).sin() * 3.0 * s } else { 0.0 };
+            // Its bulb rests on the ledge, sunk a hair like something that was always there.
+            p.win.present(&img, (pos.x - img.width as f32 * 0.5 + dx).round() as i32, (pos.y - img.height as f32 + 2.0 * s).round() as i32)
         }
         FindKind::Deposit => {
             let img = faded(deposit, alpha);

@@ -56,12 +56,15 @@ pub mod ids {
     pub const GRIMM_CAMEO: &str = "grimm_cameo";
     pub const INTERIOR_DECORATOR: &str = "interior_decorator";
     pub const SPLINTERS: &str = "splinters";
+    pub const GRUB_FRIEND: &str = "grub_friend";
+    pub const GRUB_RESCUER: &str = "grub_rescuer";
+    pub const GRUB_MIMIC: &str = "grub_mimic";
 
     pub const ALL: &[&str] = &[
         HORNET_TALK, DREAM_WINDOW, DREAM_VISITOR, FIRST_SPELL, POGO, VENGEFLY_AIRBORNE, FALL_AND_RECLAIM, WINDOW_RIDE, CURSOR_DEFEAT, CURSOR_VICTOR, WALL_CRYSTAL_DASH, DREAM_GATE, EVERY_REGION, EVERY_BENCH, EVERY_VISITOR, SLY_LESSON, ZOTE_SPAR, GAUNTLET,
         UNN_FORM, HIGHLIGHTED_TEXT, SHATTERED_WINDOW, GEO_HOARD, NAP_POKE, THROW, MIDAIR_CATCH, STEP_BEHIND, WALL_JUMP_CHAIN, SUPER_HARD_LANDING, EVERY_ENEMY, TROUPE_MASTER, TROUPE_ENCORE,
         CORNIFER_MAPS, QUIRREL_VIEW, MYLA_SONG, HORNET_RACE, HORNET_DUEL, GRIMM_CAMEO, INTERIOR_DECORATOR,
-        GEO_PURSE, SPLINTERS,
+        GEO_PURSE, SPLINTERS, GRUB_FRIEND, GRUB_RESCUER, GRUB_MIMIC,
     ];
 }
 use ids::*;
@@ -226,6 +229,10 @@ pub enum AchievementEvent {
     /// A training dummy broke; `by_knight`: under his blow, practising (not worn out by
     /// time, not the user's clicks).
     DummyBroken { by_knight: bool },
+    /// He broke a jar and a grub went free.
+    GrubFreed,
+    /// He broke a jar and a Grub Mimic burst out.
+    GrubMimicMet,
 }
 
 /// Unlock state and every criterion.
@@ -453,6 +460,16 @@ impl Tracker {
                     unlock(SPLINTERS);
                 }
             }
+            E::GrubFreed => {
+                // Both count every freed grub (the bigger one keeps counting on its own).
+                if self.count(GRUB_FRIEND, 1) {
+                    unlock(GRUB_FRIEND);
+                }
+                if self.count(GRUB_RESCUER, 1) {
+                    unlock(GRUB_RESCUER);
+                }
+            }
+            E::GrubMimicMet => unlock(GRUB_MIMIC),
         }
         let mut fresh = Vec::new();
         for id in new {

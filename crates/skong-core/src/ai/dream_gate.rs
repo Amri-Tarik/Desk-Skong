@@ -63,7 +63,9 @@ pub enum Prize {
     Visitor(u32),
     Shade,
     Coin,
+    /// A found thing he can't walk to: a Geo deposit or a trapped grub.
     Deposit(PlaceId),
+    Grub(PlaceId),
     Shiny(u64),
 }
 
@@ -74,6 +76,7 @@ impl Prize {
             Prize::Shade => "shade",
             Prize::Coin => "geo",
             Prize::Deposit(_) => "geo deposit",
+            Prize::Grub(_) => "trapped grub",
             Prize::Shiny(_) => "shiny",
         }
     }
@@ -174,8 +177,8 @@ fn deposits(ctx: &Ctx) -> Vec<Candidate> {
         .places
         .all()
         .iter()
-        .filter(|p| p.kind == PlaceKind::Deposit && want(p, ctx.mind) > 0.05)
-        .map(|p| Candidate { prize: Prize::Deposit(p.id), target: p.center, stand: p.at, tol: SEAT_TOL + 2.0 })
+        .filter(|p| matches!(p.kind, PlaceKind::Deposit | PlaceKind::Grub) && want(p, ctx.mind) > 0.05)
+        .map(|p| Candidate { prize: if p.kind == PlaceKind::Grub { Prize::Grub(p.id) } else { Prize::Deposit(p.id) }, target: p.center, stand: p.at, tol: SEAT_TOL + 2.0 })
         .collect();
     d.sort_by(|a, b| a.stand.distance(k).total_cmp(&b.stand.distance(k)));
     d
@@ -353,7 +356,7 @@ impl DreamGate {
             Prize::Visitor(id) => ctx.senses.visitors.iter().any(|v| v.id == id && !v.greeted && !matches!(v.state, VisitorState::Leaving | VisitorState::Held)),
             Prize::Shade => ctx.stakes.sense.shade.is_some(),
             Prize::Coin => ctx.stakes.sense.coins.iter().any(|c| c.distance(self.wish.target) < 12.0),
-            Prize::Deposit(id) => ctx.interest.places.get(id).is_some(),
+            Prize::Deposit(id) | Prize::Grub(id) => ctx.interest.places.get(id).is_some(),
             Prize::Shiny(id) => ctx.interest.shinies.get(id).is_some(),
         }
     }
@@ -433,7 +436,7 @@ impl DreamGate {
                 ctx.stakes.loot_ready_at = ctx.now;
             }
             Prize::Shiny(id) => ctx.interest.shinies.forget_try(id),
-            Prize::Deposit(_) | Prize::Visitor(_) => {}
+            Prize::Deposit(_) | Prize::Grub(_) | Prize::Visitor(_) => {}
         }
         ctx.interest.places.rescore();
         ctx.stakes.gate.landed = Some(w.prize);
