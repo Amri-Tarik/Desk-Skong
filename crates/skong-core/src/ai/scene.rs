@@ -301,7 +301,7 @@ impl Scene {
     pub fn reason(&self) -> String {
         match &self.phase {
             Phase::Ready => "scene: race, ready for the start".into(),
-            Phase::Racing { tries, .. } => format!("scene: racing to the needle (try {})", tries + 1),
+            Phase::Racing { tries, .. } => format!("scene: racing to the barb (try {})", tries + 1),
             Phase::Waiting => "scene: race, waiting for the result".into(),
             Phase::React(_) => "scene: race decided, reacting".into(),
             Phase::Watch { .. } => "scene: watching the guest".into(),

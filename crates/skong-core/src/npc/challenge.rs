@@ -1,5 +1,5 @@
 //! Hornet's challenges: after the conversation she may challenge the knight — half the
-//! time to a [`race`](super::race) to where her needle lands, half the time to a short
+//! time to a [`race`](super::race) to where her barb lands, half the time to a short
 //! [`duel`](super::duel) she wins. The app decides before the talk (a race needs a finish
 //! on a settled, reachable ledge: [`ChallengePlan`]); the visitor actor runs it.
 use anyhow::{Context, Result, bail};

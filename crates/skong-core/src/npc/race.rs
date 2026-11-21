@@ -1,12 +1,12 @@
-//! Hornet's race: she throws her needle (its silk thread trailing) to mark the finish on a
-//! settled ledge far away, then "Go!" — both race there. She moves with her own runs,
-//! ground dashes and leaps along a planned [`Course`] (her clips; she is Hornet, so her
-//! leaps ignore windows), paced against the knight's planned time so either can win. The
-//! knight uses his whole kit (the brain's `Scene` behaviour: a Hurry route, crystal dash and
-//! wall jumps included). Whoever touches the needle first wins; she reacts, plucks it out
-//! and leaps away.
+//! Hornet's race: she flings one of her spiked silk barbs (the traps of her second fight)
+//! to mark the finish on a settled ledge far away, where it sits, then "Go!" — both race
+//! there. She moves with her own runs, ground dashes and leaps along a planned [`Course`]
+//! (her clips; she is Hornet, so her leaps ignore windows), paced against the knight's
+//! planned time so either can win. The knight uses his whole kit (the brain's `Scene`
+//! behaviour: a Hurry route, crystal dash and wall jumps included). Whoever touches the barb
+//! first wins and it bursts apart; she reacts and leaps away.
 //!
-//! Pure: [`pick_finish`] (where the needle lands), [`Course`] (her moves and timing) and
+//! Pure: [`pick_finish`] (where the barb lands), [`Course`] (her moves and timing) and
 //! [`Race`] (the state machine the visitor actor drives).
 use anyhow::{Result, bail};
 use serde::Deserialize;
@@ -17,7 +17,7 @@ use crate::desktop::WindowId;
 use crate::geom::{RectF, Vec2};
 use crate::portal::Footing;
 
-use super::actor::{NpcEnv, NpcEvent, NpcProp, once_secs};
+use super::actor::{DrawnProp, NpcEnv, NpcEvent, NpcProp, once_secs};
 use super::challenge::{Body, Next, frame_at, pick_line};
 
 /// Clip names for the race (from Hornet's merged libraries).
@@ -28,13 +28,15 @@ pub struct RaceClipNames {
     pub point: String,
     /// Standing ready.
     pub ready: String,
+    /// Her barb throw (a held clip may loop while the barb flies).
     pub throw_antic: String,
     pub throw: String,
     pub throw_recover: String,
-    /// The needle in flight / stuck (a separate sprite).
-    pub needle: String,
-    /// Its silk thread, trailing behind it.
-    pub thread: String,
+    /// The barb (a separate sprite): looped as it tumbles through the air, played now and
+    /// then as it sits at the finish (its first frame between).
+    pub barb: String,
+    /// The barb bursting apart (played once) when someone reaches it or the race is off.
+    pub burst: String,
     pub run: String,
     pub dash_antic: String,
     pub dash: String,
@@ -52,7 +54,7 @@ pub struct RaceClipNames {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RaceDef {
-    /// Said as she points out where the needle will go (one picked).
+    /// Said as she points out where the barb will go (one picked).
     pub challenge: Vec<String>,
     /// The start.
     pub go: Vec<String>,
@@ -68,12 +70,12 @@ pub struct RaceDef {
     /// Her running and ground-dash speeds (game units/s) before pacing.
     pub run_speed: f32,
     pub dash_speed: f32,
-    /// Her time to the needle as a multiple of the knight's planned time ([min, max], one
+    /// Her time to the barb as a multiple of the knight's planned time ([min, max], one
     /// picked per race): around 1, so either may win.
     pub pace: [f32; 2],
-    /// Needle flight speed (game units/s).
-    pub needle_speed: f32,
-    /// The knight touches the needle within this many units of it.
+    /// Barb flight speed (game units/s).
+    pub barb_speed: f32,
+    /// The knight touches the barb within this many units of it.
     pub reach: f32,
 }
 
@@ -85,8 +87,8 @@ pub struct RaceClips {
     pub throw_antic: ClipId,
     pub throw: ClipId,
     pub throw_recover: ClipId,
-    pub needle: ClipId,
-    pub thread: ClipId,
+    pub barb: ClipId,
+    pub burst: ClipId,
     pub run: ClipId,
     pub dash_antic: ClipId,
     pub dash: ClipId,
@@ -101,7 +103,7 @@ pub struct RaceClips {
 impl RaceDef {
     pub fn validate(&self) -> Result<()> {
         let pos = |x: f32| x.is_finite() && x > 0.0;
-        if !pos(self.run_speed) || !pos(self.dash_speed) || !pos(self.needle_speed) || !pos(self.reach) {
+        if !pos(self.run_speed) || !pos(self.dash_speed) || !pos(self.barb_speed) || !pos(self.reach) {
             bail!("race: speeds and reach must be positive");
         }
         if !(pos(self.distance[0]) && self.distance[1] >= self.distance[0]) || !(pos(self.pace[0]) && self.pace[1] >= self.pace[0]) {
@@ -129,8 +131,8 @@ impl RaceDef {
             throw_antic: get(&c.throw_antic)?,
             throw: get(&c.throw)?,
             throw_recover: get(&c.throw_recover)?,
-            needle: get(&c.needle)?,
-            thread: get(&c.thread)?,
+            barb: get(&c.barb)?,
+            burst: get(&c.burst)?,
             run: get(&c.run)?,
             dash_antic: get(&c.dash_antic)?,
             dash: get(&c.dash)?,
@@ -144,7 +146,7 @@ impl RaceDef {
     }
 }
 
-/// Where the needle lands: a point on a footing (settled ledges only, on `area` — the
+/// Where the barb lands: a point on a footing (settled ledges only, on `area` — the
 /// monitor she stands on, never a game's) `distance` units from `start`, preferring far and
 /// high ones (a climb, a dash), that `reachable` (a route check for the knight) accepts.
 pub fn pick_finish(
@@ -199,7 +201,7 @@ struct Leg {
     secs: f32,
 }
 
-/// Her way to the needle: runs along her ledge (a ground dash on long stretches), a leap to
+/// Her way to the barb: runs along her ledge (a ground dash on long stretches), a leap to
 /// the finish's ledge (she is Hornet: through windows if need be), a landing.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Course {
@@ -313,7 +315,7 @@ impl Course {
     }
 }
 
-/// Who touched the needle first.
+/// Who touched the barb first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Winner {
     Knight,
@@ -325,16 +327,15 @@ enum Stage {
     /// Pointing out the finish, saying the challenge.
     Challenge,
     ThrowAntic,
-    /// The needle flies; she holds the throw until it sticks.
+    /// The barb flies; she holds the throw until it lands.
     Throw,
     Recover,
     /// A breath, then "Go!".
     Set,
     Run,
-    /// At the needle: the winner's reaction (hers, or her grudging word).
+    /// At the finish (the barb burst as it was reached): the winner's reaction (hers, or
+    /// her grudging word).
     Finish,
-    /// Plucks the needle out.
-    Retrieve,
     /// Then a pause and her parting line (the conversation's closing line, held back until
     /// now; `said` once it's up).
     Farewell { said: bool },
@@ -344,13 +345,25 @@ enum Stage {
     Depart,
 }
 
+/// The barb marking the finish.
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum Needle {
+enum Barb {
     Held,
-    Flying { from: Vec2, t: f32, secs: f32 },
-    Stuck { t: f32 },
+    /// Tumbling along its arc from her hand (see [`barb_arc`]).
+    Flying { from: Vec2, to: Vec2, lift: f32, t: f32, secs: f32 },
+    /// Sitting on the finish ledge (`at`: its centre).
+    Resting { at: Vec2, t: f32 },
+    /// Bursting apart where it was.
+    Bursting { at: Vec2, t: f32 },
     Gone,
 }
+
+/// The barb's centre above the finish (game units): its spike tips just touch the ledge.
+const BARB_REST: f32 = 0.82;
+/// Its reach (tip to centre, game units) when the app draws it itself.
+const BARB_RADIUS: f32 = 0.8;
+/// Sitting, it stirs (its clip played once) this often (s).
+const BARB_STIR: f32 = 2.6;
 
 /// A race in progress (see the module docs).
 #[derive(Clone, Debug)]
@@ -366,9 +379,9 @@ pub struct Race {
     course: Course,
     run_t: f32,
     winner: Option<Winner>,
-    needle: Needle,
-    /// The needle points this way (+1 right).
-    needle_dir: f32,
+    barb: Barb,
+    /// The barb was thrown this way (+1 right).
+    barb_dir: f32,
     go: bool,
     abandoned: bool,
     depart_from: Vec2,
@@ -376,9 +389,18 @@ pub struct Race {
     pub(super) farewell: Option<String>,
 }
 
-/// The needle's resting point: its middle, a little above the ledge (the point stuck in).
-fn needle_rest(finish: Vec2, ppu: f32) -> Vec2 {
-    finish - Vec2::new(0.0, 0.35 * ppu)
+/// The barb's resting point: its centre, sitting on the ledge.
+fn barb_rest(finish: Vec2, ppu: f32) -> Vec2 {
+    finish - Vec2::new(0.0, BARB_REST * ppu)
+}
+
+/// Where the barb is `t` seconds into a `secs` flight from `from` to `to`, lobbed `lift`
+/// px above the straight line at its middle.
+fn barb_arc(from: Vec2, to: Vec2, lift: f32, t: f32, secs: f32) -> Vec2 {
+    let s = (t / secs.max(1e-3)).clamp(0.0, 1.0);
+    let mut p = from + (to - from) * s;
+    p.y -= 4.0 * lift * s * (1.0 - s);
+    p
 }
 
 impl Race {
@@ -389,7 +411,7 @@ impl Race {
         body.face(finish.x);
         body.play(clips.point, true);
         events.push(NpcEvent::Say { text, secs: len });
-        let needle_dir = if finish.x >= body.pos.x { 1.0 } else { -1.0 };
+        let barb_dir = if finish.x >= body.pos.x { 1.0 } else { -1.0 };
         let depart_from = *body.pos;
         Race {
             stage: Stage::Challenge,
@@ -401,8 +423,8 @@ impl Race {
             course: Course::default(),
             run_t: 0.0,
             winner: None,
-            needle: Needle::Held,
-            needle_dir,
+            barb: Barb::Held,
+            barb_dir,
             go: false,
             abandoned: false,
             depart_from,
@@ -434,34 +456,38 @@ impl Race {
         SceneCue::Race { serial, finish: self.finish, go: self.go && !over, over, won: self.winner.map(|w| w == Winner::Knight) }
     }
 
-    /// The needle and its thread (while they're out).
+    /// The barb (while it's out): tumbling in flight, sitting (stirring now and then),
+    /// bursting.
     pub fn props(&self, lib: &ClipLibrary, clips: &RaceClips, ppu: f32) -> Vec<NpcProp> {
-        let rest = needle_rest(self.finish, ppu);
-        let (at, t) = match self.needle {
-            Needle::Held | Needle::Gone => return Vec::new(),
-            Needle::Flying { from, t, secs } => {
-                let s = (t / secs.max(1e-3)).clamp(0.0, 1.0);
-                // A shallow arc on its way.
-                let mut p = from + (rest - from) * s;
-                p.y -= 4.0 * (0.6 * ppu) * s * (1.0 - s);
-                (p, t)
+        let (at, key, burst) = match self.barb {
+            Barb::Held | Barb::Gone => return Vec::new(),
+            Barb::Flying { from, to, lift, t, secs } => (barb_arc(from, to, lift, t, secs), frame_at(lib, clips.barb, t, true), 0.0),
+            Barb::Resting { at, t } => {
+                let stir = t % BARB_STIR;
+                let t = if stir < once_secs(lib, clips.barb) { stir } else { 0.0 };
+                (at, frame_at(lib, clips.barb, t, false), 0.0)
             }
-            Needle::Stuck { t } => (rest, t + 10.0),
+            Barb::Bursting { at, t } => (at, frame_at(lib, clips.burst, t, false), (t / once_secs(lib, clips.burst).max(0.1)).clamp(0.0, 1.0)),
         };
-        // The art points left: mirrored when it flies right. The thread trails behind it.
-        let flip = self.needle_dir > 0.0;
-        let mut v = Vec::new();
-        if let Some(key) = frame_at(lib, clips.thread, t, false) {
-            v.push(NpcProp { key, at, flip, alpha: 1.0 });
-        }
-        if let Some(key) = frame_at(lib, clips.needle, t, false) {
-            v.push(NpcProp { key, at, flip, alpha: 1.0 });
-        }
-        v
+        let Some(key) = key else { return Vec::new() };
+        // Mirrored when thrown right (it tumbles the way it flies).
+        let drawn = Some(DrawnProp::Barb { radius: BARB_RADIUS * ppu, burst });
+        vec![NpcProp { key, at, flip: self.barb_dir > 0.0, alpha: 1.0, drawn }]
+    }
+
+    /// The barb bursts where it is (reached, or the race is off); one still in her hand
+    /// is simply put away.
+    fn burst_barb(&mut self) {
+        self.barb = match self.barb {
+            Barb::Flying { from, to, lift, t, secs } => Barb::Bursting { at: barb_arc(from, to, lift, t, secs), t: 0.0 },
+            Barb::Resting { at, .. } => Barb::Bursting { at, t: 0.0 },
+            Barb::Held => Barb::Gone,
+            b => b,
+        };
     }
 
     /// Call it off (the user needs the screen, the Shade, enemies...): a parting word, the
-    /// needle comes back, she leaves.
+    /// barb bursts, she leaves.
     pub(super) fn abandon(&mut self, def: &RaceDef, body: &mut Body, events: &mut Vec<NpcEvent>) {
         if self.abandoned || matches!(self.stage, Stage::Depart | Stage::Abandon) {
             return;
@@ -471,7 +497,7 @@ impl Race {
         if self.winner.is_none() {
             events.push(NpcEvent::RaceOver { knight_won: None });
         }
-        self.needle = Needle::Gone;
+        self.burst_barb();
         self.farewell = None;
         let text = pick_line(body.rng, &def.abandon);
         self.len = crate::bubble::read_secs(&text).min(3.0);
@@ -483,23 +509,22 @@ impl Race {
     pub(super) fn tick(&mut self, dt: f32, def: &RaceDef, clips: &RaceClips, body: &mut Body, env: &NpcEnv, events: &mut Vec<NpcEvent>) -> Next {
         let u = env.ppu;
         self.t += dt;
-        match &mut self.needle {
-            Needle::Flying { from, t, secs } => {
-                *t += dt;
-                if *t >= *secs {
-                    let _ = from;
-                    self.needle = Needle::Stuck { t: 0.0 };
-                }
-            }
-            Needle::Stuck { t } => *t += dt,
-            Needle::Held | Needle::Gone => {}
-        }
-        // The knight at the needle first?
+        let burst_secs = once_secs(body.lib, clips.burst);
+        self.barb = match self.barb {
+            Barb::Flying { from, to, lift, t, secs } if t + dt < secs => Barb::Flying { from, to, lift, t: t + dt, secs },
+            Barb::Flying { to, .. } => Barb::Resting { at: to, t: 0.0 },
+            Barb::Resting { at, t } => Barb::Resting { at, t: t + dt },
+            Barb::Bursting { at, t } if t + dt < burst_secs => Barb::Bursting { at, t: t + dt },
+            Barb::Bursting { .. } => Barb::Gone,
+            b => b,
+        };
+        // The knight at the barb first?
         if self.go && self.winner.is_none() && !self.abandoned && self.stage == Stage::Run {
             let k = env.knight;
             if (k.x - self.finish.x).abs() <= def.reach * u && (k.y - self.finish.y).abs() <= 0.6 * u {
-                log::info!("race: the knight reached the needle first");
+                log::info!("race: the knight reached the barb first");
                 self.winner = Some(Winner::Knight);
+                self.burst_barb();
                 events.push(NpcEvent::RaceOver { knight_won: Some(true) });
             }
         }
@@ -515,10 +540,13 @@ impl Race {
             Stage::ThrowAntic => {
                 if self.t >= self.len {
                     body.play(clips.throw, true);
-                    // From her hand: in front of her, at chest height.
-                    let hand = *body.pos + Vec2::new(self.needle_dir * 1.2 * u, -1.1 * u);
-                    let secs = (hand.distance(needle_rest(self.finish, u)) / (def.needle_speed * u)).clamp(0.3, 1.4);
-                    self.needle = Needle::Flying { from: hand, t: 0.0, secs };
+                    // Flung up from over her shoulder.
+                    let hand = *body.pos + Vec2::new(self.barb_dir * 0.4 * u, -2.0 * u);
+                    let to = barb_rest(self.finish, u);
+                    let secs = (hand.distance(to) / (def.barb_speed * u)).clamp(0.4, 1.6);
+                    // A lob, higher on longer throws.
+                    let lift = (0.8 * u + 0.12 * hand.distance(to)).min(3.5 * u);
+                    self.barb = Barb::Flying { from: hand, to, lift, t: 0.0, secs };
                     self.next(Stage::Throw, secs);
                 }
             }
@@ -576,8 +604,9 @@ impl Race {
                 };
                 body.play(clip, false);
                 if self.winner.is_none() && self.run_t >= self.course.arrival() {
-                    log::info!("race: Hornet reached her needle first");
+                    log::info!("race: Hornet reached her barb first");
                     self.winner = Some(Winner::Hornet);
+                    self.burst_barb();
                     events.push(NpcEvent::RaceOver { knight_won: Some(false) });
                 }
                 if p.done {
@@ -599,15 +628,11 @@ impl Race {
             Stage::Finish => {
                 if self.t >= self.len {
                     events.push(NpcEvent::LineDone);
-                    body.play(clips.throw_recover, true);
-                    self.needle = Needle::Gone;
-                    self.next(Stage::Retrieve, once_secs(body.lib, clips.throw_recover).max(0.4));
+                    body.face(env.knight.x);
+                    body.play(clips.ready, true);
+                    // A breath, then her parting line (if any) and away.
+                    self.next(Stage::Farewell { said: self.farewell.is_none() }, 0.4);
                 }
-            }
-            Stage::Retrieve if self.t >= self.len && self.farewell.is_some() => {
-                body.face(env.knight.x);
-                body.play(clips.ready, true);
-                self.next(Stage::Farewell { said: false }, 0.4);
             }
             Stage::Farewell { said } => {
                 body.face(env.knight.x);
@@ -627,11 +652,9 @@ impl Race {
                     }
                 }
             }
-            Stage::Retrieve | Stage::Abandon => {
+            Stage::Abandon => {
                 if self.t >= self.len {
-                    if self.stage == Stage::Abandon {
-                        events.push(NpcEvent::LineDone);
-                    }
+                    events.push(NpcEvent::LineDone);
                     body.play(clips.depart, true);
                     self.depart_from = *body.pos;
                     self.next(Stage::Depart, 0.8);

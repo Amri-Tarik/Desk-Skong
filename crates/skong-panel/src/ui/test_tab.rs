@@ -127,7 +127,7 @@ pub(super) fn show(p: &mut Panel, ui: &mut egui::Ui, status: Option<&Status>, he
                             ("cornifer", _) => "they sit (or stand) together with their maps open while he hums",
                             ("sly", _) => "Sly's nail lesson: demos, drills, praise, the bow",
                             ("zote", _) => "Zote challenges the knight to a spar",
-                            (_, Scene::Race) => "a race to her needle across the windows (needs a settled finish he can reach on her monitor, else a duel)",
+                            (_, Scene::Race) => "a race to her barb across the windows (needs a settled finish he can reach on her monitor, else a duel)",
                             (_, Scene::Duel) => "a short duel she wins",
                             _ => "this scene after the talk",
                         };

@@ -217,7 +217,7 @@ pub enum AchievementEvent {
     TroupeMasterBeaten,
     /// The Troupe Master beat him.
     FellToTroupeMaster,
-    /// He beat Hornet to her needle.
+    /// He beat Hornet to her barb.
     HornetRaceWon,
     /// Hornet's duel was seen through to her final word.
     HornetDuelDone,

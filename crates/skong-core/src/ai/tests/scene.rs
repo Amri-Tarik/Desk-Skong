@@ -19,7 +19,7 @@ fn he_readies_for_the_race_runs_on_go_and_reacts_to_the_result() {
     assert!(sim.last_reason().contains("ready"), "{}", sim.last_reason());
     assert!(matches!(sim.intents.last().unwrap().motion, Motion::Hold));
     assert_eq!(sim.intents.last().and_then(|i| i.face), Some(Side::Right), "faces the finish");
-    // Go! The whole kit: a Hurry route to the needle.
+    // Go! The whole kit: a Hurry route to the barb.
     sim.brain.see_scene(race(true, false, None));
     sim.run(0.5);
     assert_eq!(sim.nav.gos.last(), Some(&(NavGoal::Point(FINISH), TravelStyle::Hurry)), "{:?}", sim.nav.gos);

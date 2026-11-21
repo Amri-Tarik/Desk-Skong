@@ -262,7 +262,7 @@ impl Duel {
     pub fn props(&self, pos: Vec2, looking_right: bool, lib: &ClipLibrary, def: &DuelDef, clips: &DuelClips, ppu: f32) -> Vec<NpcProp> {
         if self.stage == DuelStage::Attack(DuelMove::Sphere) {
             let at = pos - Vec2::new(0.0, 1.0 * ppu);
-            return frame_at(lib, clips.sphere_ball, self.t, false).map(|key| NpcProp { key, at, flip: !looking_right, alpha: 1.0 }).into_iter().collect();
+            return frame_at(lib, clips.sphere_ball, self.t, false).map(|key| NpcProp { key, at, flip: !looking_right, alpha: 1.0, drawn: None }).into_iter().collect();
         }
         if self.stage != DuelStage::Attack(DuelMove::Throw) {
             return Vec::new();
@@ -273,7 +273,7 @@ impl Duel {
         [frame_at(lib, clips.thread, self.t, false), frame_at(lib, clips.needle, self.t, true)]
             .into_iter()
             .flatten()
-            .map(|key| NpcProp { key, at, flip, alpha: 1.0 })
+            .map(|key| NpcProp { key, at, flip, alpha: 1.0, drawn: None })
             .collect()
     }
 

@@ -14,7 +14,8 @@ use super::lesson::Lesson;
 use super::{Arrival, Faces, Leave, NpcSet};
 
 mod company_run;
-/// An extra sprite a visitor shows apart from its body (Hornet's needle and its thread).
+/// An extra sprite a visitor shows apart from its body (Hornet's duel needle and its
+/// thread, her silk sphere, the barb marking a race's finish).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NpcProp {
     pub key: SpriteKey,
@@ -23,6 +24,16 @@ pub struct NpcProp {
     /// Mirrored (the art points left).
     pub flip: bool,
     pub alpha: f32,
+    /// What the app draws itself when the sprite's art is missing (else nothing shows).
+    pub drawn: Option<DrawnProp>,
+}
+
+/// A prop the app can draw without art (centred on [`NpcProp::at`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum DrawnProp {
+    /// Hornet's barb: a spiked silk ball reaching `radius` px with its tips; `burst` 0
+    /// whole, up to 1 as it bursts apart.
+    Barb { radius: f32, burst: f32 },
 }
 
 /// Where a visitor appears (computed by the app from terrain / nav / monitors).
@@ -643,7 +654,7 @@ impl Npc {
         }
     }
 
-    /// Extra sprites to draw (Hornet's needle and thread).
+    /// Extra sprites to draw (Hornet's needle and thread, her sphere, her race's barb).
     pub fn props(&self, set: &NpcSet, ppu: f32) -> Vec<NpcProp> {
         let (State::Challenge(c), Some(def), Some(clips)) = (&self.state, set.defs[self.def].challenge.as_ref(), set.clips[self.def].challenge.as_ref()) else {
             return Vec::new();
