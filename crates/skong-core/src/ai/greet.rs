@@ -107,6 +107,11 @@ impl VisitorMemory {
         self.snubbed.remove(&id);
     }
 
+    /// Until when this visitor is given up on (brain time), if ever.
+    pub fn snubbed_until(&self, id: u32) -> Option<f64> {
+        self.snubbed.get(&id).copied()
+    }
+
     /// The visitor worth greeting now: not yet greeted, not leaving, not given up on;
     /// the one already talking first, else the nearest.
     pub fn target<'v>(&self, visitors: &'v [Visitor], knight: Vec2, now: f64) -> Option<&'v Visitor> {

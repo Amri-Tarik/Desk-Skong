@@ -31,6 +31,7 @@
 mod activity;
 mod battle;
 mod behaviours;
+mod candidates;
 mod carry;
 mod combat;
 mod company;
@@ -71,6 +72,7 @@ use std::fmt::Write as _;
 pub use activity::{Activity, ActivitySpot, ActivityTracker, QUIET, TrackedSpot};
 pub use battle::{BattleScore, Outcome};
 pub use behaviours::{BehaviourKind, Tier};
+pub use candidates::{Candidate, Gate, Lose, Subject, Why};
 pub use carry::Carry;
 pub use config::{BattleConfig, BoredomConfig, BrainConfig, CompanionConfig, NeedRates, Personality, SereneConfig, TierConfig, WatchConfig};
 pub use dream_gate::{DreamGateConfig, GateWish, Prize};
@@ -324,6 +326,8 @@ pub struct Brain {
     flame_rest_until: f64,
     /// The map / lantern in his hands (see [`carry`]).
     carry: carry::Carrying,
+    /// What he passed over at the last think, and why (diagnostics; see `ai::candidates`).
+    passed: candidates::PassedOver,
 }
 
 impl Brain {
@@ -374,6 +378,7 @@ impl Brain {
             scene_reacted: None,
             flame_rest_until: f64::NEG_INFINITY,
             carry: carry::Carrying::default(),
+            passed: Default::default(),
             cfg,
         }
     }
@@ -967,9 +972,11 @@ impl Brain {
         } else {
             None
         };
+        let decision = candidates::Decision { best, best_u, best_tier, cur: current, cur_u, cur_tier, since_switch: self.since_switch };
         if let Some(reason) = reason {
             self.switch_to(best, reason, p, nav, out);
         }
+        self.note_passed_over(p, Some(decision));
     }
 
     /// Tier at utility `u`: high tiers need a minimum score, otherwise it competes as Ambient.
