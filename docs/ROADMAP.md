@@ -162,7 +162,7 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
       The pet enforces it (refuses those commands from hotkeys, tray and panels); the
       tracker ignores every event and the Geo wallet stops saving until restart.
 - [x] **Sandbox placement:** click on the screen to choose where things spawn.
-      > note: the Sandbox tab's Test half: 📍 next to the dummy, flame, deposit, shiny,
+      > note: the Sandbox tab's Test half: Place next to the dummy, flame, deposit, shiny,
       > bench, each enemy, Geo shower, visitors and a Dream Gate target; plus forced
       > visitor scenes, each enemy kind, the view, the stars, the slug, the emote cycle.
       > Checklist: [TESTING.md](TESTING.md).

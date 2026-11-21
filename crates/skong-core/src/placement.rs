@@ -1,4 +1,4 @@
-//! Test-panel placement ("📍 Place…"): the user clicks anywhere on screen and the thing goes
+//! Test-panel placement ("Place…"): the user clicks anywhere on screen and the thing goes
 //! on the nearest ledge at or below the click — a window's title bar, a content line, the
 //! monitor floor. Never on a monitor running a fullscreen game. Pure: the app captures the
 //! click (`skong_win::click_capture`) and does the rest.

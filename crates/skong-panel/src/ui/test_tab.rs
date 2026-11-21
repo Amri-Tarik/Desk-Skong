@@ -1,6 +1,6 @@
 //! The Test tab: make the pet do one specific thing now, section by section (visitors and
 //! their scenes, enemies, Grimm, pastimes and props, discoveries and Geo, the knight), with
-//! "📍" buttons that put the thing where you click next on screen, and the pet's feedback
+//! "Place" buttons that put the thing where you click next on screen, and the pet's feedback
 //! (what came of each request, why one couldn't run) at the top.
 //!
 //! Part of the Sandbox tab: only shown once the sandbox is on (achievements paused until
@@ -13,7 +13,9 @@ use super::palette as pal;
 use super::style::{self, hint};
 
 /// The "place where I click" companion of a button.
-const PIN: &str = "📍";
+/// The companion button that places a thing where the user clicks next. A word, not an
+/// emoji: neither the bundled fonts nor egui's fallbacks have "📍" (it drew as an empty box).
+const PIN: &str = "Place";
 /// Discover kinds (`Command::Discover`), as the pet numbers them.
 const DISCOVER_BENCH: u8 = 0;
 const DISCOVER_DEPOSIT: u8 = 1;
@@ -21,7 +23,7 @@ const DISCOVER_SHINY: u8 = 2;
 const DISCOVER_DUMMY: u8 = 3;
 const DISCOVER_LUMAFLY: u8 = 4;
 
-const PIN_TIP: &str = "📍 Place: your next left click anywhere on screen picks the spot (the click doesn't reach the app under it); it lands on the nearest ledge at or below the click — a title bar, a content line, the floor — never on a game's monitor. Esc or right-click cancels; 30 s to click. Placed props skip the 'lasting ledge' rule, but on a window moved in the last ~15 s they show once it has settled.";
+const PIN_TIP: &str = "Place: your next left click anywhere on screen picks the spot (the click doesn't reach the app under it); it lands on the nearest ledge at or below the click — a title bar, a content line, the floor — never on a game's monitor. Esc or right-click cancels; 30 s to click. Placed props skip the 'lasting ledge' rule, but on a window moved in the last ~15 s they show once it has settled.";
 
 fn test(c: TestCommand) -> Command {
     Command::Test(c)
@@ -31,7 +33,7 @@ fn place(p: Placeable) -> Command {
     Command::Test(TestCommand::Place(p))
 }
 
-/// A button, its hover hint, and optionally a 📍 companion placing `pin`.
+/// A button, its hover hint, and optionally a Place companion placing `pin`.
 fn row(ui: &mut egui::Ui, out: &mut Vec<Command>, label: &str, tip: &str, now: Option<Command>, pin: Option<Placeable>) {
     if let Some(c) = now
         && ui.button(label).on_hover_text(tip).clicked()
@@ -59,7 +61,7 @@ fn feedback(ui: &mut egui::Ui, out: &mut Vec<Command>, info: Option<&TestInfo>) 
     };
     if let Some(what) = &info.placing {
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new(format!("{PIN} Placing {what}: click a spot on screen ({:.0} s)", info.placing_secs.ceil())).color(pal::EMBER));
+            ui.label(RichText::new(format!("Placing {what}: click a spot on screen ({:.0} s)", info.placing_secs.ceil())).color(pal::EMBER));
             if ui.button("Cancel").on_hover_text("or press Esc / right-click anywhere").clicked() {
                 out.push(test(TestCommand::CancelPlace));
             }
@@ -85,7 +87,7 @@ pub(super) fn show(p: &mut Panel, ui: &mut egui::Ui, status: Option<&Status>, he
     };
     let info = status.and_then(|s| s.test.as_ref());
     let mut out: Vec<Command> = Vec::new();
-    hint(ui, "Make him do one specific thing now; 📍 puts it where you click next on screen.");
+    hint(ui, "Make him do one specific thing now; Place puts it where you click next on screen.");
     ui.add_space(4.0);
     style::frame(ui, |ui| {
         ui.set_width(ui.available_width());

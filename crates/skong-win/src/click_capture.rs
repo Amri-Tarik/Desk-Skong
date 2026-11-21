@@ -1,4 +1,4 @@
-//! One click, captured (the test panel's "📍 Place…"): while it lives, a low-level mouse
+//! One click, captured (the test panel's "Place…"): while it lives, a low-level mouse
 //! hook takes the next left click anywhere on screen — the click (down and up) is swallowed,
 //! so it never reaches the app underneath — and reports where it was. A right click or Esc
 //! cancels (also swallowed). Clicks on the control panel itself pass through (its Cancel

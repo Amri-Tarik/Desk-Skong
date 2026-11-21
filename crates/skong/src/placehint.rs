@@ -1,5 +1,5 @@
 //! The cue while the test panel places something: a small click-through label riding just
-//! below-right of the cursor ("📍 training dummy: click a spot · Esc / right-click cancels ·
+//! below-right of the cursor ("training dummy: click a spot · Esc / right-click cancels ·
 //! 23 s"). It only follows the cursor; it never moves it.
 use skong_core::canvas::{Image, premul};
 use skong_win::sprite_window::SpriteWindow;

@@ -1,6 +1,6 @@
 //! The control panel's Test tab ([`TestCommand`]): make the pet do one specific thing now —
 //! a visitor and the scene after the talk, an enemy of one kind, the view, the stars, the
-//! slug, the emote cycle — or put something where the user clicks ("📍 Place…": the next
+//! slug, the emote cycle — or put something where the user clicks ("Place…": the next
 //! left click anywhere is captured by `skong_win::click_capture`, swallowed, and snapped to
 //! the nearest ledge at or below it, never on a game's monitor; Esc / right-click cancels;
 //! it times out). What came of each request goes back to the panel as a [`TestNote`].
