@@ -32,6 +32,16 @@ struct CollectionHead {
     atlas_width: u32,
     #[serde(default)]
     atlas_height: u32,
+    /// Atlas pages 1.. (Grimm's second texture).
+    #[serde(default)]
+    extra_atlases: Vec<PageHead>,
+}
+
+#[derive(Deserialize)]
+struct PageHead {
+    name: String,
+    width: u32,
+    height: u32,
 }
 
 /// The plan from `data/hk/collections/*.json` and `data/props.json`.
@@ -51,12 +61,14 @@ pub fn plan(hk_data: &Path, props_json: &Path) -> Result<Plan> {
         if c.atlas_name.is_empty() || c.atlas_width == 0 {
             continue;
         }
-        let file = match skong_core::assets::SKIN_FILES.iter().find(|(n, _)| *n == c.name) {
-            Some((_, f)) => f.to_string(),
-            None => format!("{}.png", c.name.replace(' ', "_")),
-        };
-        atlases.push(WantedAtlas { collection: c.name, atlas_name: c.atlas_name, width: c.atlas_width, height: c.atlas_height, file });
+        let file = skong_core::assets::atlas_file(&c.name);
+        for (k, page) in c.extra_atlases.iter().enumerate() {
+            let k = k as u32 + 1;
+            atlases.push(WantedAtlas { collection: c.name.clone(), page: k, atlas_name: page.name.clone(), width: page.width, height: page.height, file: skong_core::assets::page_file(&file, k) });
+        }
+        atlases.push(WantedAtlas { collection: c.name, page: 0, atlas_name: c.atlas_name, width: c.atlas_width, height: c.atlas_height, file });
     }
+    atlases.sort_by(|a, b| (&a.collection, a.page).cmp(&(&b.collection, b.page)));
     let sprites = match std::fs::read_to_string(props_json) {
         Ok(text) => prop_sprites(&serde_json::from_str(&text).with_context(|| format!("parse {}", props_json.display()))?),
         Err(_) => Vec::new(),
@@ -118,7 +130,7 @@ pub struct Report {
 pub fn extract(game_data: &Path, plan: &Plan, out: &Path, progress: &(dyn Fn(Progress) + Sync)) -> Result<Report> {
     let t0 = Instant::now();
     let cat = catalog::search(game_data, &plan.atlases, &plan.sprites, &mut |file, files| progress(Progress::Searching { file, files }))?;
-    let Some(knight) = cat.atlases.get("Knight") else {
+    let Some(knight) = cat.atlases.get("Knight.png") else {
         bail!("the knight's sprites weren't found in {}", game_data.display())
     };
     let unity_version = knight.file.unity_version.clone();
@@ -127,14 +139,14 @@ pub fn extract(game_data: &Path, plan: &Plan, out: &Path, progress: &(dyn Fn(Pro
         *formats.entry(texture::format_name(t.format)).or_insert(0) += 1;
     }
 
-    let mut missing: Vec<String> = plan.atlases.iter().filter(|a| !cat.atlases.contains_key(&a.collection)).map(|a| a.collection.clone()).collect();
+    let mut missing: Vec<String> = plan.atlases.iter().filter(|a| !cat.atlases.contains_key(&a.file)).map(|a| if a.page == 0 { a.collection.clone() } else { format!("{} (page {})", a.collection, a.page) }).collect();
     missing.extend(plan.sprites.iter().filter(|s| !cat.sprites.contains_key(*s)).cloned());
 
     enum Job<'a> {
         Atlas(&'a Found, &'a str),
         Sprite(&'a catalog::FoundSprite),
     }
-    let mut jobs: Vec<Job> = plan.atlases.iter().filter_map(|a| cat.atlases.get(&a.collection).map(|f| Job::Atlas(f, a.file.as_str()))).collect();
+    let mut jobs: Vec<Job> = plan.atlases.iter().filter_map(|a| cat.atlases.get(&a.file).map(|f| Job::Atlas(f, a.file.as_str()))).collect();
     jobs.extend(plan.sprites.iter().filter_map(|s| cat.sprites.get(s)).map(Job::Sprite));
     // Biggest first, so the threads finish together.
     jobs.sort_by_key(|j| std::cmp::Reverse(match j {
@@ -280,12 +292,13 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("skong-extract-plan-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("hk/collections")).unwrap();
         std::fs::write(dir.join("hk/collections/Knight.json"), r#"{"name":"Knight","atlas_name":"atlas0","atlas_width":4096,"atlas_height":4096,"sprites":[]}"#).unwrap();
-        std::fs::write(dir.join("hk/collections/Grimm_Cln.json"), r#"{"name":"Grimm Cln","atlas_name":"atlas0","atlas_width":64,"atlas_height":32}"#).unwrap();
+        std::fs::write(dir.join("hk/collections/Grimm_Cln.json"), r#"{"name":"Grimm Cln","atlas_name":"atlas0","atlas_width":64,"atlas_height":32,"extra_atlases":[{"name":"atlas1","width":16,"height":16}]}"#).unwrap();
         std::fs::write(dir.join("hk/collections/Knight_Slug_Cln.json"), r#"{"name":"Knight Slug Cln","atlas_name":"atlas0","atlas_width":64,"atlas_height":32}"#).unwrap();
         std::fs::write(dir.join("props.json"), r#"{"benches":[{"sprite":"town_bench"},{"name":"x"}],"discoveries":{"$comment":"no","deposit_rock":"mines_small_rock"}}"#).unwrap();
         let p = plan(&dir.join("hk"), &dir.join("props.json")).unwrap();
         let files: Vec<(&str, &str)> = p.atlases.iter().map(|a| (a.collection.as_str(), a.file.as_str())).collect();
-        assert_eq!(files, [("Grimm Cln", "Grimm_Cln.png"), ("Knight", "Knight.png"), ("Knight Slug Cln", "Unn.png")]);
+        assert_eq!(files, [("Grimm Cln", "Grimm_Cln.png"), ("Grimm Cln", "Grimm_Cln_1.png"), ("Knight", "Knight.png"), ("Knight Slug Cln", "Unn.png")]);
+        assert_eq!((p.atlases[1].page, p.atlases[1].atlas_name.as_str(), p.atlases[1].width), (1, "atlas1", 16));
         assert_eq!(p.sprites, ["town_bench", "mines_small_rock"]);
         std::fs::remove_dir_all(&dir).ok();
     }

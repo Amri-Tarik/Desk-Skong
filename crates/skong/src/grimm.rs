@@ -543,7 +543,9 @@ impl Troupe {
                 let cl = lib.get(clip);
                 frame_of(cl.frames.iter().filter_map(|f| f.sprite).collect::<Vec<_>>().as_slice(), t * cl.fps, looped)
             };
-            let flip = h.vel.x > 0.0; // the art flies left
+            // The firebat art flies right (face right, flames streaming left): mirror it for
+            // bats heading left. Fireballs are round swirls; mirrored the same way.
+            let flip = h.vel.x < 0.0;
             let (img, look, bottom) = match h.kind {
                 HazardKind::Firebat => match sprite(&self.set.lib, c.firebat, h.age, true).and_then(|k| art.bats.get(&k).map(|f| (k, f))) {
                     Some((k, f)) => (f.image.clone(), Look::Sprite(k, flip, 255, 0), false),

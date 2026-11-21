@@ -3,6 +3,13 @@
   "atlas_name": "atlas0",
   "atlas_width": 4096,
   "atlas_height": 4096,
+  "extra_atlases": [
+    {
+      "name": "atlas1",
+      "width": 1024,
+      "height": 1024
+    }
+  ],
   "sprites": [
     {
       "id": 0,
