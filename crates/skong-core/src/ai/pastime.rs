@@ -31,7 +31,7 @@ use crate::terrain::LedgeKind;
 use super::behaviours::{ActWait, Active, BehaviourKind, Ctx, SEAT_TOL, Status, Travel, TravelStep, on_point};
 use super::candidates::Why;
 use super::combat::{Mark, Stance, pogo_now};
-use super::interest::PoiTarget;
+use super::interest::{CANDIDATE_PLANS, PoiTarget, UNPLANNED, UNREACHABLE_SECS};
 use super::navigator::{Navigator, Reach};
 use super::percept::Percepts;
 use super::{Attack, AttackDir, Brain, Motion, spots};
@@ -151,8 +151,11 @@ pub struct PastimeMemory {
     dummy_view: Option<(u64, &'static str)>,
     /// The dummy that broke last (the app told him): practising on it, he stops with a look.
     dummy_broke: Option<u64>,
-    /// The lumafly last route-checked and what came of it (diagnostics, `ai::candidates`).
-    fly_view: Option<(u64, Why)>,
+    /// The lumaflies last route-checked and what came of each (diagnostics, `ai::candidates`).
+    fly_view: Vec<(u64, Why)>,
+    /// Lumaflies no route reached at a recent scoring, with the verdict: left out of route
+    /// planning until then (brain time), so the next scorings try the other flies.
+    fly_unreached: BTreeMap<u64, (f64, Why)>,
 }
 
 impl PastimeMemory {
@@ -206,10 +209,7 @@ impl PastimeMemory {
             } else if let Some(&t) = self.tried_flies.get(&f.id) {
                 Why::GaveUp { until: t + 60.0 }
             } else {
-                match self.fly_view {
-                    Some((id, why)) if id == f.id => why,
-                    _ => Why::Outranked,
-                }
+                self.fly_view.iter().find(|v| v.0 == f.id).map_or(Why::Outranked, |v| v.1)
             };
             (f.id, why)
         })
@@ -365,6 +365,15 @@ impl Brain {
         }
     }
 
+    /// The dummy or lumafly the pastime under way is about (tests).
+    #[cfg(test)]
+    pub(crate) fn pastime_target(&self) -> Option<u64> {
+        match &self.active {
+            Active::Pastime(b) => Some(b.target),
+            _ => None,
+        }
+    }
+
     /// Find the best pastime and where to do it (route-planned).
     pub(crate) fn score_pastimes(&mut self, p: &Percepts, nav: &mut dyn Navigator) {
         let now = self.now;
@@ -433,28 +442,45 @@ impl Brain {
         }
 
         // A lumafly: the ledge under it.
+        // Nearest first, until one is reachable (within the plan budget): an unreachable
+        // nearest fly must not keep the others out of mind until he gives up on it.
+        let mut view = std::mem::take(&mut self.interest.pastimes.fly_view);
+        view.clear();
         if ready(&self.interest.pastimes, PastimeKind::Lumafly) {
-            let mem = &self.interest.pastimes;
-            let fly = mem.flies.iter().filter(|f| !f.leaving && !mem.tried_flies.contains_key(&f.id)).min_by(|a, b| a.pos.distance(k.pos).total_cmp(&b.pos.distance(k.pos))).copied();
-            // The same checks as one chain, each outcome noted for the passed-over list.
-            let mut view = None;
-            if let Some(f) = fly {
-                view = Some((f.id, Why::Note("no ledge under it")));
-                if let Some(under) = spots::project(p.terrain, f.pos) {
-                    view = Some((f.id, Why::NoRoute(style)));
-                    if let Some(r) = nav.reach(k, NavGoal::Point(under), style) {
-                        view = Some((f.id, Why::Misses));
-                        if r.end.is_none_or(|e| e.distance(under) < 3.0 * ppu) {
-                            view = Some((f.id, Why::Planned));
-                            options.push(PastimeChoice { kind: PastimeKind::Lumafly, at: under, eta: r.eta, value: 0.0, target: f.id, place: String::new(), style });
-                        }
-                    }
+            let mem = &mut self.interest.pastimes;
+            mem.fly_unreached.retain(|id, (until, _)| *until > now && mem.flies.iter().any(|f| f.id == *id));
+            let mut flies: Vec<KnownLumafly> = mem.flies.iter().filter(|f| !f.leaving && !mem.tried_flies.contains_key(&f.id)).copied().collect();
+            flies.sort_by(|a, b| a.pos.distance(k.pos).total_cmp(&b.pos.distance(k.pos)));
+            let mut plans = 0;
+            // Each outcome noted for the passed-over list.
+            for f in flies {
+                if let Some(&(_, why)) = mem.fly_unreached.get(&f.id) {
+                    view.push((f.id, why));
+                    continue;
                 }
+                let Some(under) = spots::project(p.terrain, f.pos) else {
+                    view.push((f.id, Why::Note("no ledge under it")));
+                    continue;
+                };
+                if plans >= CANDIDATE_PLANS {
+                    view.push((f.id, Why::Note(UNPLANNED)));
+                    continue;
+                }
+                plans += 1;
+                let why = match nav.reach(k, NavGoal::Point(under), style) {
+                    Some(r) if r.end.is_none_or(|e| e.distance(under) < 3.0 * ppu) => {
+                        view.push((f.id, Why::Planned));
+                        options.push(PastimeChoice { kind: PastimeKind::Lumafly, at: under, eta: r.eta, value: 0.0, target: f.id, place: String::new(), style });
+                        break;
+                    }
+                    Some(_) => Why::Misses,
+                    None => Why::NoRoute(style),
+                };
+                view.push((f.id, why));
+                mem.fly_unreached.insert(f.id, (now + UNREACHABLE_SECS, why));
             }
-            self.interest.pastimes.fly_view = view;
-        } else {
-            self.interest.pastimes.fly_view = None;
         }
+        self.interest.pastimes.fly_view = view;
 
         // The view and the stars: re-scanned every few seconds.
         if !restless_enough {
@@ -500,8 +526,10 @@ impl Brain {
         if let Some(o) = options.iter().find(|o| o.kind == PastimeKind::Dummy && o.value <= 0.0) {
             self.interest.pastimes.note_dummy(o.target, "not up to it: too tired or too sore", now);
         }
-        if let Some(o) = options.iter().find(|o| o.kind == PastimeKind::Lumafly && o.value <= 0.0) {
-            self.interest.pastimes.fly_view = Some((o.target, Why::Note("not up to it: worn out")));
+        if let Some(o) = options.iter().find(|o| o.kind == PastimeKind::Lumafly && o.value <= 0.0)
+            && let Some(v) = self.interest.pastimes.fly_view.iter_mut().find(|v| v.0 == o.target)
+        {
+            v.1 = Why::Note("not up to it: worn out");
         }
         options.retain(|o| o.value > 0.0);
         // Test panel: the view / the stars now, if there is a spot for them.

@@ -1292,25 +1292,33 @@ impl Brain {
             })
             .collect();
         ranked.sort_by(|a, b| b.1.total_cmp(&a.1));
-        ranked
-            .into_iter()
-            .take(2)
-            .filter_map(|(mut c, _)| {
-                let here = c.vantage.point.distance(knight.pos) < 30.0;
-                // The route must end at the vantage point, not merely near it.
-                let eta = if here {
-                    0.0
-                } else {
-                    let r = nav.reach(knight, NavGoal::Point(c.vantage.point), style)?;
-                    if !r.lands_on(c.vantage.point, watch::VANTAGE_TOL) {
-                        return None;
-                    }
-                    r.eta
-                };
-                c.score = c.interest - self.cfg.travel_cost_per_sec * eta;
-                Some(c)
-            })
-            .max_by(|a, b| a.score.total_cmp(&b.score))
+        // Route-check best first until two reachable ones are found (the better one after
+        // travel wins), within the plan budget: two unreachable top spots must not hide a
+        // reachable third. (Spots come and go with screen activity: no memory kept here.)
+        let mut plans = 0;
+        let mut found: Vec<SpotChoice> = Vec::with_capacity(2);
+        for (mut c, _) in ranked {
+            if found.len() >= 2 {
+                break;
+            }
+            let here = c.vantage.point.distance(knight.pos) < 30.0;
+            // The route must end at the vantage point, not merely near it.
+            let eta = if here {
+                0.0
+            } else {
+                if plans >= interest::CANDIDATE_PLANS {
+                    continue;
+                }
+                plans += 1;
+                match nav.reach(knight, NavGoal::Point(c.vantage.point), style) {
+                    Some(r) if r.lands_on(c.vantage.point, watch::VANTAGE_TOL) => r.eta,
+                    _ => continue,
+                }
+            };
+            c.score = c.interest - self.cfg.travel_cost_per_sec * eta;
+            found.push(c);
+        }
+        found.into_iter().max_by(|a, b| a.score.total_cmp(&b.score))
     }
 
     fn score_behaviours(&self, p: &Percepts) -> Vec<(BehaviourKind, f32)> {

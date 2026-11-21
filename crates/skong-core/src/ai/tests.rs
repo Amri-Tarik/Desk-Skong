@@ -27,6 +27,7 @@ mod pastime;
 mod pastime_desk;
 mod passed_over;
 mod priorities;
+mod reachable;
 mod scene;
 mod shiny;
 mod train;
@@ -55,6 +56,10 @@ struct FakeNav {
     ends: Vec<(Vec2, Option<TravelStyle>, Vec2)>,
     /// Hide those ends from `reach` (a planner that over-promises).
     lies: bool,
+    /// No route at all to these points (any style).
+    refuse: Vec<Vec2>,
+    /// Every point `reach` was asked about (route plans), in order.
+    planned: Vec<Vec2>,
 }
 
 impl FakeNav {
@@ -66,10 +71,17 @@ impl FakeNav {
             NavGoal::OnWindow(_) => None,
         }
     }
+
+    fn refused(&self, goal: NavGoal) -> bool {
+        matches!(goal, NavGoal::Point(p) if self.refuse.iter().any(|r| r.distance(p) < 1.0))
+    }
 }
 
 impl Navigator for FakeNav {
     fn estimate(&mut self, from: &Character, goal: NavGoal, _style: TravelStyle) -> Option<f32> {
+        if self.refused(goal) {
+            return None;
+        }
         Some(match goal {
             NavGoal::Point(p) => from.pos.distance(p) / 400.0,
             NavGoal::OnWindow(_) => 1.5,
@@ -77,11 +89,18 @@ impl Navigator for FakeNav {
     }
     fn go(&mut self, _from: &Character, goal: NavGoal, style: TravelStyle) -> bool {
         self.gos.push((goal, style));
+        if self.refused(goal) {
+            self.status = NavStatus::Failed;
+            return false;
+        }
         self.status = NavStatus::Moving;
         self.elapsed = 0.0;
         true
     }
     fn reach(&mut self, from: &Character, goal: NavGoal, style: TravelStyle) -> Option<Reach> {
+        if let NavGoal::Point(p) = goal {
+            self.planned.push(p);
+        }
         let eta = self.estimate(from, goal, style)?;
         let end = if self.lies { None } else { self.end_of(goal, style) };
         Some(Reach { eta, end })
