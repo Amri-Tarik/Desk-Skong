@@ -16,7 +16,7 @@
 //! * [`company`] — calm scenes after the talk: sitting together with maps, taking in the
 //!   view, a song while mining.
 //!
-//! * [`challenge`] — Hornet's challenges after the talk: a [`race`] to where her needle
+//! * [`challenge`] — Hornet's challenges after the talk: a [`race`] to where her barb
 //!   lands, or a short [`duel`] she wins.
 //!
 //! The brain sees visitors as [`crate::ai::Visitor`] percepts (see [`Npc::percept`]).
@@ -48,7 +48,7 @@ use crate::anim::{ClipId, ClipLibrary};
 use crate::ai::rng::Rng;
 use crate::assets::{SpriteBank, read_json};
 
-pub use actor::{Npc, NpcEnv, NpcEvent, NpcPhase, NpcProp, Placement, once_secs};
+pub use actor::{DrawnProp, Npc, NpcEnv, NpcEvent, NpcPhase, NpcProp, Placement, once_secs};
 pub use challenge::{ChallengeClips, ChallengeDef, ChallengeKind, ChallengePlan};
 pub use dream::DreamRules;
 pub use lesson::{DemoStep, DrillDef, Lesson, LessonDef, PlannedDrill};

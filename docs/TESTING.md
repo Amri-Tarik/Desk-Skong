@@ -94,14 +94,17 @@ Pick a visitor in the drop-down, or use the "Every scene" row.
       deposit when there is one.
 - [ ] **Calm scene cut short**: start any calm scene, then type fast / send an enemy / kill
       him → the visitor's abandon line, the knight leaves.
-- [ ] **Hornet race** → she throws her needle (`Needle` + `Needle Thread`) to a finish
-      ledge; "Go!"; they race across the windows; her win `Flourish` or lose line; she
-      plucks the needle and leaps away · needs a settled finish on her monitor he can reach
-      (else a duel, and the result line says so) · *look for* the needle drawn horizontal
-      whatever its flight angle and its height above the ledge; her run, ground dash, leaps
-      up to windows (through them), the air dash on long leaps; her pace (slowed up to ~2×
-      to match him); the knight's Hurry route (crystal dash, wall jumps) and touching the
-      needle. *Faster Than Silk* when he wins (about 1 race in 4).
+- [ ] **Hornet race** → she flings one of her spiked barbs (`Barb Throw` poses; the barb
+      tumbling through the air, `Barb Loose`) onto a finish ledge, where it sits; "Go!";
+      they race across the windows; whoever reaches it first, it bursts (`Barb Break`);
+      her win `Flourish` or lose line; she leaps away · needs a settled finish on her
+      monitor he can reach (else a duel, and the result line says so) · *look for* the
+      barb's lobbed arc, it sitting on the ledge (spike tips on the edge, stirring now and
+      then), the burst at the right moment (his touch, or her landing); her run, ground
+      dash, leaps up to windows (through them), the air dash on long leaps; her pace (slowed
+      up to ~2× to match him); the knight's Hurry route (crystal dash, wall jumps) and
+      touching the barb. *Faster Than Silk* when he wins (about 1 race in 4). Called off
+      mid-race: the barb bursts where it is.
 - [ ] **Hornet duel** → lunges, needle throws (out and back), the silk sphere, step-backs,
       her flashes when struck, the knight dodging / pogoing; her `Flourish` and parting
       word. *Needle Practice*. On its own: 60 % of her talks end in a race or duel (50/50).
@@ -260,7 +263,7 @@ other monitor instead. A plain click does nothing (on the dummy it's a blow: see
       surprised line; set down → he comes over again (or talks from nearby) and the talk
       goes on from the line it stopped at (no fresh conversation).
 - [ ] **Visitor, mid-lesson / spar / calm scene / Hornet's race or duel**: pick them up →
-      the scene ends at once (no stuck knight, no needle left behind); set down → a parting
+      the scene ends at once (no stuck knight, no needle or barb left behind); set down → a parting
       line ("set_down" in `data/npcs.json`), then they leave as usual · *look for* the
       knight going back to his own business, Zote's held-back goodbye not said.
 - [ ] **Geo deposit**: half-mine one (1–2 hits), drag it onto another app's window → it

@@ -1,4 +1,4 @@
-//! Hornet's challenges against the real data: the race (where the needle lands, her course,
+//! Hornet's challenges against the real data: the race (where the barb lands, her course,
 //! fairness against the real planner and controller over many desktops, calling it off)
 //! and the duel (her moves, she always wins, calling it off).
 use std::path::Path;
@@ -93,14 +93,14 @@ fn hornet_challenges_with_her_own_clips() {
     assert!((0.0..=1.0).contains(&def.chance) && (def.race_share - 0.5).abs() < 0.01, "50/50 race and duel");
     // Only the clips she plays came over from the boss library.
     let lib = s.lib(id);
-    assert!(lib.id("Boss Needle").is_some() && lib.id("Boss Barb Throw").is_none(), "a trimmed merge");
+    assert!(lib.id("Boss Barb Loose").is_some() && lib.id("Boss Counter Stance").is_none(), "a trimmed merge");
     let mut rng = crate::ai::rng::Rng::new(1);
     let races = (0..400).filter(|_| def.pick(&mut rng) == ChallengeKind::Race).count();
     assert!((150..250).contains(&races), "{races} races in 400");
 }
 
 #[test]
-fn the_needle_lands_far_on_a_settled_reachable_ledge() {
+fn the_barb_lands_far_on_a_settled_reachable_ledge() {
     let s = set();
     let race = &s.defs[s.id("hornet").unwrap()].challenge.as_ref().unwrap().race;
     let t = terrain(vec![win(1, 1200, 600, 1700, 1000), win(2, 300, 350, 800, 900)]);
@@ -127,7 +127,7 @@ fn the_needle_lands_far_on_a_settled_reachable_ledge() {
 }
 
 #[test]
-fn her_course_runs_dashes_and_leaps_to_the_needle() {
+fn her_course_runs_dashes_and_leaps_to_the_barb() {
     let s = set();
     let race = &s.defs[s.id("hornet").unwrap()].challenge.as_ref().unwrap().race;
     let start = Vec2::new(200.0, FLOOR);
@@ -230,7 +230,7 @@ fn races_are_fair_the_knight_wins_some_and_loses_some() {
 }
 
 #[test]
-fn a_race_throws_the_needle_says_go_and_ends_with_her_leaping_away() {
+fn a_race_throws_the_barb_says_go_and_ends_with_her_leaping_away() {
     let (_, ev) = race(layouts()[0].clone(), 200.0, 3).expect("a race");
     let says: Vec<&str> = ev.iter().filter_map(|e| if let NpcEvent::Say { text, .. } = e { Some(text.as_str()) } else { None }).collect();
     assert!(says.len() >= 3, "challenge, go, and the reaction: {says:?}");
@@ -239,9 +239,16 @@ fn a_race_throws_the_needle_says_go_and_ends_with_her_leaping_away() {
     assert!(race.go.iter().any(|g| says.contains(&g.as_str())), "a go line: {says:?}");
 }
 
+/// The sprites of one of Hornet's clips.
+fn clip_keys(s: &NpcSet, clip: &str) -> Vec<crate::assets::SpriteKey> {
+    let lib = s.lib(s.id("hornet").unwrap());
+    lib.get(lib.id(clip).expect(clip)).frames.iter().filter_map(|f| f.sprite).collect()
+}
+
 #[test]
-fn the_needle_shows_while_out_and_she_retrieves_it() {
+fn the_barb_flies_sits_on_the_finish_and_bursts_when_reached() {
     let s = set();
+    let (barb, burst) = (clip_keys(&s, "Boss Barb Loose"), clip_keys(&s, "Boss Barb Break"));
     let t = terrain(vec![]);
     let start = Vec2::new(200.0, FLOOR);
     let k = Vec2::new(330.0, FLOOR);
@@ -250,28 +257,41 @@ fn the_needle_shows_while_out_and_she_retrieves_it() {
     let finish = Vec2::new(1300.0, FLOOR);
     challenged(&mut npc, &s, &t, ChallengePlan::Race { finish, owner: None, knight_eta: Some(3.0) }, k, &mut ev);
     assert!(npc.props(&s, PPU).is_empty(), "still in her hand");
-    let mut seen_flying = false;
-    let mut seen_stuck = false;
+    let (mut flying, mut lofted, mut resting, mut bursting) = (false, false, false, false);
     for _ in 0..(40.0 / DT) as usize {
         npc.tick(DT, &s, &env(&t, k), &mut ev);
         let props = npc.props(&s, PPU);
         if let Some(p) = props.first() {
-            assert_eq!(props.len(), 2, "needle and thread");
-            assert!(p.flip, "thrown to the right: mirrored left-pointing art");
-            if (p.at.x - finish.x).abs() < 2.0 {
-                seen_stuck = true;
+            assert_eq!(props.len(), 1, "just the barb");
+            assert!(matches!(p.drawn, Some(DrawnProp::Barb { .. })), "drawn plainly if its art is missing");
+            if burst.contains(&p.key) {
+                assert!(!bursting || resting, "it bursts where it sat");
+                assert!((p.at.x - finish.x).abs() < 2.0, "{p:?}");
+                assert!(ev.iter().any(|e| matches!(e, NpcEvent::RaceOver { .. })), "only once it's reached");
+                bursting = true;
             } else {
-                seen_flying = true;
+                assert!(barb.contains(&p.key), "{p:?}");
+                assert!(!bursting, "gone once burst");
+                if (p.at.x - finish.x).abs() < 2.0 {
+                    // Sitting on the ledge: its spikes' tips at the ledge line.
+                    assert!(((finish.y - p.at.y) / PPU - 0.82).abs() < 0.05, "{p:?}");
+                    resting = true;
+                } else {
+                    assert!(!resting, "it stays where it landed");
+                    lofted |= p.at.y < FLOOR - 3.0 * PPU;
+                    flying = true;
+                }
             }
         }
         if npc.phase() == NpcPhase::Gone {
             break;
         }
     }
-    assert!(seen_flying && seen_stuck, "flies, then sticks at the finish");
+    assert!(flying && lofted, "lobbed through the air");
+    assert!(resting && bursting, "sits at the finish, then bursts");
     assert!(ev.contains(&NpcEvent::RaceOver { knight_won: Some(false) }), "the knight stood still: she wins");
     assert_eq!(npc.phase(), NpcPhase::Gone, "she leaps away");
-    assert!(npc.props(&s, PPU).is_empty(), "with her needle");
+    assert!(npc.props(&s, PPU).is_empty(), "nothing left behind");
 }
 
 #[test]
@@ -287,7 +307,11 @@ fn a_race_called_off_ends_politely() {
         npc.tick(DT, &s, &env(&t, k), &mut ev);
     }
     ev.clear();
+    let barb = clip_keys(&s, "Boss Barb Loose");
+    assert!(npc.props(&s, PPU).first().is_some_and(|p| barb.contains(&p.key)), "the barb sits at the finish");
     assert!(npc.call_off(&s, &mut ev));
+    let burst = clip_keys(&s, "Boss Barb Break");
+    assert!(npc.props(&s, PPU).first().is_some_and(|p| burst.contains(&p.key)), "called off: the barb bursts");
     assert!(ev.contains(&NpcEvent::RaceOver { knight_won: None }), "{ev:?}");
     assert!(ev.iter().any(|e| matches!(e, NpcEvent::Say { .. })), "a parting word");
     assert!(matches!(npc.scene_cue(), Some(SceneCue::Race { over: true, won: None, .. })));

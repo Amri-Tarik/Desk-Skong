@@ -4,7 +4,7 @@
 //! bubble about the window he struck.
 //!
 //! The logic lives in `skong_core::npc` / `skong_core::portal`; this module is rendering and
-//! plumbing. Hornet's challenges (planning the race's finish, the needle's windows, calling
+//! plumbing. Hornet's challenges (planning the race's finish, her props' windows, calling
 //! them off) live in `npcs/challenge.rs`.
 mod challenge;
 
@@ -48,7 +48,7 @@ struct LiveNpc {
     bubble: Option<BubbleId>,
     /// The Geo deposit they arrived beside (Myla mines it), rock bottom center.
     deposit: Option<Vec2>,
-    /// Windows for extra sprites (Hornet's needle and thread), see `npcs/challenge.rs`.
+    /// Windows for extra sprites (Hornet's needle and thread, her barb), see `npcs/challenge.rs`.
     props: Vec<challenge::PropWin>,
 }
 

@@ -104,7 +104,7 @@ _Working list, last updated 2026-11-20. Reorder freely and add notes under any i
       > done: `enemy::grimm::cameo`, rare (`cameo.schedule`), panel Debug "Grimm's friendly
       > visit"; achievement "A Passing Troupe".
 - [x] **Hornet: race and duel, both** (50/50 at first; drop one if it doesn't hold up).
-      - Race: she throws her needle and silk to mark the finish, and they race across the
+      - Race: she flings a spiked barb to mark the finish, and they race across the
         windows.
       - Duel: a short spar; she wins and leaves.
       > done: `npc::race` / `npc::duel`, 60 % of her talks end in one; panel Debug
@@ -306,12 +306,12 @@ checklist, with how to trigger each from the panel's Sandbox tab, is [TESTING.md
       line, the teleports around the knight (flashes, `LookBack` / `Hand Click` poses), the
       knight's startle / bow / glances, farewell; the flame left behind (8+ achievements).
 - [ ] Hornet's race:
-      - the needle (`Needle` + `Needle Thread` sprites) in flight and stuck on the finish
-        ledge: drawn horizontal whatever the angle; its height above the ledge;
+      - the barb (`Barb Loose` sprite) lobbed from her `Barb Throw`, then sitting on the
+        finish ledge (spike tips on the edge); bursting (`Barb Break`) when reached;
       - her course: runs, the ground dash, leaps up to windows (through them), the air dash
         on long leaps, the landing; her pace (slowed up to ~2x to match the knight);
-      - the knight on "Go!" (Hurry route, crystal dash, wall jumps), touching the needle;
-      - her win `Flourish` / lose line, plucking the needle, the leap away.
+      - the knight on "Go!" (Hurry route, crystal dash, wall jumps), touching the barb;
+      - her win `Flourish` / lose line, the leap away.
 - [ ] Hornet's duel: lunges, needle throws (needle sprite out and back), the silk sphere
       (`Sphere Ball`), step-backs, her flashes when struck, the knight dodging / pogoing;
       the `Flourish` and her parting word.
