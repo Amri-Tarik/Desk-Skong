@@ -137,6 +137,7 @@ pub(super) fn show(p: &mut Panel, ui: &mut egui::Ui, status: Option<&Status>, he
             });
             ui.horizontal_wrapped(|ui| {
                 row(ui, &mut out, "Any visitor", "a random visitor, as the tray's \"Invite a visitor\"", Some(Command::InviteVisitor), None);
+                row(ui, &mut out, "Talk to visitor", "the visitor nearest him (just standing around) is ready to talk, again if they already did, and he goes over now; a Dream Gate if no route reaches them", Some(test(TestCommand::TalkToVisitor)), None);
                 row(ui, &mut out, "Dream nail", "he dream-nails the window he stands on (never while someone talks)", Some(Command::DreamNail), None);
             });
         });

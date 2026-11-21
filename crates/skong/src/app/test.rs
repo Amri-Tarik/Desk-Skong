@@ -145,6 +145,19 @@ impl Pet {
                 self.brain.ready_dream_gate();
                 self.note(true, "dream gate ready: the next prize no route reaches gets a gate at once");
             }
+            TestCommand::TalkToVisitor => {
+                let asked = match self.visitors.as_mut() {
+                    Some(v) => v.ask_to_talk(self.ch.pos),
+                    None => Err("no visitor art loaded".into()),
+                };
+                match asked {
+                    Ok((id, name)) => {
+                        self.brain.force_greet(id);
+                        self.note(true, format!("talk: {name} waits for him; he goes over now (a Dream Gate if no route reaches them)"));
+                    }
+                    Err(why) => self.note(false, format!("talk: {why}")),
+                }
+            }
             TestCommand::Slug => match self.data.acts.id("slug_crawl") {
                 Some(id) if self.ch.is_grounded() => {
                     self.seat_y = None;
