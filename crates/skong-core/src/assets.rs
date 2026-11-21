@@ -3,7 +3,7 @@
 //! Each tk2d sprite is a quad given as local `positions` (world units, y up, origin =
 //! sprite anchor) with matching atlas `uvs`. Rasterizing that quad reproduces exactly what
 //! the game draws: trimming, pivot and atlas rotation are all encoded in the vertices.
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
@@ -33,6 +33,10 @@ pub struct SpriteJson {
     pub uvs: Vec<[f32; 2]>,
     #[serde(default)]
     pub texel_size: Vec<f32>,
+    /// The collection's atlas page (tk2d material) the UVs point into: 0 is the main atlas,
+    /// page `k` is `<atlas>_<k>.png` (see [`Skin::atlas_page`]). Only Grimm has a second.
+    #[serde(default)]
+    pub material_id: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -97,6 +101,21 @@ pub struct Skin {
     pub dir: PathBuf,
 }
 
+/// Skin file name of a collection's main atlas: the Custom Knight name (`Sprint.png`) or
+/// `<Collection_Name>.png`.
+pub fn atlas_file(collection: &str) -> String {
+    match SKIN_FILES.iter().find(|(c, _)| *c == collection) {
+        Some((_, f)) => f.to_string(),
+        None => format!("{}.png", collection.replace(' ', "_")),
+    }
+}
+
+/// File name of atlas page `page` (> 0) next to the main atlas `file`: `Grimm_Cln_1.png`.
+pub fn page_file(file: &str, page: u32) -> String {
+    let stem = file.strip_suffix(".png").unwrap_or(file);
+    format!("{stem}_{page}.png")
+}
+
 impl Skin {
     pub fn from_dir(dir: &Path) -> Option<Skin> {
         find_ci(dir, "Knight.png")?;
@@ -111,6 +130,15 @@ impl Skin {
             return find_ci(&self.dir, file);
         }
         find_ci(&self.dir, &format!("{}.png", collection.replace(' ', "_")))
+    }
+
+    /// Atlas file for page `page` of a collection: page 0 is [`Self::atlas_for`], page
+    /// `k` is the same name with `_<k>` before `.png` (`Grimm_Cln_1.png`).
+    pub fn atlas_page(&self, collection: &str, page: u32) -> Option<PathBuf> {
+        if page == 0 {
+            return self.atlas_for(collection);
+        }
+        find_ci(&self.dir, &page_file(&atlas_file(collection), page))
     }
 
     /// Skins under `root`: every folder (up to two levels deep) containing a Knight.png,
@@ -560,24 +588,31 @@ impl SpriteBank {
             wanted.sort_unstable();
             wanted.dedup();
             let meta = &self.collections[col as usize];
-            let Some(path) = skin.atlas_for(&meta.name).or_else(|| fallback?.atlas_for(&meta.name)) else {
-                log::debug!("skin '{}' (and fallback) has no atlas for '{}'", skin.name, meta.name);
-                continue;
-            };
-            let atlas = Atlas::load_png(&path)?;
-            if (atlas.width, atlas.height) != (meta.atlas_width, meta.atlas_height) {
-                log::warn!(
-                    "{}: atlas is {}x{}, expected {}x{} — UVs are normalized so it may still work",
-                    path.display(),
-                    atlas.width,
-                    atlas.height,
-                    meta.atlas_width,
-                    meta.atlas_height
-                );
-            }
+            // Atlas page -> its sprites (a page's UVs mean nothing on another page).
+            let mut pages: BTreeMap<u32, Vec<(usize, u32)>> = BTreeMap::new();
             for (set, id) in wanted {
                 if let Some(s) = meta.sprites.get(id as usize) {
-                    sink(set, SpriteKey { collection: col, sprite: id }, rasterize(s, &atlas, sets[set].1));
+                    pages.entry(s.material_id).or_default().push((set, id));
+                }
+            }
+            for (page, wanted) in pages {
+                let Some(path) = skin.atlas_page(&meta.name, page).or_else(|| fallback?.atlas_page(&meta.name, page)) else {
+                    log::debug!("skin '{}' (and fallback) has no atlas page {page} for '{}'", skin.name, meta.name);
+                    continue;
+                };
+                let atlas = Atlas::load_png(&path)?;
+                if page == 0 && (atlas.width, atlas.height) != (meta.atlas_width, meta.atlas_height) {
+                    log::warn!(
+                        "{}: atlas is {}x{}, expected {}x{} — UVs are normalized so it may still work",
+                        path.display(),
+                        atlas.width,
+                        atlas.height,
+                        meta.atlas_width,
+                        meta.atlas_height
+                    );
+                }
+                for (set, id) in wanted {
+                    sink(set, SpriteKey { collection: col, sprite: id }, rasterize(&meta.sprites[id as usize], &atlas, sets[set].1));
                 }
             }
         }
@@ -652,7 +687,43 @@ mod tests {
             positions: vec![[-1.0, -1.0, 0.0], [1.0, -1.0, 0.0], [-1.0, 1.0, 0.0], [1.0, 1.0, 0.0]],
             uvs: uvs.to_vec(),
             texel_size: vec![1.0, 1.0],
+            material_id: 0,
         }
+    }
+
+    #[test]
+    fn sprites_on_a_second_atlas_page_draw_from_it_or_not_at_all() {
+        // Live: Grimm's teleport frames on his second atlas page were cut out of the first
+        // one, showing random pieces of his sheet.
+        let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/hk");
+        let bank = SpriteBank::load_metadata(&data).expect("load");
+        let gi = bank.collection_index("Grimm Cln").unwrap();
+        let sprites = &bank.collections[gi as usize].sprites;
+        let on = |page: u32| sprites.iter().find(|s| s.material_id == page).map(|s| SpriteKey { collection: gi, sprite: s.id }).unwrap();
+        let (main, paged) = (on(0), on(1));
+        let dir = std::env::temp_dir().join(format!("skong-atlas-pages-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let solid = |file: &str, rgba: [u8; 4]| {
+            let mut out = Vec::new();
+            let mut e = png::Encoder::new(&mut out, 8, 8);
+            e.set_color(png::ColorType::Rgba);
+            e.write_header().unwrap().write_image_data(&rgba.repeat(64)).unwrap();
+            std::fs::write(dir.join(file), out).unwrap();
+        };
+        solid("Knight.png", [0, 0, 255, 255]);
+        solid("Grimm_Cln.png", [255, 0, 0, 255]);
+        let skin = Skin::from_dir(&dir).unwrap();
+        let colour = |f: &HashMap<SpriteKey, Frame>, k: SpriteKey| f.get(&k).map(|f| f.image.px[f.image.px.len() / 2] & 0x00ff_ffff);
+
+        let frames = bank.rasterize_sets(&skin, None, &[(&[main, paged], 16.0)]).unwrap().pop().unwrap();
+        assert_eq!(colour(&frames, main), Some(0xff0000));
+        assert_eq!(colour(&frames, paged), None, "no page 1: drawn not at all, never from page 0");
+
+        solid("Grimm_Cln_1.png", [0, 255, 0, 255]);
+        let frames = bank.rasterize_sets(&skin, None, &[(&[main, paged], 16.0)]).unwrap().pop().unwrap();
+        assert_eq!(colour(&frames, main), Some(0xff0000));
+        assert_eq!(colour(&frames, paged), Some(0x00ff00));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

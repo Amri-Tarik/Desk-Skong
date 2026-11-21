@@ -204,28 +204,32 @@ internal static class Program
         ["Shade"] = "Shade.png",
     };
 
-    /// Decode the collection's first atlas texture and save it as PNG (top-down rows).
+    /// Decode the collection's atlas textures and save them as PNG (top-down rows): the
+    /// first as the skin file name, page k > 0 as `<name>_<k>.png` (tk2d `materialId` k).
     /// The output is game art: write it somewhere git-ignored and never redistribute it.
     static void ExportAtlas(AssetsManager am, Scanner.Entry c, string dir)
     {
-        try
+        var textures = c.Field["textures.Array"];
+        var main = SkinFileNames.TryGetValue(c.Name, out var n) ? n : Safe(c.Name) + ".png";
+        for (int page = 0; page < textures.AsArray.size; page++)
         {
-            var textures = c.Field["textures.Array"];
-            if (textures.AsArray.size == 0) return;
-            var ext = am.GetExtAsset(c.Afi, textures[0]);
-            var tf = TextureFile.ReadTextureFile(ext.baseField);
-            var raw = tf.FillPictureData(Path.GetDirectoryName(ext.file.path) ?? ".");
-            Directory.CreateDirectory(dir);
-            var name = SkinFileNames.TryGetValue(c.Name, out var n) ? n : Safe(c.Name) + ".png";
-            var path = Path.Combine(dir, name);
-            if (raw is null || !tf.DecodeTextureImage(raw, path, ImageExportType.Png, 100))
+            try
             {
-                Console.Error.WriteLine($"  texture {c.Name}: could not decode {(TextureFormat)tf.m_TextureFormat}");
-                return;
+                var ext = am.GetExtAsset(c.Afi, textures[page]);
+                var tf = TextureFile.ReadTextureFile(ext.baseField);
+                var raw = tf.FillPictureData(Path.GetDirectoryName(ext.file.path) ?? ".");
+                Directory.CreateDirectory(dir);
+                var name = page == 0 ? main : Path.GetFileNameWithoutExtension(main) + $"_{page}.png";
+                var path = Path.Combine(dir, name);
+                if (raw is null || !tf.DecodeTextureImage(raw, path, ImageExportType.Png, 100))
+                {
+                    Console.Error.WriteLine($"  texture {c.Name} page {page}: could not decode {(TextureFormat)tf.m_TextureFormat}");
+                    continue;
+                }
+                Console.WriteLine($"  atlas {tf.m_Width}x{tf.m_Height} {(TextureFormat)tf.m_TextureFormat} -> {path}");
             }
-            Console.WriteLine($"  atlas {tf.m_Width}x{tf.m_Height} {(TextureFormat)tf.m_TextureFormat} -> {path}");
+            catch (Exception e) { Console.Error.WriteLine($"  texture {c.Name} page {page}: {e.Message}"); }
         }
-        catch (Exception e) { Console.Error.WriteLine($"  texture {c.Name}: {e.Message}"); }
     }
 
     // ------------------------------------------------------------------ export: collections
@@ -236,7 +240,17 @@ internal static class Program
         public string AtlasName { get; set; } = "";
         public int AtlasWidth { get; set; }
         public int AtlasHeight { get; set; }
+        /// Pages 1.. of the atlas (sprites with `material_id` k use page k), if any.
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public List<AtlasOut>? ExtraAtlases { get; set; }
         public List<SpriteOut> Sprites { get; set; } = new();
+    }
+
+    sealed class AtlasOut
+    {
+        public string Name { get; set; } = "";
+        public int Width { get; set; }
+        public int Height { get; set; }
     }
 
     sealed class SpriteOut
@@ -270,6 +284,11 @@ internal static class Program
                 outc.AtlasName = tex["m_Name"].AsString;
                 outc.AtlasWidth = tex["m_Width"].AsInt;
                 outc.AtlasHeight = tex["m_Height"].AsInt;
+            }
+            for (int page = 1; page < textures.AsArray.size; page++)
+            {
+                var tex = am.GetExtAsset(c.Afi, textures[page]).baseField;
+                (outc.ExtraAtlases ??= new()).Add(new AtlasOut { Name = tex["m_Name"].AsString, Width = tex["m_Width"].AsInt, Height = tex["m_Height"].AsInt });
             }
         }
         catch { /* texture lives in an unloaded file */ }

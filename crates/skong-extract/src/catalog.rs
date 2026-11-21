@@ -23,6 +23,9 @@ use crate::texture::{self, TextureInfo};
 pub struct WantedAtlas {
     /// The collection's GameObject name ("Knight", "Grimm Cln").
     pub collection: String,
+    /// Index in the collection's `textures` (0: the main atlas; sprites with tk2d
+    /// `materialId` k use page k).
+    pub page: u32,
     pub atlas_name: String,
     pub width: u32,
     pub height: u32,
@@ -46,6 +49,7 @@ pub struct FoundSprite {
 
 #[derive(Default)]
 pub struct Catalog {
+    /// By output file ([`WantedAtlas::file`]).
     pub atlases: HashMap<String, Found>,
     pub sprites: HashMap<String, FoundSprite>,
 }
@@ -138,16 +142,19 @@ pub fn search(data: &Path, atlases: &[WantedAtlas], sprites: &[String], progress
     let files = game_files(data)?;
     let mut fs = Files::default();
     let mut out = Catalog::default();
-    let want_atlas: HashMap<&str, &WantedAtlas> = atlases.iter().map(|a| (a.collection.as_str(), a)).collect();
+    let mut want_atlas: HashMap<&str, Vec<&WantedAtlas>> = HashMap::new();
+    for a in atlases {
+        want_atlas.entry(a.collection.as_str()).or_default().push(a);
+    }
     for (i, path) in files.iter().enumerate() {
         progress(i, files.len());
-        if out.atlases.len() == want_atlas.len() && sprites.iter().all(|s| out.sprites.contains_key(s)) {
+        if out.atlases.len() == atlases.len() && sprites.iter().all(|s| out.sprites.contains_key(s)) {
             break;
         }
         let Some(sf) = fs.get(path) else { continue };
         for obj in &sf.objects {
             match obj.class_id {
-                CLASS_MONO_BEHAVIOUR if out.atlases.len() < want_atlas.len() => {
+                CLASS_MONO_BEHAVIOUR if out.atlases.len() < atlases.len() => {
                     let Some(script) = obj.script else { continue };
                     if fs.script_class(&sf, script).as_deref() != Some("tk2dSpriteCollectionData") {
                         continue;
@@ -179,36 +186,51 @@ pub fn search(data: &Path, atlases: &[WantedAtlas], sprites: &[String], progress
     Ok(out)
 }
 
-fn find_atlas(fs: &mut Files, sf: &Arc<SerializedFile>, obj: &ObjectInfo, want: &HashMap<&str, &WantedAtlas>, out: &mut Catalog) -> Result<()> {
+fn find_atlas(fs: &mut Files, sf: &Arc<SerializedFile>, obj: &ObjectInfo, want: &HashMap<&str, Vec<&WantedAtlas>>, out: &mut Catalog) -> Result<()> {
     let bytes = sf.read(obj)?;
     let go = sf.reader(&bytes).pptr()?;
     let (gf, gobj) = fs.resolve(sf, go).context("no GameObject")?;
     let name = game_object_name(&gf, &gobj)?;
-    let Some(w) = want.get(name.as_str()) else { return Ok(()) };
-    if out.atlases.contains_key(&name) {
+    let Some(pages) = want.get(name.as_str()) else { return Ok(()) };
+    let Some(main) = pages.iter().find(|w| w.page == 0) else { return Ok(()) };
+    if out.atlases.contains_key(&main.file) {
         return Ok(());
     }
-    // `textures`: i32 count (1–8), then that many PPtrs; the first is the atlas.
+    // The texture `p` points to, if it is `w`'s.
+    let texture = |fs: &mut Files, p: PPtr, w: &WantedAtlas| -> Option<Found> {
+        if p.file < 0 || p.path_id <= 0 {
+            return None;
+        }
+        let (tf, tobj) = fs.resolve(sf, p)?;
+        let tex = (tobj.class_id == CLASS_TEXTURE2D).then(|| tf.read(&tobj).and_then(|b| texture::parse(&tf, &b)).ok()).flatten()?;
+        (tex.name == w.atlas_name && (tex.width, tex.height) == (w.width, w.height)).then_some(Found { file: tf, obj: tobj, tex })
+    };
+    // `textures`: i32 count (1–8), then that many PPtrs (12 bytes each); the first is the
+    // main atlas, page k the k-th.
     let mut off = 4;
     while off + 16 <= bytes.len() {
         let mut r = Reader::new(&bytes[off..], sf.big_endian);
         let count = r.i32()?;
         if (1..=8).contains(&count)
             && let Ok(p) = r.pptr()
-            && p.file >= 0
-            && p.path_id > 0
-            && let Some((tf, tobj)) = fs.resolve(sf, p)
-            && tobj.class_id == CLASS_TEXTURE2D
-            && let Ok(tex) = tf.read(&tobj).and_then(|b| texture::parse(&tf, &b))
-            && tex.name == w.atlas_name
-            && (tex.width, tex.height) == (w.width, w.height)
+            && let Some(found) = texture(fs, p, main)
         {
-            out.atlases.insert(name, Found { file: tf, obj: tobj, tex });
+            out.atlases.insert(main.file.clone(), found);
+            for w in pages.iter().filter(|w| w.page > 0 && (w.page as i32) < count) {
+                let at = off + 4 + 12 * w.page as usize;
+                let p = bytes.get(at..at + 12).and_then(|b| Reader::new(b, sf.big_endian).pptr().ok());
+                match p.and_then(|p| texture(fs, p, w)) {
+                    Some(found) => {
+                        out.atlases.insert(w.file.clone(), found);
+                    }
+                    None => log::warn!("collection '{name}': page {} ('{}' {}x{}) not found", w.page, w.atlas_name, w.width, w.height),
+                }
+            }
             return Ok(());
         }
         off += 4;
     }
-    anyhow::bail!("collection '{name}': no {}x{} '{}' texture referenced", w.width, w.height, w.atlas_name)
+    anyhow::bail!("collection '{name}': no {}x{} '{}' texture referenced", main.width, main.height, main.atlas_name)
 }
 
 fn find_sprite(fs: &mut Files, sf: &Arc<SerializedFile>, obj: &ObjectInfo, name: &str) -> Result<FoundSprite> {
@@ -273,8 +295,9 @@ mod tests {
         mb.extend([7u8; 40]); // sprite definitions…
         mb.extend(1i32.to_le_bytes());
         mb.extend(build::pptr(0, 31)); // materials
-        mb.extend(1i32.to_le_bytes());
-        mb.extend(build::pptr(0, 30)); // textures
+        mb.extend(2i32.to_le_bytes());
+        mb.extend(build::pptr(0, 30)); // textures: the atlas, then page 1 (the 512x512)
+        mb.extend(build::pptr(0, 29));
         let body = |w, h| crate::texture::tests::texture_body("atlas0", w, h, 25, None, Some(("resources.assets.resS", 0, (w * h) as u32)));
         let objs = [
             Obj { path_id: 10, class_id: CLASS_GAME_OBJECT, script: None, data: go },
@@ -285,13 +308,20 @@ mod tests {
         let res = build::file("6000.0.61f1", &objs, &[PPtr { file: 1, path_id: 3 }], &["globalgamemanagers.assets"]);
         std::fs::write(dir.join("resources.assets"), res).unwrap();
 
-        let want = [WantedAtlas { collection: "Knight".into(), atlas_name: "atlas0".into(), width: 1024, height: 512, file: "Knight.png".into() }];
+        let want = [WantedAtlas { collection: "Knight".into(), page: 0, atlas_name: "atlas0".into(), width: 1024, height: 512, file: "Knight.png".into() }];
         let mut calls = 0;
         let cat = search(&dir, &want, &[], &mut |_, _| calls += 1).unwrap();
-        let found = &cat.atlases["Knight"];
+        let found = &cat.atlases["Knight.png"];
+        assert!(!cat.atlases.contains_key("Knight_1.png"), "page 1 only when wanted");
         assert_eq!(found.obj.path_id, 30);
         assert_eq!((found.tex.width, found.tex.height), (1024, 512));
         assert!(calls >= 2);
+
+        // A second atlas page: the next pointer in `textures`.
+        let paged = [want[0].clone(), WantedAtlas { page: 1, width: 512, height: 512, file: "Knight_1.png".into(), ..want[0].clone() }];
+        let cat = search(&dir, &paged, &[], &mut |_, _| {}).unwrap();
+        assert_eq!(cat.atlases["Knight.png"].obj.path_id, 30);
+        assert_eq!(cat.atlases["Knight_1.png"].obj.path_id, 29);
 
         // Wrong size wanted: nothing found, no error.
         let want = [WantedAtlas { width: 2048, ..want[0].clone() }];

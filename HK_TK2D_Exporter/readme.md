@@ -41,6 +41,11 @@ Props: `--find bench` lists matching Sprite/Texture2D assets across all asset fi
 scale, components, tk2d collection / animation library + default clip) — the source of the effect
 offsets in `data/effects.json`.
 
+A collection whose sprites span several atlas textures (tk2d materials; only `Grimm Cln`
+so far) lists pages 1.. as `extra_atlases` in its JSON, and `--textures` writes them as
+`<atlas>_<k>.png` (`Grimm_Cln_1.png`); sprites name their page in `material_id`.
+
+
 Options: `--collections A,B` exports collections by name instead of by reference;
 `--files resources.assets,level1` scans other asset files (default `resources.assets`).
 
