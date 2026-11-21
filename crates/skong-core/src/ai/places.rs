@@ -14,7 +14,7 @@ use crate::nav::{NavGoal, TravelStyle};
 
 use super::behaviours::{ActWait, Beat, Ctx, SEAT_TOL, Status, Travel, TravelStep, style_for};
 use super::candidates::Why;
-use super::interest::PoiTarget;
+use super::interest::{CANDIDATE_PLANS, UNPLANNED, UNREACHABLE_SECS};
 use super::needs::Mind;
 use super::navigator::Navigator;
 use super::percept::Percepts;
@@ -99,6 +99,9 @@ pub struct PlaceMemory {
     scored_at: Option<f64>,
     /// What the last scoring made of each place (diagnostics, see `ai::candidates`).
     scan: Vec<(PlaceKind, PlaceId, Why)>,
+    /// Places no route reached at a recent scoring, with the verdict: left out of route
+    /// planning until then (brain time), so the plan budget goes to the others.
+    unreachable: BTreeMap<PlaceId, (f64, Why)>,
 }
 
 impl PlaceMemory {
@@ -113,6 +116,8 @@ impl PlaceMemory {
     /// Score again at the next think (something changed: he warped next to a place).
     pub(crate) fn rescore(&mut self) {
         self.scored_at = None;
+        // He is somewhere else now: routes are worth planning again.
+        self.unreachable.clear();
     }
 
     fn cooling(&self, p: &KnownPlace, now: f64) -> bool {
@@ -191,12 +196,16 @@ impl Brain {
         // What became of each place, for the passed-over list (a reused buffer).
         let mut scan = std::mem::take(&mut self.interest.places.scan);
         scan.clear();
+        let now = self.now;
+        let mut unreachable = std::mem::take(&mut self.interest.places.unreachable);
         let mem = &self.interest.places;
+        unreachable.retain(|id, (until, _)| *until > now && mem.places.iter().any(|p| p.id == *id));
         let mut ranked: Vec<(KnownPlace, f32, bool)> = mem
             .places
             .iter()
             .filter_map(|pl| {
-                if self.interest.is_blocked(PoiTarget::Spot(pl.at)) {
+                // Only a failure at the place itself counts (not any goal in its 64 px cell).
+                if self.interest.failed_at(pl.at) {
                     log::trace!("places: {} #{} at {:?}: blocked (failed recently)", pl.kind.label(), pl.id, pl.at);
                     scan.push((pl.kind, pl.id, Why::Blocked));
                     return None;
@@ -220,24 +229,39 @@ impl Brain {
             })
             .collect();
         ranked.sort_by(|a, b| b.1.total_cmp(&a.1));
-        scan.extend(ranked.iter().skip(2).map(|r| (r.0.kind, r.0.id, Why::Outranked)));
-        self.interest.places.best = ranked
-            .into_iter()
-            .take(2)
-            .filter_map(|(place, w, fresh)| {
-                let here = place.at.distance(knight.pos) < 4.0 && knight.is_grounded();
-                // Only places he can actually get onto (not just near).
-                let eta = if here {
-                    0.0
-                } else {
-                    let Some(r) = nav.reach(knight, NavGoal::Point(place.at), style) else {
+        // Route-check in want order until two reachable ones are found (the better of the
+        // two after travel wins), within the plan budget: unreachable favourites must not
+        // hide a reachable place further down the list.
+        let mut plans = 0;
+        let mut found: Vec<PlaceChoice> = Vec::with_capacity(2);
+        for (place, w, fresh) in ranked {
+            if found.len() >= 2 {
+                scan.push((place.kind, place.id, Why::Outranked));
+                continue;
+            }
+            if Some(place.id) != visiting
+                && let Some(&(_, why)) = unreachable.get(&place.id)
+            {
+                scan.push((place.kind, place.id, why));
+                continue;
+            }
+            let here = place.at.distance(knight.pos) < 4.0 && knight.is_grounded();
+            if !here && plans >= CANDIDATE_PLANS {
+                scan.push((place.kind, place.id, Why::Note(UNPLANNED)));
+                continue;
+            }
+            // Only places he can actually get onto (not just near).
+            let eta = if here {
+                0.0
+            } else {
+                plans += 1;
+                let planned = match nav.reach(knight, NavGoal::Point(place.at), style) {
+                    None => {
                         log::trace!("places: {} #{} at {:?}: no {style:?} route", place.kind.label(), place.id, place.at);
-                        scan.push((place.kind, place.id, Why::NoRoute(style)));
-                        return None;
-                    };
-                    if r.end.is_some() && !r.lands_on(place.at, SEAT_TOL + 2.0) {
+                        Err(Why::NoRoute(style))
+                    }
+                    Some(r) if r.end.is_some() && !r.lands_on(place.at, SEAT_TOL + 2.0) => {
                         log::trace!("places: {} #{} at {:?}: route ends at {:?}, not on it", place.kind.label(), place.id, place.at, r.end);
-                        scan.push((place.kind, place.id, Why::Misses));
                         if log::log_enabled!(log::Level::Trace) {
                             let near = |y: f32, x0: f32, x1: f32| (y - place.at.y).abs() < 120.0 && x0 < place.at.x + 200.0 && x1 > place.at.x - 200.0;
                             for l in p.terrain.ledges.iter().filter(|l| near(l.y, l.x0, l.x1)) {
@@ -247,18 +271,28 @@ impl Brain {
                                 log::trace!("places:   wall {:?} {:?} x {} y {}..{}", w.kind, w.face, w.x, w.y0, w.y1);
                             }
                         }
-                        return None;
+                        Err(Why::Misses)
                     }
-                    r.eta
+                    Some(r) => Ok(r.eta),
                 };
-                let travel = if fresh { 0.0 } else { self.cfg.travel_cost_per_sec * eta };
-                // Geo is worth a long walk: a far rock must not sink below the engagements.
-                let travel = if matches!(place.kind, PlaceKind::Deposit | PlaceKind::Grub) { travel.min(0.15) } else { travel };
-                scan.push((place.kind, place.id, Why::Planned));
-                Some(PlaceChoice { place, score: w - travel, fresh })
-            })
-            .max_by(|a, b| a.score.total_cmp(&b.score));
+                match planned {
+                    Ok(eta) => eta,
+                    Err(why) => {
+                        scan.push((place.kind, place.id, why));
+                        unreachable.insert(place.id, (now + UNREACHABLE_SECS, why));
+                        continue;
+                    }
+                }
+            };
+            let travel = if fresh { 0.0 } else { self.cfg.travel_cost_per_sec * eta };
+            // Geo is worth a long walk: a far rock must not sink below the engagements.
+            let travel = if matches!(place.kind, PlaceKind::Deposit | PlaceKind::Grub) { travel.min(0.15) } else { travel };
+            scan.push((place.kind, place.id, Why::Planned));
+            found.push(PlaceChoice { place, score: w - travel, fresh });
+        }
+        self.interest.places.best = found.into_iter().max_by(|a, b| a.score.total_cmp(&b.score));
         self.interest.places.scan = scan;
+        self.interest.places.unreachable = unreachable;
     }
 
     /// Utility of the Visit behaviour.
@@ -506,7 +540,7 @@ pub(crate) fn favourite_bench(ctx: &mut Ctx, range: f32) -> Option<(Vec2, Travel
         .places
         .all()
         .iter()
-        .filter(|p| p.kind == PlaceKind::Bench && p.favour >= 0.3 && p.at.distance(k.pos) <= range && !ctx.interest.is_blocked(PoiTarget::Spot(p.at)))
+        .filter(|p| p.kind == PlaceKind::Bench && p.favour >= 0.3 && p.at.distance(k.pos) <= range && !ctx.interest.failed_at(p.at))
         .copied()
         .collect();
     favs.sort_by(|a, b| (a.at.distance(k.pos) - 600.0 * a.favour).total_cmp(&(b.at.distance(k.pos) - 600.0 * b.favour)));

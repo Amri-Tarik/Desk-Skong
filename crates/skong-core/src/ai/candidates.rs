@@ -84,7 +84,7 @@ pub enum Why {
     Cooling { until: f64 },
     /// Wanted too little right now (a bench when not tired, a deposit when spent...).
     NotWanted,
-    /// Another one of its kind is better (only the best two are route-planned).
+    /// Another one of its kind is better (route planning stops at the best two reachable).
     Outranked,
     /// No route with this style.
     NoRoute(TravelStyle),
@@ -438,6 +438,7 @@ impl Brain {
             BehaviourKind::Pastime if s.user_busy && self.interest.pastimes.best.as_ref().is_some_and(|c| c.kind.lively()) => Gate::UserBusy,
             BehaviourKind::Shiny | BehaviourKind::Pastime | BehaviourKind::Highlight if !grounded => Gate::Airborne,
             BehaviourKind::Loot if self.now < self.stakes.loot_ready_at => Gate::LootResting { until: self.stakes.loot_ready_at },
+            BehaviourKind::Loot if !grounded => Gate::Airborne,
             BehaviourKind::Visit if self.interest.places.best.is_some_and(|c| super::places::want(&c.place, &self.mind) <= 0.0) => Gate::NotUpTo,
             _ => Gate::Zero,
         }

@@ -465,6 +465,16 @@ impl Loot {
             if self.travel.is_some() && !still_there {
                 self.picked += 1;
             }
+            if !ctx.grounded() {
+                // In mid-air (a jump, a dive, a fall): routes are planned from where he
+                // lands, and a plan from the air can fail outright. Choosing now would
+                // leave a good coin as unreachable, or find none and wrap up with a
+                // breather, and Loot would start again on landing: wait to land instead.
+                if self.travel.take().is_some() {
+                    ctx.nav.stop();
+                }
+                return Status::Running;
+            }
             let style = self.style(ctx, None);
             let Some((coin, _)) = quickest_coin(ctx, style) else {
                 ctx.nav.stop();
@@ -478,7 +488,8 @@ impl Loot {
             // On the way: a coin that is now clearly quicker (one landed closer, or he is
             // passing right by one) takes over.
             self.recheck -= ctx.dt();
-            if self.recheck <= 0.0 {
+            // Not in mid-air: a switch re-plans at once, and that plan can fail from there.
+            if self.recheck <= 0.0 && ctx.grounded() {
                 self.recheck = RECHECK_SECS;
                 let style = self.style(ctx, Some(self.target));
                 let knight = ctx.p.knight;

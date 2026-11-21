@@ -236,8 +236,13 @@ impl Brain {
         let pile = if st.sense.coins.len() >= 8 { 0.1 } else { 0.0 };
         let cheering = matches!(&self.active, Active::Loot(l) if l.cheering());
         // Strict: loose Geo is always wanted (mid-jump included — a jump used to zero it and
-        // let something else take over mid-gathering), just below fights and visitors.
-        let loot = if self.loose_geo_wanted(p) { (0.6 + 0.2 * e.excitement + pile).min(0.85) } else if cheering { 0.7 } else { 0.0 };
+        // let something else take over mid-gathering), just below fights and visitors. It is
+        // only *taken up* on the ground, though: started in mid-air (live: during a dive),
+        // it found no route from there, wrapped up with a breather, and preempted whatever
+        // came next again 2 s later, over and over. Landing takes a moment; then it starts.
+        let looting = matches!(&self.active, Active::Loot(_));
+        let wanted = self.loose_geo_wanted(p) && (looting || p.knight.is_grounded());
+        let loot = if wanted { (0.6 + 0.2 * e.excitement + pile).min(0.85) } else if cheering { 0.7 } else { 0.0 };
         [(BehaviourKind::Dead, dead), (BehaviourKind::ShadeHunt, hunt), (BehaviourKind::Loot, loot)]
     }
 

@@ -12,7 +12,7 @@ use crate::nav::{NavGoal, TravelStyle};
 
 use super::behaviours::{ActWait, Active, Ctx, Status, Travel, TravelStep, on_point, style_for};
 use super::candidates::Why;
-use super::interest::PoiTarget;
+use super::interest::{CANDIDATE_PLANS, UNPLANNED, UNREACHABLE_SECS};
 use super::navigator::Navigator;
 use super::percept::Percepts;
 use super::places::DiscoveryEvent;
@@ -55,6 +55,9 @@ pub struct ShinyMemory {
     pub(crate) best: Option<ShinyChoice>,
     /// What the last scoring made of each shiny (diagnostics, see `ai::candidates`).
     scan: Vec<(u64, Why)>,
+    /// Shinies no route reached at a recent scoring, with the verdict: left out of route
+    /// planning until then (brain time), so the plan budget goes to the others.
+    unreachable: BTreeMap<u64, (f64, Why)>,
 }
 
 impl ShinyMemory {
@@ -74,6 +77,7 @@ impl ShinyMemory {
     /// Forget a failed attempt (he got there by other means: a Dream Gate).
     pub(crate) fn forget_try(&mut self, id: u64) {
         self.tried.remove(&id);
+        self.unreachable.remove(&id);
     }
 }
 
@@ -116,7 +120,10 @@ impl Brain {
         // What became of each shiny, for the passed-over list (a reused buffer).
         let mut scan = std::mem::take(&mut self.interest.shinies.scan);
         scan.clear();
+        let now = self.now;
+        let mut unreachable = std::mem::take(&mut self.interest.shinies.unreachable);
         let mem = &self.interest.shinies;
+        unreachable.retain(|id, (until, _)| *until > now && mem.shinies.iter().any(|s| s.id == *id));
         let mut ranked: Vec<(KnownShiny, Vec2)> = mem
             .shinies
             .iter()
@@ -128,7 +135,9 @@ impl Brain {
                     return None;
                 }
                 let at = stand_spot(s, approach(s, k.pos));
-                if self.interest.is_blocked(PoiTarget::Spot(at)) {
+                // Only a failure at its own pick-up spot counts (not any goal in that 64 px
+                // cell: a seat that failed beside it must not hide it).
+                if self.interest.failed_at(at) {
                     scan.push((s.id, Why::Blocked));
                     return None;
                 }
@@ -136,29 +145,50 @@ impl Brain {
             })
             .collect();
         ranked.sort_by(|a, b| effort(k.pos, a.1).total_cmp(&effort(k.pos, b.1)));
-        scan.extend(ranked.iter().skip(2).map(|r| (r.0.id, Why::Outranked)));
-        self.interest.shinies.best = ranked
-            .into_iter()
-            .take(2)
-            .filter_map(|(shiny, at)| {
-                let eta = if on_point(k, at, PICK_TOL) {
-                    0.0
-                } else {
-                    let Some(r) = nav.reach(k, NavGoal::Point(at), style) else {
-                        scan.push((shiny.id, Why::NoRoute(style)));
-                        return None;
-                    };
-                    if !r.lands_on(at, PICK_TOL) {
-                        scan.push((shiny.id, Why::Misses));
-                        return None;
-                    }
-                    r.eta
+        // Route-check nearest first until two reachable ones are found (the quicker one
+        // wins), within the plan budget: unreachable near ones must not hide a reachable one.
+        let mut plans = 0;
+        let mut found: Vec<ShinyChoice> = Vec::with_capacity(2);
+        for (shiny, at) in ranked {
+            if found.len() >= 2 {
+                scan.push((shiny.id, Why::Outranked));
+                continue;
+            }
+            if Some(shiny.id) != current
+                && let Some(&(_, why)) = unreachable.get(&shiny.id)
+            {
+                scan.push((shiny.id, why));
+                continue;
+            }
+            let here = on_point(k, at, PICK_TOL);
+            if !here && plans >= CANDIDATE_PLANS {
+                scan.push((shiny.id, Why::Note(UNPLANNED)));
+                continue;
+            }
+            let eta = if here {
+                0.0
+            } else {
+                plans += 1;
+                let planned = match nav.reach(k, NavGoal::Point(at), style) {
+                    None => Err(Why::NoRoute(style)),
+                    Some(r) if !r.lands_on(at, PICK_TOL) => Err(Why::Misses),
+                    Some(r) => Ok(r.eta),
                 };
-                scan.push((shiny.id, Why::Planned));
-                Some(ShinyChoice { shiny, at, eta })
-            })
-            .min_by(|a, b| a.eta.total_cmp(&b.eta));
+                match planned {
+                    Ok(eta) => eta,
+                    Err(why) => {
+                        scan.push((shiny.id, why));
+                        unreachable.insert(shiny.id, (now + UNREACHABLE_SECS, why));
+                        continue;
+                    }
+                }
+            };
+            scan.push((shiny.id, Why::Planned));
+            found.push(ShinyChoice { shiny, at, eta });
+        }
+        self.interest.shinies.best = found.into_iter().min_by(|a, b| a.eta.total_cmp(&b.eta));
         self.interest.shinies.scan = scan;
+        self.interest.shinies.unreachable = unreachable;
     }
 
     /// Utility of the Shiny behaviour: curiosity, a bit more when bored, never while

@@ -128,6 +128,11 @@ pub struct InterestMap {
     /// until the given time. Kept apart from `blocked`: a seat, a cursor spot or a fight
     /// goal that failed nearby (same 64 px cell) must never hide fresh Geo.
     skipped_coins: Vec<(Vec2, f64)>,
+    /// The exact spots behind `blocked`'s spot cells, until the same time. Found places and
+    /// shinies are judged by these (see [`InterestMap::failed_at`]): a failure *at them*
+    /// keeps them from being retried, but an unrelated seat or goal that failed in the same
+    /// 64 px cell no longer hides a deposit, a grub or a shiny for a minute.
+    failed_spots: Vec<(Vec2, f64)>,
     /// Things found in windows (see [`super::places`]).
     pub(crate) places: PlaceMemory,
     /// How long each window ledge has been on screen (seats must have settled).
@@ -176,6 +181,7 @@ impl InterestMap {
         }
         self.blocked.retain(|_, until| *until > now);
         self.skipped_coins.retain(|(_, until)| *until > now);
+        self.failed_spots.retain(|(_, until)| *until > now);
     }
 
     fn raise(&mut self, kind: PoiKind, target: PoiTarget, novelty: f32) {
@@ -251,11 +257,25 @@ impl InterestMap {
     /// Skip this target for a while (no route).
     pub(crate) fn block(&mut self, target: PoiTarget, until: f64) {
         self.blocked.insert(target.key(), until);
+        if let PoiTarget::Spot(at) = target {
+            self.failed_spots.retain(|(p, _)| p.distance(at) >= SPOT_SAME);
+            self.failed_spots.push((at, until));
+        }
     }
 
     /// Reachable again (he got there by other means: a Dream Gate).
     pub(crate) fn unblock(&mut self, target: PoiTarget) {
         self.blocked.remove(&target.key());
+        if let PoiTarget::Spot(at) = target {
+            self.failed_spots.retain(|(p, _)| p.distance(at) >= SPOT_SAME);
+        }
+    }
+
+    /// Did getting to (or onto) `at` itself fail recently? Unlike [`Self::is_blocked`],
+    /// only a failure within a few px counts, not anything in the same 64 px cell: found
+    /// places and shinies use this, so a nearby seat or goal that failed doesn't hide them.
+    pub fn failed_at(&self, at: Vec2) -> bool {
+        self.failed_spots.iter().any(|(p, _)| p.distance(at) < SPOT_SAME)
     }
 
     /// Is the coin resting at `at` skipped for now (only coins Loot gave up on count)?
@@ -277,3 +297,18 @@ impl InterestMap {
 
 /// Resting coins this close (px) are the same coin for skipping.
 const COIN_SAME: f32 = 12.0;
+/// Failed goals this close (px) are the same spot for [`InterestMap::failed_at`]: travel
+/// re-targets a drifting place only past 6 px, so its last goal is within that of it.
+const SPOT_SAME: f32 = 8.0;
+/// Route plans a candidate scoring (places, shinies, lumaflies, watch spots) may spend per
+/// rescore. Candidates are checked in want order until enough reachable ones are found:
+/// checking only the top two let two unreachable favourites hide a reachable third (Visit
+/// scored 0 and he idled beside a bench, a deposit or a grub he could have walked to).
+/// Plans cost a few ms each and scoring runs up to 4 times a second, hence the cap.
+pub(crate) const CANDIDATE_PLANS: usize = 5;
+/// A candidate no route reaches is left out of the next rescores this long (s), so they
+/// spend the plan budget on the others instead of re-planning the same unreachable
+/// favourites every time. Short: a moved window can open a route at any moment.
+pub(crate) const UNREACHABLE_SECS: f64 = 5.0;
+/// The passed-over verdict on a candidate left unchecked once the plan budget was spent.
+pub(crate) const UNPLANNED: &str = "not route-checked yet (plan budget spent on better ones)";

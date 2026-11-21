@@ -35,6 +35,8 @@ struct Nav {
     dash_only: bool,
     /// The style of the latest route.
     style: Option<TravelStyle>,
+    /// No route can be planned while he is in the air (mid-dive, falling).
+    grounded_only: bool,
 }
 
 impl Navigator for Nav {
@@ -42,7 +44,7 @@ impl Navigator for Nav {
         self.estimate(from, goal, style).map(|eta| navigator::Reach { eta, end: self.ends_at })
     }
     fn estimate(&mut self, from: &Character, goal: NavGoal, style: TravelStyle) -> Option<f32> {
-        if self.dash_only && style == TravelStyle::Stroll {
+        if (self.dash_only && style == TravelStyle::Stroll) || (self.grounded_only && !from.is_grounded()) {
             return None;
         }
         Some(match goal {
@@ -50,8 +52,8 @@ impl Navigator for Nav {
             NavGoal::OnWindow(_) => 1.5,
         })
     }
-    fn go(&mut self, _: &Character, goal: NavGoal, style: TravelStyle) -> bool {
-        if self.dash_only && style == TravelStyle::Stroll {
+    fn go(&mut self, from: &Character, goal: NavGoal, style: TravelStyle) -> bool {
+        if (self.dash_only && style == TravelStyle::Stroll) || (self.grounded_only && !from.is_grounded()) {
             return false;
         }
         self.style = Some(style);
@@ -763,4 +765,36 @@ fn the_shade_comes_first_even_mid_fight_or_loot() {
     assert!(sim.run_until(1.0, |s| s.brain.behaviour() == BehaviourKind::Loot));
     sim.fixed_shade = Some(ShadeSense { pos: Vec2::new(400.0, FLOOR - 40.0), vulnerable: true, fighting: false, geo: 50 });
     assert!(sim.run_until(1.0, |s| s.brain.behaviour() == BehaviourKind::ShadeHunt), "hunts the Shade over loot");
+}
+
+#[test]
+fn geo_seen_mid_dive_is_gathered_on_landing_not_given_up_on() {
+    // Live: mid-dive, Loot started, could plan no route from the air, wrapped up with a 2 s
+    // breather, and preempted again 2 s later — dithering, while the coins were written
+    // off as unreachable. Now he lands first, then gathers.
+    let mut sim = Sim::new();
+    sim.nav.grounded_only = true;
+    sim.run_until(2.0, |_| false);
+    sim.knight.pos.y = FLOOR - 400.0;
+    sim.knight.support = None;
+    sim.knight.state = MoveState::Airborne;
+    let coins = [Vec2::new(1300.0, FLOOR), Vec2::new(1350.0, FLOOR)];
+    sim.coins = coins.to_vec();
+    let mut starts = 0;
+    let mut last = sim.brain.behaviour();
+    for _ in 0..(5.0 / DT) as usize {
+        sim.step();
+        let now = sim.brain.behaviour();
+        if now == BehaviourKind::Loot && last != BehaviourKind::Loot {
+            starts += 1;
+        }
+        last = now;
+    }
+    assert!(starts <= 1, "loot restarted {starts} times in the air");
+    assert!(coins.iter().all(|c| !sim.brain.interest.coin_skipped(*c)), "no coin given up on from the air");
+    assert!(!sim.events.iter().any(|e| matches!(e, StakeEvent::AbandonCoin { .. })));
+    assert!(sim.brain.now >= sim.brain.stakes.loot_ready_at, "no breather after a fruitless 'gathering'");
+    Sim::ground(&mut sim.knight);
+    assert!(sim.run_until(0.5, |s| s.brain.behaviour() == BehaviourKind::Loot), "{:?}", sim.brain.behaviour());
+    assert!(sim.run_until(10.0, |s| s.coins.is_empty()), "gathered: {:?}", sim.coins);
 }
