@@ -188,6 +188,18 @@ pub fn subtitle(ui: &mut egui::Ui, text: &str) {
     ui.label(RichText::new(text).font(heading(17.0)).color(pal::SOUL));
 }
 
+/// A group heading inside a frame: the sub-heading with a faint hairline running on to the
+/// right edge.
+pub fn section(ui: &mut egui::Ui, text: &str) {
+    ui.horizontal(|ui| {
+        let r = ui.label(RichText::new(text).font(heading(17.0)).color(pal::SOUL)).rect;
+        let (x0, x1) = (r.right() + 10.0, ui.max_rect().right());
+        if x1 > x0 {
+            ui.painter().line_segment([Pos2::new(x0, r.center().y), Pos2::new(x1, r.center().y)], Stroke::new(1.0, pal::LINE_FAINT));
+        }
+    });
+}
+
 /// Subtext: 15 px, pale grey-white, wrapping.
 pub fn hint(ui: &mut egui::Ui, text: impl Into<String>) -> Response {
     ui.add(egui::Label::new(RichText::new(text.into()).small().color(pal::SUB)).wrap())
