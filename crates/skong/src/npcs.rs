@@ -582,15 +582,17 @@ impl Visitors {
             && let Some(name) = self.invited.take()
         {
             if !self.present() {
-                self.spawn(name.as_deref(), w, fx);
+                let _ = self.spawn(name.as_deref(), w, fx);
             } else if self.forced_scene.is_some() || self.invite_at.is_some() || name.is_some() {
                 self.forced_scene = None;
                 self.invite_at = None;
                 self.note(false, "a visitor is already here: wait until they leave".into());
             }
             self.sched.schedule_next(&mut self.rng);
-        } else if due {
-            self.spawn(None, w, fx);
+        } else if due && !self.spawn(None, w, fx) {
+            // Nobody could come right now: stay due and try again shortly (the 20-minute
+            // guarantee), rather than waiting out a whole new gap.
+            self.sched.postpone();
         }
 
         // 2. Portals: glow, ripple, guest steps out.
@@ -718,8 +720,9 @@ impl Visitors {
         self.knight_clip_was_slash = slash;
     }
 
-    /// Pick a visitor and where they appear, then start their arrival.
-    fn spawn(&mut self, name: Option<&str>, w: &World, fx: &mut Fx) {
+    /// Pick a visitor and where they appear, then start their arrival. `false` when nobody
+    /// came (no eligible visitor, or no good spot for them right now).
+    fn spawn(&mut self, name: Option<&str>, w: &World, fx: &mut Fx) -> bool {
         let def = match name.and_then(|n| self.set.id(n)) {
             Some(d) => d,
             None => {
@@ -730,7 +733,7 @@ impl Visitors {
                 let items: Vec<(usize, f32)> = self.set.defs.iter().enumerate().map(|(i, d)| (i, if eligible(i, d) { d.weight } else { 0.0 })).collect();
                 match self.rng.pick_weighted(&items) {
                     Some(d) => d,
-                    None => return,
+                    None => return false,
                 }
             }
         };
@@ -745,7 +748,7 @@ impl Visitors {
             let base = at.feet - Vec2::new(0.0, lift);
             portal_fx(fx, self.set.portal_style, base);
             self.portals.push(OpenPortal { portal: Portal::open(PortalSpot { at: base, owner: at.owner }, self.set.portal_style), guest: Some((def, at)) });
-            return;
+            return true;
         }
         let forced_needs = self.set.defs[def].company.as_ref().map(|c| c.needs).filter(|_| self.forced_scene == Some(ForcedScene::Company));
         // A forced view needs a high, settled window edge: arrive on one.
@@ -798,7 +801,7 @@ impl Visitors {
             if self.forced_scene.take().is_some() {
                 self.note(false, format!("no good spot for {display} right now (settled, reachable, with headroom)"));
             }
-            return;
+            return false;
         };
         if self.forced_scene.is_some() {
             self.note(true, format!("{display} arrives at ({:.0},{:.0})", at.feet.x, at.feet.y));
@@ -814,6 +817,7 @@ impl Visitors {
             }
             Arrival::Perch | Arrival::Walk => self.add_npc(def, at, w),
         }
+        true
     }
 
     fn add_npc(&mut self, def: usize, at: Placement, w: &World) {

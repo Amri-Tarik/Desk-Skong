@@ -1,6 +1,8 @@
 //! When visitors come: rarely and organically. The countdown only runs while the user is
 //! at the computer; a due visit waits for a good moment (no fullscreen app, no fast
-//! typing, no visitor around, the knight not asleep or held).
+//! typing, no visitor around, the knight not asleep or held). A blocked visit stays due
+//! and comes as soon as the moment is good (within `retry`), so the longest wait between
+//! visits is the top of the `gap` range in presence time plus the time it was blocked.
 use serde::Deserialize;
 
 use crate::ai::rng::Rng;
@@ -99,6 +101,13 @@ impl VisitScheduler {
         true
     }
 
+    /// A due visit fell through (nobody eligible, or no spot fit right now): stay due and
+    /// try again after `retry`, rather than restarting the whole gap [`Self::tick`] just drew.
+    pub fn postpone(&mut self) {
+        self.next_in = 0.0;
+        self.retry_in = self.cfg.retry;
+    }
+
     /// Restart the countdown (after a visit, also a forced one).
     pub fn schedule_next(&mut self, rng: &mut Rng) {
         self.next_in = rng.range(self.cfg.gap[0], self.cfg.gap[1].max(self.cfg.gap[0]));
@@ -159,6 +168,35 @@ mod tests {
         let calm = VisitConditions { user_idle_secs: 2.0, ..Default::default() };
         let t = run(&mut s, 100.0, calm, &mut rng).expect("visit");
         assert!(t <= 10.5, "{t}");
+    }
+
+    #[test]
+    fn long_block_then_one_prompt_visit_not_a_burst() {
+        let mut rng = Rng::new(3);
+        let mut s = VisitScheduler::new(cfg(), &mut rng);
+        // Half an hour of fullscreen (the clock runs, the visit is overdue and waits).
+        let fullscreen = VisitConditions { user_idle_secs: 0.1, fullscreen: true, ..Default::default() };
+        assert_eq!(run(&mut s, 1800.0, fullscreen, &mut rng), None);
+        assert_eq!(s.due_in(), 0.0);
+        // Free again: it comes within one retry, not after a fresh gap...
+        let calm = VisitConditions { user_idle_secs: 2.0, ..Default::default() };
+        assert!(run(&mut s, 30.0, calm, &mut rng).expect("visit") <= 10.5);
+        // ...and only one: the overdue time doesn't stack visits back to back.
+        assert_eq!(s.due_in(), 300.0);
+        assert_eq!(run(&mut s, 299.0, calm, &mut rng), None);
+    }
+
+    #[test]
+    fn a_visit_that_fell_through_stays_due() {
+        let mut rng = Rng::new(4);
+        let mut s = VisitScheduler::new(cfg(), &mut rng);
+        let calm = VisitConditions { user_idle_secs: 2.0, ..Default::default() };
+        assert_eq!(run(&mut s, 200.0, calm, &mut rng), Some(100.0));
+        // The app found no spot for anyone: try again shortly, not after a whole gap.
+        s.postpone();
+        assert_eq!(s.due_in(), 0.0);
+        let t = run(&mut s, 60.0, calm, &mut rng).expect("retried");
+        assert!((9.5..=10.5).contains(&t), "{t}");
     }
 
     #[test]

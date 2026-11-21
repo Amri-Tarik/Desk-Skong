@@ -83,6 +83,61 @@ fn real_npcs_resolve_and_reacts_exist() {
     assert!(s.dream.0.iter().any(|r| r.matches.is_empty()), "a generic dream pool");
 }
 
+/// The shipped cadence: while the user is around and nothing holds a visit back, someone
+/// comes at least every 20 minutes of presence; a held-back visit comes as soon as the
+/// moment is good (within `retry`); and visits never come closer than the shortest gap.
+#[test]
+fn real_cadence_guarantees_a_visit_every_20_minutes() {
+    const GUARANTEE: f32 = 20.0 * 60.0;
+    let cfg = set().visits;
+    assert!(cfg.enabled && cfg.first[1] <= GUARANTEE && cfg.gap[1] <= GUARANTEE, "{cfg:?}");
+    let free = VisitConditions { user_idle_secs: 1.0, ..Default::default() };
+    let step = 0.5;
+    for seed in 1..40 {
+        let mut rng = Rng::new(seed);
+        let mut s = VisitScheduler::new(cfg, &mut rng);
+        // Free all along: never more than 20 minutes without a visit.
+        let (mut since, mut visits) = (0.0f32, 0);
+        for _ in 0..(6.0 * 3600.0 / step) as usize {
+            since += step;
+            if s.tick(step, &free, &mut rng) {
+                assert!(since <= GUARANTEE + step, "seed {seed}: {since} s without a visit");
+                assert!(visits == 0 || since >= cfg.gap[0] - step, "seed {seed}: visits {since} s apart");
+                since = 0.0;
+                visits += 1;
+            }
+        }
+        assert!(since <= GUARANTEE + step && visits >= 18, "seed {seed}: {visits} visits");
+
+        // Now with the user typing hard / a fullscreen app in bursts: an overdue visit
+        // comes promptly once free, and the overdue time doesn't bring several at once.
+        let (mut since, mut overdue_free) = (0.0f32, 0.0f32);
+        let mut t = 0.0f32;
+        for _ in 0..(6.0 * 3600.0 / step) as usize {
+            t += step;
+            since += step;
+            // 7 of every 11 minutes held back, alternating typing and fullscreen.
+            let minute = (t / 60.0) as u32;
+            let c = match minute % 11 {
+                0..=3 => VisitConditions { keys_per_sec: 6.0, ..free },
+                4..=6 => VisitConditions { fullscreen: true, ..free },
+                _ => free,
+            };
+            let blocked = s.blocked(&c).is_some();
+            if since > GUARANTEE && !blocked {
+                overdue_free += step;
+            }
+            if s.tick(step, &c, &mut rng) {
+                assert!(!blocked);
+                assert!(t <= since || since >= cfg.gap[0] - step, "seed {seed}: visits {since} s apart");
+                since = 0.0;
+                overdue_free = 0.0;
+            }
+            assert!(overdue_free <= cfg.retry + step, "seed {seed}: free for {overdue_free} s with a visit overdue");
+        }
+    }
+}
+
 #[test]
 fn portal_visitor_arrives_talks_and_leaves() {
     let s = set();

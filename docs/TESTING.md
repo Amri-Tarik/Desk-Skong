@@ -114,6 +114,10 @@ Pick a visitor in the drop-down, or use the "Every scene" row.
 - [ ] **Every visitor met** → *Full Guestbook*; **Hornet talk** → *Silken Small Talk*.
 - [ ] On its own: visits come now and then while you're around (not while typing hard,
       fullscreen, or with him asleep); not the same visitor twice in a row.
+- [ ] Cadence: while you're around, someone visits at least every ~20 min (usually every
+      8-20 min; the first 4-12 min after start). After a long stretch of hard typing or a
+      fullscreen video the overdue visitor turns up within ~20 s of stopping, and just one
+      (no second visitor right after).
 
 ## Enemies
 
