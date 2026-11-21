@@ -18,7 +18,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust (pinned in rust-toolchain.toml)
         uses: dtolnay/rust-toolchain@master
@@ -48,15 +48,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $notes = @(
-            '**Windows 10/11 · needs your own copy of Hollow Knight** (the art is read from your install on first run; nothing from the game is included).',
-            '',
-            'Download the zip below, unzip it anywhere and run `skong.exe`. See the README for details.',
-            '',
-            '_Desk-Skong is an unofficial fan project, not affiliated with or endorsed by Team Cherry. Hollow Knight and its characters, art and music are property of Team Cherry._',
-            ''
-          ) -join "`n"
+          # Hand-written notes (docs/release-notes.md), not a list of every merged PR.
+          $notes = Get-Content -Raw -Encoding UTF8 docs/release-notes.md
           gh release create '${{ github.ref_name }}' '${{ steps.package.outputs.zip }}' `
-            --draft --generate-notes --notes "$notes" `
+            --draft --notes "$notes" `
             --title "Desk-Skong ${{ steps.package.outputs.version }}"
           if ($LASTEXITCODE -ne 0) { throw 'gh release create failed' }

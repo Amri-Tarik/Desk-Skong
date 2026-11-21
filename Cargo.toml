@@ -11,6 +11,9 @@ license = "MIT"
 lto = "thin"
 codegen-units = 1
 panic = "abort"
+# Line tables only (small): crash reports name the function and source line, read from the
+# .pdb files shipped next to the exes.
+debug = "line-tables-only"
 
 [profile.dev.package."*"]
 opt-level = 2
