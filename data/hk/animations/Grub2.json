@@ -1,0 +1,788 @@
+{
+  "name": "Grub2",
+  "clips": [
+    {
+      "name": "Cry",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grub",
+          "sprite_id": 1,
+          "sprite": "idle_to_cry0001"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 2,
+          "sprite": "idle_to_cry0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 3,
+          "sprite": "idle_to_cry0003"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 4,
+          "sprite": "idle_to_cry0004"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 5,
+          "sprite": "idle_to_cry0005"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 6,
+          "sprite": "idle_to_cry0006"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 7,
+          "sprite": "idle_to_cry0007"
+        }
+      ]
+    },
+    {
+      "name": "Idle",
+      "fps": 12,
+      "loop_start": 1,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grub",
+          "sprite_id": 1,
+          "sprite": "idle_to_cry0001"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 73,
+          "sprite": "idle0000"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 74,
+          "sprite": "idle0001"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 75,
+          "sprite": "idle0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 76,
+          "sprite": "idle0003"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 77,
+          "sprite": "idle0004"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 78,
+          "sprite": "idle0005"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 79,
+          "sprite": "idle0006"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 80,
+          "sprite": "idle0007"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 81,
+          "sprite": "idle0008"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 82,
+          "sprite": "idle0009"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 83,
+          "sprite": "idle0010"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 84,
+          "sprite": "idle0011"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 85,
+          "sprite": "idle0012"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 86,
+          "sprite": "idle0013"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 87,
+          "sprite": "idle0014"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 88,
+          "sprite": "idle0015"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 89,
+          "sprite": "idle0016"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 90,
+          "sprite": "idle0017"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 91,
+          "sprite": "idle0018"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 92,
+          "sprite": "idle0019"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 93,
+          "sprite": "idle0020"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 93,
+          "sprite": "idle0020"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 93,
+          "sprite": "idle0020"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 93,
+          "sprite": "idle0020"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 93,
+          "sprite": "idle0020"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 93,
+          "sprite": "idle0020"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 93,
+          "sprite": "idle0020"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 93,
+          "sprite": "idle0020"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 93,
+          "sprite": "idle0020"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 93,
+          "sprite": "idle0020"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 93,
+          "sprite": "idle0020"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 93,
+          "sprite": "idle0020"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 93,
+          "sprite": "idle0020"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 93,
+          "sprite": "idle0020"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 93,
+          "sprite": "idle0020"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 94,
+          "sprite": "idle0021"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 95,
+          "sprite": "idle0022"
+        }
+      ]
+    },
+    {
+      "name": "Freed",
+      "fps": 10,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grub",
+          "sprite_id": 8,
+          "sprite": "free0000"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 9,
+          "sprite": "free0001"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 10,
+          "sprite": "free0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 11,
+          "sprite": "free0003"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 12,
+          "sprite": "free0004"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 13,
+          "sprite": "free0005"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 14,
+          "sprite": "free0006"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 15,
+          "sprite": "free0007"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 16,
+          "sprite": "free0008"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 17,
+          "sprite": "free0009"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 18,
+          "sprite": "free0010"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 19,
+          "sprite": "free0011"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 20,
+          "sprite": "free0012"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 21,
+          "sprite": "free0013"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 22,
+          "sprite": "free0014"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 23,
+          "sprite": "free0015",
+          "event": {
+            "info": "",
+            "int": 0,
+            "float": 0
+          }
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 24,
+          "sprite": "free0016"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 25,
+          "sprite": "free0017"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 26,
+          "sprite": "free0018"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 27,
+          "sprite": "free0019"
+        }
+      ]
+    },
+    {
+      "name": "Bottle Idle",
+      "fps": 30,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Grub",
+          "sprite_id": 28,
+          "sprite": "bottle0000"
+        }
+      ]
+    },
+    {
+      "name": "Bottle Shatter",
+      "fps": 24,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grub",
+          "sprite_id": 29,
+          "sprite": "bottle0001"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 30,
+          "sprite": "bottle0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 31,
+          "sprite": "bottle0003"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 32,
+          "sprite": "bottle0004"
+        }
+      ]
+    },
+    {
+      "name": "Cry Turn",
+      "fps": 12,
+      "loop_start": 3,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grub",
+          "sprite_id": 42,
+          "sprite": "turn0000"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 41,
+          "sprite": "turn0001"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 40,
+          "sprite": "turn0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 2,
+          "sprite": "idle_to_cry0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 3,
+          "sprite": "idle_to_cry0003"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 4,
+          "sprite": "idle_to_cry0004"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 5,
+          "sprite": "idle_to_cry0005"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 6,
+          "sprite": "idle_to_cry0006"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 7,
+          "sprite": "idle_to_cry0007"
+        }
+      ]
+    },
+    {
+      "name": "Home Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Grub",
+          "sprite_id": 43,
+          "sprite": "grub_idle0000"
+        }
+      ]
+    },
+    {
+      "name": "Home Bounce",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Grub",
+          "sprite_id": 43,
+          "sprite": "grub_idle0000"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 44,
+          "sprite": "grub_idle0001"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 45,
+          "sprite": "grub_idle0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 46,
+          "sprite": "grub_idle0003"
+        }
+      ]
+    },
+    {
+      "name": "Home Look",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grub",
+          "sprite_id": 47,
+          "sprite": "grub_idle_to_look0000"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 48,
+          "sprite": "grub_idle_to_look0001"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 49,
+          "sprite": "grub_idle_to_look0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 49,
+          "sprite": "grub_idle_to_look0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 49,
+          "sprite": "grub_idle_to_look0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 49,
+          "sprite": "grub_idle_to_look0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 49,
+          "sprite": "grub_idle_to_look0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 49,
+          "sprite": "grub_idle_to_look0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 49,
+          "sprite": "grub_idle_to_look0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 49,
+          "sprite": "grub_idle_to_look0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 49,
+          "sprite": "grub_idle_to_look0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 49,
+          "sprite": "grub_idle_to_look0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 49,
+          "sprite": "grub_idle_to_look0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 49,
+          "sprite": "grub_idle_to_look0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 49,
+          "sprite": "grub_idle_to_look0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 49,
+          "sprite": "grub_idle_to_look0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 49,
+          "sprite": "grub_idle_to_look0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 49,
+          "sprite": "grub_idle_to_look0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 48,
+          "sprite": "grub_idle_to_look0001"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 47,
+          "sprite": "grub_idle_to_look0000"
+        }
+      ]
+    },
+    {
+      "name": "Home Wave",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grub",
+          "sprite_id": 53,
+          "sprite": "home_wave0000"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 55,
+          "sprite": "home_wave0001"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 57,
+          "sprite": "home_wave0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 61,
+          "sprite": "home_wave0003"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 51,
+          "sprite": "home_wave0004"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 70,
+          "sprite": "home_wave0005"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 56,
+          "sprite": "home_wave0006"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 66,
+          "sprite": "home_wave0007"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 60,
+          "sprite": "home_wave0008"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 72,
+          "sprite": "home_wave0009"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 50,
+          "sprite": "home_wave0010"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 62,
+          "sprite": "home_wave0011"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 54,
+          "sprite": "home_wave0012"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 63,
+          "sprite": "home_wave0013"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 58,
+          "sprite": "home_wave0014"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 71,
+          "sprite": "home_wave0015"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 65,
+          "sprite": "home_wave0016"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 64,
+          "sprite": "home_wave0017"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 52,
+          "sprite": "home_wave0018"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 68,
+          "sprite": "home_wave0019"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 69,
+          "sprite": "home_wave0020"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 59,
+          "sprite": "home_wave0021"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 67,
+          "sprite": "home_wave0022"
+        }
+      ]
+    },
+    {
+      "name": "Freed Fake",
+      "fps": 10,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grub",
+          "sprite_id": 8,
+          "sprite": "free0000"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 9,
+          "sprite": "free0001"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 10,
+          "sprite": "free0002"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 11,
+          "sprite": "free0003"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 12,
+          "sprite": "free0004"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 13,
+          "sprite": "free0005"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 14,
+          "sprite": "free0006"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 15,
+          "sprite": "free0007"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 16,
+          "sprite": "free0008"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 17,
+          "sprite": "free0009"
+        },
+        {
+          "collection": "Grub",
+          "sprite_id": 18,
+          "sprite": "free0010"
+        }
+      ]
+    }
+  ]
+}

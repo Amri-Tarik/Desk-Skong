@@ -1,0 +1,337 @@
+{
+  "name": "Grub Mimic Anim",
+  "clips": [
+    {
+      "name": "Burst",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 0,
+          "sprite": "burst0000"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 1,
+          "sprite": "burst0001"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 2,
+          "sprite": "burst0002"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 3,
+          "sprite": "burst0003"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 4,
+          "sprite": "burst0004"
+        }
+      ]
+    },
+    {
+      "name": "Death Land",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 23,
+          "sprite": "death0006"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 24,
+          "sprite": "death0007"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 25,
+          "sprite": "death0008"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 26,
+          "sprite": "death0009"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 27,
+          "sprite": "death0010"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 28,
+          "sprite": "death0011"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 29,
+          "sprite": "death0012"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 30,
+          "sprite": "death0013"
+        }
+      ]
+    },
+    {
+      "name": "Idle",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 34,
+          "sprite": "idle0000"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 35,
+          "sprite": "idle0001"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 36,
+          "sprite": "idle0002"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 37,
+          "sprite": "idle0003"
+        }
+      ]
+    },
+    {
+      "name": "IdleToRun",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 38,
+          "sprite": "idle_to_run0000"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 39,
+          "sprite": "idle_to_run0001"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 40,
+          "sprite": "idle_to_run0002"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 41,
+          "sprite": "idle_to_run0003"
+        }
+      ]
+    },
+    {
+      "name": "Run",
+      "fps": 16,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 42,
+          "sprite": "run0000"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 43,
+          "sprite": "run0001"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 44,
+          "sprite": "run0002"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 45,
+          "sprite": "run0003"
+        }
+      ]
+    },
+    {
+      "name": "TurnToRun",
+      "fps": 16,
+      "loop_start": 3,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 46,
+          "sprite": "turn0000"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 47,
+          "sprite": "turn0001"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 48,
+          "sprite": "turn0002"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 42,
+          "sprite": "run0000"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 43,
+          "sprite": "run0001"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 44,
+          "sprite": "run0002"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 45,
+          "sprite": "run0003"
+        }
+      ]
+    },
+    {
+      "name": "Death Air",
+      "fps": 12,
+      "loop_start": 3,
+      "wrap_mode": "LoopSection",
+      "frames": [
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 17,
+          "sprite": "death0000"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 18,
+          "sprite": "death0001"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 19,
+          "sprite": "death0002"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 20,
+          "sprite": "death0003"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 21,
+          "sprite": "death0004"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 22,
+          "sprite": "death0005"
+        }
+      ]
+    },
+    {
+      "name": "Burst 2",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Once",
+      "frames": [
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 5,
+          "sprite": "burst0005"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 6,
+          "sprite": "burst0006"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 7,
+          "sprite": "burst0007"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 8,
+          "sprite": "burst0008"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 9,
+          "sprite": "burst0009"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 10,
+          "sprite": "burst0010"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 11,
+          "sprite": "burst0011"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 12,
+          "sprite": "burst0012"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 13,
+          "sprite": "burst0013"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 14,
+          "sprite": "burst0014"
+        }
+      ]
+    },
+    {
+      "name": "WallRun",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 15,
+          "sprite": "wall_run0000"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 31,
+          "sprite": "wall_run0001"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 32,
+          "sprite": "wall_run0002"
+        },
+        {
+          "collection": "Grub Mimic Cln",
+          "sprite_id": 16,
+          "sprite": "wall_run0003"
+        }
+      ]
+    }
+  ]
+}

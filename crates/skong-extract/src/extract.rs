@@ -251,7 +251,12 @@ fn write_atlas(f: &Found, path: &Path) -> Result<()> {
 fn write_sprite(s: &catalog::FoundSprite, dir: &Path) -> Result<()> {
     let tex = &s.texture.tex;
     let rgba = decode(&s.texture)?;
-    let px = sprite::crop(&rgba, tex.width, tex.height, &s.rect).with_context(|| format!("sprite {}", s.name))?;
+    let mut px = sprite::crop(&rgba, tex.width, tex.height, &s.rect).with_context(|| format!("sprite {}", s.name))?;
+    let (w, h) = (s.rect.width as usize, s.rect.height as usize);
+    sprite::unflip(&mut px, w, h, s.rotation).with_context(|| format!("sprite {}", s.name))?;
+    if let Some(mesh) = &s.mesh {
+        sprite::mask(&mut px, w, h, mesh);
+    }
     write_png(&dir.join(format!("{}.png", s.name)), s.rect.width as u32, s.rect.height as u32, &px)?;
     let meta = serde_json::json!({
         "name": s.name, "width": s.rect.width, "height": s.rect.height,
