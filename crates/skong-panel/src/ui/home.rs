@@ -81,11 +81,8 @@ fn journal(p: &mut Panel, ui: &mut egui::Ui, s: &Status, info: Option<&Achieveme
             return;
         };
         let (got, total) = (info.unlocked(), info.total());
-        ui.horizontal(|ui| {
-            ui.label(RichText::new(format!("{got} / {total}")).font(style::heading(22.0)).color(pal::SOUL));
-            ui.add_space(6.0);
-            let frac = if total == 0 { 0.0 } else { got as f32 / total as f32 };
-            style::progress(ui, frac, ui.available_width().min(300.0));
+        ui.vertical_centered(|ui| {
+            ui.label(RichText::new(format!("{got} / {total}")).font(style::heading(22.0)).color(pal::SOUL)).on_hover_text("achievements found");
         });
         if s.sandbox {
             ui.label(RichText::new("Sandbox on — achievements paused until restart. Geo collected now isn't kept.").color(pal::EMBER));
