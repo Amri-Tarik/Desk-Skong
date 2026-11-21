@@ -49,7 +49,8 @@ $Forbidden = @(
     '.txt', '.bytes', '.csv', '.zip', '.7z'
 )
 # Files the zip may hold, by path inside the package folder.
-$AllowedTop = @('skong.exe', 'skong-panel.exe', 'README.md', 'LICENSE.txt', 'FONTS-OFL.txt')
+# The two .pdb files are our own debug symbols (crash reports name the source line).
+$AllowedTop = @('skong.exe', 'skong-panel.exe', 'skong.pdb', 'skong_panel.pdb', 'README.md', 'LICENSE.txt', 'FONTS-OFL.txt')
 
 function Test-PackageContent {
     <#
@@ -110,7 +111,7 @@ if ($SelfTest) {
         return $d
     }
     $json = [System.Text.Encoding]::UTF8.GetBytes('{"fps": 12}')
-    $base = @{ 'skong.exe' = @(77, 90); 'skong-panel.exe' = @(77, 90); 'README.md' = @(35); 'LICENSE.txt' = @(84); 'FONTS-OFL.txt' = @(83); 'data/hk/animations/Knight.json' = $json }
+    $base = @{ 'skong.exe' = @(77, 90); 'skong-panel.exe' = @(77, 90); 'skong.pdb' = @(77); 'skong_panel.pdb' = @(77); 'README.md' = @(35); 'LICENSE.txt' = @(84); 'FONTS-OFL.txt' = @(83); 'data/hk/animations/Knight.json' = $json }
     $cases = @(
         @{ name = 'clean'; extra = @{}; ok = $true },
         @{ name = 'png'; extra = @{ 'data/hk/Knight.png' = @(0x89, 0x50, 0x4E, 0x47, 13, 10, 26, 10) }; ok = $false },
@@ -118,6 +119,7 @@ if ($SelfTest) {
         @{ name = 'audio'; extra = @{ 'data/sfx.wav' = @(1) }; ok = $false },
         @{ name = 'game-text'; extra = @{ 'data/dialogue.txt' = @(65) }; ok = $false },
         @{ name = 'stray'; extra = @{ 'notes.md' = @(65) }; ok = $false },
+        @{ name = 'stray-pdb'; extra = @{ 'UnityPlayer.pdb' = @(1) }; ok = $false },
         @{ name = 'embedded'; extra = @{ 'data/atlas.json' = [System.Text.Encoding]::UTF8.GetBytes('{"img":"iVBORw0KGgoAAAANSUhEUg"}') }; ok = $false },
         @{ name = 'disguised'; extra = @{ 'data/atlas.json' = @(0x89, 0x50, 0x4E, 0x47, 13, 10, 26, 10) }; ok = $false }
     )
@@ -158,7 +160,7 @@ try {
         cargo build --release --locked -p skong -p skong-panel
         if ($LASTEXITCODE -ne 0) { throw 'cargo build failed' }
     }
-    $exes = @('skong.exe', 'skong-panel.exe') | ForEach-Object { Join-Path $Root "target\release\$_" }
+    $exes = @('skong.exe', 'skong-panel.exe', 'skong.pdb', 'skong_panel.pdb') | ForEach-Object { Join-Path $Root "target\release\$_" }
     foreach ($e in $exes) { if (-not (Test-Path $e)) { throw "missing $e (build first, or drop -SkipBuild)" } }
 
     # Data: only files git tracks (never local exports lying around), only JSON.
