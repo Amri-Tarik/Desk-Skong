@@ -25,6 +25,7 @@ mod handling;
 mod highlight;
 mod pastime;
 mod pastime_desk;
+mod passed_over;
 mod priorities;
 mod scene;
 mod shiny;

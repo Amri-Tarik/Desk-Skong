@@ -11,6 +11,7 @@ use crate::geom::Vec2;
 use crate::nav::{NavGoal, TravelStyle};
 
 use super::behaviours::{ActWait, Active, Ctx, Status, Travel, TravelStep, on_point, style_for};
+use super::candidates::Why;
 use super::interest::PoiTarget;
 use super::navigator::Navigator;
 use super::percept::Percepts;
@@ -52,9 +53,16 @@ pub struct ShinyMemory {
     shinies: Vec<KnownShiny>,
     tried: BTreeMap<u64, f64>,
     pub(crate) best: Option<ShinyChoice>,
+    /// What the last scoring made of each shiny (diagnostics, see `ai::candidates`).
+    scan: Vec<(u64, Why)>,
 }
 
 impl ShinyMemory {
+    /// The last scoring's verdict on each shiny (`Why::Planned`: a route gets him there).
+    pub(crate) fn scan(&self) -> &[(u64, Why)] {
+        &self.scan
+    }
+
     pub fn all(&self) -> &[KnownShiny] {
         &self.shinies
     }
@@ -105,15 +113,30 @@ impl Brain {
         let k = p.knight;
         let style = self.mind.travel_style();
         let current = self.shiny_target();
+        // What became of each shiny, for the passed-over list (a reused buffer).
+        let mut scan = std::mem::take(&mut self.interest.shinies.scan);
+        scan.clear();
         let mem = &self.interest.shinies;
         let mut ranked: Vec<(KnownShiny, Vec2)> = mem
             .shinies
             .iter()
-            .filter(|s| Some(s.id) == current || !mem.tried.contains_key(&s.id))
-            .map(|s| (*s, stand_spot(s, approach(s, k.pos))))
-            .filter(|(_, at)| !self.interest.is_blocked(PoiTarget::Spot(*at)))
+            .filter_map(|s| {
+                if Some(s.id) != current
+                    && let Some(&t) = mem.tried.get(&s.id)
+                {
+                    scan.push((s.id, Why::GaveUp { until: t + f64::from(RETRY_SECS) }));
+                    return None;
+                }
+                let at = stand_spot(s, approach(s, k.pos));
+                if self.interest.is_blocked(PoiTarget::Spot(at)) {
+                    scan.push((s.id, Why::Blocked));
+                    return None;
+                }
+                Some((*s, at))
+            })
             .collect();
         ranked.sort_by(|a, b| effort(k.pos, a.1).total_cmp(&effort(k.pos, b.1)));
+        scan.extend(ranked.iter().skip(2).map(|r| (r.0.id, Why::Outranked)));
         self.interest.shinies.best = ranked
             .into_iter()
             .take(2)
@@ -121,15 +144,21 @@ impl Brain {
                 let eta = if on_point(k, at, PICK_TOL) {
                     0.0
                 } else {
-                    let r = nav.reach(k, NavGoal::Point(at), style)?;
+                    let Some(r) = nav.reach(k, NavGoal::Point(at), style) else {
+                        scan.push((shiny.id, Why::NoRoute(style)));
+                        return None;
+                    };
                     if !r.lands_on(at, PICK_TOL) {
+                        scan.push((shiny.id, Why::Misses));
                         return None;
                     }
                     r.eta
                 };
+                scan.push((shiny.id, Why::Planned));
                 Some(ShinyChoice { shiny, at, eta })
             })
             .min_by(|a, b| a.eta.total_cmp(&b.eta));
+        self.interest.shinies.scan = scan;
     }
 
     /// Utility of the Shiny behaviour: curiosity, a bit more when bored, never while

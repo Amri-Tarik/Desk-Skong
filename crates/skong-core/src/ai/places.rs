@@ -13,6 +13,7 @@ use crate::geom::Vec2;
 use crate::nav::{NavGoal, TravelStyle};
 
 use super::behaviours::{ActWait, Beat, Ctx, SEAT_TOL, Status, Travel, TravelStep, style_for};
+use super::candidates::Why;
 use super::interest::PoiTarget;
 use super::needs::Mind;
 use super::navigator::Navigator;
@@ -96,6 +97,8 @@ pub struct PlaceMemory {
     pub(crate) best: Option<PlaceChoice>,
     /// Brain clock of the last scoring (route plans): at most every 0.25 s.
     scored_at: Option<f64>,
+    /// What the last scoring made of each place (diagnostics, see `ai::candidates`).
+    scan: Vec<(PlaceKind, PlaceId, Why)>,
 }
 
 impl PlaceMemory {
@@ -114,6 +117,11 @@ impl PlaceMemory {
 
     fn cooling(&self, p: &KnownPlace, now: f64) -> bool {
         self.used.get(&p.id).is_some_and(|t| ((now - t) as f32) < p.kind.cooldown())
+    }
+
+    /// The last scoring's verdict on each place (`Why::Planned`: route-planned and scored).
+    pub(crate) fn scan(&self) -> &[(PlaceKind, PlaceId, Why)] {
+        &self.scan
     }
 
     fn needs_notice(&self, p: &KnownPlace) -> bool {
@@ -180,21 +188,24 @@ impl Brain {
         let current = self.interest.places.current.filter(|_| matches!(self.active, super::behaviours::Active::Visit(_)));
         let visiting = current.map(|c| c.0);
         let trying = current.filter(|c| c.1).map(|c| c.0);
+        // What became of each place, for the passed-over list (a reused buffer).
+        let mut scan = std::mem::take(&mut self.interest.places.scan);
+        scan.clear();
         let mem = &self.interest.places;
         let mut ranked: Vec<(KnownPlace, f32, bool)> = mem
             .places
             .iter()
-            .filter(|pl| {
-                let blocked = self.interest.is_blocked(PoiTarget::Spot(pl.at));
-                if blocked {
-                    log::trace!("places: {} #{} at {:?}: blocked (failed recently)", pl.kind.label(), pl.id, pl.at);
-                }
-                !blocked
-            })
             .filter_map(|pl| {
+                if self.interest.is_blocked(PoiTarget::Spot(pl.at)) {
+                    log::trace!("places: {} #{} at {:?}: blocked (failed recently)", pl.kind.label(), pl.id, pl.at);
+                    scan.push((pl.kind, pl.id, Why::Blocked));
+                    return None;
+                }
                 let fresh = mem.needs_notice(pl) && pl.at.distance(knight.pos) < 1600.0;
                 if !fresh && Some(pl.id) != visiting && mem.cooling(pl, self.now) {
                     log::trace!("places: {} #{} at {:?}: cooling down", pl.kind.label(), pl.id, pl.at);
+                    let until = mem.used.get(&pl.id).map_or(self.now, |t| t + f64::from(pl.kind.cooldown()));
+                    scan.push((pl.kind, pl.id, Why::Cooling { until }));
                     return None;
                 }
                 let w = match fresh {
@@ -202,10 +213,14 @@ impl Brain {
                     false if Some(pl.id) == trying => want(pl, &self.mind).max(0.95),
                     false => want(pl, &self.mind),
                 };
+                if w <= 0.05 {
+                    scan.push((pl.kind, pl.id, Why::NotWanted));
+                }
                 (w > 0.05).then_some((*pl, w, fresh))
             })
             .collect();
         ranked.sort_by(|a, b| b.1.total_cmp(&a.1));
+        scan.extend(ranked.iter().skip(2).map(|r| (r.0.kind, r.0.id, Why::Outranked)));
         self.interest.places.best = ranked
             .into_iter()
             .take(2)
@@ -217,10 +232,12 @@ impl Brain {
                 } else {
                     let Some(r) = nav.reach(knight, NavGoal::Point(place.at), style) else {
                         log::trace!("places: {} #{} at {:?}: no {style:?} route", place.kind.label(), place.id, place.at);
+                        scan.push((place.kind, place.id, Why::NoRoute(style)));
                         return None;
                     };
                     if r.end.is_some() && !r.lands_on(place.at, SEAT_TOL + 2.0) {
                         log::trace!("places: {} #{} at {:?}: route ends at {:?}, not on it", place.kind.label(), place.id, place.at, r.end);
+                        scan.push((place.kind, place.id, Why::Misses));
                         if log::log_enabled!(log::Level::Trace) {
                             let near = |y: f32, x0: f32, x1: f32| (y - place.at.y).abs() < 120.0 && x0 < place.at.x + 200.0 && x1 > place.at.x - 200.0;
                             for l in p.terrain.ledges.iter().filter(|l| near(l.y, l.x0, l.x1)) {
@@ -237,9 +254,11 @@ impl Brain {
                 let travel = if fresh { 0.0 } else { self.cfg.travel_cost_per_sec * eta };
                 // Geo is worth a long walk: a far rock must not sink below the engagements.
                 let travel = if matches!(place.kind, PlaceKind::Deposit | PlaceKind::Grub) { travel.min(0.15) } else { travel };
+                scan.push((place.kind, place.id, Why::Planned));
                 Some(PlaceChoice { place, score: w - travel, fresh })
             })
             .max_by(|a, b| a.score.total_cmp(&b.score));
+        self.interest.places.scan = scan;
     }
 
     /// Utility of the Visit behaviour.

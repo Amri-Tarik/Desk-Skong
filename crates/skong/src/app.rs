@@ -1213,6 +1213,14 @@ impl Pet {
             self.rec.note(format!("switch {} -> {} ({:?})", s.from.label(), s.to.label(), s.reason));
         }
         self.rec.think(self.brain.behaviour().label(), reason, source, input);
+        // Idling / keeping company with activities on screen: what he passed over, and why
+        // (described only when the list changes in kind).
+        let brain = &self.brain;
+        self.rec.passed_over(brain.idling_past(), brain.behaviour().label(), || {
+            let mut s = String::new();
+            brain.describe_passed_over(&mut s);
+            s
+        });
     }
 
     /// Clicks on the knight poke him; press-and-drag picks him up; release throws him.
@@ -1331,7 +1339,11 @@ impl Pet {
             }
             Command::OpenLogFolder => crate::logfile::open_folder(),
             Command::SaveTrace => {
-                let _ = self.rec.save("saved from the panel");
+                // With the brain's latest passed-over list (whatever he is doing).
+                let mut passed = String::new();
+                self.brain.describe_passed_over(&mut passed);
+                let passed = if passed.is_empty() { "nothing" } else { passed.as_str() };
+                let _ = self.rec.save(&format!("saved from the panel\npassed over now ({}): {passed}", self.brain.behaviour().label()));
             }
             Command::ReextractArt => {
                 let game = self.settings.game_dir.as_ref().map(std::path::PathBuf::from).or_else(crate::art::recorded_game);

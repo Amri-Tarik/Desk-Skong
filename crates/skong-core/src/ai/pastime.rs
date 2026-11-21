@@ -29,6 +29,7 @@ use crate::pastime::DummyHit;
 use crate::terrain::LedgeKind;
 
 use super::behaviours::{ActWait, Active, BehaviourKind, Ctx, SEAT_TOL, Status, Travel, TravelStep, on_point};
+use super::candidates::Why;
 use super::combat::{Mark, Stance, pogo_now};
 use super::interest::PoiTarget;
 use super::navigator::{Navigator, Reach};
@@ -82,6 +83,11 @@ impl PastimeKind {
             PastimeKind::View => "taking in the view",
             PastimeKind::Stargaze => "stargazing",
         }
+    }
+
+    /// A dummy or a lumafly (not the quiet ones).
+    pub(crate) fn lively(self) -> bool {
+        matches!(self, PastimeKind::Dummy | PastimeKind::Lumafly)
     }
 
     /// Seconds before the same pastime again (after one ends).
@@ -145,6 +151,8 @@ pub struct PastimeMemory {
     dummy_view: Option<(u64, &'static str)>,
     /// The dummy that broke last (the app told him): practising on it, he stops with a look.
     dummy_broke: Option<u64>,
+    /// The lumafly last route-checked and what came of it (diagnostics, `ai::candidates`).
+    fly_view: Option<(u64, Why)>,
 }
 
 impl PastimeMemory {
@@ -170,6 +178,41 @@ impl PastimeMemory {
             let at = self.dummy.map_or(Vec2::ZERO, |d| d.pos);
             log::info!("brain: training dummy #{id} at ({:.0},{:.0}): {what} (t {now:.0})", at.x, at.y);
         }
+    }
+
+    /// Until when `kind` is on its cooldown (brain time), if it is.
+    pub(crate) fn cooling(&self, kind: PastimeKind, now: f64) -> Option<f64> {
+        self.ready_at.get(&kind).copied().filter(|&t| now < t)
+    }
+
+    /// What he last made of dummy `id` (when it isn't cooling or the chosen pastime).
+    pub(crate) fn dummy_verdict(&self, id: u64) -> Why {
+        match self.dummy_skip {
+            Some((d, until)) if d == id => Why::GaveUp { until },
+            _ => match self.dummy_view {
+                Some((d, what)) if d == id => Why::Note(what),
+                _ => Why::Note("not looked at yet"),
+            },
+        }
+    }
+
+    /// The verdict on each lumafly worth chasing (not floating off): cooling, given up on,
+    /// the route check of the nearest, or a nearer one first. `Why::Planned`: chaseable.
+    pub(crate) fn fly_verdicts(&self, now: f64) -> impl Iterator<Item = (u64, Why)> + '_ {
+        let cooling = self.cooling(PastimeKind::Lumafly, now);
+        self.flies.iter().filter(|f| !f.leaving).map(move |f| {
+            let why = if let Some(until) = cooling {
+                Why::Cooling { until }
+            } else if let Some(&t) = self.tried_flies.get(&f.id) {
+                Why::GaveUp { until: t + 60.0 }
+            } else {
+                match self.fly_view {
+                    Some((id, why)) if id == f.id => why,
+                    _ => Why::Outranked,
+                }
+            };
+            (f.id, why)
+        })
     }
 
     fn rest(&mut self, kind: PastimeKind, now: f64) {
@@ -393,13 +436,24 @@ impl Brain {
         if ready(&self.interest.pastimes, PastimeKind::Lumafly) {
             let mem = &self.interest.pastimes;
             let fly = mem.flies.iter().filter(|f| !f.leaving && !mem.tried_flies.contains_key(&f.id)).min_by(|a, b| a.pos.distance(k.pos).total_cmp(&b.pos.distance(k.pos))).copied();
-            if let Some(f) = fly
-                && let Some(under) = spots::project(p.terrain, f.pos)
-                && let Some(r) = nav.reach(k, NavGoal::Point(under), style)
-                && r.end.is_none_or(|e| e.distance(under) < 3.0 * ppu)
-            {
-                options.push(PastimeChoice { kind: PastimeKind::Lumafly, at: under, eta: r.eta, value: 0.0, target: f.id, place: String::new(), style });
+            // The same checks as one chain, each outcome noted for the passed-over list.
+            let mut view = None;
+            if let Some(f) = fly {
+                view = Some((f.id, Why::Note("no ledge under it")));
+                if let Some(under) = spots::project(p.terrain, f.pos) {
+                    view = Some((f.id, Why::NoRoute(style)));
+                    if let Some(r) = nav.reach(k, NavGoal::Point(under), style) {
+                        view = Some((f.id, Why::Misses));
+                        if r.end.is_none_or(|e| e.distance(under) < 3.0 * ppu) {
+                            view = Some((f.id, Why::Planned));
+                            options.push(PastimeChoice { kind: PastimeKind::Lumafly, at: under, eta: r.eta, value: 0.0, target: f.id, place: String::new(), style });
+                        }
+                    }
+                }
             }
+            self.interest.pastimes.fly_view = view;
+        } else {
+            self.interest.pastimes.fly_view = None;
         }
 
         // The view and the stars: re-scanned every few seconds.
@@ -445,6 +499,9 @@ impl Brain {
         }
         if let Some(o) = options.iter().find(|o| o.kind == PastimeKind::Dummy && o.value <= 0.0) {
             self.interest.pastimes.note_dummy(o.target, "not up to it: too tired or too sore", now);
+        }
+        if let Some(o) = options.iter().find(|o| o.kind == PastimeKind::Lumafly && o.value <= 0.0) {
+            self.interest.pastimes.fly_view = Some((o.target, Why::Note("not up to it: worn out")));
         }
         options.retain(|o| o.value > 0.0);
         // Test panel: the view / the stars now, if there is a spot for them.
