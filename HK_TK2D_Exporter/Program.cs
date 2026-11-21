@@ -17,7 +17,7 @@ using AssetsTools.NET.Texture;
 
 internal static class Program
 {
-    sealed record Options(string DataDir, string? OutDir, bool List, HashSet<string>? Collections, HashSet<string>? Animations, string[] Files, string? DumpMono, int MaxArray, string? TexturesDir, string? Find, HashSet<string>? ExportSprites, bool Hierarchy);
+    sealed record Options(string DataDir, string? OutDir, bool List, HashSet<string>? Collections, HashSet<string>? Animations, string[] Files, string? DumpMono, int MaxArray, string? TexturesDir, string? Find, HashSet<string>? ExportSprites, bool Hierarchy, bool Root);
 
     static int Main(string[] args)
     {
@@ -180,6 +180,11 @@ internal static class Program
             // Texture rows are bottom-up; rect origin is bottom-left. Output top-down.
             for (int row = 0; row < h; row++)
                 Buffer.BlockCopy(rgba, ((y + h - 1 - row) * tw + x) * 4, outPx, row * w * 4, w * 4);
+            // The packer may have flipped the sprite to fit it in (settingsRaw bits 2-5).
+            uint rotation = (rd["settingsRaw"].AsUInt >> 2) & 0xF;
+            if (rotation > 3) throw new InvalidOperationException($"packed rotated ({rotation}), not supported");
+            Unflip(outPx, w, h, flipX: rotation is 1 or 3, flipY: rotation is 2 or 3);
+            ApplyMeshMask(sprite, w, h, outPx);
             Directory.CreateDirectory(dir);
             using (var fs = File.Create(Path.Combine(dir, name + ".png")))
                 new StbImageWriteSharp.ImageWriter().WritePng(outPx, w, h, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, fs);
@@ -188,6 +193,89 @@ internal static class Program
             Console.WriteLine($"sprite {name} {w}x{h} (texture {tw}x{th}) -> {dir}");
         }
         catch (Exception e) { Console.Error.WriteLine($"sprite {name}: {e.Message}"); }
+    }
+
+    /// Undo a packer flip in place (top-down RGBA, `w` x `h`).
+    static void Unflip(byte[] px, int w, int h, bool flipX, bool flipY)
+    {
+        if (!flipX && !flipY) return;
+        var src = (byte[])px.Clone();
+        for (int row = 0; row < h; row++)
+            for (int col = 0; col < w; col++)
+            {
+                int sr = flipY ? h - 1 - row : row, sc = flipX ? w - 1 - col : col;
+                Buffer.BlockCopy(src, (sr * w + sc) * 4, px, (row * w + col) * 4, 4);
+            }
+    }
+
+    /// Tight-packed sprites share their rectangle with neighbours in the texture: only the
+    /// sprite's mesh is its own. Clear every pixel whose centre is outside all of the mesh's
+    /// triangles, after growing the mesh by one pixel (8-neighbourhood) so antialiased edges
+    /// stay. Same rule as `skong_extract::sprite::mesh_mask` (the two must match pixel for
+    /// pixel). Sprites without a readable float position channel are left as they are.
+    static void ApplyMeshMask(AssetTypeValueField sprite, int w, int h, byte[] px)
+    {
+        try
+        {
+            var rd = sprite["m_RD"];
+            var vd = rd["m_VertexData"];
+            int count = (int)vd["m_VertexCount"].AsUInt;
+            var channels = vd["m_Channels.Array"].Children;
+            if (count == 0 || channels.Count == 0) return;
+            var pos = channels[0];
+            if (pos["stream"].AsByte != 0 || pos["format"].AsByte != 0 || (pos["dimension"].AsByte & 0xF) < 2) return;
+            int stride = 0;
+            foreach (var c in channels)
+            {
+                if (c["stream"].AsByte != 0 || (c["dimension"].AsByte & 0xF) == 0) continue;
+                int size = c["format"].AsByte switch { 0 or 10 or 11 => 4, 1 or 4 or 5 or 8 or 9 => 2, _ => 1 };
+                stride = Math.Max(stride, c["offset"].AsByte + size * (c["dimension"].AsByte & 0xF));
+            }
+            var data = vd["m_DataSize"].AsByteArray;
+            var arr = rd["m_IndexBuffer"]["Array"];
+            var idx = arr.Value?.ValueType == AssetValueType.ByteArray ? arr.AsByteArray : arr.Children.Select(b => b.AsByte).ToArray();
+            if (data.Length < count * stride || idx.Length < 6) return;
+            double ppu = sprite["m_PixelsToUnits"].AsFloat;
+            var rect = sprite["m_Rect"]; var piv = sprite["m_Pivot"]; var off = rd["textureRectOffset"];
+            double bx = piv["x"].AsFloat * (double)rect["width"].AsFloat - off["x"].AsFloat;
+            double by = piv["y"].AsFloat * (double)rect["height"].AsFloat - off["y"].AsFloat;
+            var vx = new double[count]; var vy = new double[count];
+            for (int i = 0; i < count; i++)
+            {
+                int o = i * stride + pos["offset"].AsByte;
+                vx[i] = BitConverter.ToSingle(data, o) * ppu + bx;
+                vy[i] = BitConverter.ToSingle(data, o + 4) * ppu + by;
+            }
+            var inside = new bool[w * h];
+            for (int t = 0; t + 5 < idx.Length; t += 6)
+            {
+                int a = BitConverter.ToUInt16(idx, t), b = BitConverter.ToUInt16(idx, t + 2), c = BitConverter.ToUInt16(idx, t + 4);
+                if (a >= count || b >= count || c >= count) return;
+                for (int row = 0; row < h; row++)
+                    for (int col = 0; col < w; col++)
+                    {
+                        if (inside[row * w + col]) continue;
+                        double qx = col + 0.5, qy = h - row - 0.5;
+                        double e0 = (vx[b] - vx[a]) * (qy - vy[a]) - (vy[b] - vy[a]) * (qx - vx[a]);
+                        double e1 = (vx[c] - vx[b]) * (qy - vy[b]) - (vy[c] - vy[b]) * (qx - vx[b]);
+                        double e2 = (vx[a] - vx[c]) * (qy - vy[c]) - (vy[a] - vy[c]) * (qx - vx[c]);
+                        if ((e0 >= 0 && e1 >= 0 && e2 >= 0) || (e0 <= 0 && e1 <= 0 && e2 <= 0)) inside[row * w + col] = true;
+                    }
+            }
+            for (int row = 0; row < h; row++)
+                for (int col = 0; col < w; col++)
+                {
+                    bool keep = false;
+                    for (int dy = -1; dy <= 1 && !keep; dy++)
+                        for (int dx = -1; dx <= 1 && !keep; dx++)
+                        {
+                            int r2 = row + dy, c2 = col + dx;
+                            keep = r2 >= 0 && r2 < h && c2 >= 0 && c2 < w && inside[r2 * w + c2];
+                        }
+                    if (!keep) { int o = (row * w + col) * 4; px[o] = px[o + 1] = px[o + 2] = px[o + 3] = 0; }
+                }
+        }
+        catch (Exception e) { Console.Error.WriteLine($"  mesh mask skipped: {e.Message}"); }
     }
 
     // ------------------------------------------------------------------ export: atlas textures
@@ -528,6 +616,13 @@ internal static class Program
                 if (ext.info is null) continue;
                 var type = (AssetClassID)ext.info.TypeId;
                 if (type is AssetClassID.Transform or AssetClassID.RectTransform) continue;
+                if (type == AssetClassID.SpriteRenderer)
+                {
+                    var sprite = "";
+                    try { var sp = am.GetExtAsset(ext.file, am.GetBaseField(ext.file, ext.info)["m_Sprite"]).baseField; if (sp is not null) sprite = $" sprite={sp["m_Name"].AsString}"; } catch { }
+                    parts.Add(type + sprite);
+                    continue;
+                }
                 if (type != AssetClassID.MonoBehaviour) { parts.Add(type.ToString()); continue; }
                 var cls = scan.ClassName(ext.file, ext.info) ?? "?";
                 var detail = "";
@@ -591,11 +686,22 @@ internal static class Program
         }
         if (opt.Hierarchy)
         {
+            var printedRoots = new HashSet<(string, long)>();
             foreach (var e in scan.Dumped)
             {
                 var go = am.GetExtAsset(e.Afi, e.Field["m_GameObject"]);
                 var tr = TransformOf(am, go);
-                if (tr is not null) PrintTree(am, scan, tr.Value.file, tr.Value.baseField, 0);
+                if (tr is null) continue;
+                var top = tr.Value;
+                // --root: print from the top of the object's tree (its prefab or scene root), once.
+                while (opt.Root)
+                {
+                    var father = am.GetExtAsset(top.file, top.baseField["m_Father"]);
+                    if (father.baseField is null) break;
+                    top = father;
+                }
+                if (opt.Root && !printedRoots.Add((top.file.path, top.info.PathId))) continue;
+                PrintTree(am, scan, top.file, top.baseField, 0);
             }
             return 0;
         }
@@ -682,7 +788,7 @@ internal static class Program
         string? data = null, outDir = null; bool list = false;
         HashSet<string>? cols = null, anims = null;
         string[] files = ["resources.assets"];
-        string? dumpMono = null; int maxArray = 64; string? textures = null; string? find = null; HashSet<string>? exportSprites = null; bool hierarchy = false;
+        string? dumpMono = null; int maxArray = 64; string? textures = null; string? find = null; HashSet<string>? exportSprites = null; bool hierarchy = false; bool root = false;
         for (int i = 0; i < args.Length; i++)
         {
             string Next() => i + 1 < args.Length ? args[++i] : throw new ArgumentException($"missing value for {args[i]}");
@@ -700,12 +806,13 @@ internal static class Program
                 case "--find": find = Next(); break;
                 case "--export-sprites": exportSprites = Set(Next()); break;
                 case "--hierarchy": hierarchy = true; break;
+                case "--root": hierarchy = true; root = true; break;
                 case "--files": files = Next().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries); break;
                 default: throw new ArgumentException($"unknown arg {args[i]}");
             }
         }
         if (data is null) throw new ArgumentException("--data is required");
-        return new Options(data, outDir, list, cols, anims, files, dumpMono, maxArray, textures, find, exportSprites, hierarchy);
+        return new Options(data, outDir, list, cols, anims, files, dumpMono, maxArray, textures, find, exportSprites, hierarchy, root);
     }
 
     static void PrintUsage() => Console.Error.WriteLine(

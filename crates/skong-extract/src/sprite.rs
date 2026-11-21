@@ -24,6 +24,104 @@ pub struct Sprite {
     pub rect: SpriteRect,
     pub atlas: PPtr,
     pub render_key: [u8; 24],
+    /// Packing rotation of its own texture rectangle (`settingsRaw` bits 2-5; an atlas
+    /// entry has its own, see [`atlas_render_data`]).
+    pub rotation: u32,
+    /// What of its rectangle is its own (tight packing shares rectangles).
+    pub mesh: Option<Mesh>,
+}
+
+/// A sprite's mesh in its own space: positions in game units from the pivot (x right,
+/// y up), triangles as index triples, and what places it on its texture rectangle.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Mesh {
+    pub positions: Vec<[f32; 2]>,
+    pub indices: Vec<u16>,
+    /// `m_Rect` size (px).
+    pub rect_size: [f32; 2],
+    pub pivot: [f32; 2],
+    pub ppu: f32,
+    /// `textureRectOffset`: the texture rectangle's corner inside `m_Rect` (px).
+    pub offset: [f32; 2],
+}
+
+/// The float position channel (stream 0) of a sprite's vertex data, as (x, y) pairs.
+fn positions(count: usize, channels: &[[u8; 4]], data: &[u8]) -> Option<Vec<[f32; 2]>> {
+    let pos = channels.first()?;
+    if pos[0] != 0 || pos[2] != 0 || (pos[3] & 0xF) < 2 {
+        return None;
+    }
+    let size = |format: u8| match format {
+        0 | 10 | 11 => 4,
+        1 | 4 | 5 | 8 | 9 => 2,
+        _ => 1,
+    };
+    let stride = channels.iter().filter(|c| c[0] == 0 && c[3] & 0xF != 0).map(|c| c[1] as usize + size(c[2]) * (c[3] & 0xF) as usize).max()?;
+    if count == 0 || data.len() < count * stride {
+        return None;
+    }
+    let f = |o: usize| f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]);
+    Some((0..count).map(|i| i * stride + pos[1] as usize).map(|o| [f(o), f(o + 4)]).collect())
+}
+
+/// Undo a packer flip (`rotation` 1: horizontal, 2: vertical, 3: both) of a top-down
+/// RGBA image in place. Rotated packing (4) is not supported.
+pub fn unflip(px: &mut [u8], w: usize, h: usize, rotation: u32) -> Result<()> {
+    let (fx, fy) = match rotation {
+        0 => return Ok(()),
+        1 => (true, false),
+        2 => (false, true),
+        3 => (true, true),
+        r => bail!("packed rotated ({r}), not supported"),
+    };
+    let src = px.to_vec();
+    for row in 0..h {
+        for col in 0..w {
+            let (sr, sc) = (if fy { h - 1 - row } else { row }, if fx { w - 1 - col } else { col });
+            px[(row * w + col) * 4..][..4].copy_from_slice(&src[(sr * w + sc) * 4..][..4]);
+        }
+    }
+    Ok(())
+}
+
+/// Clear every pixel of a top-down RGBA image (`w` x `h`, the sprite's texture rectangle
+/// in its own orientation) whose centre lies outside all of `mesh`'s triangles, after
+/// growing them by one pixel (8-neighbourhood) so antialiased edges stay. Same rule and
+/// arithmetic as the .NET exporter's `ApplyMeshMask` (the two must match pixel for pixel).
+pub fn mask(px: &mut [u8], w: usize, h: usize, mesh: &Mesh) {
+    let ppu = mesh.ppu as f64;
+    let bx = mesh.pivot[0] as f64 * mesh.rect_size[0] as f64 - mesh.offset[0] as f64;
+    let by = mesh.pivot[1] as f64 * mesh.rect_size[1] as f64 - mesh.offset[1] as f64;
+    let v: Vec<(f64, f64)> = mesh.positions.iter().map(|p| (p[0] as f64 * ppu + bx, p[1] as f64 * ppu + by)).collect();
+    if mesh.indices.len() < 3 || mesh.indices.iter().any(|&i| i as usize >= v.len()) {
+        return;
+    }
+    let mut inside = vec![false; w * h];
+    for t in mesh.indices.chunks_exact(3) {
+        let (a, b, c) = (v[t[0] as usize], v[t[1] as usize], v[t[2] as usize]);
+        for row in 0..h {
+            for col in 0..w {
+                if inside[row * w + col] {
+                    continue;
+                }
+                let (qx, qy) = (col as f64 + 0.5, h as f64 - row as f64 - 0.5);
+                let e0 = (b.0 - a.0) * (qy - a.1) - (b.1 - a.1) * (qx - a.0);
+                let e1 = (c.0 - b.0) * (qy - b.1) - (c.1 - b.1) * (qx - b.0);
+                let e2 = (a.0 - c.0) * (qy - c.1) - (a.1 - c.1) * (qx - c.0);
+                if (e0 >= 0.0 && e1 >= 0.0 && e2 >= 0.0) || (e0 <= 0.0 && e1 <= 0.0 && e2 <= 0.0) {
+                    inside[row * w + col] = true;
+                }
+            }
+        }
+    }
+    for row in 0..h {
+        for col in 0..w {
+            let keep = (row.saturating_sub(1)..=(row + 1).min(h - 1)).any(|r| (col.saturating_sub(1)..=(col + 1).min(w - 1)).any(|c| inside[r * w + c]));
+            if !keep {
+                px[(row * w + col) * 4..][..4].fill(0);
+            }
+        }
+    }
 }
 
 fn rect(r: &mut Reader) -> Result<[f32; 4]> {
@@ -51,7 +149,7 @@ fn skip_secondary_textures(r: &mut Reader) -> Result<()> {
 pub fn parse(sf: &SerializedFile, bytes: &[u8]) -> Result<Sprite> {
     let mut r = sf.reader(bytes);
     let name = r.string()?;
-    rect(&mut r)?; // m_Rect
+    let m_rect = rect(&mut r)?;
     r.skip(8 + 16)?; // m_Offset, m_Border
     let ppu = r.f32()?;
     let pivot = [r.f32()?, r.f32()?];
@@ -69,20 +167,27 @@ pub fn parse(sf: &SerializedFile, bytes: &[u8]) -> Result<Sprite> {
     r.pptr()?; // alphaTexture
     skip_secondary_textures(&mut r)?;
     skip_vec(&mut r, 48)?; // m_SubMeshes
-    r.byte_array()?; // m_IndexBuffer
-    r.u32()?; // m_VertexCount
-    skip_vec(&mut r, 4)?; // m_Channels
-    r.byte_array()?; // m_DataSize
+    let index_bytes = r.byte_array()?; // m_IndexBuffer
+    let count = r.u32()? as usize; // m_VertexCount
+    let n = r.len(4)?;
+    let channels: Vec<[u8; 4]> = (0..n).map(|_| r.bytes(4).map(|b| [b[0], b[1], b[2], b[3]])).collect::<Result<_>>()?;
+    let data = r.byte_array()?; // m_DataSize
     skip_vec(&mut r, 64)?; // m_Bindpose
     let tr = rect(&mut r)?;
     if !(tr[2] > 0.0 && tr[3] > 0.0 && tr[2] <= 16384.0 && tr[3] <= 16384.0 && ppu > 0.0) {
         bail!("sprite '{name}': unrecognised Sprite layout (Unity {})", sf.unity_version);
     }
-    Ok(Sprite { name, texture: (!texture.is_null()).then_some(texture), rect: round_rect(tr, pivot, ppu), atlas, render_key })
+    let offset = [r.f32()?, r.f32()?]; // textureRectOffset
+    r.skip(8)?; // atlasRectOffset
+    let settings = r.u32()?;
+    let indices: Vec<u16> = index_bytes.chunks_exact(2).map(|b| u16::from_le_bytes([b[0], b[1]])).collect();
+    let mesh = positions(count, &channels, data).map(|positions| Mesh { positions, indices, rect_size: [m_rect[2], m_rect[3]], pivot, ppu, offset });
+    Ok(Sprite { name, texture: (!texture.is_null()).then_some(texture), rect: round_rect(tr, pivot, ppu), atlas, render_key, rotation: (settings >> 2) & 0xF, mesh })
 }
 
 /// The texture and rectangle a `SpriteAtlas` stores for the sprite with `key`.
-pub fn atlas_render_data(sf: &SerializedFile, bytes: &[u8], key: &[u8; 24]) -> Result<Option<(PPtr, SpriteRect)>> {
+/// Also returns the entry's packing rotation (`settingsRaw` bits 2-5).
+pub fn atlas_render_data(sf: &SerializedFile, bytes: &[u8], key: &[u8; 24]) -> Result<Option<(PPtr, SpriteRect, u32)>> {
     let mut r = sf.reader(bytes);
     r.string()?; // m_Name
     skip_vec(&mut r, 12)?; // m_PackedSprites
@@ -96,10 +201,11 @@ pub fn atlas_render_data(sf: &SerializedFile, bytes: &[u8], key: &[u8; 24]) -> R
         let texture = r.pptr()?;
         r.pptr()?; // alphaTexture
         let tr = rect(&mut r)?;
-        r.skip(8 + 8 + 16 + 4 + 4)?; // textureRectOffset, atlasRectOffset, uvTransform, downscale, settings
+        r.skip(8 + 8 + 16 + 4)?; // textureRectOffset, atlasRectOffset, uvTransform, downscale
+        let settings = r.u32()?;
         skip_secondary_textures(&mut r)?;
         if k == key {
-            return Ok(Some((texture, round_rect(tr, [0.5, 0.5], 100.0))));
+            return Ok(Some((texture, round_rect(tr, [0.5, 0.5], 100.0), (settings >> 2) & 0xF)));
         }
     }
     Ok(None)
@@ -178,5 +284,33 @@ mod tests {
         let px: Vec<u8> = (0..6u8).flat_map(|i| [i, i, i, 255]).collect();
         assert_eq!(crop(&px, 3, 2, &s.rect).unwrap(), [4, 4, 4, 255, 5, 5, 5, 255]);
         assert!(crop(&px, 2, 2, &s.rect).is_err());
+        assert!(s.mesh.is_none(), "no float position channel: nothing to mask with");
+    }
+
+    #[test]
+    fn a_flipped_packing_is_undone() {
+        // 2x2 top-down: a b / c d.
+        let img = |v: [u8; 4]| -> Vec<u8> { v.iter().flat_map(|&i| [i, i, i, 255]).collect() };
+        let mut px = img([1, 2, 3, 4]);
+        unflip(&mut px, 2, 2, 2).unwrap();
+        assert_eq!(px, img([3, 4, 1, 2]), "vertical");
+        let mut px = img([1, 2, 3, 4]);
+        unflip(&mut px, 2, 2, 3).unwrap();
+        assert_eq!(px, img([4, 3, 2, 1]), "both");
+        assert!(unflip(&mut img([1, 2, 3, 4]), 2, 2, 4).is_err(), "rotated packing");
+    }
+
+    #[test]
+    fn the_mesh_keeps_its_own_pixels_and_a_one_pixel_rim() {
+        // An 8x4 rectangle whose mesh is its left 2 columns (1 px per unit, pivot at the
+        // bottom-left corner): columns 0-2 stay (the mesh plus a pixel), the rest is a
+        // neighbour's art and goes.
+        let mesh = Mesh { positions: vec![[0.0, 0.0], [2.0, 0.0], [0.0, 4.0], [2.0, 4.0]], indices: vec![0, 1, 2, 2, 1, 3], rect_size: [8.0, 4.0], pivot: [0.0, 0.0], ppu: 1.0, offset: [0.0, 0.0] };
+        let mut px = vec![255u8; 8 * 4 * 4];
+        mask(&mut px, 8, 4, &mesh);
+        for row in 0..4 {
+            let kept: Vec<bool> = (0..8).map(|c| px[(row * 8 + c) * 4 + 3] == 255).collect();
+            assert_eq!(kept, [true, true, true, false, false, false, false, false], "row {row}");
+        }
     }
 }

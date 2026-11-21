@@ -45,6 +45,14 @@ A collection whose sprites span several atlas textures (tk2d materials; only `Gr
 so far) lists pages 1.. as `extra_atlases` in its JSON, and `--textures` writes them as
 `<atlas>_<k>.png` (`Grimm_Cln_1.png`); sprites name their page in `material_id`.
 
+`--export-sprites` undoes a packer flip (the grub jar is stored upside down) and keeps only
+the sprite's own mesh (tight packing shares rectangles with neighbours: the jar's crop
+held a piece of rubble), exactly like the first-run extractor (`skong_extract::sprite`).
+
+`--dump-mono <Class> --root` prints the whole tree each match belongs to (from its prefab
+or scene root, once per root), with SpriteRenderer sprite names: how the grub jar was
+found (`--files level110 --dump-mono tk2dSpriteAnimator --root`).
+
 
 Options: `--collections A,B` exports collections by name instead of by reference;
 `--files resources.assets,level1` scans other asset files (default `resources.assets`).

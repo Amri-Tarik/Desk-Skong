@@ -45,6 +45,10 @@ pub struct FoundSprite {
     pub name: String,
     pub texture: Found,
     pub rect: SpriteRect,
+    /// How the packer flipped its rectangle ([`sprite::unflip`]).
+    pub rotation: u32,
+    /// Its own part of the rectangle ([`sprite::mask`]).
+    pub mesh: Option<sprite::Mesh>,
 }
 
 #[derive(Default)]
@@ -242,15 +246,15 @@ fn find_sprite(fs: &mut Files, sf: &Arc<SerializedFile>, obj: &ObjectInfo, name:
             // Packed into a SpriteAtlas: its render data holds the texture and rectangle.
             let (af, aobj) = fs.resolve(sf, s.atlas).context("sprite has no texture and no atlas")?;
             let abytes = af.read(&aobj)?;
-            let (t, rect) = sprite::atlas_render_data(&af, &abytes, &s.render_key)?.context("sprite not in its atlas")?;
+            let (t, rect, rotation) = sprite::atlas_render_data(&af, &abytes, &s.render_key)?.context("sprite not in its atlas")?;
             let (tf, tobj) = fs.resolve(&af, t).context("atlas texture missing")?;
             let tex = texture::parse(&tf, &tf.read(&tobj)?)?;
-            return Ok(FoundSprite { name: name.to_string(), texture: Found { file: tf, obj: tobj, tex }, rect: SpriteRect { pivot: s.rect.pivot, pixels_per_unit: s.rect.pixels_per_unit, ..rect } });
+            return Ok(FoundSprite { name: name.to_string(), texture: Found { file: tf, obj: tobj, tex }, rect: SpriteRect { pivot: s.rect.pivot, pixels_per_unit: s.rect.pixels_per_unit, ..rect }, rotation, mesh: s.mesh });
         }
     };
     let (tf, tobj) = fs.resolve(sf, tex_ptr).context("sprite texture missing")?;
     let tex = texture::parse(&tf, &tf.read(&tobj)?)?;
-    Ok(FoundSprite { name: name.to_string(), texture: Found { file: tf, obj: tobj, tex }, rect })
+    Ok(FoundSprite { name: name.to_string(), texture: Found { file: tf, obj: tobj, tex }, rect, rotation: s.rotation, mesh: s.mesh })
 }
 
 #[cfg(test)]
