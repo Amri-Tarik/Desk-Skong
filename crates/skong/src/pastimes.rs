@@ -7,7 +7,10 @@
 //!   hit flash. The user's click on it is a blow too (no drag: `app/drag.rs`). Worn out it
 //!   breaks: its library has no break clip, so it fades fast while the app throws wood
 //!   splinters (`particles::DUMMY_SPLINTERS`, [`PastimeNews::broken`]).
-//! * **lumaflies**: a procedural glow (`pastime::glow`), bobbing as it drifts.
+//! * **lumaflies**: the game's `Glow Fly` library (the lumaflies of Hallownest's caves,
+//!   exported into the vanilla skin as `Ambient_Life.png`): the bug beating its wings over
+//!   its wide, pulsing light, bobbing as it drifts; the procedural glow (`pastime::glow`)
+//!   when that art is missing.
 //!
 //! One small capture-excluded sprite window each (lumaflies' are click-through; the
 //! dummy's opaque pixels catch the mouse: the user can drag it or strike it, see
@@ -18,6 +21,7 @@ use std::path::Path;
 use skong_core::ai::{KnownDummy, KnownLumafly};
 use skong_core::anim::{Animator, ClipId, ClipLibrary};
 use skong_core::assets::{Frame, Skin, SpriteBank, SpriteKey};
+use skong_core::canvas::Image;
 use skong_core::desktop::DesktopSnapshot;
 use skong_core::discovery::Footprint;
 use skong_core::geom::{RectF, RectI, Vec2};
@@ -42,6 +46,12 @@ const STAND_IN: (f32, f32) = (64.0, 160.0);
 /// The lumafly's glow square (px at scale 1) and redraw rate.
 const GLOW: f32 = 40.0;
 const FLY_FPS: f32 = 20.0;
+/// The lumafly's art, relative to the game's size: about the knight's head across, a
+/// little smaller than in the game, where it would read as a large moth on a desktop.
+const FLY_ART_SCALE: f32 = 0.6;
+/// How strongly its wide `Glow` is laid under the bug (the bug carries a small halo of its
+/// own): the full light is a broad pale disc that would wash over the windows behind it.
+const FLY_LIGHT: f32 = 0.8;
 /// The dummy's claim in the shared occupancy.
 const DUMMY_CLAIM: ClaimKey = ClaimKey::new(ClaimKind::Other, 0x6475_6d79);
 
@@ -66,10 +76,73 @@ impl DummyArt {
     }
 }
 
+/// The lumafly's art: the game's `Glow Fly` library, `Bug` (wings beating, a small halo)
+/// over `Glow` (its wide, soft light, pulsing). Both loop on their own, from the clock (a
+/// fly's `phase` keeps a few from beating in step).
+struct FlyArt {
+    bug: (Vec<Frame>, f32),
+    glow: (Vec<Frame>, f32),
+}
+
+impl FlyArt {
+    fn load(data: &Path, vanilla: Option<&Skin>, ppu: f32) -> anyhow::Result<FlyArt> {
+        let skin = vanilla.ok_or_else(|| anyhow::anyhow!("no vanilla skin export"))?;
+        let bank = SpriteBank::load_metadata(data)?;
+        let lib = ClipLibrary::load(&data.join("animations/Glow_Fly.json"), &bank)?;
+        let frames = bank.rasterize_sets(skin, None, &[(&lib.sprite_keys(), ppu)])?.pop().unwrap_or_default();
+        let clip = |name: &str| -> anyhow::Result<(Vec<Frame>, f32)> {
+            let c = lib.get(lib.id(name).ok_or_else(|| anyhow::anyhow!("no {name} clip"))?);
+            let v: Vec<Frame> = c.frames.iter().filter_map(|f| f.sprite.and_then(|k| frames.get(&k)).cloned()).collect();
+            if v.is_empty() {
+                anyhow::bail!("no {name} frames (Ambient_Life.png missing from the skin?)");
+            }
+            Ok((v, c.fps.max(1.0)))
+        };
+        Ok(FlyArt { bug: clip("Bug")?, glow: clip("Glow")? })
+    }
+
+    /// The frames showing at `t` for a fly of `phase` (0..1): (bug, glow).
+    fn frames_at(&self, t: f64, phase: f32) -> (usize, usize) {
+        let at = |(frames, fps): &(Vec<Frame>, f32)| ((t * *fps as f64) as usize + (phase * frames.len() as f32) as usize) % frames.len();
+        (at(&self.bug), at(&self.glow))
+    }
+
+    /// Where the fly's centre (both sprites' origin) is in [`Self::draw`]'s image.
+    fn origin(&self, (bug, glow): (usize, usize)) -> Vec2 {
+        let (b, g) = (&self.bug.0[bug], &self.glow.0[glow]);
+        Vec2::new(b.anchor[0].max(g.anchor[0]).ceil(), b.anchor[1].max(g.anchor[1]).ceil())
+    }
+
+    /// The fly drawn: its light under the bug, both on their origin. `flare` (0..1)
+    /// brightens both: the catch flare.
+    fn draw(&self, (bug, glow): (usize, usize), flare: f32, alpha: f32) -> Image {
+        let (b, g) = (&self.bug.0[bug], &self.glow.0[glow]);
+        let Vec2 { x: left, y: top } = self.origin((bug, glow));
+        let right = (b.image.width as f32 - b.anchor[0]).max(g.image.width as f32 - g.anchor[0]).ceil();
+        let bottom = (b.image.height as f32 - b.anchor[1]).max(g.image.height as f32 - g.anchor[1]).ceil();
+        let mut img = Image::new((left + right) as u32, (top + bottom) as u32);
+        let at = |f: &Frame| ((left - f.anchor[0]).round() as i32, (top - f.anchor[1]).round() as i32);
+        let light = faded(&g.image, (FLY_LIGHT * 255.0) as u8);
+        let (gx, gy) = at(g);
+        img.blit_over(&light, gx, gy, false);
+        if flare > 0.0 {
+            // Laid twice: the light doubles up, as the procedural glow's flare.
+            img.blit_over(&faded(&g.image, (flare * 255.0) as u8), gx, gy, false);
+        }
+        let body = if flare > 0.0 { flashed(&b.image, flare) } else { b.image.clone() };
+        let (bx, by) = at(b);
+        img.blit_over(&body, bx, by, false);
+        let alpha = (alpha.clamp(0.0, 1.0) * 255.0) as u8;
+        if alpha < 255 { faded(&img, alpha) } else { img }
+    }
+}
+
 struct FlyWin {
     id: u64,
     win: SpriteWindow,
     drawn_at: f64,
+    /// (bug frame, glow frame, alpha, flare step) last drawn, with the art.
+    look: Option<(usize, usize, u8, u8)>,
 }
 
 pub struct PastimeProps {
@@ -94,6 +167,8 @@ pub struct PastimeProps {
     shown_dummy: Option<ShownDummy>,
     /// In the user's hand (or falling from it): its foot. The brain doesn't see it meanwhile.
     held: Option<Vec2>,
+    /// The lumafly's art (none: the procedural glow).
+    fly_art: Option<FlyArt>,
     flies: Vec<FlyWin>,
     shown_flies: Vec<ShownFly>,
     game_monitors: Vec<RectI>,
@@ -133,6 +208,13 @@ impl PastimeProps {
                 None
             }
         };
+        let fly_art = match FlyArt::load(data, vanilla, 64.0 * scale * FLY_ART_SCALE) {
+            Ok(a) => Some(a),
+            Err(e) => {
+                log::warn!("lumafly: using the drawn glow ({e:#})");
+                None
+            }
+        };
         log::info!(
             "pastimes: a training dummy every {:.0}-{:.0} min, a lumafly every {:.0}-{:.0} min",
             drules.every_secs[0] / 60.0,
@@ -156,6 +238,7 @@ impl PastimeProps {
             clicks: Vec::new(),
             shown_dummy: None,
             held: None,
+            fly_art,
             flies: Vec::new(),
             shown_flies: Vec::new(),
             game_monitors: Vec::new(),
@@ -168,9 +251,13 @@ impl PastimeProps {
         if self.art.is_some() {
             self.art = DummyArt::load(data, vanilla, 64.0 * scale * DUMMY_ART_SCALE).ok();
         }
+        if self.fly_art.is_some() {
+            self.fly_art = FlyArt::load(data, vanilla, 64.0 * scale * FLY_ART_SCALE).ok();
+        }
         self.dummy_drawn = None;
         for f in &mut self.flies {
             f.drawn_at = f64::NEG_INFINITY;
+            f.look = None;
         }
     }
 
@@ -501,11 +588,29 @@ impl PastimeProps {
                     let Ok(win) = SpriteWindow::new() else { continue };
                     win.set_capturable(self.capturable);
                     win.set_click_through(true);
-                    self.flies.push(FlyWin { id: f.id, win, drawn_at: f64::NEG_INFINITY });
+                    self.flies.push(FlyWin { id: f.id, win, drawn_at: f64::NEG_INFINITY, look: None });
                     created = true;
                     self.flies.last_mut().expect("just pushed")
                 }
             };
+            if let Some(art) = &self.fly_art {
+                // Redrawn when its frames, fade or flare change; otherwise only moved.
+                let frames = art.frames_at(clock, f.phase);
+                let flare = ((f.glow - 1.0) / 1.5).clamp(0.0, 1.0);
+                let look = (frames.0, frames.1, (f.alpha.clamp(0.0, 1.0) * 255.0) as u8, (flare * 8.0).round() as u8);
+                let origin = art.origin(frames);
+                let (x, y) = ((f.pos.x - origin.x).round() as i32, (f.pos.y - origin.y).round() as i32);
+                let shown = if fw.look != Some(look) {
+                    fw.look = Some(look);
+                    fw.win.present(&art.draw(frames, look.3 as f32 / 8.0, f.alpha), x, y)
+                } else {
+                    fw.win.move_to(x, y)
+                };
+                if let Err(e) = shown {
+                    log::warn!("lumafly: {e:#}");
+                }
+                continue;
+            }
             let (x, y) = ((f.pos.x - size as f32 * 0.5).round() as i32, (f.pos.y - size as f32 * 0.5).round() as i32);
             if (clock - fw.drawn_at) as f32 >= 1.0 / FLY_FPS {
                 fw.drawn_at = clock;
@@ -596,5 +701,46 @@ mod tests {
         // Blows hit its stuffed figure, above the pole.
         let body = p.body(Vec2::new(500.0, 1000.0));
         assert!(body.bottom < 1000.0 - 0.3 * h && body.top > 1000.0 - h - 1.0);
+        // The lumafly is the drawn glow then.
+        assert!(p.fly_art.is_none());
+    }
+
+    #[test]
+    fn the_lumaflys_clips_are_in_the_exported_metadata() {
+        let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/hk");
+        let bank = SpriteBank::load_metadata(&data).expect("metadata");
+        let lib = ClipLibrary::load(&data.join("animations/Glow_Fly.json"), &bank).expect("lumafly clips");
+        for clip in ["Bug", "Glow"] {
+            let c = lib.get(lib.id(clip).expect(clip));
+            assert!(c.frames.len() >= 4 && c.frames.iter().all(|f| f.sprite.is_some()), "{clip}: every frame from Ambient Life");
+        }
+    }
+
+    /// A square frame of one colour with its origin in the middle.
+    fn square(size: u32, px: u32) -> Frame {
+        let mut image = Image::new(size, size);
+        image.px.fill(px);
+        Frame { image, anchor: [size as f32 / 2.0; 2] }
+    }
+
+    #[test]
+    fn the_lumafly_is_its_bug_centred_on_its_light() {
+        let art = FlyArt { bug: (vec![square(10, 0xff00_00ff), square(10, 0xff00_ff00)], 12.0), glow: (vec![square(40, 0x8080_8080)], 12.0) };
+        let img = art.draw((0, 0), 0.0, 1.0);
+        assert_eq!((img.width, img.height), (40, 40));
+        assert_eq!(art.origin((0, 0)), Vec2::new(20.0, 20.0));
+        assert_eq!(img.px[20 * 40 + 20], 0xff00_00ff, "the bug on top, in the middle");
+        let light = img.px[2 * 40 + 2] >> 24;
+        assert!(light > 0 && light < 0x80, "the light around it, softened: {light:#x}");
+        // The catch flare: a brighter light, a whiter bug.
+        let flare = art.draw((0, 0), 1.0, 1.0);
+        assert!(flare.px[2 * 40 + 2] >> 24 > light);
+        assert_eq!(flare.px[20 * 40 + 20], 0xffff_ffff);
+        // Fading out.
+        assert!(art.draw((0, 0), 0.0, 0.5).px[20 * 40 + 20] >> 24 < 0x90);
+        // Frames follow the clock; a fly's phase shifts them.
+        assert_eq!(art.frames_at(0.0, 0.0), (0, 0));
+        assert_eq!(art.frames_at(1.0 / 12.0 + 0.001, 0.0), (1, 0));
+        assert_eq!(art.frames_at(0.0, 0.5), (1, 0));
     }
 }

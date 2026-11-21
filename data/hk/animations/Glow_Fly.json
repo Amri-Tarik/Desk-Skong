@@ -1,0 +1,71 @@
+{
+  "name": "Glow Fly",
+  "clips": [
+    {
+      "name": "Bug",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Ambient Life",
+          "sprite_id": 3,
+          "sprite": "cave_glow_bug0000"
+        },
+        {
+          "collection": "Ambient Life",
+          "sprite_id": 2,
+          "sprite": "cave_glow_bug0001"
+        },
+        {
+          "collection": "Ambient Life",
+          "sprite_id": 1,
+          "sprite": "cave_glow_bug0002"
+        },
+        {
+          "collection": "Ambient Life",
+          "sprite_id": 4,
+          "sprite": "cave_glow_bug0003"
+        }
+      ]
+    },
+    {
+      "name": "Glow",
+      "fps": 12,
+      "loop_start": 0,
+      "wrap_mode": "Loop",
+      "frames": [
+        {
+          "collection": "Ambient Life",
+          "sprite_id": 10,
+          "sprite": "bug_glow0000"
+        },
+        {
+          "collection": "Ambient Life",
+          "sprite_id": 5,
+          "sprite": "bug_glow0001"
+        },
+        {
+          "collection": "Ambient Life",
+          "sprite_id": 6,
+          "sprite": "bug_glow0002"
+        },
+        {
+          "collection": "Ambient Life",
+          "sprite_id": 8,
+          "sprite": "bug_glow0003"
+        },
+        {
+          "collection": "Ambient Life",
+          "sprite_id": 7,
+          "sprite": "bug_glow0004"
+        },
+        {
+          "collection": "Ambient Life",
+          "sprite_id": 9,
+          "sprite": "bug_glow0005"
+        }
+      ]
+    }
+  ]
+}
