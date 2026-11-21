@@ -85,8 +85,10 @@ impl ShadeHunt {
         }
     }
 
+    /// His Geo is at stake: hurry, or run when worn out — never a stroll (a stroll may not
+    /// dash, and a route that crosses a wall mid-air needs one).
     fn style(ctx: &Ctx) -> TravelStyle {
-        if ctx.mind.needs.energy > 0.3 { TravelStyle::Normal } else { TravelStyle::Stroll }
+        if ctx.mind.needs.energy > 0.3 { TravelStyle::Hurry } else { TravelStyle::Normal }
     }
 
     /// The point on the ledge right under the Shade (where he can stand and fight).

@@ -31,19 +31,30 @@ struct Nav {
     goal: Option<NavGoal>,
     /// Every planned route ends here instead (an unreachable goal).
     ends_at: Option<Vec2>,
+    /// Only a dash gets there: strolls find no route.
+    dash_only: bool,
+    /// The style of the latest route.
+    style: Option<TravelStyle>,
 }
 
 impl Navigator for Nav {
     fn reach(&mut self, from: &Character, goal: NavGoal, style: TravelStyle) -> Option<navigator::Reach> {
         self.estimate(from, goal, style).map(|eta| navigator::Reach { eta, end: self.ends_at })
     }
-    fn estimate(&mut self, from: &Character, goal: NavGoal, _: TravelStyle) -> Option<f32> {
+    fn estimate(&mut self, from: &Character, goal: NavGoal, style: TravelStyle) -> Option<f32> {
+        if self.dash_only && style == TravelStyle::Stroll {
+            return None;
+        }
         Some(match goal {
             NavGoal::Point(p) => from.pos.distance(p) / 400.0,
             NavGoal::OnWindow(_) => 1.5,
         })
     }
-    fn go(&mut self, _: &Character, goal: NavGoal, _: TravelStyle) -> bool {
+    fn go(&mut self, _: &Character, goal: NavGoal, style: TravelStyle) -> bool {
+        if self.dash_only && style == TravelStyle::Stroll {
+            return false;
+        }
+        self.style = Some(style);
         self.goal = Some(goal);
         self.status = NavStatus::Moving;
         self.elapsed = 0.0;
@@ -527,6 +538,37 @@ fn a_failed_route_to_the_shade_is_re_planned_not_given_up() {
     sim.step();
     assert_eq!(sim.brain.behaviour(), BehaviourKind::ShadeHunt, "still on it");
     assert!(sim.run_until(1.0, |s| heading_for(s, 1500.0)), "a fresh route under it");
+}
+
+#[test]
+fn a_worn_out_knight_still_hurries_to_his_shade_and_dashes_if_he_must() {
+    // Live: tired after dying, he strolled after his Shade, and a stroll may not dash; the
+    // only way there crossed a wall mid-air, so every route failed and was re-planned.
+    let mut sim = Sim::new();
+    sim.brain.mind_mut().needs.energy = 0.05;
+    sim.nav.dash_only = true;
+    sim.knight.pos.x = 300.0;
+    sim.fixed_shade = Some(ShadeSense { pos: Vec2::new(1500.0, FLOOR - 40.0), vulnerable: true, fighting: false, geo: 60 });
+    assert!(sim.run_until(3.0, |s| s.brain.behaviour() == BehaviourKind::ShadeHunt && s.nav.status == NavStatus::Moving), "on his way: {:?}", sim.brain.behaviour());
+    assert!(heading_for(&sim, 1500.0));
+    assert_ne!(sim.nav.style, Some(TravelStyle::Stroll), "never a stroll to the Shade");
+    sim.brain.mind_mut().needs.energy = 0.9;
+    sim.nav.status = NavStatus::Failed;
+    sim.nav.goal = None;
+    assert!(sim.run_until(1.0, |s| heading_for(s, 1500.0)));
+    assert_eq!(sim.nav.style, Some(TravelStyle::Hurry), "rested: he hurries");
+}
+
+#[test]
+fn a_tired_stroll_that_needs_a_dash_runs_instead() {
+    // Any behaviour: a worn-out knight strolls where a stroll gets there, and runs (dashes
+    // allowed) where only that does, instead of failing over and over.
+    let mut sim = Sim::new();
+    sim.brain.mind_mut().needs.energy = 0.05;
+    sim.nav.dash_only = true;
+    sim.coins = vec![Vec2::new(1850.0, FLOOR)];
+    assert!(sim.run_until(2.0, |s| s.brain.behaviour() == BehaviourKind::Loot && s.nav.status == NavStatus::Moving), "{:?}", sim.brain.behaviour());
+    assert_eq!(sim.nav.style, Some(TravelStyle::Normal));
 }
 
 // --- Priority tiers -------------------------------------------------------------------

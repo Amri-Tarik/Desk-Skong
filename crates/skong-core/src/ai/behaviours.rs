@@ -520,7 +520,14 @@ impl Travel {
             return TravelStep::Moving;
         }
         if !self.started {
-            if !ctx.nav.go(ctx.p.knight, self.goal, self.style) {
+            // A stroll walks, hops and climbs but never dashes: where only a dash gets
+            // there, a tired knight runs instead of failing over and over.
+            let mut planned = ctx.nav.go(ctx.p.knight, self.goal, self.style);
+            if !planned && self.style == TravelStyle::Stroll && ctx.nav.go(ctx.p.knight, self.goal, TravelStyle::Normal) {
+                self.style = TravelStyle::Normal;
+                planned = true;
+            }
+            if !planned {
                 block(ctx, self.goal, 30.0);
                 return TravelStep::Failed;
             }
