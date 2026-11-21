@@ -24,6 +24,8 @@ use skong_ipc::{Command, LogLevel, LogLine, ManualKeys, PanelMsg, Status};
 use crate::link::Link;
 
 mod home;
+#[cfg(test)]
+mod render;
 mod sandbox;
 mod test_tab;
 

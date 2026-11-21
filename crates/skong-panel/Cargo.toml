@@ -13,3 +13,6 @@ skong-extract = { path = "../skong-extract" }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_UI_Controls_Dialogs"] }
+
+[dev-dependencies]
+png = "0.18.1"

@@ -2075,6 +2075,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "eframe",
+ "png",
  "skong-core",
  "skong-extract",
  "skong-ipc",
