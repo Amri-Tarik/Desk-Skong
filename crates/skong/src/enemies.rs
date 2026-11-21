@@ -87,6 +87,8 @@ pub struct Enemies {
     pub killed: Vec<(u32, String)>,
     /// Test panel: one of this kind asked for, maybe at a picked spot.
     wanted: Option<(usize, Option<Spot>)>,
+    /// Enemies bursting out of something (a broken grub jar): (def, feet, owner, delay s).
+    bursts: Vec<(usize, Vec2, Option<WindowId>, f32)>,
     /// What came of the test panel's requests (ok, line).
     pub notes: Vec<(bool, String)>,
 }
@@ -94,7 +96,19 @@ pub struct Enemies {
 impl Enemies {
     /// Every kind of enemy that may wander in (definition names).
     pub fn kinds(&self) -> Vec<String> {
-        self.set.defs.iter().map(|d| d.name.clone()).collect()
+        self.set.defs.iter().filter(|d| d.weight > 0.0).map(|d| d.name.clone()).collect()
+    }
+
+    /// A Grub Mimic (or any enemy `name`) bursting out right here: feet `feet` on window
+    /// `owner`'s ledge, dropping from where the jar stood, after `delay` s. Only a game on
+    /// that monitor stops it.
+    pub fn burst_out(&mut self, name: &str, feet: Vec2, owner: Option<WindowId>, delay: f32) -> bool {
+        let Some(def) = self.set.defs.iter().position(|d| d.name == name) else {
+            log::warn!("enemies: no '{name}' to burst out");
+            return false;
+        };
+        self.bursts.push((def, feet, owner, delay));
+        true
     }
 
     pub fn load(data_dir: &Path, vanilla: Option<&Skin>, scale: f32, seed: u32) -> Result<Enemies> {
@@ -134,6 +148,7 @@ impl Enemies {
             gauntlet,
             killed: Vec::new(),
             wanted: None,
+            bursts: Vec::new(),
             notes: Vec::new(),
         };
         e.rescale(vanilla, scale)?;
@@ -267,6 +282,7 @@ impl Enemies {
         // 0. A gauntlet (under way or waiting to start) holds back every other arrival.
         let gauntlet = self.tick_gauntlet(dt, w, visitor_present, ks, &mut news);
         self.admit_wanted(w, visitor_present, gauntlet);
+        self.admit_bursts(dt, w);
         if gauntlet && !self.forced {
             // The bored knight's wish for an enemy is more than granted.
             self.invited = false;
@@ -370,7 +386,7 @@ impl Enemies {
 
     /// Pick an enemy and where it shows up, and let it in.
     fn spawn(&mut self, w: &World) {
-        let items: Vec<(usize, f32)> = self.set.defs.iter().enumerate().map(|(i, d)| (i, d.weight)).collect();
+        let items: Vec<(usize, f32)> = self.set.defs.iter().enumerate().filter(|(_, d)| d.weight > 0.0).map(|(i, d)| (i, d.weight)).collect();
         if let Some(def) = self.rng.pick_weighted(&items) {
             self.spawn_def(w, def);
         }
@@ -446,6 +462,22 @@ impl Enemies {
         match placed {
             Some((_, p, _)) => self.notes.push((true, format!("a {name} comes in at ({:.0},{:.0})", p.x, p.y))),
             None => self.notes.push((false, format!("no good spot for a {name} right now (settled, reachable, on his monitor)"))),
+        }
+    }
+
+    /// Enemies bursting out of something, once their moment comes (see [`Self::burst_out`]).
+    fn admit_bursts(&mut self, dt: f32, w: &World) {
+        for b in &mut self.bursts {
+            b.3 -= dt;
+        }
+        let (due, wait): (Vec<_>, Vec<_>) = std::mem::take(&mut self.bursts).into_iter().partition(|b| b.3 <= 0.0);
+        self.bursts = wait;
+        for (def, feet, owner, _) in due {
+            if w.game_monitors.iter().any(|r| r.contains(feet.x as i32, (feet.y - 1.0) as i32)) {
+                continue;
+            }
+            let at = placed_arrival(&self.set.defs[def], feet, owner, self.ppu);
+            self.admit(w, def, at);
         }
     }
 

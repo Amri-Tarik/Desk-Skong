@@ -39,6 +39,13 @@ pub enum FindKind {
     /// A geo rock: slashed for Geo; breaks after a few hits and is gone, and another one
     /// turns up in some other app's window a little later (something new to travel to).
     Deposit,
+    /// A grub trapped in a glass jar: one blow breaks it and the grub is free (and gone);
+    /// another jar turns up in some other app much later. A `mimic` is no grub at all:
+    /// a Grub Mimic bursts out and attacks.
+    Grub {
+        #[serde(default)]
+        mimic: bool,
+    },
 }
 
 impl FindKind {
@@ -46,6 +53,7 @@ impl FindKind {
         match self {
             FindKind::Bench { .. } => PlaceKind::Bench,
             FindKind::Deposit => PlaceKind::Deposit,
+            FindKind::Grub { .. } => PlaceKind::Grub,
         }
     }
 
@@ -53,6 +61,7 @@ impl FindKind {
         match self {
             FindKind::Bench { .. } => "bench",
             FindKind::Deposit => "geo deposit",
+            FindKind::Grub { .. } => "trapped grub",
         }
     }
 
@@ -60,6 +69,7 @@ impl FindKind {
     fn priority(self) -> i32 {
         match self {
             FindKind::Bench { .. } => 50,
+            FindKind::Grub { .. } => 45,
             FindKind::Deposit => 40,
         }
     }
@@ -130,21 +140,36 @@ fn known_finds<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Find>, D::Error> {
 /// Rarity and upkeep.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Rules {
-    /// Weights of nothing / bench / deposit for a newly explored app.
+    /// Weights of nothing / bench / deposit / trapped grub for a newly explored app.
     pub nothing: f32,
     pub bench: f32,
     pub deposit: f32,
+    pub grub: f32,
+    /// Chance that a jar holds a Grub Mimic instead of a grub.
+    pub mimic_chance: f32,
     /// Relative weight per bench style (index = `props.json` order).
     pub bench_styles: Vec<f32>,
     /// Seconds (range) until a broken deposit turns up again elsewhere.
     pub relocate_secs: [u64; 2],
+    /// Seconds (range) until another jar turns up after one was broken (grubs are rarer).
+    pub grub_relocate_secs: [u64; 2],
     /// Hits that break a deposit.
     pub deposit_hp: u32,
 }
 
 impl Default for Rules {
     fn default() -> Self {
-        Self { nothing: 0.6, bench: 0.25, deposit: 0.15, bench_styles: vec![3.0, 1.0, 1.5, 1.5, 1.5], relocate_secs: [60, 180], deposit_hp: 3 }
+        Self {
+            nothing: 0.55,
+            bench: 0.22,
+            deposit: 0.13,
+            grub: 0.1,
+            mimic_chance: 0.1,
+            bench_styles: vec![3.0, 1.0, 1.5, 1.5, 1.5],
+            relocate_secs: [60, 180],
+            grub_relocate_secs: [900, 2700],
+            deposit_hp: 3,
+        }
     }
 }
 
@@ -203,6 +228,9 @@ pub struct World {
     /// A rock never regrows in place: the next one is somewhere new to travel to.
     #[serde(default)]
     relocations: Vec<(String, u64)>,
+    /// Broken grub jars: another turns up elsewhere (app it broke in, unix time due).
+    #[serde(default)]
+    grub_relocations: Vec<(String, u64)>,
     /// Which window of an app hosts its finds right now (not saved).
     #[serde(skip)]
     hosts: BTreeMap<String, WindowId>,
@@ -277,9 +305,10 @@ impl Mix {
 /// The deterministic roll for one app: what its room holds (before placement).
 pub fn roll(seed: u64, key: &str, rules: &Rules) -> Vec<FindKind> {
     let mut m = Mix::new(seed, key);
-    match m.pick(&[rules.nothing, rules.bench, rules.deposit]) {
+    match m.pick(&[rules.nothing, rules.bench, rules.deposit, rules.grub]) {
         1 => vec![FindKind::Bench { style: m.pick(&rules.bench_styles) }],
         2 => vec![FindKind::Deposit],
+        3 => vec![FindKind::Grub { mimic: m.f32() < rules.mimic_chance }],
         _ => vec![],
     }
 }
@@ -368,7 +397,7 @@ pub fn settle(mut shown: Vec<Shown>, occ: &mut Occupancy, footprint: &dyn Fn(Fin
 
 impl World {
     pub fn new(seed: u64) -> Self {
-        Self { version: version(), seed, rooms: BTreeMap::new(), next_id: 1, relocations: Vec::new(), hosts: BTreeMap::new() }
+        Self { version: version(), seed, rooms: BTreeMap::new(), next_id: 1, relocations: Vec::new(), grub_relocations: Vec::new(), hosts: BTreeMap::new() }
     }
 
     pub fn from_json(s: &str) -> serde_json::Result<World> {
@@ -616,22 +645,46 @@ impl World {
         Some(DepositDrop { at, geo })
     }
 
-    /// Broken deposits due to turn up again: place each in a visible window of *another*
-    /// app (trying windows in a seed-shuffled order), on a ledge that lasted. Returns what
-    /// was placed, with its window, to reveal; anything that found no spot waits.
-    pub fn relocate_due(&mut self, desk: &DesktopSnapshot, site: &Site, now_unix: u64) -> Vec<(FindId, WindowId)> {
+    /// The jar `id` was struck: it breaks at once and the grub is free (or the mimic is
+    /// out). Gone for good; another jar turns up in some other app's window much later.
+    /// Returns whether it was a mimic (`None`: no such jar).
+    pub fn free_grub(&mut self, id: FindId, now_unix: u64, rules: &Rules) -> Option<bool> {
+        let mimic = match self.find(id)?.kind {
+            FindKind::Grub { mimic } => mimic,
+            _ => return None,
+        };
+        let key = self.rooms.iter().find(|(_, r)| r.finds.iter().any(|f| f.id == id)).map(|(k, _)| k.clone())?;
+        if let Some(room) = self.rooms.get_mut(&key) {
+            room.finds.retain(|f| f.id != id);
+        }
+        let [lo, hi] = rules.grub_relocate_secs;
+        let wait = lo + Mix(self.seed ^ id ^ now_unix).next() % (hi - lo).max(1);
+        self.grub_relocations.push((key, now_unix + wait));
+        Some(mimic)
+    }
+
+    /// Broken deposits and jars due to turn up again: place each in a visible window of
+    /// *another* app (trying windows in a seed-shuffled order), on a ledge that lasted.
+    /// Returns what was placed, with its window, to reveal; anything that found no spot
+    /// waits.
+    pub fn relocate_due(&mut self, desk: &DesktopSnapshot, site: &Site, now_unix: u64, rules: &Rules) -> Vec<(FindId, WindowId)> {
         let mut placed = vec![];
-        let due: Vec<(String, u64)> = self.relocations.iter().filter(|(_, t)| now_unix >= *t).cloned().collect();
-        for (from, t) in due {
-            let mut wins: Vec<&WindowInfo> = desk.windows.iter().filter(|w| !w.fullscreen && app_key(w).is_some_and(|k| k != from)).collect();
-            let mut mix = Mix(self.seed ^ t);
-            for i in (1..wins.len()).rev() {
-                wins.swap(i, (mix.next() % (i as u64 + 1)) as usize);
-            }
-            let ids: Vec<WindowId> = wins.iter().map(|w| w.id).collect();
-            if let Some((fid, wid)) = ids.into_iter().find_map(|wid| self.force(FindKind::Deposit, wid, desk, site).map(|f| (f, wid))) {
-                self.relocations.retain(|r| r != &(from.clone(), t));
-                placed.push((fid, wid));
+        for grub in [false, true] {
+            let queue = if grub { &self.grub_relocations } else { &self.relocations };
+            let due: Vec<(String, u64)> = queue.iter().filter(|(_, t)| now_unix >= *t).cloned().collect();
+            for (from, t) in due {
+                let mut wins: Vec<&WindowInfo> = desk.windows.iter().filter(|w| !w.fullscreen && app_key(w).is_some_and(|k| k != from)).collect();
+                let mut mix = Mix(self.seed ^ t);
+                for i in (1..wins.len()).rev() {
+                    wins.swap(i, (mix.next() % (i as u64 + 1)) as usize);
+                }
+                let kind = if grub { FindKind::Grub { mimic: mix.f32() < rules.mimic_chance } } else { FindKind::Deposit };
+                let ids: Vec<WindowId> = wins.iter().map(|w| w.id).collect();
+                if let Some((fid, wid)) = ids.into_iter().find_map(|wid| self.force(kind, wid, desk, site).map(|f| (f, wid))) {
+                    let queue = if grub { &mut self.grub_relocations } else { &mut self.relocations };
+                    queue.retain(|r| r != &(from.clone(), t));
+                    placed.push((fid, wid));
+                }
             }
         }
         placed
@@ -724,7 +777,7 @@ mod tests {
     /// Rules that always find something of `kind`.
     fn always(kind: FindKind) -> Rules {
         let one = |k: FindKind| if std::mem::discriminant(&k) == std::mem::discriminant(&kind) { 1.0 } else { 0.0 };
-        Rules { nothing: 0.0, bench: one(FindKind::Bench { style: 0 }), deposit: one(FindKind::Deposit), ..Rules::default() }
+        Rules { nothing: 0.0, bench: one(FindKind::Bench { style: 0 }), deposit: one(FindKind::Deposit), grub: one(FindKind::Grub { mimic: false }), ..Rules::default() }
     }
 
     #[test]
@@ -882,8 +935,8 @@ mod tests {
         let drop = world.strike(id, at, 1000, &rules).expect("broke");
         assert!((5..=15).contains(&drop.geo));
         assert!(world.shown(&d, &env.terrain, 1001, &rules, &fp, &|_| true).is_empty(), "gone");
-        assert!(world.relocate_due(&d, &env.site(), 1001).is_empty(), "not right away");
-        let placed = world.relocate_due(&d, &env.site(), 1000 + 200);
+        assert!(world.relocate_due(&d, &env.site(), 1001, &rules).is_empty(), "not right away");
+        let placed = world.relocate_due(&d, &env.site(), 1000 + 200, &rules);
         assert_eq!(placed.len(), 1, "turned up again");
         assert_eq!(placed[0].1, 2, "in another app's window, not where it broke");
         let shown = world.shown(&d, &env.terrain, 1200, &rules, &fp, &|_| true);
@@ -891,6 +944,42 @@ mod tests {
         assert_eq!((shown[0].kind, shown[0].window), (FindKind::Deposit, 2));
         // It never regrows in paint.
         assert!(world.shown(&d, &env.terrain, 1000 + 25 * 3600, &rules, &fp, &|_| true).iter().all(|s| s.window != 1));
+    }
+
+    #[test]
+    fn a_jar_breaks_at_once_and_another_turns_up_much_later_elsewhere() {
+        let rules = always(FindKind::Grub { mimic: false });
+        let (d, t) = desk(vec![win(1, RectI::new(200, 400, 900, 900), "paint.exe"), win(2, RectI::new(1000, 300, 1800, 900), "notepad.exe")]);
+        let env = Env::new(t);
+        let mut world = World::new(3);
+        let id = world.explored(1, &d, &env.site(), &rules)[0];
+        assert!(matches!(world.find(id).unwrap().kind, FindKind::Grub { .. }));
+        assert_eq!(world.strike(id, Vec2::new(500.0, 400.0), 1000, &rules), None, "a jar is no Geo rock");
+        let mimic = world.free_grub(id, 1000, &rules).expect("a jar");
+        assert!(world.find(id).is_none() && world.free_grub(id, 1000, &rules).is_none(), "gone, once");
+        let [lo, hi] = rules.grub_relocate_secs;
+        assert!(world.relocate_due(&d, &env.site(), 1000 + lo - 1, &rules).is_empty(), "not for a good while");
+        let placed = world.relocate_due(&d, &env.site(), 1000 + hi, &rules);
+        assert_eq!(placed.len(), 1);
+        assert_eq!(placed[0].1, 2, "in another app's window");
+        assert!(matches!(world.find(placed[0].0).unwrap().kind, FindKind::Grub { .. }));
+        // The save keeps the jar kind (mimic or not) and the queue.
+        let back = World::from_json(&world.to_json()).unwrap();
+        assert_eq!(back.find(placed[0].0).map(|f| f.kind), world.find(placed[0].0).map(|f| f.kind));
+        let _ = mimic;
+    }
+
+    #[test]
+    fn about_one_jar_in_ten_holds_a_mimic() {
+        let rules = Rules::default();
+        let jars: Vec<bool> = (0..20_000).flat_map(|i| roll(7, &format!("app{i}"), &rules)).filter_map(|k| match k {
+            FindKind::Grub { mimic } => Some(mimic),
+            _ => None,
+        }).collect();
+        let share = jars.len() as f32 / 20_000.0;
+        assert!((0.08..0.12).contains(&share), "rooms with a jar: {share}");
+        let mimics = jars.iter().filter(|m| **m).count() as f32 / jars.len() as f32;
+        assert!((0.07..0.13).contains(&mimics), "mimics: {mimics}");
     }
 
     #[test]

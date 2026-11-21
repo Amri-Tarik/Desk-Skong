@@ -1002,7 +1002,9 @@ impl Brain {
                     _ => (self.interest.places.best.map(|c| c.place), false),
                 };
                 let deposit = place.is_some_and(|pl| pl.kind == PlaceKind::Deposit);
-                if deposit && !self.asleep(p) && (mining || !self.loose_geo_wanted(p)) { Tier::Engagement } else { Tier::Ambient }
+                // A grub crying in a jar is an engagement too (no loose Geo comes first).
+                let grub = place.is_some_and(|pl| pl.kind == PlaceKind::Grub);
+                if !self.asleep(p) && (grub || deposit && (mining || !self.loose_geo_wanted(p))) { Tier::Engagement } else { Tier::Ambient }
             }
             // Resting is a pastime unless he's exhausted / badly hurt — and even then Geo
             // (an engagement) comes first: he rests once it's collected.

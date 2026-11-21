@@ -514,6 +514,7 @@ mod tests {
             Placeable::Dummy,
             Placeable::Flame,
             Placeable::Deposit,
+            Placeable::Grub { mimic: true },
             Placeable::Shiny,
             Placeable::Bench(1),
             Placeable::Enemy(0),

@@ -25,6 +25,8 @@ pub type PlaceId = u64;
 pub enum PlaceKind {
     Bench,
     Deposit,
+    /// A grub trapped in a jar: break it, set the grub free.
+    Grub,
 }
 
 impl PlaceKind {
@@ -32,6 +34,7 @@ impl PlaceKind {
         match self {
             PlaceKind::Bench => "bench",
             PlaceKind::Deposit => "geo deposit",
+            PlaceKind::Grub => "trapped grub",
         }
     }
 
@@ -40,7 +43,7 @@ impl PlaceKind {
         match self {
             PlaceKind::Bench => 120.0,
             // A rock he didn't finish (a swing that missed): back at it soon, not in 90 s.
-            PlaceKind::Deposit => 10.0,
+            PlaceKind::Deposit | PlaceKind::Grub => 10.0,
         }
     }
 }
@@ -135,6 +138,9 @@ pub(crate) fn want(p: &KnownPlace, m: &Mind) -> f32 {
         PlaceKind::Deposit => {
             (0.6 + 0.15 * m.needs.mischief + 0.1 * m.emotions.excitement + 0.1 * m.needs.boredom * m.personality.playfulness + 0.05 * p.favour).min(0.85)
         }
+        // A grub crying in a jar: hardly anything comes first (only when spent).
+        PlaceKind::Grub if m.needs.energy < 0.15 => 0.0,
+        PlaceKind::Grub => (0.84 + 0.06 * m.emotions.excitement + 0.04 * m.personality.boldness).min(0.92),
     }
 }
 
@@ -230,7 +236,7 @@ impl Brain {
                 };
                 let travel = if fresh { 0.0 } else { self.cfg.travel_cost_per_sec * eta };
                 // Geo is worth a long walk: a far rock must not sink below the engagements.
-                let travel = if place.kind == PlaceKind::Deposit { travel.min(0.15) } else { travel };
+                let travel = if matches!(place.kind, PlaceKind::Deposit | PlaceKind::Grub) { travel.min(0.15) } else { travel };
                 Some(PlaceChoice { place, score: w - travel, fresh })
             })
             .max_by(|a, b| a.score.total_cmp(&b.score));
@@ -241,6 +247,13 @@ impl Brain {
         let s = &self.senses;
         if s.fullscreen || s.user_away && self.mind.tiredness() > 0.7 {
             return 0.0; // hiding, or too sleepy: nap (which prefers favourite benches) instead
+        }
+        // Mid-swing at a rock or a jar, or seeing a freed grub off: finished first, even
+        // once the thing itself is gone (a broken jar is no longer a place).
+        if let super::behaviours::Active::Visit(v) = &self.active
+            && v.mining()
+        {
+            return 0.9;
         }
         self.interest.places.best.map_or(0.0, |c| c.score.clamp(0.0, if c.fresh { 1.1 } else { 0.95 }))
     }
@@ -255,8 +268,10 @@ enum Phase {
     Travel(Travel),
     /// Seated acts on a found bench.
     Sit { beat: Beat, acts: u32 },
-    /// A few slashes at a deposit.
+    /// A few slashes at a deposit (or a grub's jar).
     Strike { left: u32, gap: f32 },
+    /// The jar broke: watch the grub wriggle free (a mimic's fight takes over by itself).
+    Watch { left: f32 },
 }
 
 /// Go to a known place and use it.
@@ -273,6 +288,10 @@ impl Visit {
     /// Swings per visit at most: he keeps at it until the rock breaks (it has 3 HP; a
     /// swing that doesn't register must not leave it half-mined).
     const STRIKES: u32 = 6;
+    /// A jar breaks at the first blow; a couple more in case one doesn't register.
+    const JAR_STRIKES: u32 = 3;
+    /// Seconds he stays to see the freed grub off.
+    const WATCH_SECS: f32 = 2.6;
 
     pub fn start(ctx: &mut Ctx, choice: PlaceChoice) -> Self {
         let place = choice.place;
@@ -299,14 +318,14 @@ impl Visit {
 
     fn travel(ctx: &mut Ctx, place: &KnownPlace) -> Phase {
         let style = match style_for(ctx, place.at) {
-            TravelStyle::Stroll if ctx.mind.needs.energy > 0.4 && place.kind == PlaceKind::Deposit => TravelStyle::Normal,
+            TravelStyle::Stroll if ctx.mind.needs.energy > 0.4 && place.kind != PlaceKind::Bench => TravelStyle::Normal,
             s => s,
         };
         match place.kind {
             // Benches need him right at the seat.
             PlaceKind::Bench => Phase::Travel(Travel::exact(ctx, place.at, style, SEAT_TOL + 2.0)),
             // A rock only needs him within a swing on its ledge (see `in_swing`).
-            PlaceKind::Deposit => Phase::Travel(Travel::to(ctx, place.at, style)),
+            PlaceKind::Deposit | PlaceKind::Grub => Phase::Travel(Travel::to(ctx, place.at, style)),
         }
     }
 
@@ -323,8 +342,9 @@ impl Visit {
         self.phase = match p.kind {
             PlaceKind::Bench => Phase::Sit { beat: Beat::new(0.2), acts: 0 },
             PlaceKind::Deposit => Phase::Strike { left: Self::STRIKES, gap: 0.3 },
+            PlaceKind::Grub => Phase::Strike { left: Self::JAR_STRIKES, gap: 0.3 },
         };
-        if p.kind != PlaceKind::Deposit {
+        if p.kind == PlaceKind::Bench {
             ctx.out.discovery = Some(DiscoveryEvent::Used(p.id));
         }
         ctx.interest.places.used.insert(p.id, ctx.now);
@@ -346,6 +366,13 @@ impl Visit {
                 self.place = p;
                 self.missing = 0.0;
             }
+            // The jar broke under his nail: see the grub off.
+            None if self.place.kind == PlaceKind::Grub && matches!(self.phase, Phase::Strike { .. }) => {
+                ctx.mind.excite(0.3);
+                ctx.mind.adjust(|n| &mut n.boredom, -0.3);
+                self.phase = Phase::Watch { left: Self::WATCH_SECS };
+            }
+            None if matches!(self.phase, Phase::Watch { .. }) => {}
             None if self.missing < 2.0 && !matches!(self.phase, Phase::Strike { .. }) => self.missing += ctx.dt(),
             None => {
                 if matches!(self.phase, Phase::Travel(_)) {
@@ -370,7 +397,7 @@ impl Visit {
                 Status::Running
             }
             Phase::Travel(t) => {
-                if place.kind == PlaceKind::Deposit && Self::in_swing(ctx, &place) {
+                if place.kind != PlaceKind::Bench && Self::in_swing(ctx, &place) {
                     ctx.nav.stop();
                     self.arrive(ctx);
                     return Status::Running;
@@ -422,12 +449,21 @@ impl Visit {
                 ctx.mind.excite(0.08);
                 Status::Running
             }
+            Phase::Watch { left } => {
+                ctx.nav.stop();
+                if ctx.grounded() && ctx.p.act.is_none() {
+                    ctx.face_toward(place.center.x);
+                }
+                *left -= ctx.dt();
+                if *left > 0.0 { Status::Running } else { Status::Done }
+            }
         }
     }
 
-    /// Swinging at a deposit (finished before anything of its tier takes over).
+    /// Swinging at a deposit or a jar, or seeing a freed grub off (finished before
+    /// anything of its tier takes over).
     pub fn mining(&self) -> bool {
-        matches!(self.phase, Phase::Strike { .. })
+        matches!(self.phase, Phase::Strike { .. } | Phase::Watch { .. })
     }
 
     pub fn reason(&self) -> String {
@@ -436,7 +472,9 @@ impl Visit {
             Phase::Notice { .. } => format!("visit: found a {what}!"),
             Phase::Travel(t) => format!("visit {what}: walking over ({:?}){}", t.style, if self.fresh { ", just found" } else { "" }),
             Phase::Sit { .. } => format!("visit {what}: sitting on a found bench"),
+            Phase::Strike { .. } if self.place.kind == PlaceKind::Grub => format!("visit {what}: breaking the jar"),
             Phase::Strike { .. } => format!("visit {what}: mining geo"),
+            Phase::Watch { .. } => "visit: watching the grub wriggle free".to_string(),
         }
     }
 }

@@ -222,6 +222,8 @@ impl Pet {
             Placeable::Dummy => "training dummy".into(),
             Placeable::Flame => "scarlet flame".into(),
             Placeable::Deposit => "Geo deposit".into(),
+            Placeable::Grub { mimic: false } => "grub jar".into(),
+            Placeable::Grub { mimic: true } => "mimic jar".into(),
             Placeable::Shiny => "shiny".into(),
             Placeable::Bench(s) => format!("{} bench", self.benches.styles.get(s as usize).map_or("?", |b| b.name.as_str())),
             Placeable::Enemy(k) => self.enemies.as_ref().and_then(|e| e.displays().get(k as usize).cloned()).unwrap_or_else(|| "enemy".into()),
@@ -302,6 +304,7 @@ impl Pet {
         let half = match what {
             Placeable::Dummy => self.pastimes.dummy_half_width(),
             Placeable::Deposit => self.discoveries.deposit_half_width(),
+            Placeable::Grub { .. } => self.discoveries.jar_half_width(),
             Placeable::Shiny | Placeable::DreamGate => self.shinies.half_width(),
             Placeable::Bench(s) => self.benches.art(s as usize).map_or(60.0 * scale, |i| 0.5 * i.width as f32),
             _ => 0.6 * 64.0 * scale,
@@ -350,6 +353,16 @@ impl Pet {
                 match self.discoveries.force_deposit_at(id, s.at, (desk, &self.terrain), &self.benches, &self.occupancy) {
                     Ok(region) => self.note(true, format!("a Geo deposit ({region} rock: the region follows the app) at {at}{wait}")),
                     Err(e) => self.note(false, format!("no Geo deposit there: {e}")),
+                }
+            }
+            Placeable::Grub { mimic } => {
+                let Some(id) = s.owner else {
+                    return self.note(false, "grub jars turn up in windows: click on a window's title bar or a line in it");
+                };
+                let desk = self.watcher.snapshot();
+                match self.discoveries.force_grub_at(id, s.at, mimic, (desk, &self.terrain), &self.benches, &self.occupancy) {
+                    Ok(()) => self.note(true, format!("a {label} at {at}{wait}: he hurries over to break it")),
+                    Err(e) => self.note(false, format!("no {label} there: {e}")),
                 }
             }
             Placeable::Bench(style) => match self.benches.place(style as usize, s.at - Vec2::new(0.0, 1.0), &self.terrain, &self.occupancy) {

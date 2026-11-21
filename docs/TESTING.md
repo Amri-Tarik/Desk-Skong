@@ -203,6 +203,16 @@ Pick a visitor in the drop-down, or use the "Every scene" row.
       new one turns up in another app later · *look for* the art and gleam for every region
       (the region follows the app: try several apps), sizes. Every region mined →
       *Rockhound*.
+- [ ] **Place Grub jar** (click a window's title bar / a line in it) → the game's jar on
+      the ledge with a grub inside (it cries once he's near, and turns to him); he drops
+      what he's doing, walks over, breaks it with one blow: glass bursts, the grub wriggles
+      free (`Freed`), he stays a moment to see it off · *look for* the grub's place in the
+      jar, the glass, where he stands. Five freed → *Glass Half Freed*; 46 → *Every Last
+      Grub*. On its own: about 1 app in 10 holds a jar; a freed one is replaced in another
+      app after 15–45 min.
+- [ ] **Place Mimic jar** → same jar; broken, the "grub" looks round oddly
+      (`Freed Fake`), then a Grub Mimic drops out (`Burst`) and runs at him; he fights it →
+      *Not a Grub*. A jar he can't walk to gets a Dream Gate.
 - [ ] **Shiny** or **Place** → a glint; he walks over and picks it up (`Collect Normal 2`),
       sometimes Geo pops out · *look for* the twinkle and the pick-up timing.
 - [ ] **Geo shower** or **Place** → a subtle dust portal, coins tumble out a moment later; he
